@@ -1,0 +1,24 @@
+{
+  "name": "@vidya/module-system",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Vidya reference module: health/ready/metrics endpoints, the append-only audit log store, and the heartbeat job. The worked example of the module contract.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@vidya/platform": "workspace:*",
+    "drizzle-orm": "^0.44.2",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "pino": "^9.7.0",
+    "typescript": "^5.8.3"
+  }
+}

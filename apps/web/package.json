@@ -1,0 +1,26 @@
+{
+  "name": "@vidya/web",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Vidya web process: Next.js App Router shell. Thin route files delegate to module public APIs through the platform pipeline.",
+  "type": "module",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@vidya/module-system": "workspace:*",
+    "@vidya/platform": "workspace:*",
+    "next": "^16.0.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "typescript": "^5.8.3"
+  }
+}

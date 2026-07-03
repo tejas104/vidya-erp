@@ -1,0 +1,11 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+  - "packages/modules/*"
+# Postinstall build scripts are opt-in under pnpm 11; each approval is
+# justified in docs/adr/0009-dependency-justifications.md.
+allowBuilds:
+  esbuild: true
+  msgpackr-extract: true
+  sharp: true
+  unrs-resolver: true

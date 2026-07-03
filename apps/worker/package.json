@@ -1,0 +1,21 @@
+{
+  "name": "@vidya/worker",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Vidya worker process: registers every module's BullMQ job processors and the repeatable schedules; exposes worker health/metrics on its own port.",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "start": "tsx src/main.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@vidya/module-system": "workspace:*",
+    "@vidya/platform": "workspace:*",
+    "tsx": "^4.20.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "typescript": "^5.8.3"
+  }
+}

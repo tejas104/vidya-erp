@@ -1,0 +1,86 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgres://vidya:ci-only-pg@localhost:5432/vidya
+      REDIS_URL: redis://localhost:6379
+      # Dummy values: integration tests never contact S3; loadConfig just
+      # requires the variables to exist.
+      S3_ENDPOINT: http://localhost:9000
+      S3_ACCESS_KEY_ID: ci-only
+      S3_SECRET_ACCESS_KEY: ci-only
+      S3_BUCKET: vidya
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: vidya
+          POSTGRES_PASSWORD: ci-only-pg
+          POSTGRES_DB: vidya
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U vidya -d vidya"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 12
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 12
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Lint (includes Constitution boundary rules)
+        run: pnpm lint
+
+      - name: No deferred-work markers in non-test code
+        run: pnpm check:todos
+
+      - name: Table-ownership convention
+        run: pnpm check:ownership
+
+      - name: OpenAPI spec in sync with route declarations
+        run: pnpm openapi:check
+
+      - name: Unit tests with coverage gate
+        run: pnpm test:coverage
+
+      - name: Migration forward + rollback + forward (proves down migrations)
+        run: |
+          pnpm db:migrate
+          pnpm db:rollback
+          pnpm db:migrate
+
+      - name: Integration tests (Postgres + Redis + BullMQ end-to-end)
+        env:
+          INTEGRATION_RESET_DB: "true"
+        run: pnpm test:integration
+
+      - name: Next.js production build
+        run: pnpm build
