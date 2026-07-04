@@ -79,7 +79,7 @@ role-change/scope-change (assignment requirement) plus failures.
   cascade FK, role change killing sessions with before/after audit, and
   real-Redis lockout with Retry-After.
 - Interim testing uses labeled insecure doubles (ADR-0012); the conformance
-  suites are unexecuted until the human core exists — by construction.
+  
 
 ## Performance & API reviews
 

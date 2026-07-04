@@ -41,8 +41,7 @@ export default defineConfig({
         "packages/platform/src/storage/s3.ts",
         // Identity: Drizzle repositories and schema are exercised by the
         // integration suite against real Postgres; the core/ subtree is
-        // HUMAN-OWNED (its conformance suites run in integration); index.ts
-        // is composition glue that requires the human core to construct;
+
         // providers/ is a type-only contract.
         "packages/modules/identity/src/repo/**",
         "packages/modules/identity/src/db/**",

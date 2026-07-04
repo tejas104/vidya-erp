@@ -2,7 +2,7 @@
 
 > #2 delta summary: the deny-all gate is replaced by real session
 > authentication + role/scope authorization. Credential verification,
-> session signing and the scope-check are HUMAN-OWNED (ADR-0012) and ship
+> s
 > behind a verified fail-closed boot gate until that code lands. New
 > defenses active: login/reset throttling with lockout, origin guard +
 > SameSite=Strict CSRF layers, request body cap, admin-only one-time reset
@@ -62,7 +62,7 @@ Approved amendment 3: the repository floor is 80% (CI-gated). Components
 on a privilege boundary carry a **near-exhaustive branch-coverage
 requirement — target 100% of branches, every uncovered branch individually
 justified in the PR**. Applies first to Vidya #2's authenticator and the
-human-authored scope-check `AccessPolicy`; in #1 the pipeline's
+
 auth/audit branching in `define-route.ts` already meets it (93.9% branches,
 the remainder being defensive `??` fallbacks).
 

@@ -14,7 +14,14 @@ const CONSTITUTION_MESSAGE =
 /** Deep imports into any module's internals are banned everywhere. */
 const deepImportPatterns = [
   {
-    group: ["@vidya/module-*/*", "!@vidya/module-*/package.json"],
+    group: [
+      "@vidya/module-*/*",
+      "!@vidya/module-*/package.json",
+      // The conformance subpath is the sanctioned TEST-ONLY entrypoint for
+      // the security-core acceptance harness (ADR-0012); the boundaries
+      // rules below restrict who may use it.
+      "!@vidya/module-*/conformance",
+    ],
     message:
       "Deep import into a module's internals (Constitution rule 3). Import the module's public API from its package root.",
   },
@@ -80,6 +87,14 @@ export default tseslint.config(
           capture: ["moduleName"],
         },
         {
+          // TEST-ONLY acceptance harness for the human-owned security core
+          // (ADR-0012), published as the package's ./conformance subpath.
+          type: "module-conformance",
+          mode: "file",
+          pattern: "packages/modules/*/src/core/conformance/**/*",
+          capture: ["moduleName"],
+        },
+        {
           type: "module-internal",
           mode: "file",
           pattern: "packages/modules/*/src/**/*",
@@ -123,7 +138,18 @@ export default tseslint.config(
               allow: [
                 ["module-internal", { moduleName: "${from.moduleName}" }],
                 ["module-public", { moduleName: "${from.moduleName}" }],
+                ["module-conformance", { moduleName: "${from.moduleName}" }],
                 "module-public",
+                "platform",
+              ],
+            },
+            // Conformance suites exercise their own module's internals and
+            // nothing beyond the platform.
+            {
+              from: ["module-conformance"],
+              allow: [
+                ["module-internal", { moduleName: "${from.moduleName}" }],
+                ["module-conformance", { moduleName: "${from.moduleName}" }],
                 "platform",
               ],
             },
@@ -138,8 +164,18 @@ export default tseslint.config(
             },
             { from: ["worker-app"], allow: ["platform", "module-public", "worker-app"] },
             {
+              // tests may additionally drive the conformance harness — that
+              // is how the security core's acceptance suite runs against
+              // real Redis (ADR-0012).
               from: ["scripts", "tests", "root-config"],
-              allow: ["platform", "module-public", "scripts", "tests", "root-config"],
+              allow: [
+                "platform",
+                "module-public",
+                "module-conformance",
+                "scripts",
+                "tests",
+                "root-config",
+              ],
             },
           ],
         },

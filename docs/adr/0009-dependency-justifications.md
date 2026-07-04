@@ -19,6 +19,7 @@
 | `prom-client` | platform | Constitution-locked Prometheus exposition. |
 | `zod` | platform, modules, scripts | Constitution-locked config/input validation; schemas double as OpenAPI source (ADR-0007). |
 | `tsx` | worker | Runs TypeScript sources directly (esbuild transform). Type safety is guaranteed by `tsc --noEmit` in CI over exactly these sources; a compile-to-JS step for the worker is recorded as technical debt (docs/review-gate.md), not a correctness gap. |
+| `argon2` | module-identity | Native libargon2 binding for the human-owned PasswordHasher (argon2id, ADR-0012). Native reference implementation chosen over pure-JS ports: cost parameters only defend if the hash actually costs that much. |
 
 ## Development dependencies
 
@@ -43,6 +44,7 @@ under this justification.
 
 | Package | Why it needs a build script |
 |---|---|
+| `argon2` | Native libargon2 addon; `node-gyp-build` selects a shipped prebuild (or compiles from source) at install. |
 | `esbuild` | Downloads its platform binary (tsx, vite/vitest). |
 | `msgpackr-extract` | Optional native codec used by BullMQ; falls back to JS if absent. |
 | `sharp` | Next.js optional image optimizer binary; unused by API routes but harmless. |

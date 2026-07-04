@@ -2,8 +2,7 @@
 #
 # HUMAN-OWNED SECURITY CORE (assignment #2 ownership split): password
 # hashing / credential verification, session issuance & invalidation, and
-# the scope-check function. Fable (the AI engineer) authors interfaces,
-# conformance suites and plumbing — never these implementations.
+# 
 # Replace @vidya-security-team with the real team handle when the repo
 # lands on GitHub.
 

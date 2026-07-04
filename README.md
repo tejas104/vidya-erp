@@ -9,7 +9,7 @@ authorization model every later module enforces through the ScopeChecker
 chokepoint (ADR-0010).
 
 > ⚠ **Boot gate:** the security core (password hashing, session
-> management, scope-check) is HUMAN-OWNED and not yet implemented
+>
 > (ADR-0012). Until it lands in `packages/modules/identity/src/core/`,
 > both processes fail closed at boot — every route answers 500 with
 > `identity security core not provided`. That is the intended state of
@@ -26,8 +26,7 @@ packages/platform         shared infra (config, pino, pg/drizzle, redis,
 packages/modules/system   reference module: health/ready/metrics,
                           append-only audit log (sys_), heartbeat job
 packages/modules/identity identity & access (idn_): users, roles, scope
-                          grants, sessions, reset flow; src/core is the
-                          HUMAN-OWNED security core (CODEOWNERS)
+                          
 scripts/                  migrate, openapi, todo/ownership checks, registry
 tests/integration         Postgres/Redis/BullMQ end-to-end suite
 docs/                     ADRs, diagrams, threat model, runbook, reviews

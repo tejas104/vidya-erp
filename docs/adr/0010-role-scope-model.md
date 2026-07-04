@@ -24,7 +24,7 @@ cascades grants away when the role is revoked.
 
 | Role | Read | Write |
 |---|---|---|
-| teacher | any record in their attached class/section, all subjects | create/update/delete **their own class+subject records** only |
+| teacher | non-subject records in their attached class/section, plus **their own subject's** records — other subjects' marks are private to their teachers (human-directed revision, 2026-07-04) | create/update/delete **their own class+subject records** only |
 | class_teacher | their class(es), all sections/subjects | their class's **non-subject** records (attendance, conduct, promotion); never subject marks |
 | hod | their entire department | department-level **approve** only; no routine entry |
 | principal | college-wide | none (pure viewer) |

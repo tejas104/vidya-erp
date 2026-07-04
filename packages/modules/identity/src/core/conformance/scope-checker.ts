@@ -13,7 +13,10 @@ import type {
  * the HUMAN-OWNED scope-check function). This file IS the approved
  * permission matrix (ADR-0010) in executable form:
  *
- *   teacher        read: any record in their attached class/section, all subjects
+ *   teacher        read: non-subject records (attendance, conduct, ...) in
+ *                  their attached class/section, plus their OWN subject's
+ *                  records; other subjects' marks are private to their
+ *                  teachers (human-directed revision, 2026-07-04)
  *                  write: their own class + subject only (create/update/delete)
  *   class_teacher  read: their class(es), all sections/subjects
  *                  write: their class's non-subject records; never subject marks
@@ -104,7 +107,7 @@ interface Case {
 const MATRIX: readonly Case[] = [
   // --- teacher: read any subject within the attached class -----------------
   { name: "teacher reads own-subject marks in own class", caller: teacherClassLevel, action: "read", resource: inClass(), expect: true },
-  { name: "teacher reads OTHER-subject marks in own class", caller: teacherClassLevel, action: "read", resource: inClass({ subjectId: OTHER_SUB }), expect: true },
+  { name: "teacher cannot read OTHER-subject marks (privacy line between teachers)", caller: teacherClassLevel, action: "read", resource: inClass({ subjectId: OTHER_SUB }), expect: false },
   { name: "teacher reads non-subject records in own class", caller: teacherClassLevel, action: "read", resource: attendance({ collegeId: COL, departmentId: DEP, classId: CLS }), expect: true },
   { name: "teacher class-level grant covers the class's sections", caller: teacherClassLevel, action: "read", resource: attendance({ collegeId: COL, departmentId: DEP, classId: CLS, sectionId: SEC }), expect: true },
   { name: "teacher cannot read another class", caller: teacherClassLevel, action: "read", resource: inClass({ org: { collegeId: COL, departmentId: DEP, classId: OTHER_CLS } }), expect: false },
