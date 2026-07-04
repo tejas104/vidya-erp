@@ -41,7 +41,6 @@ export {
 } from "./definition";
 export {
   createIdentityCore,
-  IdentityCoreNotProvidedError,
   type IdentityCore,
   type IdentityCoreOptions,
   type IssuedSession,

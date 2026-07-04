@@ -1,6 +1,10 @@
 # ADR-0012: Human-owned security core — ownership mechanics
 
-- **Status:** Accepted (implements the assignment #2 ownership split)
+- **Status:** Accepted (implements the assignment #2 ownership split).
+  **Update 2026-07-04:** the security team landed all three
+  implementations; `createIdentityCore()` is wired (fail-closed gate
+  retired) and the platform boots end-to-end. The matrix was extended once
+  under owner authorization — see ADR-0013.
 - **Date:** 2026-07-04
 
 ## The split

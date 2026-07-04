@@ -84,8 +84,12 @@ function grantAllows(grant: ScopeGrant, action: AccessAction, resource: Resource
       // Pure viewer, college-wide.
       return action === "read" || action === "export";
     case "admin":
-      // Reads college-wide for support; writes identity records only —
-      // never academic records, and approve stays hod-only.
+      // Reads college-wide for support; writes ADMINISTRATIVE records only:
+      // identity (users/roles/grants, ADR-0010) and people (org structure,
+      // student/teacher records, enrollment — ADR-0013, owner-authorized
+      // matrix extension for Vidya #3). Never academic records
+      // (marks/attendance etc. live in the academics module), and approve
+      // stays hod-only.
       switch (action) {
         case "read":
         case "export":
@@ -93,7 +97,7 @@ function grantAllows(grant: ScopeGrant, action: AccessAction, resource: Resource
         case "create":
         case "update":
         case "delete":
-          return resource.module === "identity";
+          return resource.module === "identity" || resource.module === "people";
         default:
           return false;
       }

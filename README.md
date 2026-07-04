@@ -1,19 +1,17 @@
-# Project Vidya — modular monolith (#1 foundation, #2 identity & access)
+# Project Vidya — modular monolith (#1 foundation, #2 identity, #3 people)
 
 On-premise College Information & Analytics System. Assignment #1 built the
 Next.js modular-monolith skeleton (module system with build-failing
 boundaries, web+worker split, audit log, migration harness,
-observability). Assignment #2 adds the identity module: users, roles,
+observability). Assignment #2 added the identity module: users, roles,
 scope grants, Redis sessions, login/logout/reset, and the role+scope
-authorization model every later module enforces through the ScopeChecker
-chokepoint (ADR-0010).
-
-> ⚠ **Boot gate:** the security core (password hashing, session
->
-> (ADR-0012). Until it lands in `packages/modules/identity/src/core/`,
-> both processes fail closed at boot — every route answers 500 with
-> `identity security core not provided`. That is the intended state of
-> this branch, not a bug.
+authorization model (ADR-0010) — its security core (argon2id hashing,
+split-token Redis sessions, the scope-check matrix) is HUMAN-OWNED,
+implemented and wired (ADR-0012/0013). Assignment #3 adds the people
+module: the canonical org tree (college→department→class→section +
+subjects), student/teacher records, enrollment, teacher assignments as the
+source of truth for DERIVED identity grants, the OrgDirectory that
+verifies grants, and bulk CSV import through the worker.
 
 ## Layout
 
@@ -26,7 +24,10 @@ packages/platform         shared infra (config, pino, pg/drizzle, redis,
 packages/modules/system   reference module: health/ready/metrics,
                           append-only audit log (sys_), heartbeat job
 packages/modules/identity identity & access (idn_): users, roles, scope
-                          
+                          grants, sessions; src/core is the HUMAN-OWNED
+                          security core (CODEOWNERS)
+packages/modules/people   org tree, students/teachers, enrollment,
+                          assignments → derived grants, CSV import (ppl_)
 scripts/                  migrate, openapi, todo/ownership checks, registry
 tests/integration         Postgres/Redis/BullMQ end-to-end suite
 docs/                     ADRs, diagrams, threat model, runbook, reviews

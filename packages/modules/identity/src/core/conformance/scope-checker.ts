@@ -165,6 +165,25 @@ const MATRIX: readonly Case[] = [
   { name: "admin deletes identity records (grants)", caller: admin, action: "delete", resource: { module: "identity", resourceType: "scope-grant", org: { collegeId: COL } }, expect: true },
   { name: "admin reads the user directory", caller: admin, action: "read", resource: { module: "identity", resourceType: "user-directory", org: { collegeId: COL } }, expect: true },
   { name: "admin cannot manage identity in another college", caller: admin, action: "create", resource: { module: "identity", resourceType: "user", org: { collegeId: OTHER_COL } }, expect: false },
+  // --- ADR-0013: people-module administration (owner-authorized extension, Vidya #3)
+  { name: "admin creates org units (people module) in their college", caller: admin, action: "create", resource: { module: "people", resourceType: "department", org: { collegeId: COL } }, expect: true },
+  { name: "admin updates people records (student) in their college", caller: admin, action: "update", resource: { module: "people", resourceType: "student", org: { collegeId: COL, departmentId: DEP, classId: CLS } }, expect: true },
+  { name: "admin deletes people records (enrollment) in their college", caller: admin, action: "delete", resource: { module: "people", resourceType: "enrollment", org: { collegeId: COL, departmentId: DEP, classId: CLS, sectionId: SEC } }, expect: true },
+  { name: "admin cannot manage people records in another college", caller: admin, action: "create", resource: { module: "people", resourceType: "student", org: { collegeId: OTHER_COL } }, expect: false },
+  { name: "admin cannot approve people records (approve stays hod-only)", caller: admin, action: "approve", resource: { module: "people", resourceType: "enrollment", org: { collegeId: COL } }, expect: false },
+  { name: "teacher cannot write people records (rosters are read-only for teachers)", caller: teacherClassLevel, action: "update", resource: { module: "people", resourceType: "student", org: { collegeId: COL, departmentId: DEP, classId: CLS } }, expect: false },
+  { name: "teacher reads their class roster (people module, non-subject)", caller: teacherClassLevel, action: "read", resource: { module: "people", resourceType: "roster", org: { collegeId: COL, departmentId: DEP, classId: CLS } }, expect: true },
+  // The matrix's "promotion" clause: class_teacher writes non-subject
+  // records OF THEIR CLASS — which includes enrollment moves. Records
+  // anchored above their class (e.g. creating a student, which sits at
+  // college level until enrolled) stay out of reach via containment.
+  { name: "class_teacher writes enrollment records of their class (promotion authority)", caller: classTeacher, action: "create", resource: { module: "people", resourceType: "enrollment", org: { collegeId: COL, departmentId: DEP, classId: CLS } }, expect: true },
+  { name: "class_teacher cannot create college-anchored people records (students)", caller: classTeacher, action: "create", resource: { module: "people", resourceType: "student", org: { collegeId: COL } }, expect: false },
+  { name: "class_teacher cannot write enrollment in another class", caller: classTeacher, action: "create", resource: { module: "people", resourceType: "enrollment", org: { collegeId: COL, departmentId: DEP, classId: OTHER_CLS } }, expect: false },
+  { name: "hod reads people records across their department", caller: hod, action: "read", resource: { module: "people", resourceType: "teacher-assignment", org: { collegeId: COL, departmentId: DEP, classId: OTHER_CLS } }, expect: true },
+  { name: "hod cannot write people records", caller: hod, action: "update", resource: { module: "people", resourceType: "class", org: { collegeId: COL, departmentId: DEP, classId: CLS } }, expect: false },
+  { name: "principal reads people records college-wide but writes nothing", caller: principal, action: "read", resource: { module: "people", resourceType: "student", org: { collegeId: COL, departmentId: OTHER_DEP } }, expect: true },
+  { name: "principal cannot write people records", caller: principal, action: "create", resource: { module: "people", resourceType: "college", org: { collegeId: COL } }, expect: false },
   { name: "admin exports within the college", caller: admin, action: "export", resource: inClass(), expect: true },
   // --- self-access ---------------------------------------------------------------
   { name: "a user with zero grants reads their own profile", caller: noGrants, action: "read", resource: { module: "identity", resourceType: "user-profile", org: { collegeId: COL }, ownerUserId: "n-1" }, expect: true },

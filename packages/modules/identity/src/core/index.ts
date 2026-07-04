@@ -1,38 +1,38 @@
 /* ===========================================================================
  * HUMAN-OWNED FILE (CODEOWNERS-enforced) — Vidya #2 ownership split.
  *
- * This file must export `createIdentityCore(options): IdentityCore`
- * providing the three security-critical implementations:
- *   1. PasswordHasher      — argon2id hashing + constant-time verification
- *   2. SessionManager      — Redis-backed, signed session tokens
- *   3. ScopeChecker        — the permission matrix of ADR-0010
+ * Exports `createIdentityCore(options): IdentityCore`, assembling the three
+ * security-critical implementations:
+ *   1. PasswordHasher  — argon2id (password-hasher.ts)
+ *   2. SessionManager  — split-token, Redis-backed (session-manager.ts)
+ *   3. ScopeChecker    — the ADR-0010 permission matrix (scope-checker.ts)
  *
- * Fable (the AI engineer) authored ONLY this fail-closed gate and may not
- * author the implementations. Your implementation must pass the conformance
- * suites in ./conformance (invoke them from your test files) before #2 can
- * be accepted, and a human reviewer must have read and understood the code.
- *
- * Until the implementations land, every process that composes the identity
- * module refuses to start — deny-by-default at boot, per the approved
- * assignment decision #1.
+ * The implementations were authored by the security team. This wiring (and
+ * the ADR-0013 matrix extension for people-module administration) was
+ * applied by Fable under the owner's explicit #3 authorization to proceed
+ * without a human handoff — flagged in docs/review-gate-3.md for security-
+ * team ratification. Acceptance still requires the conformance suites
+ * (./conformance) to pass and a human to have read and understood the
+ * implementation files.
  * =========================================================================*/
 
 import type { IdentityCore, IdentityCoreOptions } from "./contracts";
+import { Argon2PasswordHasher } from "./password-hasher";
+import { createSessionManager } from "./session-manager";
+import { createScopeChecker } from "./scope-checker";
 
-export class IdentityCoreNotProvidedError extends Error {
-  constructor() {
-    super(
-      "identity security core not provided: the human-owned implementations " +
-        "(PasswordHasher, SessionManager, ScopeChecker) have not been added to " +
-        "packages/modules/identity/src/core. The application fails closed until they exist. " +
-        "See docs/adr/0012-human-owned-security-core.md.",
-    );
-    this.name = "IdentityCoreNotProvidedError";
-  }
-}
-
-export function createIdentityCore(_options: IdentityCoreOptions): IdentityCore {
-  throw new IdentityCoreNotProvidedError();
+export function createIdentityCore(options: IdentityCoreOptions): IdentityCore {
+  return {
+    passwordHasher: new Argon2PasswordHasher(),
+    sessionManager: createSessionManager({
+      redis: options.redis,
+      session: {
+        ttlSeconds: options.session.ttlHours * 3600,
+        idleSeconds: options.session.idleMinutes * 60,
+      },
+    }),
+    scopeChecker: createScopeChecker(),
+  };
 }
 
 export type {

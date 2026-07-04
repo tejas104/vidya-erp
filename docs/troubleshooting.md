@@ -18,9 +18,10 @@ printed by design.
 
 ## Every route returns 500 with "identity security core not provided"
 
-The HUMAN-OWNED security core (packages/modules/identity/src/core) has not
-been implemented yet — the platform fails closed by design (ADR-0012).
-Nothing to fix in config; the security team's implementation PR unblocks it.
+Historical (pre-core-landing) failure mode: the fail-closed boot gate of
+ADR-0012. If you ever see it again, a checkout is missing or has reverted
+`packages/modules/identity/src/core/index.ts` — the core is wired on main
+since #3.
 
 ## 401 on every API route
 
