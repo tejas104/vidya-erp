@@ -1,6 +1,7 @@
 import type { z } from "zod";
 import type { Logger } from "../logger/logger";
 import type { AccessRequirement, Principal } from "../auth/types";
+import type { ActorType } from "../audit/types";
 
 /**
  * THE MODULE CONTRACT.
@@ -52,6 +53,8 @@ export interface RouteSpec {
   readonly tags: readonly string[];
   readonly auth: RouteAuth;
   readonly request?: {
+    /** Path parameters, e.g. { userId: z.string() } for /users/{userId}. */
+    readonly params?: z.ZodTypeAny;
     readonly query?: z.ZodTypeAny;
     readonly body?: z.ZodTypeAny;
   };
@@ -94,6 +97,8 @@ export interface ReadinessCheck {
 // ---------------------------------------------------------------------------
 
 export interface RouteRequest {
+  /** Validated against RouteSpec.request.params before the handler runs. */
+  readonly params: unknown;
   /** Validated against RouteSpec.request.query before the handler runs. */
   readonly query: unknown;
   /** Validated against RouteSpec.request.body before the handler runs. */
@@ -119,6 +124,15 @@ export interface RouteResult {
   readonly audit?: {
     readonly resourceId?: string;
     readonly details?: Readonly<Record<string, unknown>>;
+    /**
+     * Actor override for routes where the acting identity is established BY
+     * the handler rather than by the authenticator — e.g. login (public
+     * route, but the audit actor is the user who just authenticated).
+     */
+    readonly actor?: {
+      readonly type: ActorType;
+      readonly id: string | null;
+    };
   };
 }
 

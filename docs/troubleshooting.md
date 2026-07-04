@@ -16,12 +16,40 @@ printed by design.
   (`"readiness check failed"`), not in the response. A check that hangs
   >2s counts as failed (timeout).
 
+## Every route returns 500 with "identity security core not provided"
+
+The HUMAN-OWNED security core (packages/modules/identity/src/core) has not
+been implemented yet — the platform fails closed by design (ADR-0012).
+Nothing to fix in config; the security team's implementation PR unblocks it.
+
 ## 401 on every API route
 
-Working as designed in Vidya #1: authentication ships in #2; the deny-all
-gate answers 401 with `WWW-Authenticate: Bearer realm="vidya"` on every
-non-public route. Only `/health`, `/ready`, `/metrics` (and their
-`/api/v1/system/*` canonical forms) are public.
+You have no (valid) session. Log in at
+`POST /api/v1/identity/auth/login`; the `vidya_session` cookie must
+accompany subsequent requests. Sessions also die on absolute/idle expiry
+and on any role/grant/status/password change (by design). Public routes:
+`/health`, `/ready`, `/metrics`, login, and reset-confirm only.
+
+## 403 on a route you believe you may call
+
+Three distinct gates produce 403 — check logs by requestId:
+- `request rejected: forbidden` → route-level role requirement
+  (e.g. management routes need the `admin` role);
+- `scope check denied` → the record-level ScopeChecker (ADR-0010 matrix)
+  — the caller's grants don't cover the record's org position;
+- `request rejected: untrusted cross-origin` → state-changing request with
+  a foreign Origin header; fix `TRUSTED_ORIGINS`.
+
+## 429 too many attempts
+
+Login or reset-token lockout (default 5 failures / 15 min per user+IP).
+Self-expires; `Retry-After` is on the response. See the runbook before
+manually clearing anything.
+
+## Login says 403 "password reset required"
+
+The account is in `must_reset` (new account or admin-issued reset). An
+admin issues a one-time token; redeem it at password-reset/confirm.
 
 ## 500 with `requestId` on a state-changing route
 

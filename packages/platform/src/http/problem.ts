@@ -28,6 +28,9 @@ const PROBLEM_TYPES: Readonly<Record<number, string>> = {
   401: "https://vidya.invalid/problems/unauthenticated",
   403: "https://vidya.invalid/problems/forbidden",
   404: "https://vidya.invalid/problems/not-found",
+  409: "https://vidya.invalid/problems/conflict",
+  413: "https://vidya.invalid/problems/body-too-large",
+  429: "https://vidya.invalid/problems/too-many-requests",
   500: "https://vidya.invalid/problems/internal",
   503: "https://vidya.invalid/problems/not-ready",
 };

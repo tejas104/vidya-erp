@@ -59,6 +59,40 @@ describe("loadConfig", () => {
     );
   });
 
+  it("parses http guard and identity settings with defaults", () => {
+    const config = loadConfig(validEnv);
+    expect(config.http.trustedOrigins).toEqual([]);
+    expect(config.http.bodyMaxBytes).toBe(1_048_576);
+    expect(config.identity.session).toEqual({
+      cookieName: "vidya_session",
+      cookieSecure: true,
+      ttlHours: 12,
+      idleMinutes: 30,
+    });
+    expect(config.identity.throttle).toEqual({ maxAttempts: 5, windowMinutes: 15 });
+    expect(config.identity.resetTokenTtlMinutes).toBe(30);
+  });
+
+  it("parses TRUSTED_ORIGINS as a comma-separated origin list", () => {
+    const config = loadConfig({
+      ...validEnv,
+      TRUSTED_ORIGINS: "https://portal.example.edu, http://localhost:3000",
+    });
+    expect(config.http.trustedOrigins).toEqual([
+      "https://portal.example.edu",
+      "http://localhost:3000",
+    ]);
+  });
+
+  it("rejects TRUSTED_ORIGINS entries that are not bare origins", () => {
+    expect(() =>
+      loadConfig({ ...validEnv, TRUSTED_ORIGINS: "https://a.example.edu/path" }),
+    ).toThrowError(ConfigError);
+    expect(() => loadConfig({ ...validEnv, TRUSTED_ORIGINS: "not-a-url" })).toThrowError(
+      ConfigError,
+    );
+  });
+
   it("rejects out-of-range numerics", () => {
     expect(() => loadConfig({ ...validEnv, DATABASE_POOL_MAX: "0" })).toThrowError(ConfigError);
     expect(() => loadConfig({ ...validEnv, WORKER_METRICS_PORT: "70000" })).toThrowError(

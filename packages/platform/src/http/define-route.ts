@@ -12,15 +12,43 @@ import {
 import { problemResponse } from "./problem";
 import { REQUEST_ID_HEADER, resolveRequestId } from "./request-id";
 
+export interface HttpGuardOptions {
+  /**
+   * Origins allowed to make state-changing requests in addition to the
+   * request's own origin (CSRF defense layer 2; layer 1 is the
+   * SameSite=Strict session cookie — ADR-0011).
+   */
+  readonly trustedOrigins: readonly string[];
+  /** Maximum accepted request-body size in bytes (413 beyond it). */
+  readonly bodyMaxBytes: number;
+}
+
+export const DEFAULT_HTTP_GUARDS: HttpGuardOptions = {
+  trustedOrigins: [],
+  bodyMaxBytes: 1_048_576,
+};
+
 export interface RouteDependencies {
   readonly logger: Logger;
   readonly authenticator: Authenticator;
   readonly accessPolicy: AccessPolicy;
   readonly auditLogger: AuditLogger;
   readonly metrics: Metrics;
+  /** Omit to use DEFAULT_HTTP_GUARDS. */
+  readonly http?: HttpGuardOptions;
 }
 
-export type BoundRouteHandler = (request: Request) => Promise<Response>;
+/** Second argument mirrors Next.js route-handler context (async params). */
+export interface RouteHandlerContext {
+  readonly params?:
+    | Promise<Record<string, string | string[] | undefined>>
+    | Record<string, string | string[] | undefined>;
+}
+
+export type BoundRouteHandler = (
+  request: Request,
+  context?: RouteHandlerContext,
+) => Promise<Response>;
 
 interface ValidationOutcome {
   readonly ok: boolean;
@@ -64,8 +92,9 @@ function toResponse(result: RouteResult, requestId: string): Response {
 /**
  * Builds the standard request pipeline around a module route handler:
  *
- *   request id → authentication gate → authorization (scope check) →
- *   zod validation → handler → audit (state-changing) → metrics + access log
+ *   request id → origin guard (state-changing) → authentication gate →
+ *   authorization (role requirement) → zod validation (params/query/body,
+ *   size-capped) → handler → audit (state-changing) → metrics + access log
  *
  * Security posture (Constitution rule 6): authentication runs unless the
  * RouteSpec explicitly declares itself public. Audit posture (rule 7):
@@ -82,8 +111,9 @@ export function defineRoute(
       `route "${spec.id}": ${spec.method} routes must declare an audit action (Constitution rule 7)`,
     );
   }
+  const guards = deps.http ?? DEFAULT_HTTP_GUARDS;
 
-  return async (request: Request): Promise<Response> => {
+  return async (request: Request, context?: RouteHandlerContext): Promise<Response> => {
     const requestId = resolveRequestId(request.headers);
     const log = deps.logger.child({ requestId, route: spec.id, method: spec.method });
     const startedAt = performance.now();
@@ -113,6 +143,23 @@ export function defineRoute(
     };
 
     try {
+      if (STATE_CHANGING_METHODS.has(spec.method)) {
+        const origin = request.headers.get("origin");
+        if (origin !== null) {
+          const allowed = new Set([...guards.trustedOrigins, new URL(request.url).origin]);
+          if (!allowed.has(origin)) {
+            log.warn({ origin }, "request rejected: untrusted cross-origin");
+            return finish(
+              problemResponse({
+                status: 403,
+                title: "Cross-origin request rejected",
+                requestId,
+              }),
+            );
+          }
+        }
+      }
+
       if (!spec.auth.public) {
         const authn = await deps.authenticator.authenticate({
           headers: request.headers,
@@ -148,6 +195,23 @@ export function defineRoute(
         }
       }
 
+      let params: unknown;
+      if (spec.request?.params !== undefined) {
+        const raw = context?.params === undefined ? {} : await context.params;
+        const outcome = validate(spec.request.params, raw);
+        if (!outcome.ok) {
+          return finish(
+            problemResponse({
+              status: 400,
+              title: "Invalid path parameters",
+              requestId,
+              issues: outcome.issues,
+            }),
+          );
+        }
+        params = outcome.value;
+      }
+
       let query: unknown;
       if (spec.request?.query !== undefined) {
         const url = new URL(request.url);
@@ -168,9 +232,34 @@ export function defineRoute(
 
       let body: unknown;
       if (spec.request?.body !== undefined) {
+        const declaredLength = Number(request.headers.get("content-length") ?? "0");
+        if (Number.isFinite(declaredLength) && declaredLength > guards.bodyMaxBytes) {
+          return finish(
+            problemResponse({
+              status: 413,
+              title: "Request body too large",
+              requestId,
+            }),
+          );
+        }
+        let text: string;
+        try {
+          text = await request.text();
+        } catch {
+          text = "";
+        }
+        if (text.length > guards.bodyMaxBytes) {
+          return finish(
+            problemResponse({
+              status: 413,
+              title: "Request body too large",
+              requestId,
+            }),
+          );
+        }
         let raw: unknown;
         try {
-          raw = await request.json();
+          raw = JSON.parse(text) as unknown;
         } catch {
           return finish(
             problemResponse({
@@ -198,7 +287,7 @@ export function defineRoute(
         requestId,
         logger: log,
         principal,
-        request: { query, body, headers: request.headers },
+        request: { params, query, body, headers: request.headers },
       });
 
       if (
@@ -206,11 +295,13 @@ export function defineRoute(
         STATE_CHANGING_METHODS.has(spec.method) &&
         result.status < 400
       ) {
+        const actorOverride = result.audit?.actor;
         await deps.auditLogger.record({
           module: spec.module,
           action: spec.audit.action,
-          actorType: principal === null ? "system" : principal.kind,
-          actorId: principal?.id ?? null,
+          actorType:
+            actorOverride?.type ?? (principal === null ? "system" : principal.kind),
+          actorId: actorOverride !== undefined ? actorOverride.id : (principal?.id ?? null),
           resourceType: spec.audit.resourceType,
           resourceId: result.audit?.resourceId ?? null,
           requestId,

@@ -39,12 +39,31 @@ export default defineConfig({
         "packages/platform/src/redis/client.ts",
         "packages/platform/src/queue/queue.ts",
         "packages/platform/src/storage/s3.ts",
+        // Identity: Drizzle repositories and schema are exercised by the
+        // integration suite against real Postgres; the core/ subtree is
+        // HUMAN-OWNED (its conformance suites run in integration); index.ts
+        // is composition glue that requires the human core to construct;
+        // providers/ is a type-only contract.
+        "packages/modules/identity/src/repo/**",
+        "packages/modules/identity/src/db/**",
+        "packages/modules/identity/src/core/**",
+        "packages/modules/identity/src/index.ts",
+        "packages/modules/identity/src/providers/**",
       ],
       thresholds: {
         lines: 80,
         functions: 80,
         branches: 80,
         statements: 80,
+        // Security-critical coverage policy (approved amendment 3, #1):
+        // identity's Fable-owned auth plumbing carries a near-exhaustive
+        // branch requirement.
+        "packages/modules/identity/src/service/**": {
+          lines: 95,
+          functions: 95,
+          branches: 95,
+          statements: 95,
+        },
       },
     },
   },

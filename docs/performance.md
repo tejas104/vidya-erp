@@ -1,4 +1,23 @@
-# Performance review — Vidya #1 foundation
+# Performance review — Vidya #1 foundation + #2 identity
+
+## Identity hot paths (#2)
+
+- **Authenticated request:** one Redis round-trip (session resolve; idle
+  slide is part of it). Zero Postgres reads — roles/grants ride in the
+  session snapshot. The scope-check is a pure in-memory function.
+- **Login:** the argon2 verify (human core) dominates by design —
+  budget ~50–150ms/login depending on chosen parameters; it is the
+  brute-force control. Login QPS is inherently low (a college's morning
+  peak, not a feed); if it ever matters, scale web replicas — hashing is
+  CPU-bound and stateless. Throttle adds two Redis ops per failure, one
+  GET per attempt.
+- **Session invalidation on authority change** is O(sessions-of-user) in
+  Redis — trivial.
+- **Admin list endpoints** hydrate roles+grants per user (N+1 against
+  Postgres, capped at 200/page): fine for admin tooling; join-optimize
+  only if it appears in a hot path.
+
+
 
 ## Pool sizing
 

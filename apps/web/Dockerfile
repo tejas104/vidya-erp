@@ -14,6 +14,7 @@ COPY apps/web/package.json apps/web/
 COPY apps/worker/package.json apps/worker/
 COPY packages/platform/package.json packages/platform/
 COPY packages/modules/system/package.json packages/modules/system/
+COPY packages/modules/identity/package.json packages/modules/identity/
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store pnpm install --frozen-lockfile
 
 COPY . .

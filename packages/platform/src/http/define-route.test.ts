@@ -18,8 +18,11 @@ const testPrincipal: Principal = {
   id: "user-1",
   kind: "user",
   displayName: "Test User",
-  roles: ["registrar"],
-  scopes: ["attendance:write"],
+  roles: ["teacher"],
+  scopes: [],
+  grants: [
+    { role: "teacher", org: { collegeId: "col-1", classId: "cls-1" }, subjectId: "sub-math" },
+  ],
   sessionId: "sess-1",
 };
 
@@ -104,7 +107,7 @@ describe("defineRoute — authentication gate (deny-by-default)", () => {
 
   it("passes principal, requirement and context to the access policy (the #2 scope-check seam)", async () => {
     const authorize = vi.fn(async () => ({ granted: true }) as const);
-    const requirement = { rolesAnyOf: ["registrar"], scopesAllOf: ["attendance:write"] };
+    const requirement = { rolesAnyOf: ["teacher" as const] };
     const deps = makeDeps({
       authenticator: allowAuthenticator,
       accessPolicy: { authorize },
@@ -283,6 +286,117 @@ describe("defineRoute — audit (Constitution rule 7)", () => {
     const deps = makeDeps({ authenticator: allowAuthenticator, accessPolicy: allowPolicy });
     await defineRoute(makeSpec(), okHandler, deps)(get());
     expect(deps.audit.events).toHaveLength(0);
+  });
+});
+
+describe("defineRoute — path parameters (Vidya #2 pipeline extension)", () => {
+  it("validates path params and passes them to the handler", async () => {
+    const spec = makeSpec({
+      auth: { public: true, reason: "test" },
+      request: { params: z.object({ userId: z.string().uuid() }) },
+    });
+    let seen: unknown;
+    const handler: RouteHandler = async (ctx) => {
+      seen = ctx.request.params;
+      return { status: 200 };
+    };
+    const bound = defineRoute(spec, handler, makeDeps());
+    const id = "3e9a6f0e-58f8-4a0f-bd1c-2f16a1c0a111";
+    const response = await bound(get(), { params: Promise.resolve({ userId: id }) });
+    expect(response.status).toBe(200);
+    expect(seen).toEqual({ userId: id });
+  });
+
+  it("rejects malformed path params with 400", async () => {
+    const spec = makeSpec({
+      auth: { public: true, reason: "test" },
+      request: { params: z.object({ userId: z.string().uuid() }) },
+    });
+    const response = await defineRoute(spec, okHandler, makeDeps())(get(), {
+      params: { userId: "not-a-uuid" },
+    });
+    expect(response.status).toBe(400);
+  });
+});
+
+describe("defineRoute — origin guard (CSRF layer 2)", () => {
+  const postSpec = () =>
+    makeSpec({
+      method: "POST",
+      audit: { action: "demo.create", resourceType: "demo" },
+      auth: { public: true, reason: "test" },
+    });
+
+  function post(headers: Record<string, string> = {}) {
+    return new Request("http://localhost/api/v1/demo", { method: "POST", headers });
+  }
+
+  it("rejects state-changing requests from an untrusted origin", async () => {
+    const response = await defineRoute(postSpec(), okHandler, makeDeps())(
+      post({ origin: "https://evil.example.com" }),
+    );
+    expect(response.status).toBe(403);
+  });
+
+  it("accepts the request's own origin and configured trusted origins", async () => {
+    const deps = makeDeps({
+      http: { trustedOrigins: ["https://portal.example.edu"], bodyMaxBytes: 1_048_576 },
+    });
+    const bound = defineRoute(postSpec(), okHandler, deps);
+    expect((await bound(post({ origin: "http://localhost" }))).status).toBe(200);
+    expect((await bound(post({ origin: "https://portal.example.edu" }))).status).toBe(200);
+  });
+
+  it("lets origin-less (non-browser) requests through and never blocks reads", async () => {
+    expect((await defineRoute(postSpec(), okHandler, makeDeps())(post())).status).toBe(200);
+    const readSpec = makeSpec({ auth: { public: true, reason: "test" } });
+    const read = await defineRoute(readSpec, okHandler, makeDeps())(
+      get(undefined, { origin: "https://evil.example.com" }),
+    );
+    expect(read.status).toBe(200);
+  });
+});
+
+describe("defineRoute — body size cap", () => {
+  it("rejects oversized bodies with 413", async () => {
+    const spec = makeSpec({
+      method: "POST",
+      audit: { action: "demo.create", resourceType: "demo" },
+      auth: { public: true, reason: "test" },
+      request: { body: z.object({ name: z.string() }) },
+    });
+    const deps = makeDeps({ http: { trustedOrigins: [], bodyMaxBytes: 64 } });
+    const response = await defineRoute(spec, okHandler, deps)(
+      new Request("http://localhost/api/v1/demo", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name: "x".repeat(500) }),
+      }),
+    );
+    expect(response.status).toBe(413);
+  });
+});
+
+describe("defineRoute — audit actor override (login-style routes)", () => {
+  it("uses the handler-declared actor when the route is public", async () => {
+    const deps = makeDeps();
+    const spec = makeSpec({
+      method: "POST",
+      auth: { public: true, reason: "credential establishment" },
+      audit: { action: "identity.login", resourceType: "session" },
+    });
+    const handler: RouteHandler = async () => ({
+      status: 200,
+      audit: { actor: { type: "user", id: "user-42" }, resourceId: "sess-9" },
+    });
+    await defineRoute(spec, handler, deps)(
+      new Request("http://localhost/api/v1/demo", { method: "POST" }),
+    );
+    expect(deps.audit.events[0]).toMatchObject({
+      actorType: "user",
+      actorId: "user-42",
+      resourceId: "sess-9",
+    });
   });
 });
 

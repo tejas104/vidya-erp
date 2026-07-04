@@ -29,16 +29,24 @@ describe("migration harness (ADR-0008)", () => {
     );
   });
 
-  it("rolls back and reapplies the audit migration (forward + rollback proof)", async () => {
+  it("rolls back and reapplies every module's migrations (forward + rollback proof)", async () => {
     expect(await tableExists("sys_audit_log")).toBe(true);
+    expect(await tableExists("idn_users")).toBe(true);
 
-    const rolledBack = await migrateDown(pool, sources, 1, logger);
-    expect(rolledBack.map((entry) => entry.name)).toEqual(["0000_audit_log"]);
+    const applied = await migrationStatus(pool, sources);
+    const rolledBack = await migrateDown(pool, sources, applied.applied.length, logger);
+    expect(rolledBack.length).toBe(applied.applied.length);
     expect(await tableExists("sys_audit_log")).toBe(false);
+    expect(await tableExists("idn_users")).toBe(false);
+    expect(await tableExists("idn_scope_grants")).toBe(false);
 
     const reapplied = await migrateUp(pool, sources, logger);
-    expect(reapplied.map((entry) => entry.name)).toEqual(["0000_audit_log"]);
+    expect(reapplied.map((entry) => `${entry.module}/${entry.name}`)).toEqual([
+      "system/0000_audit_log",
+      "identity/0000_identity",
+    ]);
     expect(await tableExists("sys_audit_log")).toBe(true);
+    expect(await tableExists("idn_users")).toBe(true);
   });
 
   it("is idempotent — a second up run applies nothing", async () => {
@@ -51,6 +59,7 @@ describe("migration harness (ADR-0008)", () => {
       "SELECT module, name FROM platform_migrations ORDER BY id",
     );
     expect(result.rows).toContainEqual({ module: "system", name: "0000_audit_log" });
+    expect(result.rows).toContainEqual({ module: "identity", name: "0000_identity" });
   });
 
   it("survives concurrent runners (advisory lock)", async () => {

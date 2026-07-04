@@ -63,6 +63,34 @@ queue/observability/pg/redis close → exit. No drain delay (no LB).
   `max(vidya_jobs_total{job="audit-heartbeat",outcome="success"})` stops
   increasing — it means Redis, the worker, or Postgres is broken.
 
+## Identity operations (#2)
+
+- **Bootstrap (once per installation):**
+  `VIDYA_ADMIN_PASSWORD=<strong> pnpm exec tsx scripts/create-admin.ts --username <u> --display-name "<n>" --college-id <opaque-id>` —
+  refuses if any admin exists. Requires DATABASE_URL, REDIS_URL and the
+  human-owned core (fails closed without it).
+- **Fail-closed boot:** until the security core lands (ADR-0012), every
+  replica answers 500 on all routes including /health, with
+  `identity security core not provided` in the logs. That is intended,
+  not an outage to work around.
+- **Password reset:** admin calls `POST /api/v1/identity/users/{id}/password-reset`,
+  reads the one-time token from the response (it is shown exactly once,
+  never logged), and hands it to the user out-of-band (in person / phone —
+  institutional procedure). The user redeems at
+  `POST /api/v1/identity/auth/password-reset/confirm` within 30 minutes.
+- **Locked-out user:** the window self-expires (default 15 min). Bursts of
+  `identity.login-failed` audit rows with `locked:true` against one
+  username from many IPs = investigate as an attack, not a forgotten
+  password.
+- **Kill a user's access NOW:** `PATCH /users/{id}` with
+  `{"status":"disabled"}` — disables the account AND invalidates every
+  session immediately. Role/grant changes also invalidate sessions.
+- **Deployment prerequisites:** TLS termination at the institution proxy
+  (session cookie is Secure in production), proxy must set
+  `x-forwarded-for` (throttle keying), Redis with AUTH on the private
+  network (it now holds sessions), `TRUSTED_ORIGINS` set to the browser
+  origin(s) once a UI exists.
+
 ## Routine checks
 
 - `GET /ready` on every replica after deploys.

@@ -1,0 +1,205 @@
+import { describe, expect, it } from "vitest";
+import type {
+  AccessAction,
+  OrgPath,
+  Principal,
+  ResourceRef,
+  ScopeChecker,
+  ScopeGrant,
+} from "@vidya/platform";
+
+/**
+ * CONFORMANCE SUITE — ScopeChecker (Fable-authored acceptance harness for
+ * the HUMAN-OWNED scope-check function). This file IS the approved
+ * permission matrix (ADR-0010) in executable form:
+ *
+ *   teacher        read: any record in their attached class/section, all subjects
+ *                  write: their own class + subject only (create/update/delete)
+ *   class_teacher  read: their class(es), all sections/subjects
+ *                  write: their class's non-subject records; never subject marks
+ *   hod            read: their entire department
+ *                  write: department-level approvals ("approve") only
+ *   principal      read: college-wide · write: none (pure viewer)
+ *   admin          read: college-wide (support) · write: identity records only
+ *   self-access    anyone reads their own profile (ownerUserId)
+ *   deny-by-default: no match → denied
+ *
+ * Spec decisions encoded here and flagged in docs/review-gate-2.md for
+ * human confirmation: "export" follows read scope but only for hod,
+ * principal and admin (bulk-exfiltration control); "approve" is denied to
+ * teacher and class_teacher.
+ */
+
+const grant = (g: {
+  role: ScopeGrant["role"];
+  org: OrgPath;
+  subjectId?: string;
+}): ScopeGrant => ({
+  role: g.role,
+  org: g.org,
+  ...(g.subjectId !== undefined ? { subjectId: g.subjectId } : {}),
+});
+
+function caller(id: string, roles: Principal["roles"], grants: ScopeGrant[]): Principal {
+  return { id, kind: "user", displayName: id, roles, scopes: [], grants, sessionId: "s" };
+}
+
+const COL = "col-1";
+const OTHER_COL = "col-2";
+const DEP = "dep-science";
+const OTHER_DEP = "dep-arts";
+const CLS = "cls-10a";
+const OTHER_CLS = "cls-10b";
+const SEC = "sec-10a-1";
+const OTHER_SEC = "sec-10a-2";
+const SUB = "sub-math";
+const OTHER_SUB = "sub-physics";
+
+const inClass = (extra: Partial<ResourceRef> = {}): ResourceRef => ({
+  module: "academics",
+  resourceType: "marks",
+  org: { collegeId: COL, departmentId: DEP, classId: CLS },
+  subjectId: SUB,
+  ...extra,
+});
+
+const attendance = (org: OrgPath): ResourceRef => ({
+  module: "academics",
+  resourceType: "attendance-record",
+  org,
+});
+
+// --- The callers -----------------------------------------------------------
+
+const teacherClassLevel = caller("t-1", ["teacher"], [
+  grant({ role: "teacher", org: { collegeId: COL, departmentId: DEP, classId: CLS }, subjectId: SUB }),
+]);
+const teacherSectionLevel = caller("t-2", ["teacher"], [
+  grant({
+    role: "teacher",
+    org: { collegeId: COL, departmentId: DEP, classId: CLS, sectionId: SEC },
+    subjectId: SUB,
+  }),
+]);
+const classTeacher = caller("ct-1", ["class_teacher"], [
+  grant({ role: "class_teacher", org: { collegeId: COL, departmentId: DEP, classId: CLS } }),
+]);
+const hod = caller("h-1", ["hod"], [
+  grant({ role: "hod", org: { collegeId: COL, departmentId: DEP } }),
+]);
+const principal = caller("p-1", ["principal"], [
+  grant({ role: "principal", org: { collegeId: COL } }),
+]);
+const admin = caller("a-1", ["admin"], [grant({ role: "admin", org: { collegeId: COL } })]);
+const noGrants = caller("n-1", ["teacher"], []);
+
+interface Case {
+  readonly name: string;
+  readonly caller: Principal;
+  readonly action: AccessAction;
+  readonly resource: ResourceRef;
+  readonly expect: boolean;
+}
+
+const MATRIX: readonly Case[] = [
+  // --- teacher: read any subject within the attached class -----------------
+  { name: "teacher reads own-subject marks in own class", caller: teacherClassLevel, action: "read", resource: inClass(), expect: true },
+  { name: "teacher reads OTHER-subject marks in own class", caller: teacherClassLevel, action: "read", resource: inClass({ subjectId: OTHER_SUB }), expect: true },
+  { name: "teacher reads non-subject records in own class", caller: teacherClassLevel, action: "read", resource: attendance({ collegeId: COL, departmentId: DEP, classId: CLS }), expect: true },
+  { name: "teacher class-level grant covers the class's sections", caller: teacherClassLevel, action: "read", resource: attendance({ collegeId: COL, departmentId: DEP, classId: CLS, sectionId: SEC }), expect: true },
+  { name: "teacher cannot read another class", caller: teacherClassLevel, action: "read", resource: inClass({ org: { collegeId: COL, departmentId: DEP, classId: OTHER_CLS } }), expect: false },
+  { name: "teacher cannot read another college", caller: teacherClassLevel, action: "read", resource: inClass({ org: { collegeId: OTHER_COL, departmentId: DEP, classId: CLS } }), expect: false },
+  // --- teacher: write own class + subject only -----------------------------
+  { name: "teacher creates marks for own class+subject", caller: teacherClassLevel, action: "create", resource: inClass(), expect: true },
+  { name: "teacher updates marks for own class+subject", caller: teacherClassLevel, action: "update", resource: inClass(), expect: true },
+  { name: "teacher deletes marks for own class+subject", caller: teacherClassLevel, action: "delete", resource: inClass(), expect: true },
+  { name: "teacher cannot write another teacher's subject", caller: teacherClassLevel, action: "update", resource: inClass({ subjectId: OTHER_SUB }), expect: false },
+  { name: "teacher cannot write non-subject records", caller: teacherClassLevel, action: "update", resource: attendance({ collegeId: COL, departmentId: DEP, classId: CLS }), expect: false },
+  { name: "teacher cannot write own subject in another class", caller: teacherClassLevel, action: "update", resource: inClass({ org: { collegeId: COL, departmentId: DEP, classId: OTHER_CLS } }), expect: false },
+  { name: "teacher cannot approve (department-level act)", caller: teacherClassLevel, action: "approve", resource: inClass(), expect: false },
+  { name: "teacher cannot export", caller: teacherClassLevel, action: "export", resource: inClass(), expect: false },
+  // --- teacher at section granularity ---------------------------------------
+  { name: "section-scoped teacher reads own section", caller: teacherSectionLevel, action: "read", resource: inClass({ org: { collegeId: COL, departmentId: DEP, classId: CLS, sectionId: SEC } }), expect: true },
+  { name: "section-scoped teacher cannot read the sibling section", caller: teacherSectionLevel, action: "read", resource: inClass({ org: { collegeId: COL, departmentId: DEP, classId: CLS, sectionId: OTHER_SEC } }), expect: false },
+  { name: "section-scoped teacher cannot read the whole class (broader than grant)", caller: teacherSectionLevel, action: "read", resource: inClass({ org: { collegeId: COL, departmentId: DEP, classId: CLS } }), expect: false },
+  { name: "section-scoped teacher writes own section+subject", caller: teacherSectionLevel, action: "update", resource: inClass({ org: { collegeId: COL, departmentId: DEP, classId: CLS, sectionId: SEC } }), expect: true },
+  // --- class_teacher --------------------------------------------------------
+  { name: "class_teacher reads subject marks in their class", caller: classTeacher, action: "read", resource: inClass(), expect: true },
+  { name: "class_teacher reads any section of their class", caller: classTeacher, action: "read", resource: attendance({ collegeId: COL, departmentId: DEP, classId: CLS, sectionId: OTHER_SEC }), expect: true },
+  { name: "class_teacher cannot read another class", caller: classTeacher, action: "read", resource: inClass({ org: { collegeId: COL, departmentId: DEP, classId: OTHER_CLS } }), expect: false },
+  { name: "class_teacher writes non-subject records of their class", caller: classTeacher, action: "update", resource: attendance({ collegeId: COL, departmentId: DEP, classId: CLS }), expect: true },
+  { name: "class_teacher creates non-subject records (e.g. promotion) of their class", caller: classTeacher, action: "create", resource: { module: "academics", resourceType: "promotion", org: { collegeId: COL, departmentId: DEP, classId: CLS } }, expect: true },
+  { name: "class_teacher cannot write subject marks", caller: classTeacher, action: "update", resource: inClass(), expect: false },
+  { name: "class_teacher cannot write outside their class", caller: classTeacher, action: "update", resource: attendance({ collegeId: COL, departmentId: DEP, classId: OTHER_CLS }), expect: false },
+  { name: "class_teacher cannot approve", caller: classTeacher, action: "approve", resource: attendance({ collegeId: COL, departmentId: DEP, classId: CLS }), expect: false },
+  { name: "class_teacher cannot export", caller: classTeacher, action: "export", resource: attendance({ collegeId: COL, departmentId: DEP, classId: CLS }), expect: false },
+  // --- hod -------------------------------------------------------------------
+  { name: "hod reads anything in their department", caller: hod, action: "read", resource: inClass(), expect: true },
+  { name: "hod reads section-level records in their department", caller: hod, action: "read", resource: attendance({ collegeId: COL, departmentId: DEP, classId: CLS, sectionId: SEC }), expect: true },
+  { name: "hod cannot read another department", caller: hod, action: "read", resource: inClass({ org: { collegeId: COL, departmentId: OTHER_DEP, classId: CLS } }), expect: false },
+  { name: "hod approves within their department", caller: hod, action: "approve", resource: inClass(), expect: true },
+  { name: "hod cannot do routine subject-record entry", caller: hod, action: "update", resource: inClass(), expect: false },
+  { name: "hod cannot create records", caller: hod, action: "create", resource: inClass(), expect: false },
+  { name: "hod cannot delete records", caller: hod, action: "delete", resource: inClass(), expect: false },
+  { name: "hod cannot approve outside their department", caller: hod, action: "approve", resource: inClass({ org: { collegeId: COL, departmentId: OTHER_DEP, classId: CLS } }), expect: false },
+  { name: "hod exports within their department", caller: hod, action: "export", resource: inClass(), expect: true },
+  { name: "hod cannot export another department", caller: hod, action: "export", resource: inClass({ org: { collegeId: COL, departmentId: OTHER_DEP } }), expect: false },
+  // --- principal --------------------------------------------------------------
+  { name: "principal reads college-wide", caller: principal, action: "read", resource: inClass(), expect: true },
+  { name: "principal reads any department", caller: principal, action: "read", resource: inClass({ org: { collegeId: COL, departmentId: OTHER_DEP, classId: OTHER_CLS } }), expect: true },
+  { name: "principal cannot read another college", caller: principal, action: "read", resource: inClass({ org: { collegeId: OTHER_COL, departmentId: DEP, classId: CLS } }), expect: false },
+  { name: "principal cannot update (pure viewer)", caller: principal, action: "update", resource: inClass(), expect: false },
+  { name: "principal cannot create", caller: principal, action: "create", resource: inClass(), expect: false },
+  { name: "principal cannot approve", caller: principal, action: "approve", resource: inClass(), expect: false },
+  { name: "principal cannot write identity records", caller: principal, action: "update", resource: { module: "identity", resourceType: "user", org: { collegeId: COL } }, expect: false },
+  { name: "principal exports college-wide", caller: principal, action: "export", resource: inClass(), expect: true },
+  // --- admin -------------------------------------------------------------------
+  { name: "admin reads academic data for support", caller: admin, action: "read", resource: inClass(), expect: true },
+  { name: "admin cannot write academic records", caller: admin, action: "update", resource: inClass(), expect: false },
+  { name: "admin cannot approve academic records", caller: admin, action: "approve", resource: inClass(), expect: false },
+  { name: "admin creates identity records (users)", caller: admin, action: "create", resource: { module: "identity", resourceType: "user", org: { collegeId: COL } }, expect: true },
+  { name: "admin updates identity records (roles)", caller: admin, action: "update", resource: { module: "identity", resourceType: "user-roles", org: { collegeId: COL } }, expect: true },
+  { name: "admin deletes identity records (grants)", caller: admin, action: "delete", resource: { module: "identity", resourceType: "scope-grant", org: { collegeId: COL } }, expect: true },
+  { name: "admin reads the user directory", caller: admin, action: "read", resource: { module: "identity", resourceType: "user-directory", org: { collegeId: COL } }, expect: true },
+  { name: "admin cannot manage identity in another college", caller: admin, action: "create", resource: { module: "identity", resourceType: "user", org: { collegeId: OTHER_COL } }, expect: false },
+  { name: "admin exports within the college", caller: admin, action: "export", resource: inClass(), expect: true },
+  // --- self-access ---------------------------------------------------------------
+  { name: "a user with zero grants reads their own profile", caller: noGrants, action: "read", resource: { module: "identity", resourceType: "user-profile", org: { collegeId: COL }, ownerUserId: "n-1" }, expect: true },
+  { name: "self-access does not allow writes", caller: noGrants, action: "update", resource: { module: "identity", resourceType: "user-profile", org: { collegeId: COL }, ownerUserId: "n-1" }, expect: false },
+  { name: "no self-access to someone else's profile", caller: noGrants, action: "read", resource: { module: "identity", resourceType: "user-profile", org: { collegeId: COL }, ownerUserId: "someone-else" }, expect: false },
+  // --- deny-by-default -------------------------------------------------------------
+  { name: "no grants → no academic access at all", caller: noGrants, action: "read", resource: inClass(), expect: false },
+  { name: "role membership without a grant conveys nothing", caller: caller("r-1", ["hod"], []), action: "read", resource: inClass(), expect: false },
+];
+
+export function describeScopeCheckerConformance(name: string, create: () => ScopeChecker): void {
+  describe(`ScopeChecker conformance: ${name} (the ADR-0010 matrix)`, () => {
+    for (const testCase of MATRIX) {
+      it(`${testCase.expect ? "GRANTS" : "DENIES"}: ${testCase.name}`, () => {
+        const checker = create();
+        const decision = checker.check(testCase.caller, testCase.action, testCase.resource);
+        expect(decision.granted).toBe(testCase.expect);
+        if (!decision.granted) {
+          expect(decision.reason.length).toBeGreaterThan(0);
+        }
+      });
+    }
+
+    it("is deterministic — identical inputs yield identical decisions", () => {
+      const checker = create();
+      const first = checker.check(teacherClassLevel, "read", inClass());
+      const second = checker.check(teacherClassLevel, "read", inClass());
+      expect(second).toEqual(first);
+    });
+
+    it("reports the matching grant on grant-based allows", () => {
+      const checker = create();
+      const decision = checker.check(teacherClassLevel, "read", inClass());
+      expect(decision.granted).toBe(true);
+      expect(decision.matchedGrant).toEqual(teacherClassLevel.grants[0]);
+    });
+  });
+}
+
+/** Exported so documentation tooling and reviewers can count/inspect cases. */
+export const SCOPE_MATRIX_CASES: readonly Case[] = MATRIX;

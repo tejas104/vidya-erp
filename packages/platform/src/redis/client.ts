@@ -1,6 +1,9 @@
 import { Redis } from "ioredis";
 import type { Logger } from "../logger/logger";
 
+/** The concrete client type modules receive through their factory deps. */
+export type RedisClient = Redis;
+
 export interface RedisOptions {
   readonly url: string;
   readonly logger: Logger;

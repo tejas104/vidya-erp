@@ -1,7 +1,6 @@
 import {
-  DenyAllAccessPolicy,
-  DenyAllAuthenticator,
   Lifecycle,
+  RoleRequirementPolicy,
   assertModuleWiring,
   createDb,
   createLogger,
@@ -15,9 +14,11 @@ import {
   type BoundRouteHandler,
   type Logger,
   type RouteDependencies,
+  type RouteHandlerContext,
   type RuntimeModule,
 } from "@vidya/platform";
 import { createSystemModule } from "@vidya/module-system";
+import { createIdentityCore, createIdentityModule } from "@vidya/module-identity";
 
 /**
  * COMPOSITION ROOT — web process.
@@ -28,10 +29,13 @@ import { createSystemModule } from "@vidya/module-system";
  * pipeline. Route files under app/ contain no logic — they look up their
  * bound handler by route id.
  *
- * AUTH POSTURE (Vidya #1): DenyAllAuthenticator + DenyAllAccessPolicy.
- * Every non-public route answers 401. Vidya #2 swaps these two bindings for
- * the session authenticator and the human-authored scope policy — this file
- * is the only place that changes.
+ * AUTH POSTURE (Vidya #2): the identity module's SessionAuthenticator and
+ * the RoleRequirementPolicy replace #1's DenyAll bindings — exactly the
+ * two-binding swap the seam was designed for. Record-level authorization
+ * is the ScopeChecker, exposed via identity's service to every module.
+ *
+ * FAIL-CLOSED BOOT: createIdentityCore() throws until the HUMAN-OWNED
+ * security core lands (ADR-0012); no process starts half-secured.
  */
 
 export interface WebRuntime {
@@ -86,14 +90,31 @@ function buildWebRuntime(): WebRuntime {
     ],
   });
 
-  const modules: RuntimeModule<unknown>[] = [system];
+  const identityCore = createIdentityCore({
+    redis,
+    session: {
+      ttlHours: config.identity.session.ttlHours,
+      idleMinutes: config.identity.session.idleMinutes,
+    },
+  });
+  const identity = createIdentityModule({
+    db,
+    redis,
+    metrics,
+    audit: system.service.audit,
+    core: identityCore,
+    config: config.identity,
+  });
+
+  const modules: RuntimeModule<unknown>[] = [system, identity];
 
   const routeDeps: RouteDependencies = {
     logger,
-    authenticator: new DenyAllAuthenticator(),
-    accessPolicy: new DenyAllAccessPolicy(),
+    authenticator: identity.service.authenticator,
+    accessPolicy: new RoleRequirementPolicy(),
     auditLogger: system.service.audit,
     metrics,
+    http: config.http,
   };
 
   const handlers: Record<string, BoundRouteHandler> = {};
@@ -141,15 +162,18 @@ export function getWebRuntime(): WebRuntime {
 
 /**
  * The only export route files use: a lazy binding from a route id to its
- * pipeline-wrapped handler.
+ * pipeline-wrapped handler. The second argument carries Next's route
+ * context (async path params).
  */
-export function routeHandler(routeId: string): (request: Request) => Promise<Response> {
-  return async (request: Request): Promise<Response> => {
+export function routeHandler(
+  routeId: string,
+): (request: Request, context?: RouteHandlerContext) => Promise<Response> {
+  return async (request: Request, context?: RouteHandlerContext): Promise<Response> => {
     const runtime = getWebRuntime();
     const handler = runtime.handlers[routeId];
     if (handler === undefined) {
       throw new Error(`no route registered with id "${routeId}"`);
     }
-    return handler(request);
+    return handler(request, context);
   };
 }

@@ -29,6 +29,9 @@ export {
 } from "./contracts/module";
 
 export {
+  ROLES,
+  WRITE_ACTIONS,
+  type AccessAction,
   type AccessPolicy,
   type AccessRequirement,
   type AuthnDecision,
@@ -36,16 +39,28 @@ export {
   type Authenticator,
   type AuthzContext,
   type AuthzDecision,
+  type OrgPath,
   type Principal,
+  type ResourceRef,
+  type Role,
+  type ScopeChecker,
+  type ScopeDecision,
+  type ScopeGrant,
 } from "./auth/types";
 export { DenyAllAccessPolicy, DenyAllAuthenticator } from "./auth/deny-all";
+export { RoleRequirementPolicy } from "./auth/role-policy";
+
+export { type OrgDirectory } from "./contracts/org-directory";
 
 export { type ActorType, type AuditEvent, type AuditLogger } from "./audit/types";
 
 export {
+  DEFAULT_HTTP_GUARDS,
   defineRoute,
   type BoundRouteHandler,
+  type HttpGuardOptions,
   type RouteDependencies,
+  type RouteHandlerContext,
 } from "./http/define-route";
 export { problemResponse, type Problem, type ProblemOptions } from "./http/problem";
 export { REQUEST_ID_HEADER, resolveRequestId } from "./http/request-id";
@@ -65,7 +80,7 @@ export {
   type ModuleMigrationSource,
 } from "./db/migrator";
 
-export { createRedis, pingRedis, type RedisOptions } from "./redis/client";
+export { createRedis, pingRedis, type RedisClient, type RedisOptions } from "./redis/client";
 
 export {
   createModuleQueue,

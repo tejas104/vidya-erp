@@ -4,11 +4,16 @@ import { fileURLToPath } from "node:url";
 import {
   OpenAPIRegistry,
   OpenApiGeneratorV3,
+  extendZodWithOpenApi,
   type RouteConfig,
 } from "@asteasolutions/zod-to-openapi";
 import { z, type AnyZodObject } from "zod";
 import type { RouteSpec } from "@vidya/platform";
 import { moduleDefinitions } from "./registry";
+
+// Adds .openapi() to the shared zod prototype so the generator can inline
+// path/query parameters from the modules' plain zod schemas.
+extendZodWithOpenApi(z);
 
 /**
  * Generates docs/openapi/openapi.json from the RouteSpecs every module
@@ -62,18 +67,27 @@ function toRouteConfig(spec: RouteSpec): RouteConfig {
     description: [spec.description, authNote].filter(Boolean).join("\n\n"),
     tags: [...spec.tags],
     security: spec.auth.public ? [] : [{ sessionAuth: [] }],
-    request:
-      spec.request?.query !== undefined
-        ? { query: spec.request.query as AnyZodObject }
-        : spec.request?.body !== undefined
-          ? {
-              body: {
-                content: { "application/json": { schema: spec.request.body } },
-              },
-            }
-          : undefined,
+    request: buildRequest(spec),
     responses,
   };
+}
+
+function buildRequest(spec: RouteSpec): RouteConfig["request"] {
+  const request: NonNullable<RouteConfig["request"]> = {};
+  let present = false;
+  if (spec.request?.params !== undefined) {
+    request.params = spec.request.params as AnyZodObject;
+    present = true;
+  }
+  if (spec.request?.query !== undefined) {
+    request.query = spec.request.query as AnyZodObject;
+    present = true;
+  }
+  if (spec.request?.body !== undefined) {
+    request.body = { content: { "application/json": { schema: spec.request.body } } };
+    present = true;
+  }
+  return present ? request : undefined;
 }
 
 export function buildOpenApiDocument(): unknown {

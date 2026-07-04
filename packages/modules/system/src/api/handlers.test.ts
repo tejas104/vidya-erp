@@ -10,7 +10,7 @@ function ctx(): RouteContext {
     requestId: "req-1",
     logger,
     principal: null,
-    request: { query: undefined, body: undefined, headers: new Headers() },
+    request: { params: undefined, query: undefined, body: undefined, headers: new Headers() },
   };
 }
 

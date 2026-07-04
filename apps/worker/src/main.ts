@@ -20,7 +20,16 @@ import {
   SYSTEM_MODULE_NAME,
   createSystemModule,
 } from "@vidya/module-system";
+import {
+  IDENTITY_MODULE_NAME,
+  RESET_CLEANUP_JOB_NAME,
+  RESET_CLEANUP_SCHEDULER_ID,
+  createIdentityCore,
+  createIdentityModule,
+} from "@vidya/module-identity";
 import { createMetricsServer } from "./metrics-server";
+
+const RESET_CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
 
 /**
  * COMPOSITION ROOT — worker process.
@@ -73,7 +82,25 @@ async function main(): Promise<void> {
     ],
   });
 
-  const modules: RuntimeModule<unknown>[] = [system];
+  // FAIL-CLOSED BOOT: throws until the HUMAN-OWNED security core lands
+  // (ADR-0012); the worker refuses to start half-secured, like the web app.
+  const identityCore = createIdentityCore({
+    redis,
+    session: {
+      ttlHours: config.identity.session.ttlHours,
+      idleMinutes: config.identity.session.idleMinutes,
+    },
+  });
+  const identity = createIdentityModule({
+    db,
+    redis,
+    metrics,
+    audit: system.service.audit,
+    core: identityCore,
+    config: config.identity,
+  });
+
+  const modules: RuntimeModule<unknown>[] = [system, identity];
 
   for (const module of modules) {
     assertModuleWiring(module);
@@ -116,6 +143,19 @@ async function main(): Promise<void> {
     schedulerId: HEARTBEAT_SCHEDULER_ID,
     everyMs: config.worker.systemHeartbeatIntervalMs,
     jobName: HEARTBEAT_JOB_NAME,
+    payload: { source: "worker-schedule" },
+  });
+
+  const identityQueue = createModuleQueue({
+    module: IDENTITY_MODULE_NAME,
+    redisUrl: config.redis.url,
+  });
+  lifecycle.onShutdown("identity-queue", () => identityQueue.close());
+  await upsertRepeatableJob({
+    queue: identityQueue.queue,
+    schedulerId: RESET_CLEANUP_SCHEDULER_ID,
+    everyMs: RESET_CLEANUP_INTERVAL_MS,
+    jobName: RESET_CLEANUP_JOB_NAME,
     payload: { source: "worker-schedule" },
   });
 

@@ -33,6 +33,37 @@ const envSchema = z.object({
   WORKER_METRICS_PORT: z.coerce.number().int().min(1).max(65535).default(9464),
   SYSTEM_HEARTBEAT_INTERVAL_MS: z.coerce.number().int().min(1000).default(300000),
 
+  /** Comma-separated allowed Origins for state-changing requests (CSRF layer 2). */
+  TRUSTED_ORIGINS: z
+    .string()
+    .default("")
+    .transform((value) =>
+      value
+        .split(",")
+        .map((entry) => entry.trim())
+        .filter((entry) => entry !== ""),
+    )
+    .refine(
+      (origins) =>
+        origins.every((origin) => {
+          try {
+            return new URL(origin).origin === origin;
+          } catch {
+            return false;
+          }
+        }),
+      { message: "each entry must be a bare origin like https://vidya.example.edu" },
+    ),
+  BODY_MAX_BYTES: z.coerce.number().int().min(1024).default(1_048_576),
+
+  SESSION_COOKIE_NAME: z.string().min(1).default("vidya_session"),
+  SESSION_COOKIE_SECURE: booleanish.default("true"),
+  SESSION_TTL_HOURS: z.coerce.number().int().min(1).max(168).default(12),
+  SESSION_IDLE_MINUTES: z.coerce.number().int().min(1).default(30),
+  RESET_TOKEN_TTL_MINUTES: z.coerce.number().int().min(5).max(1440).default(30),
+  LOGIN_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(100).default(5),
+  LOGIN_WINDOW_MINUTES: z.coerce.number().int().min(1).default(15),
+
   SHUTDOWN_DRAIN_MS: z.coerce.number().int().min(0).default(5000),
   SHUTDOWN_TIMEOUT_MS: z.coerce.number().int().min(1000).default(15000),
 
@@ -65,6 +96,23 @@ export interface AppConfig {
   readonly lifecycle: {
     readonly drainMs: number;
     readonly timeoutMs: number;
+  };
+  readonly http: {
+    readonly trustedOrigins: readonly string[];
+    readonly bodyMaxBytes: number;
+  };
+  readonly identity: {
+    readonly session: {
+      readonly cookieName: string;
+      readonly cookieSecure: boolean;
+      readonly ttlHours: number;
+      readonly idleMinutes: number;
+    };
+    readonly resetTokenTtlMinutes: number;
+    readonly throttle: {
+      readonly maxAttempts: number;
+      readonly windowMinutes: number;
+    };
   };
 }
 
@@ -115,6 +163,23 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
     lifecycle: {
       drainMs: env.SHUTDOWN_DRAIN_MS,
       timeoutMs: env.SHUTDOWN_TIMEOUT_MS,
+    },
+    http: {
+      trustedOrigins: env.TRUSTED_ORIGINS,
+      bodyMaxBytes: env.BODY_MAX_BYTES,
+    },
+    identity: {
+      session: {
+        cookieName: env.SESSION_COOKIE_NAME,
+        cookieSecure: env.SESSION_COOKIE_SECURE,
+        ttlHours: env.SESSION_TTL_HOURS,
+        idleMinutes: env.SESSION_IDLE_MINUTES,
+      },
+      resetTokenTtlMinutes: env.RESET_TOKEN_TTL_MINUTES,
+      throttle: {
+        maxAttempts: env.LOGIN_MAX_ATTEMPTS,
+        windowMinutes: env.LOGIN_WINDOW_MINUTES,
+      },
     },
   };
 }

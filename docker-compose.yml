@@ -78,6 +78,15 @@ services:
       S3_FORCE_PATH_STYLE: "true"
       WORKER_METRICS_PORT: "9464"
       SYSTEM_HEARTBEAT_INTERVAL_MS: "300000"
+      TRUSTED_ORIGINS: ${TRUSTED_ORIGINS:-}
+      # The compose stack serves plain http on localhost; production MUST
+      # run behind TLS with this set to "true".
+      SESSION_COOKIE_SECURE: "false"
+      SESSION_TTL_HOURS: "12"
+      SESSION_IDLE_MINUTES: "30"
+      RESET_TOKEN_TTL_MINUTES: "30"
+      LOGIN_MAX_ATTEMPTS: "5"
+      LOGIN_WINDOW_MINUTES: "15"
       SHUTDOWN_DRAIN_MS: "5000"
       SHUTDOWN_TIMEOUT_MS: "15000"
     ports:

@@ -1,0 +1,26 @@
+{
+  "name": "@vidya/module-identity",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Vidya identity & access module: users, roles, scope grants, sessions, password lifecycle. The security core (hashing, sessions, scope-check) is HUMAN-OWNED under src/core.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@vidya/platform": "workspace:*",
+    "drizzle-orm": "^0.44.2",
+    "prom-client": "^15.1.3",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "pino": "^9.7.0",
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.0"
+  }
+}

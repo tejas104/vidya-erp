@@ -1,0 +1,14 @@
+# Vidya code ownership.
+#
+# HUMAN-OWNED SECURITY CORE (assignment #2 ownership split): password
+# hashing / credential verification, session issuance & invalidation, and
+# the scope-check function. Fable (the AI engineer) authors interfaces,
+# conformance suites and plumbing — never these implementations.
+# Replace @vidya-security-team with the real team handle when the repo
+# lands on GitHub.
+
+/packages/modules/identity/src/core/ @vidya-security-team
+
+# The conformance suites are the acceptance harness for the core and are
+# reviewed by the same team even though Fable authors them.
+/packages/modules/identity/src/core/conformance/ @vidya-security-team

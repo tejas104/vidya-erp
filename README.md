@@ -1,11 +1,19 @@
-# Project Vidya — modular-monolith foundation (#1)
+# Project Vidya — modular monolith (#1 foundation, #2 identity & access)
 
-On-premise College Information & Analytics System. This repository
-contains assignment #1: the Next.js modular-monolith skeleton — module
-system with build-failing boundaries, web+worker split, shared
-infrastructure, audit log, migration harness, observability — that every
-future Vidya module plugs into. **No business features exist yet by
-design;** authentication arrives in #2.
+On-premise College Information & Analytics System. Assignment #1 built the
+Next.js modular-monolith skeleton (module system with build-failing
+boundaries, web+worker split, audit log, migration harness,
+observability). Assignment #2 adds the identity module: users, roles,
+scope grants, Redis sessions, login/logout/reset, and the role+scope
+authorization model every later module enforces through the ScopeChecker
+chokepoint (ADR-0010).
+
+> ⚠ **Boot gate:** the security core (password hashing, session
+> management, scope-check) is HUMAN-OWNED and not yet implemented
+> (ADR-0012). Until it lands in `packages/modules/identity/src/core/`,
+> both processes fail closed at boot — every route answers 500 with
+> `identity security core not provided`. That is the intended state of
+> this branch, not a bug.
 
 ## Layout
 
@@ -17,6 +25,9 @@ packages/platform         shared infra (config, pino, pg/drizzle, redis,
                           lifecycle, migration runner) — imports NO module
 packages/modules/system   reference module: health/ready/metrics,
                           append-only audit log (sys_), heartbeat job
+packages/modules/identity identity & access (idn_): users, roles, scope
+                          grants, sessions, reset flow; src/core is the
+                          HUMAN-OWNED security core (CODEOWNERS)
 scripts/                  migrate, openapi, todo/ownership checks, registry
 tests/integration         Postgres/Redis/BullMQ end-to-end suite
 docs/                     ADRs, diagrams, threat model, runbook, reviews
@@ -54,23 +65,32 @@ pnpm check:todos && pnpm check:ownership && pnpm openapi:check
 # database
 pnpm db:migrate ; pnpm db:status ; pnpm db:rollback
 
+# one-time platform bootstrap (after the human core lands)
+VIDYA_ADMIN_PASSWORD=<strong> pnpm exec tsx scripts/create-admin.ts \
+  --username root-admin --display-name "Root Admin" --college-id col-main
+
 # integration suite (needs DATABASE_URL/REDIS_URL, e.g. the compose stack)
 pnpm test:integration
 ```
 
 ### Expected green-path output
 
-- `pnpm test:coverage` → `Test Files 15 passed`, `Tests 77 passed`,
-  coverage ≥ 80% on all four axes (verified: 83.9% stmts / 95.2% branch).
+- `pnpm test:coverage` → `Test Files 24 passed`, `Tests 165 passed`,
+  coverage ≥ 80% globally (verified 86.8% / 90.5% branches) and ≥ 95% on
+  `identity/src/service/**` (verified 99.5% / 95.1% branches).
 - `pnpm lint` → exit 0. (Try a deep import like
-  `import x from "@vidya/module-system/src/db/schema"` anywhere — the
+  `import x from "@vidya/module-identity/src/db/schema"` anywhere — the
   build fails with a Constitution message. That's the feature.)
-- `pnpm db:migrate` → `applied  system/0000_audit_log`.
-- `pnpm test:integration` → 13 tests across migrations (up/down/up),
-  append-only audit enforcement, and the heartbeat job end-to-end
-  (enqueue → Redis → BullMQ worker → audit row).
-- Every API response carries `x-request-id`; every non-public route
-  answers `401` until #2 (deny-by-default is real).
+- `pnpm db:migrate` → `applied  system/0000_audit_log`,
+  `applied  identity/0000_identity`.
+- `pnpm test:integration` (CI / Docker machine) → 23 tests: migrations
+  up/down/up across both modules, append-only audit enforcement, heartbeat
+  job end-to-end, and the identity flows (login/logout/reset/self-access/
+  role-gate/lockout) against real Postgres+Redis with the labeled test
+  core.
+- Every API response carries `x-request-id`. With the human core absent,
+  every route answers 500 fail-closed; with it, non-public routes answer
+  401 without a valid `vidya_session` cookie.
 
 ## The rules that bite (on purpose)
 
