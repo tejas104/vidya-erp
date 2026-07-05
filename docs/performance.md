@@ -1,5 +1,27 @@
 # Performance review — Vidya #1 foundation + #2 identity
 
+## Attendance & marks at class + college scale (#4)
+
+- **Recording a section's attendance** (≤~100 entries): one directory path
+  lookup, one roster read, one transaction (session + entries) — tens of
+  ms. A college of 100 sections marking daily ≈ 100 such requests spread
+  over the morning: noise.
+- **Marksheet entry** (≤500 entries, all-or-nothing): one assessment read,
+  one scope check for the whole batch (all rows share the ref), N
+  studentPosition lookups (indexed; the class-size N keeps this in tens of
+  ms), one upsert transaction with per-entry diffs. Corrections are single
+  rows.
+- **Reads:** sessions and marks carry their own org paths, so scope checks
+  are pure in-memory per row — row-filtering a student's year of history
+  (≤ a few hundred rows) costs microseconds after one indexed query.
+- **Gap scan:** one distinct-enrollment query, one indexed session scan
+  per 1k sections, daily. A 200-section college: two queries.
+- **Year-scale growth:** attendance ≈ sections × working days × roster
+  (~1–2M rows/year for a mid college) — the (section_id, held_on) and
+  (student_id) indexes keep every access path narrow; partition by
+  academic year if a deployment crosses ~10M rows (recorded trigger, not
+  built).
+
 ## Bulk import at college scale (#3)
 
 Measured shape, 5,000-row student CSV: one S3 GET, one in-memory parse

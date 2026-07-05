@@ -291,6 +291,26 @@ export class InMemoryPeopleRepo implements PeopleRepo {
     return existing;
   }
 
+  async findExistingStudentIds(studentIds: readonly string[]): Promise<Set<string>> {
+    const existing = new Set<string>();
+    for (const id of studentIds) {
+      if (this.students.has(id)) {
+        existing.add(id);
+      }
+    }
+    return existing;
+  }
+
+  async sectionsWithLiveEnrollment(): Promise<string[]> {
+    const sections = new Set<string>();
+    for (const enrollment of this.enrollments.values()) {
+      if (enrollment.status === "enrolled") {
+        sections.add(enrollment.sectionId);
+      }
+    }
+    return [...sections];
+  }
+
   async findExistingStaffNos(collegeId: string, staffNos: readonly string[]): Promise<Set<string>> {
     const wanted = new Set(staffNos);
     const existing = new Set<string>();

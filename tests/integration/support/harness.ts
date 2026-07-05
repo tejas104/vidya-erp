@@ -21,6 +21,7 @@ import {
 import { createSystemModule } from "@vidya/module-system";
 import { createIdentityCore, createIdentityModule } from "@vidya/module-identity";
 import { createPeopleModule } from "@vidya/module-people";
+import { createAcademicsModule } from "@vidya/module-academics";
 
 export const ADMIN_USERNAME = "int-admin";
 export const ADMIN_PASSWORD = "integration-admin-pass-1";
@@ -97,6 +98,23 @@ export function buildStack() {
   });
   orgDirectoryRef.current = people.service.orgDirectory;
 
+  const academics = createAcademicsModule({
+    db,
+    metrics,
+    audit: system.service.audit,
+    scopeChecker: core.scopeChecker,
+    peopleDirectory: people.service.directory,
+    readAudit: async (resourceType, resourceId, limit) =>
+      (await system.service.readAuditEventsForResource(resourceType, resourceId, limit)).map(
+        (row) => ({
+          action: row.action,
+          actorId: row.actorId,
+          occurredAt: row.occurredAt,
+          details: row.details,
+        }),
+      ),
+  });
+
   const routeDeps: RouteDependencies = {
     logger,
     authenticator: identity.service.authenticator,
@@ -106,7 +124,7 @@ export function buildStack() {
   };
   const specs = new Map<string, RouteSpec>();
   const handlers: Record<string, BoundRouteHandler> = {};
-  for (const module of [identity, people]) {
+  for (const module of [identity, people, academics]) {
     for (const route of module.definition.routes) {
       specs.set(route.id, route);
       handlers[route.id] = defineRoute(route, module.handlers[route.id]!, routeDeps);
@@ -189,6 +207,7 @@ export function buildStack() {
     system,
     identity,
     people,
+    academics,
     core,
     enqueuedImports,
     call,

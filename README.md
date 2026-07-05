@@ -1,4 +1,4 @@
-# Project Vidya — modular monolith (#1 foundation, #2 identity, #3 people)
+# Project Vidya — modular monolith (#1 foundation, #2 identity, #3 people, #4 academics)
 
 On-premise College Information & Analytics System. Assignment #1 built the
 Next.js modular-monolith skeleton (module system with build-failing
@@ -11,7 +11,11 @@ implemented and wired (ADR-0012/0013). Assignment #3 adds the people
 module: the canonical org tree (college→department→class→section +
 subjects), student/teacher records, enrollment, teacher assignments as the
 source of truth for DERIVED identity grants, the OrgDirectory that
-verifies grants, and bulk CSV import through the worker.
+verifies grants, and bulk CSV import through the worker. Assignment #4
+adds academics: attendance (non-subject records, class_teacher-written)
+and marks (subject records, locked per teacher+subject), every access
+through the ScopeChecker with executed worked traces (ADR-0017), complete
+grade-change audit trails, and the daily attendance-gap worker scan.
 
 ## Layout
 
@@ -28,6 +32,7 @@ packages/modules/identity identity & access (idn_): users, roles, scope
                           security core (CODEOWNERS)
 packages/modules/people   org tree, students/teachers, enrollment,
                           assignments → derived grants, CSV import (ppl_)
+packages/modules/academics attendance + marks, scope-traced (acd_)
 scripts/                  migrate, openapi, todo/ownership checks, registry
 tests/integration         Postgres/Redis/BullMQ end-to-end suite
 docs/                     ADRs, diagrams, threat model, runbook, reviews
@@ -75,15 +80,18 @@ pnpm test:integration
 
 ### Expected green-path output
 
-- `pnpm test:coverage` → `Test Files 34 passed`, `Tests 329 passed`,
-  coverage ≥ 80% globally (verified 91.7% / 86.6% branches), ≥ 95% on
-  `identity/src/service/**` and on the grant-derivation seam
-  (`people/src/service/assignments-service.ts`).
+- `pnpm test:coverage` → `Test Files 40 passed`, `Tests 377 passed`,
+  coverage ≥ 80% globally (verified 91.9% / 85.8% branches), ≥ 95% on
+  `identity/src/service/**`, the grant-derivation seam, and
+  `academics/src/service/**`, and **100%** on
+  `academics/src/resource-refs.ts` (the scope-integration surface). The
+  11 worked scope traces run against the REAL human-owned checker.
 - `pnpm lint` → exit 0. (Try a deep import like
   `import x from "@vidya/module-people/src/db/schema"` anywhere — the
   build fails with a Constitution message. That's the feature.)
 - `pnpm db:migrate` → `system/0000_audit_log`, `identity/0000_identity`,
-  `identity/0001_grant_provenance`, `people/0000_people`.
+  `identity/0001_grant_provenance`, `people/0000_people`,
+  `academics/0000_academics`.
 - `pnpm test:integration` (CI / Docker machine, incl. MinIO) → migrations
   up/down/up across all modules, append-only audit enforcement, the
   heartbeat job, identity flows against the REAL security core (argon2 +

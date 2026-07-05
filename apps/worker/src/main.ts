@@ -36,10 +36,17 @@ import {
   RECONCILE_SCHEDULER_ID,
   createPeopleModule,
 } from "@vidya/module-people";
+import {
+  ACADEMICS_MODULE_NAME,
+  GAP_SCAN_JOB_NAME,
+  GAP_SCAN_SCHEDULER_ID,
+  createAcademicsModule,
+} from "@vidya/module-academics";
 import { createMetricsServer } from "./metrics-server";
 
 const RESET_CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
 const RECONCILE_INTERVAL_MS = 60 * 60 * 1000;
+const GAP_SCAN_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
 /**
  * COMPOSITION ROOT — worker process.
@@ -134,7 +141,24 @@ async function main(): Promise<void> {
   });
   orgDirectoryRef.current = people.service.orgDirectory;
 
-  const modules: RuntimeModule<unknown>[] = [system, identity, people];
+  const academics = createAcademicsModule({
+    db,
+    metrics,
+    audit: system.service.audit,
+    scopeChecker: identityCore.scopeChecker,
+    peopleDirectory: people.service.directory,
+    readAudit: async (resourceType, resourceId, limit) =>
+      (await system.service.readAuditEventsForResource(resourceType, resourceId, limit)).map(
+        (row) => ({
+          action: row.action,
+          actorId: row.actorId,
+          occurredAt: row.occurredAt,
+          details: row.details,
+        }),
+      ),
+  });
+
+  const modules: RuntimeModule<unknown>[] = [system, identity, people, academics];
 
   for (const module of modules) {
     assertModuleWiring(module);
@@ -199,6 +223,20 @@ async function main(): Promise<void> {
     schedulerId: RECONCILE_SCHEDULER_ID,
     everyMs: RECONCILE_INTERVAL_MS,
     jobName: RECONCILE_JOB_NAME,
+    payload: { source: "worker-schedule" },
+  });
+
+  // Daily attendance gap scan (#4): sections with no session for the day.
+  const academicsQueue = createModuleQueue({
+    module: ACADEMICS_MODULE_NAME,
+    redisUrl: config.redis.url,
+  });
+  lifecycle.onShutdown("academics-queue", () => academicsQueue.close());
+  await upsertRepeatableJob({
+    queue: academicsQueue.queue,
+    schedulerId: GAP_SCAN_SCHEDULER_ID,
+    everyMs: GAP_SCAN_INTERVAL_MS,
+    jobName: GAP_SCAN_JOB_NAME,
     payload: { source: "worker-schedule" },
   });
 

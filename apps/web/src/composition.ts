@@ -22,6 +22,7 @@ import {
 import { createSystemModule } from "@vidya/module-system";
 import { createIdentityCore, createIdentityModule } from "@vidya/module-identity";
 import { IMPORT_JOB_NAME, PEOPLE_MODULE_NAME, createPeopleModule } from "@vidya/module-people";
+import { createAcademicsModule } from "@vidya/module-academics";
 
 /**
  * COMPOSITION ROOT — web process.
@@ -131,7 +132,24 @@ function buildWebRuntime(): WebRuntime {
   });
   orgDirectoryRef.current = people.service.orgDirectory;
 
-  const modules: RuntimeModule<unknown>[] = [system, identity, people];
+  const academics = createAcademicsModule({
+    db,
+    metrics,
+    audit: system.service.audit,
+    scopeChecker: identityCore.scopeChecker,
+    peopleDirectory: people.service.directory,
+    readAudit: async (resourceType, resourceId, limit) =>
+      (await system.service.readAuditEventsForResource(resourceType, resourceId, limit)).map(
+        (row) => ({
+          action: row.action,
+          actorId: row.actorId,
+          occurredAt: row.occurredAt,
+          details: row.details,
+        }),
+      ),
+  });
+
+  const modules: RuntimeModule<unknown>[] = [system, identity, people, academics];
 
   const routeDeps: RouteDependencies = {
     logger,

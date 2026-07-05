@@ -16,6 +16,7 @@ const nextConfig: NextConfig = {
     "@vidya/module-system",
     "@vidya/module-identity",
     "@vidya/module-people",
+    "@vidya/module-academics",
   ],
   // Infrastructure clients with native/dynamic requires stay external to the
   // server bundle.

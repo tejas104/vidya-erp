@@ -5261,6 +5261,2251 @@
           }
         }
       }
+    },
+    "/api/v1/academics/attendance/sessions": {
+      "post": {
+        "summary": "Record a section's attendance for a session (class teacher)",
+        "description": "Creates the session with the full roster's entries in one call. Attendance is a NON-SUBJECT record: writable by the section's class teacher per the matrix; subject teachers read it but cannot write it. Every entry must belong to the section's live roster.\n\n**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "academics-attendance"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "sectionId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64
+                  },
+                  "heldOn": {
+                    "type": "string",
+                    "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                  },
+                  "slot": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 32,
+                    "default": "day"
+                  },
+                  "academicYear": {
+                    "type": "string",
+                    "pattern": "^\\d{4}-\\d{2}$"
+                  },
+                  "entries": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "studentId": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 64
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "present",
+                            "absent",
+                            "late",
+                            "excused"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "studentId",
+                        "status"
+                      ]
+                    },
+                    "minItems": 1,
+                    "maxItems": 500
+                  }
+                },
+                "required": [
+                  "sectionId",
+                  "heldOn",
+                  "academicYear",
+                  "entries"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Session recorded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "sectionId": {
+                      "type": "string"
+                    },
+                    "heldOn": {
+                      "type": "string"
+                    },
+                    "slot": {
+                      "type": "string"
+                    },
+                    "academicYear": {
+                      "type": "string"
+                    },
+                    "takenBy": {
+                      "type": "string"
+                    },
+                    "entries": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "studentId": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "present",
+                              "absent",
+                              "late",
+                              "excused"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "studentId",
+                          "status"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "sectionId",
+                    "heldOn",
+                    "slot",
+                    "academicYear",
+                    "takenBy",
+                    "entries"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Access denied by the role/scope policy (problem+json)"
+          },
+          "404": {
+            "description": "No such section",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Session already exists for this section/date/slot",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Entries outside the section's live roster",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    },
+                    "invalid": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "studentId": {
+                            "type": "string"
+                          },
+                          "reason": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "studentId",
+                          "reason"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "message",
+                    "invalid"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/academics/attendance/sessions/{sessionId}/entries/{studentId}": {
+      "patch": {
+        "summary": "Correct one attendance entry (class teacher; audited with before/after)",
+        "description": "**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "academics-attendance"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "sessionId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "studentId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "present",
+                      "absent",
+                      "late",
+                      "excused"
+                    ]
+                  }
+                },
+                "required": [
+                  "status"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Entry corrected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "studentId": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "present",
+                        "absent",
+                        "late",
+                        "excused"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "studentId",
+                    "status"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Access denied by the role/scope policy (problem+json)"
+          },
+          "404": {
+            "description": "No such session or entry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/academics/attendance/sessions/{sessionId}": {
+      "get": {
+        "summary": "One session with its entries",
+        "description": "**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "academics-attendance"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "sessionId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "sectionId": {
+                      "type": "string"
+                    },
+                    "heldOn": {
+                      "type": "string"
+                    },
+                    "slot": {
+                      "type": "string"
+                    },
+                    "academicYear": {
+                      "type": "string"
+                    },
+                    "takenBy": {
+                      "type": "string"
+                    },
+                    "entries": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "studentId": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "present",
+                              "absent",
+                              "late",
+                              "excused"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "studentId",
+                          "status"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "sectionId",
+                    "heldOn",
+                    "slot",
+                    "academicYear",
+                    "takenBy",
+                    "entries"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Scope check denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/academics/sections/{sectionId}/attendance": {
+      "get": {
+        "summary": "A section's sessions in a date range",
+        "description": "**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "academics-attendance"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "sectionId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            },
+            "required": false,
+            "name": "from",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            },
+            "required": false,
+            "name": "to",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 50
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Sessions (entry counts, newest first)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "sessions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "heldOn": {
+                            "type": "string"
+                          },
+                          "slot": {
+                            "type": "string"
+                          },
+                          "academicYear": {
+                            "type": "string"
+                          },
+                          "counts": {
+                            "type": "object",
+                            "properties": {
+                              "present": {
+                                "type": "number"
+                              },
+                              "absent": {
+                                "type": "number"
+                              },
+                              "late": {
+                                "type": "number"
+                              },
+                              "excused": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "present",
+                              "absent",
+                              "late",
+                              "excused"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "heldOn",
+                          "slot",
+                          "academicYear",
+                          "counts"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "sessions"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Scope check denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such section",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/academics/students/{studentId}/attendance": {
+      "get": {
+        "summary": "A student's attendance record (rows the caller's scope covers)",
+        "description": "Row-filtered by the ScopeChecker: each session is checked at its own stored org path; counts are computed over granted rows only.\n\n**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "academics-attendance"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "studentId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}$"
+            },
+            "required": false,
+            "name": "academicYear",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Granted sessions + counts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "sessions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "sessionId": {
+                            "type": "string"
+                          },
+                          "sectionId": {
+                            "type": "string"
+                          },
+                          "heldOn": {
+                            "type": "string"
+                          },
+                          "slot": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "present",
+                              "absent",
+                              "late",
+                              "excused"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "sessionId",
+                          "sectionId",
+                          "heldOn",
+                          "slot",
+                          "status"
+                        ]
+                      }
+                    },
+                    "counts": {
+                      "type": "object",
+                      "properties": {
+                        "present": {
+                          "type": "number"
+                        },
+                        "absent": {
+                          "type": "number"
+                        },
+                        "late": {
+                          "type": "number"
+                        },
+                        "excused": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "present",
+                        "absent",
+                        "late",
+                        "excused"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "sessions",
+                    "counts"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Access denied by the role/scope policy (problem+json)"
+          },
+          "404": {
+            "description": "No such student",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/academics/assessments": {
+      "post": {
+        "summary": "Create an assessment (the subject's teacher)",
+        "description": "Marks are SUBJECT records: creation requires the caller's teacher grant for exactly this class + subject. The subject must belong to the class's department.\n\n**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "academics-marks"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "classId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64
+                  },
+                  "subjectId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64
+                  },
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "exam",
+                      "quiz",
+                      "assignment"
+                    ]
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  },
+                  "academicYear": {
+                    "type": "string",
+                    "pattern": "^\\d{4}-\\d{2}$"
+                  },
+                  "maxScore": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 9999.99
+                  },
+                  "heldOn": {
+                    "type": "string",
+                    "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                  }
+                },
+                "required": [
+                  "classId",
+                  "subjectId",
+                  "kind",
+                  "name",
+                  "academicYear",
+                  "maxScore"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "classId": {
+                      "type": "string"
+                    },
+                    "subjectId": {
+                      "type": "string"
+                    },
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "exam",
+                        "quiz",
+                        "assignment"
+                      ]
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "academicYear": {
+                      "type": "string"
+                    },
+                    "maxScore": {
+                      "type": "number"
+                    },
+                    "heldOn": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "classId",
+                    "subjectId",
+                    "kind",
+                    "name",
+                    "academicYear",
+                    "maxScore",
+                    "heldOn"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Access denied by the role/scope policy (problem+json)"
+          },
+          "404": {
+            "description": "No such class or subject",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Duplicate assessment name for this class/subject/year",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Subject does not belong to the class's department",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/academics/assessments/{assessmentId}": {
+      "delete": {
+        "summary": "Delete an assessment without marks (the subject's teacher)",
+        "description": "**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "academics-marks"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "assessmentId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Access denied by the role/scope policy (problem+json)"
+          },
+          "404": {
+            "description": "No such assessment",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Marks exist — deletion blocked",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "summary": "One assessment",
+        "description": "**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "academics-marks"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "assessmentId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The assessment",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "classId": {
+                      "type": "string"
+                    },
+                    "subjectId": {
+                      "type": "string"
+                    },
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "exam",
+                        "quiz",
+                        "assignment"
+                      ]
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "academicYear": {
+                      "type": "string"
+                    },
+                    "maxScore": {
+                      "type": "number"
+                    },
+                    "heldOn": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "classId",
+                    "subjectId",
+                    "kind",
+                    "name",
+                    "academicYear",
+                    "maxScore",
+                    "heldOn"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Scope check denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such assessment",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/academics/classes/{classId}/assessments": {
+      "get": {
+        "summary": "A class's assessments the caller may see (row-filtered by subject scope)",
+        "description": "**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "academics-marks"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "classId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}$"
+            },
+            "required": false,
+            "name": "academicYear",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Granted assessments",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "assessments": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "classId": {
+                            "type": "string"
+                          },
+                          "subjectId": {
+                            "type": "string"
+                          },
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "exam",
+                              "quiz",
+                              "assignment"
+                            ]
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "academicYear": {
+                            "type": "string"
+                          },
+                          "maxScore": {
+                            "type": "number"
+                          },
+                          "heldOn": {
+                            "type": "string",
+                            "nullable": true
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "classId",
+                          "subjectId",
+                          "kind",
+                          "name",
+                          "academicYear",
+                          "maxScore",
+                          "heldOn"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "assessments"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Access denied by the role/scope policy (problem+json)"
+          },
+          "404": {
+            "description": "No such class",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/academics/assessments/{assessmentId}/marks": {
+      "put": {
+        "summary": "Enter or update a marksheet in bulk (the subject's teacher)",
+        "description": "All-or-nothing: every entry is validated (score within maxScore, student enrolled in the class) before any write; the audit event carries per-entry before/after diffs (grade-change integrity).\n\n**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "academics-marks"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "assessmentId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "entries": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "studentId": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 64
+                        },
+                        "score": {
+                          "type": "number",
+                          "minimum": 0,
+                          "maximum": 9999.99
+                        }
+                      },
+                      "required": [
+                        "studentId",
+                        "score"
+                      ]
+                    },
+                    "minItems": 1,
+                    "maxItems": 500
+                  }
+                },
+                "required": [
+                  "entries"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Marksheet applied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "created": {
+                      "type": "number"
+                    },
+                    "updated": {
+                      "type": "number"
+                    },
+                    "unchanged": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "created",
+                    "updated",
+                    "unchanged"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Access denied by the role/scope policy (problem+json)"
+          },
+          "404": {
+            "description": "No such assessment",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid entries (score range / not enrolled in this class)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    },
+                    "invalid": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "studentId": {
+                            "type": "string"
+                          },
+                          "reason": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "studentId",
+                          "reason"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "message",
+                    "invalid"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "summary": "An assessment's marks",
+        "description": "**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "academics-marks"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "assessmentId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Marks",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "marks": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "assessmentId": {
+                            "type": "string"
+                          },
+                          "studentId": {
+                            "type": "string"
+                          },
+                          "score": {
+                            "type": "number"
+                          },
+                          "recordedBy": {
+                            "type": "string"
+                          },
+                          "updatedAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "assessmentId",
+                          "studentId",
+                          "score",
+                          "recordedBy",
+                          "updatedAt"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "marks"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Scope check denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such assessment",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/academics/marks/{markId}": {
+      "patch": {
+        "summary": "Correct one mark (the subject's teacher; audited with before/after)",
+        "description": "**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "academics-marks"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "markId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "score": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 9999.99
+                  }
+                },
+                "required": [
+                  "score"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Corrected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "assessmentId": {
+                      "type": "string"
+                    },
+                    "studentId": {
+                      "type": "string"
+                    },
+                    "score": {
+                      "type": "number"
+                    },
+                    "recordedBy": {
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "assessmentId",
+                    "studentId",
+                    "score",
+                    "recordedBy",
+                    "updatedAt"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Access denied by the role/scope policy (problem+json)"
+          },
+          "404": {
+            "description": "No such mark",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Score exceeds the assessment's maxScore",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/academics/students/{studentId}/marks": {
+      "get": {
+        "summary": "A student's marks the caller may see (row-filtered by subject scope)",
+        "description": "Each mark is checked at its assessment's stored class path + subjectId — a subject teacher sees only their own subject's rows.\n\n**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "academics-marks"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "studentId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}$"
+            },
+            "required": false,
+            "name": "academicYear",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": false,
+            "name": "subjectId",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Granted marks with their assessments",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "marks": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "mark": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "assessmentId": {
+                                "type": "string"
+                              },
+                              "studentId": {
+                                "type": "string"
+                              },
+                              "score": {
+                                "type": "number"
+                              },
+                              "recordedBy": {
+                                "type": "string"
+                              },
+                              "updatedAt": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "assessmentId",
+                              "studentId",
+                              "score",
+                              "recordedBy",
+                              "updatedAt"
+                            ]
+                          },
+                          "assessment": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "classId": {
+                                "type": "string"
+                              },
+                              "subjectId": {
+                                "type": "string"
+                              },
+                              "kind": {
+                                "type": "string",
+                                "enum": [
+                                  "exam",
+                                  "quiz",
+                                  "assignment"
+                                ]
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "academicYear": {
+                                "type": "string"
+                              },
+                              "maxScore": {
+                                "type": "number"
+                              },
+                              "heldOn": {
+                                "type": "string",
+                                "nullable": true
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "classId",
+                              "subjectId",
+                              "kind",
+                              "name",
+                              "academicYear",
+                              "maxScore",
+                              "heldOn"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "mark",
+                          "assessment"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "marks"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Access denied by the role/scope policy (problem+json)"
+          },
+          "404": {
+            "description": "No such student",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/academics/marks/{markId}/history": {
+      "get": {
+        "summary": "A mark's complete change history (from the append-only audit log)",
+        "description": "**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "academics-marks"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "markId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Audit events, newest first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "history": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "action": {
+                            "type": "string"
+                          },
+                          "actorId": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "occurredAt": {
+                            "type": "string"
+                          },
+                          "details": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "nullable": true
+                            }
+                          }
+                        },
+                        "required": [
+                          "action",
+                          "actorId",
+                          "occurredAt",
+                          "details"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "history"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Scope check denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such mark",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
     }
   }
 }

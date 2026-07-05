@@ -19,7 +19,12 @@ import {
   type RuntimeModule,
 } from "@vidya/platform";
 import { createSystemHandlers } from "./api/handlers";
-import { readRecentAuditEvents, SystemAuditLogger, type AuditLogRecord } from "./service/audit-writer";
+import {
+  readAuditEventsForResource,
+  readRecentAuditEvents,
+  SystemAuditLogger,
+  type AuditLogRecord,
+} from "./service/audit-writer";
 import { createHeartbeatProcessor } from "./jobs/heartbeat";
 import {
   HEARTBEAT_JOB_NAME,
@@ -45,6 +50,12 @@ export interface SystemService {
   readonly audit: AuditLogger;
   /** Operational read-back of recent audit events, newest first. */
   readRecentAuditEvents(limit: number): Promise<AuditLogRecord[]>;
+  /** One resource's change history (e.g. a mark's grade changes), newest first. */
+  readAuditEventsForResource(
+    resourceType: string,
+    resourceId: string,
+    limit: number,
+  ): Promise<AuditLogRecord[]>;
 }
 
 export interface SystemModuleDeps {
@@ -73,6 +84,8 @@ export function createSystemModule(deps: SystemModuleDeps): RuntimeModule<System
     service: {
       audit,
       readRecentAuditEvents: (limit: number) => readRecentAuditEvents(deps.db, limit),
+      readAuditEventsForResource: (resourceType: string, resourceId: string, limit: number) =>
+        readAuditEventsForResource(deps.db, resourceType, resourceId, limit),
     },
   };
   assertModuleWiring(module);

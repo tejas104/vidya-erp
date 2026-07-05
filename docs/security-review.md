@@ -1,4 +1,37 @@
-# Security review — Vidya foundation (#1) + identity & access (#2) + people (#3)
+# Security review — Vidya #1 foundation + #2 identity + #3 people + #4 academics
+
+## <a id="worked-scope-traces"></a>#4: The worked scope traces (EXECUTED, not argued)
+
+Every trace below is executed against the REAL human-owned ScopeChecker
+with ResourceRefs built by the module's actual builders — in
+`packages/modules/academics/src/scope-traces.test.ts` (unit, 11 tests) and
+re-verified LIVE in `tests/integration/academics-flow.int.test.ts` with
+real logged-in teachers holding #3-derived grants. **A human must read the
+trace file against the matrix as an acceptance item (review-gate-4).**
+
+| # | Trace | Verdict |
+|---|---|---|
+| 1 | teacher reads own-subject marks across their class | **GRANTED** |
+| 2 | teacher reads another subject's marks, same class | **DENIED** |
+| 3 | teacher reads attendance across their class's sections | **GRANTED** |
+| 4 | teacher writes marks for a subject not theirs | **DENIED** |
+| 4b | teacher writes own class+subject marks | **GRANTED** |
+| 4c | teacher writes attendance (non-subject record) | **DENIED** |
+| 5 | class_teacher writes attendance / writes marks / reads all subjects' marks | **GRANTED / DENIED / GRANTED** |
+| 6 | hod & principal read marks+attendance / routine writes | **GRANTED / DENIED** |
+| 7 | admin reads academic data / writes any of it | **GRANTED / DENIED** |
+| 8 | anything across class or college boundaries | **DENIED** |
+| 9 | assessment creation: subject teacher / class_teacher / admin | **GRANTED / DENIED / DENIED** |
+
+Why the traces cannot rot: the subjectId bit is set by construction
+(ADR-0017 — attendance refs cannot carry one, marks refs always do, from
+the stored row, never caller input), the builder file has a 100% coverage
+gate, and org paths are stamped from the PeopleDirectory at write time.
+Grade-change integrity: every entry and correction audits before/after
+with actor into the append-only log; `GET /marks/{id}/history` surfaces
+the trail, scope-checked like the mark itself. #4 required ZERO changes
+to the human-owned core (ADR-0016 honored).
+
 
 > #3 delta summary: the people module makes the scope model operational
 > against real domain records — every read AND write flows through the

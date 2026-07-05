@@ -117,6 +117,29 @@ queue/observability/pg/redis close → exit. No drain delay (no LB).
   year's sections (the one-live-enrollment rule is per year, so old years
   stay intact for history).
 
+## Academics operations (#4)
+
+- **Daily rhythm:** class teachers record sessions
+  (`POST /api/v1/academics/attendance/sessions`, one per section/slot);
+  subject teachers create assessments and enter marksheets. Everything is
+  scope-gated — "403 but I'm their teacher" almost always means a missing
+  or stale assignment in #3 (check `GET /classes/{id}/assignments`).
+- **The gap scan** runs daily on the worker;
+  `academics.attendance-gap-detected` audit rows (and the
+  `vidya_attendance_gaps_total` counter) list sections that never recorded
+  a session — chase those, don't grep logs.
+- **Grade disputes:** `GET /api/v1/academics/marks/{markId}/history` is
+  the authoritative trail (who, when, before/after — from the append-only
+  log). Never "fix" marks in SQL: raw writes bypass both the audit trail
+  and validation, and the restricted-DB-roles hardening item exists
+  precisely to make that impossible.
+- **Wrong marksheet submitted:** re-PUT the corrected sheet — upserts diff
+  per entry and audit only actual changes; unchanged rows are recorded as
+  unchanged.
+- **Assessment created by mistake:** deletable only while it has no marks
+  (409 otherwise) — enter the marks under a new assessment and leave the
+  mistake empty, or escalate for a reviewed migration.
+
 ## Routine checks
 
 - `GET /ready` on every replica after deploys.

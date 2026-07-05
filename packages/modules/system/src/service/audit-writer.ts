@@ -1,4 +1,4 @@
-import { desc } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import type { AuditEvent, AuditLogger, Db } from "@vidya/platform";
 import { sysAuditLog, type SysAuditLogRow } from "../db/schema";
 
@@ -35,4 +35,25 @@ export async function readRecentAuditEvents(db: Db, limit: number): Promise<Audi
     throw new RangeError("limit must be an integer between 1 and 1000");
   }
   return db.select().from(sysAuditLog).orderBy(desc(sysAuditLog.id)).limit(limit);
+}
+
+/**
+ * The change history of one resource, newest first — e.g. every grade
+ * change of a mark (Vidya #4's differential history rides on this).
+ */
+export async function readAuditEventsForResource(
+  db: Db,
+  resourceType: string,
+  resourceId: string,
+  limit: number,
+): Promise<AuditLogRecord[]> {
+  if (!Number.isInteger(limit) || limit < 1 || limit > 1000) {
+    throw new RangeError("limit must be an integer between 1 and 1000");
+  }
+  return db
+    .select()
+    .from(sysAuditLog)
+    .where(and(eq(sysAuditLog.resourceType, resourceType), eq(sysAuditLog.resourceId, resourceId)))
+    .orderBy(desc(sysAuditLog.id))
+    .limit(limit);
 }

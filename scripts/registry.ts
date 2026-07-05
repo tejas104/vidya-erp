@@ -4,6 +4,7 @@ import type { ModuleDefinition, ModuleMigrationSource } from "@vidya/platform";
 import { systemModuleDefinition } from "@vidya/module-system";
 import { identityModuleDefinition } from "@vidya/module-identity";
 import { peopleModuleDefinition } from "@vidya/module-people";
+import { academicsModuleDefinition } from "@vidya/module-academics";
 
 /**
  * Tooling-side module registry. New modules are added here (one line) and in
@@ -14,6 +15,7 @@ export const moduleDefinitions: readonly ModuleDefinition[] = [
   systemModuleDefinition,
   identityModuleDefinition,
   peopleModuleDefinition,
+  academicsModuleDefinition,
 ];
 
 const require = createRequire(import.meta.url);

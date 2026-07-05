@@ -1,0 +1,28 @@
+{
+  "name": "@vidya/module-academics",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Vidya academics module (acd_): attendance sessions and marks against the #3 org tree, every read/write gated by #2's ScopeChecker; grade changes fully audited.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@vidya/module-people": "workspace:*",
+    "@vidya/platform": "workspace:*",
+    "drizzle-orm": "^0.44.2",
+    "prom-client": "^15.1.3",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "@vidya/module-identity": "workspace:*",
+    "pino": "^9.7.0",
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.0"
+  }
+}

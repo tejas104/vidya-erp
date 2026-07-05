@@ -110,6 +110,33 @@ Running: check worker logs for the importId. A failed run marks the import
 `failed` with the cause as row 0 in `errors`; re-POSTing the same CSV is
 safe (existing rows report as per-row errors).
 
+## Teacher gets 403 writing attendance
+
+Working as designed: attendance is a NON-subject record — only the
+class_teacher of that class writes it (the matrix's line, ADR-0017).
+Subject teachers read attendance and write their own subject's marks.
+
+## Teacher can't see or enter marks for their class
+
+Marks are subject records. In order: does the teacher hold a
+subject_teacher assignment for exactly this class AND this subject
+(`GET /classes/{id}/assignments`)? Did their session predate the
+assignment (grants snapshot at login — re-login)? Is the assessment under
+the expected subject (`GET /assessments/{id}`)? A physics teacher will
+always 403 on math marks — that is the feature.
+
+## 422 entering a marksheet
+
+The whole batch was rejected; the response lists per-entry reasons
+(score over maxScore, student not enrolled in this class, duplicate rows).
+Fix the sheet and resubmit — nothing was partially written.
+
+## 409 recording attendance
+
+A session already exists for that section/date/slot. Correct individual
+entries via PATCH (audited) instead of re-recording; use a different
+`slot` for genuinely separate sessions on the same day.
+
 ## Migration runner errors
 
 - `no paired rollback file` — write the `.down.sql`; pairing is mandatory.

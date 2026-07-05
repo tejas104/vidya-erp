@@ -50,6 +50,10 @@ export interface PeopleRepo {
   /** Batched existence lookups for the bulk importer. */
   findExistingAdmissionNos(collegeId: string, admissionNos: readonly string[]): Promise<Set<string>>;
   findExistingStaffNos(collegeId: string, staffNos: readonly string[]): Promise<Set<string>>;
+  /** Which of these student ids exist (batched; PeopleDirectory, #4). */
+  findExistingStudentIds(studentIds: readonly string[]): Promise<Set<string>>;
+  /** Sections holding at least one live enrollment (attendance gap scan, #4). */
+  sectionsWithLiveEnrollment(): Promise<string[]>;
 
   createTeacher(input: {
     collegeId: string;
@@ -167,6 +171,29 @@ export function createPeopleRepo(db: Db): PeopleRepo {
         }
       }
       return existing;
+    },
+
+    async findExistingStudentIds(studentIds) {
+      const existing = new Set<string>();
+      for (let index = 0; index < studentIds.length; index += 1000) {
+        const chunk = studentIds.slice(index, index + 1000);
+        const rows = await db
+          .select({ id: pplStudents.id })
+          .from(pplStudents)
+          .where(inArray(pplStudents.id, chunk));
+        for (const row of rows) {
+          existing.add(row.id);
+        }
+      }
+      return existing;
+    },
+
+    async sectionsWithLiveEnrollment() {
+      const rows = await db
+        .selectDistinct({ sectionId: pplEnrollments.sectionId })
+        .from(pplEnrollments)
+        .where(eq(pplEnrollments.status, "enrolled"));
+      return rows.map((row) => row.sectionId);
     },
 
     async createTeacher(input) {

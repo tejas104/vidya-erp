@@ -19,6 +19,7 @@ import {
   type Metrics,
   type ObjectStorageClient,
   type OrgDirectory,
+  type OrgPath,
   type RuntimeModule,
   type ScopeChecker,
 } from "@vidya/platform";
@@ -64,10 +65,32 @@ export interface PeopleModuleDeps {
   readonly enqueueImport: (payload: z.infer<typeof importJobPayloadSchema>) => Promise<void>;
 }
 
+/**
+ * Read-only directory other modules use to resolve org positions and
+ * validate people references (#4's academics module is the first
+ * consumer). All ids are the same opaque identifiers grants carry.
+ */
+export interface PeopleDirectory {
+  sectionPath(sectionId: string): Promise<OrgPath | null>;
+  classPath(classId: string): Promise<OrgPath | null>;
+  /** Live enrollments of a section: who attendance can be marked for. */
+  sectionRoster(sectionId: string): Promise<{ studentId: string; academicYear: string }[]>;
+  /** Enrollment-derived org position; `{collegeId}` for unenrolled students. */
+  studentPosition(studentId: string): Promise<OrgPath | null>;
+  /** Which of these student ids exist (batched). */
+  studentsExist(studentIds: readonly string[]): Promise<Set<string>>;
+  /** The department a subject belongs to, or null. */
+  subjectDepartment(subjectId: string): Promise<string | null>;
+  /** Sections with at least one live enrollment (attendance gap scan). */
+  sectionsWithLiveEnrollment(): Promise<string[]>;
+}
+
 /** What composition roots and other modules may use. */
 export interface PeopleModuleService {
   /** #2's OrgDirectory contract — injected into identity for grant verification. */
   readonly orgDirectory: OrgDirectory;
+  /** Read-only resolution/validation surface for other modules (#4+). */
+  readonly directory: PeopleDirectory;
   /** One-time operator bootstrap (scripts/create-admin.ts). Idempotent by code. */
   bootstrapCollege(input: { name: string; code: string }): Promise<{ collegeId: string; created: boolean }>;
 }
@@ -131,6 +154,23 @@ export function createPeopleModule(deps: PeopleModuleDeps): RuntimeModule<People
     readinessChecks: [],
     service: {
       orgDirectory: org.orgDirectory,
+      directory: {
+        sectionPath: (sectionId) => orgRepo.pathForSection(sectionId),
+        classPath: (classId) => orgRepo.pathForClass(classId),
+        sectionRoster: async (sectionId) =>
+          (await peopleRepo.roster(sectionId)).map((entry) => ({
+            studentId: entry.student.id,
+            academicYear: entry.enrollment.academicYear,
+          })),
+        studentPosition: async (studentId) => {
+          const student = await peopleRepo.getStudent(studentId);
+          return student === null ? null : people.studentOrgPosition(student);
+        },
+        studentsExist: (studentIds) => peopleRepo.findExistingStudentIds(studentIds),
+        subjectDepartment: async (subjectId) =>
+          (await orgRepo.getSubject(subjectId))?.departmentId ?? null,
+        sectionsWithLiveEnrollment: () => peopleRepo.sectionsWithLiveEnrollment(),
+      },
       bootstrapCollege: (input) => org.bootstrapCollege(input),
     },
   };

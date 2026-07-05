@@ -56,6 +56,10 @@ export default defineConfig({
         "packages/modules/people/src/repo/**",
         "packages/modules/people/src/db/**",
         "packages/modules/people/src/index.ts",
+        // Academics: same policy.
+        "packages/modules/academics/src/repo/**",
+        "packages/modules/academics/src/db/**",
+        "packages/modules/academics/src/index.ts",
       ],
       thresholds: {
         lines: 80,
@@ -73,6 +77,20 @@ export default defineConfig({
         },
         // The grant-derivation seam (ADR-0015) is security-relevant: same bar.
         "packages/modules/people/src/service/assignments-service.ts": {
+          lines: 95,
+          functions: 95,
+          branches: 95,
+          statements: 95,
+        },
+        // #4: the scope-integration surface (ref builders) and the services
+        // that feed it carry the security bar.
+        "packages/modules/academics/src/resource-refs.ts": {
+          lines: 100,
+          functions: 100,
+          branches: 100,
+          statements: 100,
+        },
+        "packages/modules/academics/src/service/**": {
           lines: 95,
           functions: 95,
           branches: 95,
