@@ -5,6 +5,9 @@
   implementations; `createIdentityCore()` is wired (fail-closed gate
   retired) and the platform boots end-to-end. The matrix was extended once
   under owner authorization — see ADR-0013.
+  **Update 2026-07-05:** both owner-authorized edits (the wiring and the
+  ADR-0013 extension) were ratified; the standing change-control rule for
+  any future edit to this human-owned boundary is ADR-0016.
 - **Date:** 2026-07-04
 
 ## The split

@@ -5,11 +5,18 @@ author (Windows, Node 22, pnpm 11.9). Docker is unavailable on the
 authoring machine: integration tests, compose, image builds and CI are
 written/updated and run in CI — the human/CI gate.
 
-## ⚠ Items executed under the owner's "no human changes" authorization
+## ✅ Items executed under the owner's "no human changes" authorization — RATIFIED 2026-07-05
+
+**Both items below were ratified by the platform owner on 2026-07-05
+(ADR-0016).** Ratification verified each diff against its ADR (minimal and
+isolated in `4011168`, matching the descriptions) and ran the scope-checker
+conformance suite green (75 cases). The standing change-control rule for any
+future edit to the human-owned boundary — and the explicit finding that diff
+size does not shorten this process — is recorded in ADR-0016.
 
 Per the #3 approval ("take the best decision … instead of doing any human
-changes"), two actions that ADR-0012 reserves for the security team were
-performed by Fable and REQUIRE RATIFICATION:
+changes"), the two actions below that ADR-0012 reserves for the security
+team were performed by Fable and required ratification:
 
 1. **`core/index.ts` wiring** — mechanical assembly of the team's landed
    implementations (argon2 hasher, Redis session manager, matrix checker);

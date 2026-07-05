@@ -1,10 +1,12 @@
 # ADR-0013: Matrix extension — admin writes for people-module records
 
-- **Status:** Accepted (authorized by the platform owner in the #3
-  approval: "take the best decision … instead of doing any human changes")
-  — ⚠ **flagged for security-team ratification** in docs/review-gate-3.md,
-  because it modifies the HUMAN-OWNED scope-checker (ADR-0012)
-- **Date:** 2026-07-04
+- **Status:** **Ratified 2026-07-05** (ADR-0016). Authorized by the
+  platform owner in the #3 approval ("take the best decision … instead of
+  doing any human changes"); modifies the HUMAN-OWNED scope-checker
+  (ADR-0012) so it was flagged for ratification in docs/review-gate-3.md.
+  Ratification verified the diff against this ADR and ran the conformance
+  suite (green). The standing change-control rule for such edits is ADR-0016.
+- **Date:** 2026-07-04 (ratified 2026-07-05)
 
 ## Context
 
@@ -31,8 +33,11 @@ i.e. **administrative** records. Everything else is untouched:
 - teacher/class_teacher/hod/principal gain no write authority over people
   records.
 
-Twelve new conformance cases pin the extension (and its non-goals) in
-`src/core/conformance/scope-checker.ts`.
+Fourteen new conformance cases pin the extension and its non-goals in
+`src/core/conformance/scope-checker.ts` — eleven for the admin/role write
+boundaries introduced here, plus three that pin the checker's pre-existing
+"promotion" clause (class_teacher writes non-subject records of their own
+class; college-anchored records stay unreachable via containment).
 
 ## Alternatives rejected
 
@@ -47,6 +52,7 @@ Twelve new conformance cases pin the extension (and its non-goals) in
 
 - The security team must ratify this diff (one function + conformance
   cases) — it is deliberately the smallest reviewable surface.
+  **Done 2026-07-05 (ADR-0016); size did not shorten the process.**
 - Future modules must NOT piggyback on `module: "people"` naming to gain
   admin writability; adding any module to the administrative set is a new
   ADR + conformance change.
