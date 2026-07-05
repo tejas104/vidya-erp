@@ -1,0 +1,28 @@
+{
+  "name": "@vidya/module-people",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Vidya people module (ppl_): the canonical org tree (college→department→class→section, subjects), student/teacher records, enrollment, teacher assignments (source of truth for derived identity grants), OrgDirectory, bulk CSV import.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@vidya/module-identity": "workspace:*",
+    "@vidya/platform": "workspace:*",
+    "csv-parse": "^5.6.0",
+    "drizzle-orm": "^0.44.2",
+    "prom-client": "^15.1.3",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "pino": "^9.7.0",
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.0"
+  }
+}

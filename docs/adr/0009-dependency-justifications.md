@@ -20,6 +20,7 @@
 | `zod` | platform, modules, scripts | Constitution-locked config/input validation; schemas double as OpenAPI source (ADR-0007). |
 | `tsx` | worker | Runs TypeScript sources directly (esbuild transform). Type safety is guaranteed by `tsc --noEmit` in CI over exactly these sources; a compile-to-JS step for the worker is recorded as technical debt (docs/review-gate.md), not a correctness gap. |
 | `argon2` | module-identity | Native libargon2 binding for the human-owned PasswordHasher (argon2id, ADR-0012). Native reference implementation chosen over pure-JS ports: cost parameters only defend if the hash actually costs that much. |
+| `csv-parse` | module-people | Bulk-import CSV parsing (quotes, embedded commas/newlines, BOM). Mature, dependency-free, no native code. Excel `.xlsx` parsing was deliberately rejected (heavyweight parsers with a poor security track record); colleges export CSV from Excel. |
 
 ## Development dependencies
 

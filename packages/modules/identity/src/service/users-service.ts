@@ -1,4 +1,4 @@
-import type { AuditLogger, Role } from "@vidya/platform";
+import type { AuditLogger, OrgDirectory, Role } from "@vidya/platform";
 import type { PasswordHasher, SessionManager } from "../core/contracts";
 import type {
   NewGrant,
@@ -6,6 +6,24 @@ import type {
   UserRecord,
   UsersRepo,
 } from "../repo/users-repo";
+
+/** Thrown when a manual grant names org units the OrgDirectory cannot resolve (422 at the route). */
+export class InvalidOrgPathError extends Error {
+  constructor(reason: string) {
+    super(`grant rejected: ${reason}`);
+    this.name = "InvalidOrgPathError";
+  }
+}
+
+/** Thrown when manual administration touches a derived grant (409 at the route, ADR-0015). */
+export class DerivedGrantImmutableError extends Error {
+  constructor() {
+    super(
+      "this grant is derived from a people-module teacher assignment; change the assignment instead",
+    );
+    this.name = "DerivedGrantImmutableError";
+  }
+}
 
 export interface UserView {
   readonly id: string;
@@ -23,6 +41,7 @@ export interface UserView {
     readonly sectionId: string | null;
     readonly subjectId: string | null;
     readonly verified: boolean;
+    readonly source: "manual" | "derived";
   }[];
   readonly createdAt: string;
 }
@@ -32,6 +51,11 @@ export interface UsersServiceDeps {
   readonly hasher: PasswordHasher;
   readonly sessions: SessionManager;
   readonly audit: AuditLogger;
+  /**
+   * Late-bound OrgDirectory (people module, #3). When present, manual
+   * grants are validated against the real org tree and stored verified.
+   */
+  readonly orgDirectory?: () => OrgDirectory | null;
 }
 
 function grantView(grant: StoredGrant): UserView["grants"][number] {
@@ -44,6 +68,7 @@ function grantView(grant: StoredGrant): UserView["grants"][number] {
     sectionId: grant.org.sectionId ?? null,
     subjectId: grant.subjectId ?? null,
     verified: grant.verified,
+    source: grant.source,
   };
 }
 
@@ -143,21 +168,42 @@ export class UsersService {
     return { before, after };
   }
 
-  /** Throws RoleNotHeldError when the grant's role is not held (409 at the route). */
+  /**
+   * Throws RoleNotHeldError when the grant's role is not held (409) and
+   * InvalidOrgPathError when the OrgDirectory rejects the org units (422).
+   * With the directory wired, manual grants are stored verified.
+   */
   async addGrant(userId: string, grant: NewGrant): Promise<StoredGrant | null> {
     const user = await this.deps.repo.findById(userId);
     if (user === null) {
       return null;
     }
-    const stored = await this.deps.repo.addGrant(userId, grant);
+    const directory = this.deps.orgDirectory?.() ?? null;
+    let verified = grant.verified ?? false;
+    if (directory !== null) {
+      const path = await directory.verifyOrgPath(grant.org);
+      if (!path.valid) {
+        throw new InvalidOrgPathError(path.reason ?? "org path does not resolve");
+      }
+      if (grant.subjectId !== undefined && !(await directory.verifySubjectId(grant.subjectId))) {
+        throw new InvalidOrgPathError(`unknown subjectId "${grant.subjectId}"`);
+      }
+      verified = true;
+    }
+    const stored = await this.deps.repo.addGrant(userId, { ...grant, verified });
     await this.deps.sessions.invalidateAllForUser(userId);
     return stored;
   }
 
+  /** Throws DerivedGrantImmutableError for derived grants (409) — change the assignment instead. */
   async removeGrant(userId: string, grantId: string): Promise<boolean | null> {
     const user = await this.deps.repo.findById(userId);
     if (user === null) {
       return null;
+    }
+    const grant = await this.deps.repo.getGrantById(grantId);
+    if (grant !== null && grant.userId === userId && grant.source === "derived") {
+      throw new DerivedGrantImmutableError();
     }
     const removed = await this.deps.repo.removeGrant(userId, grantId);
     if (removed) {

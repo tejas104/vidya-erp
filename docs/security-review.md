@@ -1,4 +1,17 @@
-# Security review — Vidya foundation (#1) + identity & access (#2)
+# Security review — Vidya foundation (#1) + identity & access (#2) + people (#3)
+
+> #3 delta summary: the people module makes the scope model operational
+> against real domain records — every read AND write flows through the
+> human-owned ScopeChecker with org positions derived from live data
+> (students positioned by enrollment; transfers checked on BOTH sides).
+> The one matrix change (admin writes for people records) was owner-
+> authorized and conformance-pinned (ADR-0013). The new security-relevant
+> surface is the assignment→grant derivation seam (ADR-0015): compensated
+> dual-writes, provenance-tagged grants immune to manual edits, session
+> invalidation on every authority change, and an hourly audited
+> reconciliation. Bulk import validates per row, caps body size, stores
+> CSVs privately, and audits actor+counts. Threat model:
+> docs/threat-model-people.md.
 
 > #2 delta summary: the deny-all gate is replaced by real session
 > authentication + role/scope authorization. Credential verification,

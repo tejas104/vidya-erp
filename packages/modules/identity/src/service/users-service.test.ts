@@ -64,6 +64,7 @@ describe("UsersService reads", () => {
         sectionId: "s",
         subjectId: "sub",
         verified: false,
+        source: "manual",
       },
     ]);
     expect(await service.getUser("ghost")).toBeNull();
@@ -134,6 +135,96 @@ describe("UsersService.setRoles", () => {
   it("returns null for an unknown user", async () => {
     const { service } = makeService();
     expect(await service.setRoles("ghost", ["teacher"], "admin-1")).toBeNull();
+  });
+});
+
+describe("UsersService grants with the OrgDirectory wired (#3)", () => {
+  function makeVerifyingService(valid: boolean) {
+    const repo = new FakeUsersRepo();
+    const service = new UsersService({
+      repo,
+      hasher: new FakePasswordHasher(),
+      sessions: new FakeSessionManager(),
+      audit: new RecordingAudit(),
+      orgDirectory: () => ({
+        verifyOrgPath: async () => (valid ? { valid: true } : { valid: false, reason: "no such department" }),
+        verifySubjectId: async () => valid,
+      }),
+    });
+    return { repo, service };
+  }
+
+  it("stores manual grants verified when the directory resolves them", async () => {
+    const { repo, service } = makeVerifyingService(true);
+    const user = repo.seed({ username: "asha", passwordHash: "h", roles: ["hod"] });
+    const stored = await service.addGrant(user.id, {
+      role: "hod",
+      org: { collegeId: "col-1", departmentId: "dep-1" },
+      grantedBy: "admin-1",
+    });
+    expect(stored?.verified).toBe(true);
+  });
+
+  it("rejects grants naming unreal org units (InvalidOrgPathError → 422)", async () => {
+    const { repo, service } = makeVerifyingService(false);
+    const user = repo.seed({ username: "asha", passwordHash: "h", roles: ["hod"] });
+    await expect(
+      service.addGrant(user.id, {
+        role: "hod",
+        org: { collegeId: "col-1", departmentId: "dep-typo" },
+        grantedBy: "admin-1",
+      }),
+    ).rejects.toThrow(/no such department/);
+    expect(await repo.getGrants(user.id)).toHaveLength(0);
+  });
+
+  it("refuses manual removal of derived grants (change the assignment instead)", async () => {
+    const { service, repo } = makeService();
+    const user = repo.seed({
+      username: "asha",
+      passwordHash: "h",
+      roles: ["teacher"],
+      grants: [
+        {
+          id: "g-derived",
+          role: "teacher",
+          org: { collegeId: "col-1", departmentId: "d", classId: "c" },
+          subjectId: "s",
+          verified: true,
+          source: "derived",
+          sourceRef: "people:assignment:a1",
+        },
+      ],
+    });
+    await expect(service.removeGrant(user.id, "g-derived")).rejects.toThrow(/assignment/);
+    expect(await repo.getGrants(user.id)).toHaveLength(1);
+  });
+});
+
+describe("UsersService grants — provenance edges", () => {
+  it("removeGrant on another user's grant id falls through to a plain false", async () => {
+    const { service, repo } = makeService();
+    const owner = repo.seed({
+      username: "owner",
+      passwordHash: "h",
+      roles: ["hod"],
+      grants: [{ id: "g-owner", role: "hod", org: { collegeId: "col-1", departmentId: "d" }, verified: true }],
+    });
+    const other = repo.seed({ username: "other", passwordHash: "h" });
+    expect(await service.removeGrant(other.id, "g-owner")).toBe(false);
+    expect(await repo.getGrants(owner.id)).toHaveLength(1);
+  });
+
+  it("addGrant passes an explicit verified flag through when no directory is wired", async () => {
+    const { service, repo } = makeService();
+    const user = repo.seed({ username: "asha", passwordHash: "h", roles: ["hod"] });
+    const stored = await service.addGrant(user.id, {
+      role: "hod",
+      org: { collegeId: "col-1", departmentId: "d" },
+      grantedBy: "migration",
+      verified: true,
+    });
+    expect(stored?.verified).toBe(true);
   });
 });
 

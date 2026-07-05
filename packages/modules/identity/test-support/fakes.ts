@@ -21,6 +21,7 @@ import type {
   SessionRecord,
 } from "../src/core/contracts";
 import type {
+  GrantSource,
   NewGrant,
   StoredGrant,
   UserRecord,
@@ -28,6 +29,12 @@ import type {
   UserStatus,
 } from "../src/repo/users-repo";
 import { RoleNotHeldError, UsernameTakenError } from "../src/repo/users-repo";
+
+/** Seed shape: provenance fields optional, filled with manual defaults. */
+export type SeedGrant = Omit<StoredGrant, "userId" | "source" | "sourceRef"> & {
+  source?: GrantSource;
+  sourceRef?: string | null;
+};
 import type { ResetTokensRepo } from "../src/repo/reset-tokens-repo";
 import type { ThrottleStore } from "../src/service/throttle";
 
@@ -169,10 +176,11 @@ export class FakeUsersRepo implements UsersRepo {
     status?: UserStatus;
     collegeId?: string;
     roles?: Role[];
-    grants?: StoredGrant[];
+    grants?: SeedGrant[];
   }): StoredUser {
+    const id = user.id ?? randomUUID();
     const stored: StoredUser = {
-      id: user.id ?? randomUUID(),
+      id,
       username: user.username,
       displayName: user.displayName ?? user.username,
       passwordHash: user.passwordHash,
@@ -180,7 +188,12 @@ export class FakeUsersRepo implements UsersRepo {
       collegeId: user.collegeId ?? "col-1",
       createdAt: new Date(),
       roles: user.roles ?? [],
-      grants: user.grants ?? [],
+      grants: (user.grants ?? []).map((grant) => ({
+        ...grant,
+        userId: id,
+        source: grant.source ?? "manual",
+        sourceRef: grant.sourceRef ?? null,
+      })),
     };
     this.byId.set(stored.id, stored);
     return stored;
@@ -258,8 +271,61 @@ export class FakeUsersRepo implements UsersRepo {
     }
   }
 
+  async addRole(userId: string, role: Role, _grantedBy: string): Promise<void> {
+    const user = this.byId.get(userId);
+    if (user !== undefined && !user.roles.includes(role)) {
+      user.roles.push(role);
+    }
+  }
+
   async getGrants(userId: string): Promise<StoredGrant[]> {
     return [...(this.byId.get(userId)?.grants ?? [])];
+  }
+
+  async getGrantById(grantId: string): Promise<StoredGrant | null> {
+    for (const user of this.byId.values()) {
+      const grant = user.grants.find((entry) => entry.id === grantId);
+      if (grant !== undefined) {
+        return grant;
+      }
+    }
+    return null;
+  }
+
+  async findGrantBySourceRef(sourceRef: string): Promise<StoredGrant | null> {
+    for (const user of this.byId.values()) {
+      const grant = user.grants.find((entry) => entry.sourceRef === sourceRef);
+      if (grant !== undefined) {
+        return grant;
+      }
+    }
+    return null;
+  }
+
+  async listGrantsBySourcePrefix(prefix: string): Promise<StoredGrant[]> {
+    const results: StoredGrant[] = [];
+    for (const user of this.byId.values()) {
+      results.push(
+        ...user.grants.filter((entry) => entry.sourceRef?.startsWith(prefix) ?? false),
+      );
+    }
+    return results;
+  }
+
+  async listUnverifiedGrants(): Promise<StoredGrant[]> {
+    const results: StoredGrant[] = [];
+    for (const user of this.byId.values()) {
+      results.push(...user.grants.filter((entry) => !entry.verified));
+    }
+    return results;
+  }
+
+  async markGrantVerified(grantId: string): Promise<void> {
+    for (const user of this.byId.values()) {
+      user.grants = user.grants.map((entry) =>
+        entry.id === grantId ? { ...entry, verified: true } : entry,
+      );
+    }
   }
 
   async addGrant(userId: string, grant: NewGrant): Promise<StoredGrant> {
@@ -269,10 +335,13 @@ export class FakeUsersRepo implements UsersRepo {
     }
     const stored: StoredGrant = {
       id: randomUUID(),
+      userId,
       role: grant.role,
       org: grant.org,
       ...(grant.subjectId !== undefined ? { subjectId: grant.subjectId } : {}),
-      verified: false,
+      verified: grant.verified ?? false,
+      source: grant.source ?? "manual",
+      sourceRef: grant.sourceRef ?? null,
     };
     user.grants.push(stored);
     return stored;

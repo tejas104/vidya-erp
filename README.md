@@ -75,22 +75,24 @@ pnpm test:integration
 
 ### Expected green-path output
 
-- `pnpm test:coverage` → `Test Files 24 passed`, `Tests 165 passed`,
-  coverage ≥ 80% globally (verified 86.8% / 90.5% branches) and ≥ 95% on
-  `identity/src/service/**` (verified 99.5% / 95.1% branches).
+- `pnpm test:coverage` → `Test Files 34 passed`, `Tests 329 passed`,
+  coverage ≥ 80% globally (verified 91.7% / 86.6% branches), ≥ 95% on
+  `identity/src/service/**` and on the grant-derivation seam
+  (`people/src/service/assignments-service.ts`).
 - `pnpm lint` → exit 0. (Try a deep import like
-  `import x from "@vidya/module-identity/src/db/schema"` anywhere — the
+  `import x from "@vidya/module-people/src/db/schema"` anywhere — the
   build fails with a Constitution message. That's the feature.)
-- `pnpm db:migrate` → `applied  system/0000_audit_log`,
-  `applied  identity/0000_identity`.
-- `pnpm test:integration` (CI / Docker machine) → 23 tests: migrations
-  up/down/up across both modules, append-only audit enforcement, heartbeat
-  job end-to-end, and the identity flows (login/logout/reset/self-access/
-  role-gate/lockout) against real Postgres+Redis with the labeled test
-  core.
-- Every API response carries `x-request-id`. With the human core absent,
-  every route answers 500 fail-closed; with it, non-public routes answer
-  401 without a valid `vidya_session` cookie.
+- `pnpm db:migrate` → `system/0000_audit_log`, `identity/0000_identity`,
+  `identity/0001_grant_provenance`, `people/0000_people`.
+- `pnpm test:integration` (CI / Docker machine, incl. MinIO) → migrations
+  up/down/up across all modules, append-only audit enforcement, the
+  heartbeat job, identity flows against the REAL security core (argon2 +
+  the live scope matrix), people org administration, the full
+  assignment→derived-grant→session-invalidation loop, the grants-verify
+  backfill, and MinIO-backed CSV imports (dry-run + apply + per-row
+  errors).
+- Every API response carries `x-request-id`; non-public routes answer 401
+  without a valid `vidya_session` cookie; people routes are never public.
 
 ## The rules that bite (on purpose)
 

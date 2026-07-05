@@ -6,11 +6,13 @@ import {
   createMetrics,
   createModuleQueue,
   createModuleWorker,
+  createObjectStorage,
   createRedis,
   loadConfig,
   pingPostgres,
   pingRedis,
   upsertRepeatableJob,
+  type OrgDirectory,
   type RegisteredJob,
   type RuntimeModule,
 } from "@vidya/platform";
@@ -27,9 +29,17 @@ import {
   createIdentityCore,
   createIdentityModule,
 } from "@vidya/module-identity";
+import {
+  IMPORT_JOB_NAME,
+  PEOPLE_MODULE_NAME,
+  RECONCILE_JOB_NAME,
+  RECONCILE_SCHEDULER_ID,
+  createPeopleModule,
+} from "@vidya/module-people";
 import { createMetricsServer } from "./metrics-server";
 
 const RESET_CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
+const RECONCILE_INTERVAL_MS = 60 * 60 * 1000;
 
 /**
  * COMPOSITION ROOT — worker process.
@@ -82,8 +92,6 @@ async function main(): Promise<void> {
     ],
   });
 
-  // FAIL-CLOSED BOOT: throws until the HUMAN-OWNED security core lands
-  // (ADR-0012); the worker refuses to start half-secured, like the web app.
   const identityCore = createIdentityCore({
     redis,
     session: {
@@ -91,6 +99,9 @@ async function main(): Promise<void> {
       idleMinutes: config.identity.session.idleMinutes,
     },
   });
+  // Late-bound OrgDirectory: interface-only dependency keeps the package
+  // graph acyclic; target set once the people module exists.
+  const orgDirectoryRef: { current: OrgDirectory | null } = { current: null };
   const identity = createIdentityModule({
     db,
     redis,
@@ -98,9 +109,32 @@ async function main(): Promise<void> {
     audit: system.service.audit,
     core: identityCore,
     config: config.identity,
+    orgDirectory: () => orgDirectoryRef.current,
   });
 
-  const modules: RuntimeModule<unknown>[] = [system, identity];
+  const objectStorage = createObjectStorage(config.s3);
+  lifecycle.onShutdown("object-storage", async () => {
+    objectStorage.destroy();
+  });
+  const peopleQueue = createModuleQueue({
+    module: PEOPLE_MODULE_NAME,
+    redisUrl: config.redis.url,
+  });
+  lifecycle.onShutdown("people-queue", () => peopleQueue.close());
+  const people = createPeopleModule({
+    db,
+    metrics,
+    audit: system.service.audit,
+    scopeChecker: identityCore.scopeChecker,
+    identityGrants: identity.service.derivedGrants,
+    storage: { client: objectStorage, bucket: config.s3.bucket },
+    enqueueImport: async (payload) => {
+      await peopleQueue.queue.add(IMPORT_JOB_NAME, payload);
+    },
+  });
+  orgDirectoryRef.current = people.service.orgDirectory;
+
+  const modules: RuntimeModule<unknown>[] = [system, identity, people];
 
   for (const module of modules) {
     assertModuleWiring(module);
@@ -156,6 +190,15 @@ async function main(): Promise<void> {
     schedulerId: RESET_CLEANUP_SCHEDULER_ID,
     everyMs: RESET_CLEANUP_INTERVAL_MS,
     jobName: RESET_CLEANUP_JOB_NAME,
+    payload: { source: "worker-schedule" },
+  });
+
+  // The ADR-0015 safety net: hourly derived-grant reconciliation.
+  await upsertRepeatableJob({
+    queue: peopleQueue.queue,
+    schedulerId: RECONCILE_SCHEDULER_ID,
+    everyMs: RECONCILE_INTERVAL_MS,
+    jobName: RECONCILE_JOB_NAME,
     payload: { source: "worker-schedule" },
   });
 

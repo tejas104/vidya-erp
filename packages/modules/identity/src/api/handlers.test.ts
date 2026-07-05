@@ -10,6 +10,7 @@ import type {
 import { createIdentityHandlers, type IdentityHandlerDeps } from "./handlers";
 import { AuthService } from "../service/auth-service";
 import { UsersService } from "../service/users-service";
+import { GrantVerificationService } from "../service/grant-verification";
 import { FailureThrottle } from "../service/throttle";
 import {
   FakePasswordHasher,
@@ -32,7 +33,9 @@ class StubScopeChecker implements ScopeChecker {
   }
 }
 
-function makeHarness() {
+function makeHarness(
+  overrides: { orgDirectory?: () => import("@vidya/platform").OrgDirectory | null } = {},
+) {
   const repo = new FakeUsersRepo();
   const resetTokens = new FakeResetTokensRepo();
   const hasher = new FakePasswordHasher();
@@ -40,7 +43,8 @@ function makeHarness() {
   const audit = new RecordingAudit();
   const store = new MemoryThrottleStore();
   const scopeChecker = new StubScopeChecker();
-  const users = new UsersService({ repo, hasher, sessions, audit });
+  const orgDirectory = overrides.orgDirectory ?? (() => null);
+  const users = new UsersService({ repo, hasher, sessions, audit, orgDirectory });
   const auth = new AuthService({
     repo,
     resetTokens,
@@ -54,6 +58,7 @@ function makeHarness() {
   const deps: IdentityHandlerDeps = {
     users,
     auth,
+    grantVerification: new GrantVerificationService(repo, orgDirectory),
     scopeChecker,
     cookiePolicy: { name: "vidya_session", secure: true },
     loginsTotal: new Counter({
@@ -188,6 +193,122 @@ describe("scope-check chokepoint usage", () => {
     );
     expect(result.status).toBe(404);
     expect(scopeChecker.lastArgs).toHaveLength(0);
+  });
+});
+
+describe("user reads and updates", () => {
+  it("user-get returns the full view when the scope allows", async () => {
+    const { handlers, repo } = makeHarness();
+    const target = repo.seed({ username: "someone", passwordHash: "h", roles: ["teacher"] });
+    const result = await handlers["identity.user-get"]!(
+      ctx({ principal: adminPrincipal, params: { userId: target.id } }),
+    );
+    expect(result.status).toBe(200);
+    expect(result.body).toMatchObject({ username: "someone", roles: ["teacher"] });
+  });
+
+  it("user-list returns college members; user-update patches and 404s", async () => {
+    const { handlers, repo } = makeHarness();
+    repo.seed({ username: "a-user", passwordHash: "h", collegeId: "col-1" });
+    const listing = await handlers["identity.user-list"]!(
+      ctx({ principal: adminPrincipal, query: { collegeId: "col-1", limit: 50, offset: 0 } }),
+    );
+    expect(listing.status).toBe(200);
+    expect((listing.body as { users: unknown[] }).users).toHaveLength(1);
+
+    const target = repo.seed({ username: "patch-me", passwordHash: "h" });
+    const updated = await handlers["identity.user-update"]!(
+      ctx({ principal: adminPrincipal, params: { userId: target.id }, body: { status: "disabled" } }),
+    );
+    expect(updated.status).toBe(200);
+    expect(
+      (
+        await handlers["identity.user-update"]!(
+          ctx({ principal: adminPrincipal, params: { userId: "ghost" }, body: { status: "active" } }),
+        )
+      ).status,
+    ).toBe(404);
+  });
+
+  it("grant-add creates and grant-remove deletes manual grants; derived rows 409", async () => {
+    const { handlers, repo } = makeHarness();
+    const user = repo.seed({ username: "asha", passwordHash: "h", roles: ["hod", "teacher"] });
+    const added = await handlers["identity.grant-add"]!(
+      ctx({
+        principal: adminPrincipal,
+        params: { userId: user.id },
+        body: { role: "hod", collegeId: "col-1", departmentId: "dep-1" },
+      }),
+    );
+    expect(added.status).toBe(201);
+    const grantId = (added.body as { id: string }).id;
+    const removed = await handlers["identity.grant-remove"]!(
+      ctx({ principal: adminPrincipal, params: { userId: user.id, grantId } }),
+    );
+    expect(removed.status).toBe(200);
+
+    await repo.addRole(user.id, "teacher", "test");
+    const derived = await repo.addGrant(user.id, {
+      role: "teacher",
+      org: { collegeId: "col-1", departmentId: "d", classId: "c" },
+      subjectId: "s",
+      grantedBy: "derivation",
+      source: "derived",
+      sourceRef: "people:assignment:a1",
+      verified: true,
+    });
+    const blocked = await handlers["identity.grant-remove"]!(
+      ctx({ principal: adminPrincipal, params: { userId: user.id, grantId: derived.id } }),
+    );
+    expect(blocked.status).toBe(409);
+    expect(
+      (
+        await handlers["identity.grant-remove"]!(
+          ctx({ principal: adminPrincipal, params: { userId: user.id, grantId: "ghost" } }),
+        )
+      ).status,
+    ).toBe(404);
+  });
+
+  it("password-change verifies the current password", async () => {
+    const { handlers, repo } = makeHarness();
+    const user = repo.seed({ username: "asha", passwordHash: "fake-hash::old-pass::x" });
+    const principal: Principal = { ...adminPrincipal, id: user.id };
+    const wrong = await handlers["identity.password-change"]!(
+      ctx({ principal, body: { currentPassword: "nope", newPassword: "a-new-password-123" } }),
+    );
+    expect(wrong.status).toBe(401);
+    const right = await handlers["identity.password-change"]!(
+      ctx({ principal, body: { currentPassword: "old-pass", newPassword: "a-new-password-123" } }),
+    );
+    expect(right.status).toBe(200);
+    expect(right.headers?.["set-cookie"]).toContain("Max-Age=0");
+  });
+});
+
+describe("grants-verify handler", () => {
+  it("503s without an OrgDirectory and reports the sweep with one", async () => {
+    const { handlers } = makeHarness();
+    expect((await handlers["identity.grants-verify"]!(ctx({ principal: adminPrincipal }))).status).toBe(503);
+
+    const { handlers: wired, repo } = makeHarness({
+      orgDirectory: () => ({
+        verifyOrgPath: async () => ({ valid: true }),
+        verifySubjectId: async () => true,
+      }),
+    });
+    repo.seed({
+      username: "asha",
+      passwordHash: "h",
+      roles: ["hod"],
+      grants: [
+        { id: "g1", role: "hod", org: { collegeId: "col-1", departmentId: "d" }, verified: false },
+      ],
+    });
+    const result = await wired["identity.grants-verify"]!(ctx({ principal: adminPrincipal }));
+    expect(result.status).toBe(200);
+    expect(result.body).toEqual({ verified: 1, unresolved: [] });
+    expect(result.audit?.details).toMatchObject({ verified: 1, unresolvedCount: 0 });
   });
 });
 

@@ -81,6 +81,35 @@ prefix, or mentions another module's prefix / `platform_migrations`.
 Rename the table or move the code to the owning module — cross-module data
 access goes through the owning module's service API.
 
+## A teacher can't see their class (or sees too little)
+
+Authority = derived grants = assignments. Check, in order: does the
+teacher record have `identity_user_id` linked? Is the teacher `active`?
+Does the assignment exist for the right class/subject/year
+(`GET /classes/{id}/assignments`)? Then check the user's grants
+(`GET /identity/users/{id}`) — the derived grant should be there with
+`source: "derived"`. If assignments and grants disagree, the hourly
+reconcile will repair it (or run it on demand) — and the repair audit
+tells you something else deleted the grant.
+
+## 409 "this grant is derived from a people-module teacher assignment"
+
+Working as designed (ADR-0015): derived grants are managed by assignments.
+Remove or change the assignment; the grant follows.
+
+## 409 deleting an org unit
+
+RESTRICT deletes: the unit still has children (or enrollments/assignments
+referencing it). Empty the subtree first — there is deliberately no
+cascade for org structure.
+
+## Import stuck in "pending" / "running"
+
+Pending: the worker isn't consuming the people queue (worker down? Redis?).
+Running: check worker logs for the importId. A failed run marks the import
+`failed` with the cause as row 0 in `errors`; re-POSTing the same CSV is
+safe (existing rows report as per-row errors).
+
 ## Migration runner errors
 
 - `no paired rollback file` — write the `.down.sql`; pairing is mandatory.

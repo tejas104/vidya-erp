@@ -5,6 +5,7 @@ import {
   createDb,
   createLogger,
   createMetrics,
+  createModuleQueue,
   createObjectStorage,
   createRedis,
   defineRoute,
@@ -13,12 +14,14 @@ import {
   pingRedis,
   type BoundRouteHandler,
   type Logger,
+  type OrgDirectory,
   type RouteDependencies,
   type RouteHandlerContext,
   type RuntimeModule,
 } from "@vidya/platform";
 import { createSystemModule } from "@vidya/module-system";
 import { createIdentityCore, createIdentityModule } from "@vidya/module-identity";
+import { IMPORT_JOB_NAME, PEOPLE_MODULE_NAME, createPeopleModule } from "@vidya/module-people";
 
 /**
  * COMPOSITION ROOT — web process.
@@ -97,6 +100,9 @@ function buildWebRuntime(): WebRuntime {
       idleMinutes: config.identity.session.idleMinutes,
     },
   });
+  // Late-bound: identity ← people is interface-only (OrgDirectory) to keep
+  // the package graph acyclic; the target is set right after people exists.
+  const orgDirectoryRef: { current: OrgDirectory | null } = { current: null };
   const identity = createIdentityModule({
     db,
     redis,
@@ -104,9 +110,28 @@ function buildWebRuntime(): WebRuntime {
     audit: system.service.audit,
     core: identityCore,
     config: config.identity,
+    orgDirectory: () => orgDirectoryRef.current,
   });
 
-  const modules: RuntimeModule<unknown>[] = [system, identity];
+  const peopleQueue = createModuleQueue({
+    module: PEOPLE_MODULE_NAME,
+    redisUrl: config.redis.url,
+  });
+  lifecycle.onShutdown("people-queue", () => peopleQueue.close());
+  const people = createPeopleModule({
+    db,
+    metrics,
+    audit: system.service.audit,
+    scopeChecker: identityCore.scopeChecker,
+    identityGrants: identity.service.derivedGrants,
+    storage: { client: objectStorage, bucket: config.s3.bucket },
+    enqueueImport: async (payload) => {
+      await peopleQueue.queue.add(IMPORT_JOB_NAME, payload);
+    },
+  });
+  orgDirectoryRef.current = people.service.orgDirectory;
+
+  const modules: RuntimeModule<unknown>[] = [system, identity, people];
 
   const routeDeps: RouteDependencies = {
     logger,

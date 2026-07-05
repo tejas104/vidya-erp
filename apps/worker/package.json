@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@vidya/module-identity": "workspace:*",
+    "@vidya/module-people": "workspace:*",
     "@vidya/module-system": "workspace:*",
     "@vidya/platform": "workspace:*",
     "tsx": "^4.20.0"

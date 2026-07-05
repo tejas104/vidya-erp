@@ -1,5 +1,31 @@
 # Performance review — Vidya #1 foundation + #2 identity
 
+## Bulk import at college scale (#3)
+
+Measured shape, 5,000-row student CSV: one S3 GET, one in-memory parse
+(csv-parse sync, ~MBs), ONE org-tree read building the section-lookup map,
+ONE batched existence query per 1,000 admission numbers, then ~1–2 inserts
+per row (student + optional enrollment). At ~1–2ms/insert that is well
+under a minute end-to-end, off the request path (worker), with the request
+itself returning 202 in milliseconds. Memory is bounded by the 1 MB body
+cap (~10k rows); raising the cap should switch parsing to the streaming
+csv-parse API — recorded as the trigger, not built. Per-row inserts (not
+multi-row VALUES) were chosen for per-row error attribution; if import
+throughput ever matters, batch the clean rows and keep per-row only for
+retries.
+
+## Derivation & scope costs (#3)
+
+- Assignment writes add one identity round-trip (grant upsert + session
+  invalidation) — admin-frequency operations, negligible.
+- Request-path scope checks stay pure/in-memory; the people handlers add
+  at most 2–3 indexed lookups to resolve a record's org position.
+- Reconciliation is O(assignments) with one identity list call — hourly,
+  thousands of rows at most, trivially cheap.
+- The tree endpoint runs one query per department+class (N+1 by design for
+  code clarity); a college with ~20 departments is ~100 fast indexed
+  queries. Join-optimize when a UI polls it.
+
 ## Identity hot paths (#2)
 
 - **Authenticated request:** one Redis round-trip (session resolve; idle

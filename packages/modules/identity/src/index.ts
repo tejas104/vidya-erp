@@ -15,6 +15,7 @@ import {
   type Authenticator,
   type Db,
   type Metrics,
+  type OrgDirectory,
   type RedisClient,
   type Role,
   type RuntimeModule,
@@ -26,6 +27,8 @@ import { createUsersRepo } from "./repo/users-repo";
 import { createResetTokensRepo } from "./repo/reset-tokens-repo";
 import { UsersService } from "./service/users-service";
 import { AuthService } from "./service/auth-service";
+import { DerivedGrantsService, type DerivedGrantsApi } from "./service/derived-grants";
+import { GrantVerificationService } from "./service/grant-verification";
 import { SessionAuthenticator } from "./service/authenticator";
 import { FailureThrottle } from "./service/throttle";
 import { createResetCleanupProcessor } from "./jobs/reset-token-cleanup";
@@ -51,6 +54,12 @@ export {
 } from "./core/index";
 export type { ExternalIdentityProvider } from "./providers/external";
 export type { UserView } from "./service/users-service";
+export type {
+  DerivableRole,
+  DerivedGrantInput,
+  DerivedGrantView,
+  DerivedGrantsApi,
+} from "./service/derived-grants";
 
 export interface IdentitySessionConfig {
   readonly cookieName: string;
@@ -79,6 +88,13 @@ export interface IdentityModuleDeps {
   readonly config: IdentityModuleConfig;
   /** LDAP/AD/SSO seam — no provider exists in #2 (contract only). */
   readonly externalProvider?: ExternalIdentityProvider;
+  /**
+   * Late-bound OrgDirectory (people module implements it; composition sets
+   * the target after both modules exist). When wired, manual grants are
+   * validated against the real org tree and the verification backfill
+   * route becomes operational.
+   */
+  readonly orgDirectory?: () => OrgDirectory | null;
 }
 
 /** What composition roots and other modules may use. */
@@ -87,6 +103,12 @@ export interface IdentityService {
   readonly authenticator: Authenticator;
   /** The scope-check chokepoint every module's record access goes through. */
   readonly scopeChecker: ScopeChecker;
+  /**
+   * Grant derivation surface for the people module (ADR-0015): teacher
+   * assignments materialize as derived grants through this API and through
+   * nothing else.
+   */
+  readonly derivedGrants: DerivedGrantsApi;
   /** One-time operator bootstrap (scripts/create-admin.ts). */
   bootstrapAdmin(input: {
     username: string;
@@ -99,13 +121,21 @@ export interface IdentityService {
 export function createIdentityModule(deps: IdentityModuleDeps): RuntimeModule<IdentityService> {
   const usersRepo = createUsersRepo(deps.db);
   const resetTokensRepo = createResetTokensRepo(deps.db);
+  const orgDirectory = deps.orgDirectory ?? (() => null);
 
   const users = new UsersService({
     repo: usersRepo,
     hasher: deps.core.passwordHasher,
     sessions: deps.core.sessionManager,
     audit: deps.audit,
+    orgDirectory,
   });
+  const derivedGrants = new DerivedGrantsService(
+    usersRepo,
+    deps.core.sessionManager,
+    deps.audit,
+  );
+  const grantVerification = new GrantVerificationService(usersRepo, orgDirectory);
   const auth = new AuthService({
     repo: usersRepo,
     resetTokens: resetTokensRepo,
@@ -135,6 +165,7 @@ export function createIdentityModule(deps: IdentityModuleDeps): RuntimeModule<Id
     handlers: createIdentityHandlers({
       users,
       auth,
+      grantVerification,
       scopeChecker: deps.core.scopeChecker,
       cookiePolicy,
       loginsTotal,
@@ -147,6 +178,7 @@ export function createIdentityModule(deps: IdentityModuleDeps): RuntimeModule<Id
     service: {
       authenticator: new SessionAuthenticator(deps.core.sessionManager, cookiePolicy),
       scopeChecker: deps.core.scopeChecker,
+      derivedGrants,
       bootstrapAdmin: (input) => users.bootstrapAdmin(input),
     },
   };

@@ -87,6 +87,7 @@ export const grantViewSchema = z.object({
   sectionId: z.string().nullable(),
   subjectId: z.string().nullable(),
   verified: z.boolean(),
+  source: z.enum(["manual", "derived"]),
 });
 
 export const userViewSchema = z.object({
@@ -357,6 +358,28 @@ const routes: RouteSpec[] = [
     responses: {
       200: { description: "Grant removed", schema: z.object({ ok: z.literal(true) }) },
       404: { description: "No such user or grant", schema: problemSchema },
+    },
+  },
+  {
+    id: "identity.grants-verify",
+    module: MODULE_NAME,
+    method: "POST",
+    path: "/api/v1/identity/grants/verify",
+    summary: "Verify unverified scope grants against the org tree (admin)",
+    description:
+      "Backfill for grants created before the people module existed (#3): checks each verified=false grant's org path and subject against the OrgDirectory, flips resolvable ones to verified, and reports the rest. Grants are never deleted by this run.",
+    tags: ["identity"],
+    auth: ADMIN_ONLY,
+    audit: { action: "identity.grants-verify-run", resourceType: "scope-grant" },
+    responses: {
+      200: {
+        description: "Verification sweep result",
+        schema: z.object({
+          verified: z.number(),
+          unresolved: z.array(z.object({ grantId: z.string(), reason: z.string() })),
+        }),
+      },
+      503: { description: "Org directory unavailable (people module not wired)", schema: problemSchema },
     },
   },
   {

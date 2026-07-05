@@ -56,8 +56,12 @@ export const idnScopeGrants = pgTable(
     classId: text("class_id"),
     sectionId: text("section_id"),
     subjectId: text("subject_id"),
-    /** False until module #3's OrgDirectory verifies the identifiers. */
+    /** False until the OrgDirectory (people module, #3) verifies the identifiers. */
     verified: boolean("verified").notNull().default(false),
+    /** 'manual' (admin-issued) or 'derived' (from a people-module assignment, ADR-0015). */
+    source: text("source").notNull().default("manual"),
+    /** For derived grants: the originating record, e.g. "people:assignment:<id>". */
+    sourceRef: text("source_ref"),
     grantedBy: text("granted_by"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },

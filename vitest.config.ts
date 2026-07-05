@@ -8,6 +8,9 @@ export default defineConfig({
           name: "unit",
           environment: "node",
           include: ["packages/**/src/**/*.test.ts", "apps/**/src/**/*.test.ts"],
+          // The argon2 conformance tests hash with production cost
+          // parameters (64 MiB, t=3) — deliberately slow.
+          testTimeout: 30_000,
         },
       },
       {
@@ -48,6 +51,11 @@ export default defineConfig({
         "packages/modules/identity/src/core/**",
         "packages/modules/identity/src/index.ts",
         "packages/modules/identity/src/providers/**",
+        // People: same policy — Drizzle repos/schema and the composition
+        // glue in index.ts are integration-tested against real services.
+        "packages/modules/people/src/repo/**",
+        "packages/modules/people/src/db/**",
+        "packages/modules/people/src/index.ts",
       ],
       thresholds: {
         lines: 80,
@@ -58,6 +66,13 @@ export default defineConfig({
         // identity's Fable-owned auth plumbing carries a near-exhaustive
         // branch requirement.
         "packages/modules/identity/src/service/**": {
+          lines: 95,
+          functions: 95,
+          branches: 95,
+          statements: 95,
+        },
+        // The grant-derivation seam (ADR-0015) is security-relevant: same bar.
+        "packages/modules/people/src/service/assignments-service.ts": {
           lines: 95,
           functions: 95,
           branches: 95,

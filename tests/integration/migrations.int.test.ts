@@ -44,9 +44,13 @@ describe("migration harness (ADR-0008)", () => {
     expect(reapplied.map((entry) => `${entry.module}/${entry.name}`)).toEqual([
       "system/0000_audit_log",
       "identity/0000_identity",
+      "identity/0001_grant_provenance",
+      "people/0000_people",
     ]);
     expect(await tableExists("sys_audit_log")).toBe(true);
     expect(await tableExists("idn_users")).toBe(true);
+    expect(await tableExists("ppl_colleges")).toBe(true);
+    expect(await tableExists("ppl_teacher_assignments")).toBe(true);
   });
 
   it("is idempotent — a second up run applies nothing", async () => {

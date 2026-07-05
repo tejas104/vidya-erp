@@ -15,12 +15,17 @@ export interface UserRecord {
   readonly createdAt: Date;
 }
 
+export type GrantSource = "manual" | "derived";
+
 export interface StoredGrant {
   readonly id: string;
+  readonly userId: string;
   readonly role: Role;
   readonly org: OrgPath;
   readonly subjectId?: string;
   readonly verified: boolean;
+  readonly source: GrantSource;
+  readonly sourceRef: string | null;
 }
 
 export interface NewGrant {
@@ -28,6 +33,10 @@ export interface NewGrant {
   readonly org: OrgPath;
   readonly subjectId?: string;
   readonly grantedBy: string;
+  /** Defaults: manual, no sourceRef, unverified. */
+  readonly source?: GrantSource;
+  readonly sourceRef?: string;
+  readonly verified?: boolean;
 }
 
 export class UsernameTakenError extends Error {
@@ -69,7 +78,14 @@ export interface UsersRepo {
   getRoles(userId: string): Promise<Role[]>;
   /** Replaces the role set; revoked roles cascade away their grants (FK). */
   setRoles(userId: string, roles: readonly Role[], grantedBy: string): Promise<void>;
+  /** Adds one role membership if absent (used by grant derivation, ADR-0015). */
+  addRole(userId: string, role: Role, grantedBy: string): Promise<void>;
   getGrants(userId: string): Promise<StoredGrant[]>;
+  getGrantById(grantId: string): Promise<StoredGrant | null>;
+  findGrantBySourceRef(sourceRef: string): Promise<StoredGrant | null>;
+  listGrantsBySourcePrefix(prefix: string): Promise<StoredGrant[]>;
+  listUnverifiedGrants(): Promise<StoredGrant[]>;
+  markGrantVerified(grantId: string): Promise<void>;
   addGrant(userId: string, grant: NewGrant): Promise<StoredGrant>;
   removeGrant(userId: string, grantId: string): Promise<boolean>;
   countAdmins(): Promise<number>;
@@ -90,6 +106,7 @@ function toRecord(row: IdnUserRow): UserRecord {
 function toStoredGrant(row: typeof idnScopeGrants.$inferSelect): StoredGrant {
   return {
     id: row.id,
+    userId: row.userId,
     role: row.role as Role,
     org: {
       collegeId: row.collegeId,
@@ -99,6 +116,8 @@ function toStoredGrant(row: typeof idnScopeGrants.$inferSelect): StoredGrant {
     },
     ...(row.subjectId !== null ? { subjectId: row.subjectId } : {}),
     verified: row.verified,
+    source: row.source as GrantSource,
+    sourceRef: row.sourceRef,
   };
 }
 
@@ -212,6 +231,13 @@ export function createUsersRepo(db: Db): UsersRepo {
       });
     },
 
+    async addRole(userId, role, grantedBy) {
+      await db
+        .insert(idnUserRoles)
+        .values({ userId, role, grantedBy })
+        .onConflictDoNothing();
+    },
+
     async getGrants(userId) {
       const rows = await db
         .select()
@@ -221,8 +247,52 @@ export function createUsersRepo(db: Db): UsersRepo {
       return rows.map(toStoredGrant);
     },
 
+    async getGrantById(grantId) {
+      const rows = await db
+        .select()
+        .from(idnScopeGrants)
+        .where(eq(idnScopeGrants.id, grantId))
+        .limit(1);
+      return rows[0] === undefined ? null : toStoredGrant(rows[0]);
+    },
+
+    async findGrantBySourceRef(sourceRef) {
+      const rows = await db
+        .select()
+        .from(idnScopeGrants)
+        .where(eq(idnScopeGrants.sourceRef, sourceRef))
+        .limit(1);
+      return rows[0] === undefined ? null : toStoredGrant(rows[0]);
+    },
+
+    async listGrantsBySourcePrefix(prefix) {
+      const rows = await db
+        .select()
+        .from(idnScopeGrants)
+        .where(sql`${idnScopeGrants.sourceRef} LIKE ${`${prefix}%`}`)
+        .orderBy(asc(idnScopeGrants.createdAt));
+      return rows.map(toStoredGrant);
+    },
+
+    async listUnverifiedGrants() {
+      const rows = await db
+        .select()
+        .from(idnScopeGrants)
+        .where(eq(idnScopeGrants.verified, false))
+        .orderBy(asc(idnScopeGrants.createdAt));
+      return rows.map(toStoredGrant);
+    },
+
+    async markGrantVerified(grantId) {
+      await db
+        .update(idnScopeGrants)
+        .set({ verified: true })
+        .where(eq(idnScopeGrants.id, grantId));
+    },
+
     async addGrant(userId, grant) {
       const id = randomUUID();
+      const source = grant.source ?? "manual";
       try {
         await db.insert(idnScopeGrants).values({
           id,
@@ -233,7 +303,9 @@ export function createUsersRepo(db: Db): UsersRepo {
           classId: grant.org.classId ?? null,
           sectionId: grant.org.sectionId ?? null,
           subjectId: grant.subjectId ?? null,
-          verified: false,
+          verified: grant.verified ?? false,
+          source,
+          sourceRef: grant.sourceRef ?? null,
           grantedBy: grant.grantedBy,
         });
       } catch (error) {
@@ -244,10 +316,13 @@ export function createUsersRepo(db: Db): UsersRepo {
       }
       return {
         id,
+        userId,
         role: grant.role,
         org: grant.org,
         ...(grant.subjectId !== undefined ? { subjectId: grant.subjectId } : {}),
-        verified: false,
+        verified: grant.verified ?? false,
+        source,
+        sourceRef: grant.sourceRef ?? null,
       };
     },
 

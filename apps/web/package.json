@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@vidya/module-identity": "workspace:*",
+    "@vidya/module-people": "workspace:*",
     "@vidya/module-system": "workspace:*",
     "@vidya/platform": "workspace:*",
     "next": "^16.0.0",

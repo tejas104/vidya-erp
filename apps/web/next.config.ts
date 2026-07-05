@@ -11,7 +11,12 @@ const nextConfig: NextConfig = {
   // includes the workspace packages.
   outputFileTracingRoot: repoRoot,
   // Workspace packages ship TypeScript source; Next transpiles them.
-  transpilePackages: ["@vidya/platform", "@vidya/module-system", "@vidya/module-identity"],
+  transpilePackages: [
+    "@vidya/platform",
+    "@vidya/module-system",
+    "@vidya/module-identity",
+    "@vidya/module-people",
+  ],
   // Infrastructure clients with native/dynamic requires stay external to the
   // server bundle.
   serverExternalPackages: [

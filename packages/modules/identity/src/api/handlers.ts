@@ -9,13 +9,19 @@ import type {
   ScopeChecker,
 } from "@vidya/platform";
 import type { AuthService } from "../service/auth-service";
-import { UsersService } from "../service/users-service";
+import {
+  DerivedGrantImmutableError,
+  InvalidOrgPathError,
+  UsersService,
+} from "../service/users-service";
+import type { GrantVerificationService } from "../service/grant-verification";
 import { RoleNotHeldError, UsernameTakenError } from "../repo/users-repo";
 import { buildSessionCookie, clearSessionCookie, type CookiePolicy } from "../service/cookies";
 
 export interface IdentityHandlerDeps {
   readonly users: UsersService;
   readonly auth: AuthService;
+  readonly grantVerification: GrantVerificationService;
   readonly scopeChecker: ScopeChecker;
   readonly cookiePolicy: CookiePolicy;
   readonly loginsTotal: Counter<"outcome">;
@@ -363,6 +369,9 @@ export function createIdentityHandlers(deps: IdentityHandlerDeps): Record<string
       if (error instanceof RoleNotHeldError) {
         return { status: 409, body: { message: error.message } };
       }
+      if (error instanceof InvalidOrgPathError) {
+        return { status: 422, body: { message: error.message } };
+      }
       throw error;
     }
   };
@@ -382,7 +391,15 @@ export function createIdentityHandlers(deps: IdentityHandlerDeps): Record<string
     if (!scope.ok) {
       return scope.result;
     }
-    const removed = await deps.users.removeGrant(params.userId, params.grantId);
+    let removed: boolean | null;
+    try {
+      removed = await deps.users.removeGrant(params.userId, params.grantId);
+    } catch (error) {
+      if (error instanceof DerivedGrantImmutableError) {
+        return { status: 409, body: { message: error.message } };
+      }
+      throw error;
+    }
     if (removed === null || !removed) {
       return notFound();
     }
@@ -390,6 +407,27 @@ export function createIdentityHandlers(deps: IdentityHandlerDeps): Record<string
       status: 200,
       body: { ok: true as const },
       audit: { resourceId: params.grantId, details: { userId: params.userId } },
+    };
+  };
+
+  const grantsVerify: RouteHandler = async (ctx) => {
+    const result = await deps.grantVerification.verifyUnverified();
+    if (result === null) {
+      return {
+        status: 503,
+        body: { message: "org directory unavailable — is the people module deployed?" },
+      };
+    }
+    ctx.logger.info(
+      { verified: result.verified, unresolved: result.unresolved.length },
+      "grant verification sweep finished",
+    );
+    return {
+      status: 200,
+      body: { verified: result.verified, unresolved: result.unresolved },
+      audit: {
+        details: { verified: result.verified, unresolvedCount: result.unresolved.length },
+      },
     };
   };
 
@@ -437,6 +475,7 @@ export function createIdentityHandlers(deps: IdentityHandlerDeps): Record<string
     "identity.roles-set": rolesSet,
     "identity.grant-add": grantAdd,
     "identity.grant-remove": grantRemove,
+    "identity.grants-verify": grantsVerify,
     "identity.password-reset-init": passwordResetInit,
   };
 }

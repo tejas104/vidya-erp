@@ -91,6 +91,32 @@ queue/observability/pg/redis close → exit. No drain delay (no LB).
   network (it now holds sessions), `TRUSTED_ORIGINS` set to the browser
   origin(s) once a UI exists.
 
+## People module operations (#3)
+
+- **Bootstrap now creates the college too:**
+  `VIDYA_ADMIN_PASSWORD=<strong> pnpm exec tsx scripts/create-admin.ts --username <u> --display-name "<n>" --college-name "<name>" --college-code <CODE>`
+  — idempotent on the college (by code), refuses a second admin.
+- **Grant-verification backfill (run once after deploying #3):** build the
+  org tree via the API, then `POST /api/v1/identity/grants/verify` (admin).
+  Resolvable pre-#3 grants flip to verified; the response lists unresolved
+  ones with reasons — fix those grants (or the tree) by hand; the sweep
+  never deletes authority.
+- **Bulk imports:** `POST /api/v1/people/imports` with the CSV in the JSON
+  body (≤1 MB; export CSV from Excel), `dryRun:true` first, then poll
+  `GET /imports/{id}` for counts and per-row errors (capped at 500). Rows
+  created by an import carry its id in `source_import_id`. Failed imports
+  can simply be re-run: existing rows surface as per-row "already exists"
+  errors, not duplicates. Consider a MinIO lifecycle rule expiring
+  `imports/*` objects after ~30 days.
+- **Grant reconciliation:** hourly on the worker
+  (`people.grant-reconcile-repaired` audit rows = repairs happened —
+  investigate what caused drift). On-demand: enqueue the job or restart the
+  worker (schedule upsert is idempotent).
+- **Academic-year rollover:** remove/recreate teacher assignments for the
+  new year (grants follow automatically); enroll students into the new
+  year's sections (the one-live-enrollment rule is per year, so old years
+  stay intact for history).
+
 ## Routine checks
 
 - `GET /ready` on every replica after deploys.

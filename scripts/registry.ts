@@ -3,6 +3,7 @@ import path from "node:path";
 import type { ModuleDefinition, ModuleMigrationSource } from "@vidya/platform";
 import { systemModuleDefinition } from "@vidya/module-system";
 import { identityModuleDefinition } from "@vidya/module-identity";
+import { peopleModuleDefinition } from "@vidya/module-people";
 
 /**
  * Tooling-side module registry. New modules are added here (one line) and in
@@ -12,6 +13,7 @@ import { identityModuleDefinition } from "@vidya/module-identity";
 export const moduleDefinitions: readonly ModuleDefinition[] = [
   systemModuleDefinition,
   identityModuleDefinition,
+  peopleModuleDefinition,
 ];
 
 const require = createRequire(import.meta.url);

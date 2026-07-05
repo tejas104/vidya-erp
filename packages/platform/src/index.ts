@@ -98,7 +98,11 @@ export {
 
 export {
   createObjectStorage,
+  ensureBucket,
+  getObjectText,
   pingObjectStorage,
+  putObjectText,
+  type ObjectStorageClient,
   type ObjectStorageOptions,
 } from "./storage/s3";
 
