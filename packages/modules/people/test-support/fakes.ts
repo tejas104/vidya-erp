@@ -144,6 +144,12 @@ export class InMemoryOrgRepo implements OrgRepo {
     return [...this.colleges.values()].sort((a, b) => a.name.localeCompare(b.name));
   }
 
+  async listSectionsOfClass(classId: string): Promise<PplSectionRow[]> {
+    return [...this.sections.values()]
+      .filter((section) => section.classId === classId)
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }
+
   async getTree(collegeId: string): Promise<OrgTree | null> {
     const college = this.colleges.get(collegeId);
     if (college === undefined) {

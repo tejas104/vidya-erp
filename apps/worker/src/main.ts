@@ -42,11 +42,18 @@ import {
   GAP_SCAN_SCHEDULER_ID,
   createAcademicsModule,
 } from "@vidya/module-academics";
+import {
+  ANALYTICS_MODULE_NAME,
+  ROLLUP_JOB_NAME,
+  ROLLUP_SCHEDULER_ID,
+  createAnalyticsModule,
+} from "@vidya/module-analytics";
 import { createMetricsServer } from "./metrics-server";
 
 const RESET_CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
 const RECONCILE_INTERVAL_MS = 60 * 60 * 1000;
 const GAP_SCAN_INTERVAL_MS = 24 * 60 * 60 * 1000;
+const ROLLUP_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
 /**
  * COMPOSITION ROOT — worker process.
@@ -158,7 +165,25 @@ async function main(): Promise<void> {
       ),
   });
 
-  const modules: RuntimeModule<unknown>[] = [system, identity, people, academics];
+  const analyticsQueue = createModuleQueue({
+    module: ANALYTICS_MODULE_NAME,
+    redisUrl: config.redis.url,
+  });
+  lifecycle.onShutdown("analytics-queue", () => analyticsQueue.close());
+  const analytics = createAnalyticsModule({
+    db,
+    metrics,
+    audit: system.service.audit,
+    scopeChecker: identityCore.scopeChecker,
+    academicsRead: academics.service.readModel,
+    peopleDirectory: people.service.directory,
+    config: config.analytics,
+    enqueueRollup: async (payload) => {
+      await analyticsQueue.queue.add(ROLLUP_JOB_NAME, payload);
+    },
+  });
+
+  const modules: RuntimeModule<unknown>[] = [system, identity, people, academics, analytics];
 
   for (const module of modules) {
     assertModuleWiring(module);
@@ -237,6 +262,15 @@ async function main(): Promise<void> {
     schedulerId: GAP_SCAN_SCHEDULER_ID,
     everyMs: GAP_SCAN_INTERVAL_MS,
     jobName: GAP_SCAN_JOB_NAME,
+    payload: { source: "worker-schedule" },
+  });
+
+  // Nightly analytics rollup rebuild (#5, ADR-0018): blind precompute.
+  await upsertRepeatableJob({
+    queue: analyticsQueue.queue,
+    schedulerId: ROLLUP_SCHEDULER_ID,
+    everyMs: ROLLUP_INTERVAL_MS,
+    jobName: ROLLUP_JOB_NAME,
     payload: { source: "worker-schedule" },
   });
 

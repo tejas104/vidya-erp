@@ -47,12 +47,15 @@ describe("migration harness (ADR-0008)", () => {
       "identity/0001_grant_provenance",
       "people/0000_people",
       "academics/0000_academics",
+      "analytics/0000_analytics",
     ]);
     expect(await tableExists("sys_audit_log")).toBe(true);
     expect(await tableExists("idn_users")).toBe(true);
     expect(await tableExists("ppl_colleges")).toBe(true);
     expect(await tableExists("ppl_teacher_assignments")).toBe(true);
     expect(await tableExists("acd_marks")).toBe(true);
+    expect(await tableExists("anl_marks_rollups")).toBe(true);
+    expect(await tableExists("anl_student_flags")).toBe(true);
   });
 
   it("is idempotent — a second up run applies nothing", async () => {

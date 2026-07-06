@@ -137,6 +137,37 @@ A session already exists for that section/date/slot. Correct individual
 entries via PATCH (audited) instead of re-recording; use a different
 `slot` for genuinely separate sessions on the same day.
 
+## A dashboard number shows "—" or "cohort too small"
+
+Working as designed (ADR-0018). "Cohort too small to summarise (under 5)"
+means the aggregate covers fewer than 5 students and is withheld for
+everyone — open the register for the raw rows. "Outside your scope" means
+constituent-closure denied it (e.g. a subject teacher asking for a class
+overall that includes subjects they can't read). Neither is served as a
+number, ever.
+
+## The dashboard is empty / "Nothing to show yet"
+
+Either the caller has no grants (permission-reflective — an unassigned user
+sees nothing) or no rollup exists yet. Check the user's roles/grants in
+identity; run `POST /api/v1/analytics/recompute` if the nightly rebuild
+hasn't run since data first appeared.
+
+## A teacher sees fewer subjects/figures than expected
+
+Analytics mirror the scope matrix: a subject teacher sees their own
+subject's averages and attendance, never other subjects' marks or the class
+overall. The class_teacher/hod/principal see the overall. If a teacher
+expects more, check their assignment (#3) — analytics can never show more
+than the record-level scope allows.
+
+## The web UI won't load past "Opening the register…"
+
+The page fetches `/api/v1/...` with the session cookie. A blank/looping load
+usually means the session expired (→ it should redirect to /login) or the
+API is down (check /ready). In production, a missing `TRUSTED_ORIGINS` or a
+non-Secure cookie over plain http will break the session round-trip.
+
 ## Migration runner errors
 
 - `no paired rollback file` — write the `.down.sql`; pairing is mandatory.

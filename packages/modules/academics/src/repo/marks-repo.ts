@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, asc, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, gte } from "drizzle-orm";
 import type { Db } from "@vidya/platform";
 import { acdAssessments, acdMarks, type AcdAssessmentRow, type AcdMarkRow } from "../db/schema";
 
@@ -66,6 +66,12 @@ export interface MarksRepo {
   marksForStudent(
     studentId: string,
     filter: { academicYear?: string; subjectId?: string },
+  ): Promise<{ mark: AcdMarkRow; assessment: AcdAssessmentRow }[]>;
+  /** Keyset page over a year's marks (analytics read model, #5). */
+  pageMarks(
+    academicYear: string,
+    afterMarkId: string | null,
+    limit: number,
   ): Promise<{ mark: AcdMarkRow; assessment: AcdAssessmentRow }[]>;
 }
 
@@ -186,6 +192,21 @@ export function createMarksRepo(db: Db): MarksRepo {
         .from(acdMarks)
         .where(eq(acdMarks.assessmentId, assessmentId))
         .orderBy(asc(acdMarks.studentId));
+    },
+
+    async pageMarks(academicYear, afterMarkId, limit) {
+      const conditions = [eq(acdAssessments.academicYear, academicYear)];
+      if (afterMarkId !== null) {
+        conditions.push(gte(acdMarks.id, afterMarkId));
+      }
+      const rows = await db
+        .select({ mark: acdMarks, assessment: acdAssessments })
+        .from(acdMarks)
+        .innerJoin(acdAssessments, eq(acdMarks.assessmentId, acdAssessments.id))
+        .where(and(...conditions))
+        .orderBy(acdMarks.id)
+        .limit(limit + (afterMarkId === null ? 0 : 1));
+      return afterMarkId === null ? rows : rows.filter((row) => row.mark.id !== afterMarkId);
     },
 
     async marksForStudent(studentId, filter) {

@@ -140,6 +140,29 @@ queue/observability/pg/redis close → exit. No drain delay (no LB).
   (409 otherwise) — enter the marks under a new assessment and leave the
   mistake empty, or escalate for a reviewed migration.
 
+## Analytics operations (#5)
+
+- **Nightly rebuild** runs on the worker (`analytics.rollups-rebuilt` audit
+  rows carry counts; `vidya_analytics_rebuilds_total` counts runs). Rollups
+  are ≤24h stale by design; the per-student view is always live.
+- **Recompute now:** `POST /api/v1/analytics/recompute {academicYear}`
+  (admin, audited) enqueues the same job — use it after a bulk import or a
+  large correction when a fresh rollup is wanted before the nightly run.
+- **"A figure is missing / shows —":** that is a designed state, not a bug.
+  Either the cohort is under 5 (withheld — open the register for the raw
+  rows) or the aggregate is outside the caller's scope (constituent-closure
+  denied it). Neither is ever served as a raw number.
+- **New deployment:** the dashboard is empty until the first rebuild; run
+  the recompute route (or wait for nightly) after the first day's
+  attendance/marks exist.
+- **Thresholds** are env-configured (`ANALYTICS_ATTENDANCE_THRESHOLD` 75,
+  `ANALYTICS_MARKS_THRESHOLD` 40, `ANALYTICS_MIN_COHORT` 5); changing them
+  takes effect on the next rebuild.
+- **The web UI** serves static shells and fetches per user; it needs no
+  extra config beyond the identity session settings. Production must run
+  behind TLS (session cookie is Secure) and set `TRUSTED_ORIGINS` to the
+  browser origin.
+
 ## Routine checks
 
 - `GET /ready` on every replica after deploys.

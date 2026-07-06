@@ -1,5 +1,28 @@
 # Performance review — Vidya #1 foundation + #2 identity
 
+## Rollups at college scale (#5)
+
+- **Nightly rebuild** pages every attendance entry and mark of the year
+  through #4's read model (keyset, 5k/page), folds them in a single pass
+  into per-node accumulators (section→college attendance, class→college
+  marks, YTD + monthly), then writes atomically per year (delete + batched
+  insert of 500). A mid college (~1–2M attendance rows, ~200k marks) is
+  minutes of streaming work, off the request path; memory is bounded by the
+  accumulator maps (per-node, not per-record). Verified with a 12k-row
+  attendance + 6k-row marks paging test.
+- **Serving is cheap:** a rollup query reads a handful of indexed rows for
+  the node and runs pure in-memory closure/cohort checks — sub-millisecond
+  after the DB read. The dashboard fans out one query per grant-derived
+  tile (bounded by the caller's grants — a teacher has one or two).
+- **Live per-student view** pulls that student's records (indexed by
+  student_id), filters per record in memory, and folds — tens of ms.
+- **Staleness:** rollups are ≤24h old; the live view is always current.
+  Trigger a rebuild (admin recompute route) after a bulk change if a fresh
+  rollup is needed sooner.
+- **Frontend:** static shells (prerendered), data fetched client-side; SVG
+  charts are hand-rolled (no chart-lib bundle); fonts self-hosted (no
+  runtime CDN).
+
 ## Attendance & marks at class + college scale (#4)
 
 - **Recording a section's attendance** (≤~100 entries): one directory path

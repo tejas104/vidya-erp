@@ -35,6 +35,7 @@
     "@types/node": "^22.15.0",
     "@types/pg": "^8.15.0",
     "@vidya/module-academics": "workspace:*",
+    "@vidya/module-analytics": "workspace:*",
     "@vidya/module-identity": "workspace:*",
     "@vidya/module-people": "workspace:*",
     "@vidya/module-system": "workspace:*",

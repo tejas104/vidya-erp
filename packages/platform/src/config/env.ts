@@ -64,6 +64,13 @@ const envSchema = z.object({
   LOGIN_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(100).default(5),
   LOGIN_WINDOW_MINUTES: z.coerce.number().int().min(1).default(15),
 
+  /** Aggregates over fewer distinct students are withheld (ADR-0018). */
+  ANALYTICS_MIN_COHORT: z.coerce.number().int().min(1).max(100).default(5),
+  /** At-risk when attendance %% falls below this. */
+  ANALYTICS_ATTENDANCE_THRESHOLD: z.coerce.number().min(1).max(100).default(75),
+  /** At-risk when average marks (%% of max) fall below this. */
+  ANALYTICS_MARKS_THRESHOLD: z.coerce.number().min(1).max(100).default(40),
+
   SHUTDOWN_DRAIN_MS: z.coerce.number().int().min(0).default(5000),
   SHUTDOWN_TIMEOUT_MS: z.coerce.number().int().min(1000).default(15000),
 
@@ -113,6 +120,11 @@ export interface AppConfig {
       readonly maxAttempts: number;
       readonly windowMinutes: number;
     };
+  };
+  readonly analytics: {
+    readonly minCohort: number;
+    readonly attendanceThreshold: number;
+    readonly marksThreshold: number;
   };
 }
 
@@ -180,6 +192,11 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
         maxAttempts: env.LOGIN_MAX_ATTEMPTS,
         windowMinutes: env.LOGIN_WINDOW_MINUTES,
       },
+    },
+    analytics: {
+      minCohort: env.ANALYTICS_MIN_COHORT,
+      attendanceThreshold: env.ANALYTICS_ATTENDANCE_THRESHOLD,
+      marksThreshold: env.ANALYTICS_MARKS_THRESHOLD,
     },
   };
 }

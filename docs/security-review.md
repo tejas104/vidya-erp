@@ -1,5 +1,32 @@
 # Security review — Vidya #1 foundation + #2 identity + #3 people + #4 academics
 
+## <a id="aggregation-scope"></a>#5: Scope-filtered aggregation + the minimum-cohort rule (EXECUTED)
+
+Analytics never aggregate-then-check. Two properties, both executed against
+the REAL matrix in `analytics/src/aggregation-scope.test.ts` (unit) and
+re-proven over real records in `tests/integration/analytics-flow.int.test.ts`:
+
+1. **Constituent-closure.** An aggregate is served only if the caller could
+   read every constituent record. Attendance and single-subject marks
+   rollups reduce to one check on the node's constituent ref; cross-subject
+   marks check every subject explicitly (a math teacher is DENIED the class
+   overall at the physics constituent — the differencing leak, closed).
+   Precomputed rollups are computed BLIND and stored with their node's
+   position; disclosure happens only at serve time. Live per-student views
+   filter per record before any arithmetic, and show an overall only when
+   nothing was filtered out.
+2. **Minimum-cohort (unconditional, K=5).** Any aggregate over < 5 distinct
+   students is withheld for EVERY role — `cohortSufficient` takes no
+   principal, so there is no bypass. It fails closed for future consumers.
+   Applied to rollups, monthly points and register-strip cells alike.
+
+Field-gating on at-risk: attendance component by section coverage,
+per-subject scores by subject scope, overall + low-marks reason only under
+closure. The dashboard is the permission mirror (tiles from grants). Full
+detail + worked-example table: ADR-0018; leak analysis:
+docs/threat-model-analytics.md. **The worked examples require human
+verification** (review-gate-5). #5 required ZERO human-core changes.
+
 ## <a id="worked-scope-traces"></a>#4: The worked scope traces (EXECUTED, not argued)
 
 Every trace below is executed against the REAL human-owned ScopeChecker

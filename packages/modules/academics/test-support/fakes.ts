@@ -80,6 +80,16 @@ export class FakePeopleDirectory implements PeopleDirectory {
     return null;
   }
 
+  async departmentPath(departmentId: string): Promise<OrgPath | null> {
+    return departmentId === ORG.departmentId
+      ? { collegeId: ORG.collegeId, departmentId }
+      : null;
+  }
+
+  async collegeExists(collegeId: string): Promise<boolean> {
+    return collegeId === ORG.collegeId;
+  }
+
   async sectionRoster(sectionId: string): Promise<{ studentId: string; academicYear: string }[]> {
     if (sectionId === ORG.sectionA) {
       return [
@@ -124,6 +134,33 @@ export class FakePeopleDirectory implements PeopleDirectory {
 
   async sectionsWithLiveEnrollment(): Promise<string[]> {
     return [ORG.sectionA, ORG.sectionB];
+  }
+
+  async sectionsOfClass(classId: string): Promise<{ sectionId: string; name: string }[]> {
+    if (classId === ORG.classId) {
+      return [
+        { sectionId: ORG.sectionA, name: "A" },
+        { sectionId: ORG.sectionB, name: "B" },
+      ];
+    }
+    return [];
+  }
+
+  async namesFor(ids: readonly string[]): Promise<Map<string, string>> {
+    const names = new Map<string, string>([
+      [ORG.collegeId, "Test College"],
+      [ORG.departmentId, "Science"],
+      [ORG.classId, "BSc Year 1"],
+      [ORG.otherClassId, "BSc Year 2"],
+      [ORG.sectionA, "A"],
+      [ORG.sectionB, "B"],
+      [ORG.mathId, "Mathematics"],
+      [ORG.physicsId, "Physics"],
+      [ORG.studentA1, "Meera Nair"],
+      [ORG.studentA2, "Ravi Kumar"],
+      [ORG.studentB1, "Asha Verma"],
+    ]);
+    return new Map(ids.filter((id) => names.has(id)).map((id) => [id, names.get(id)!]));
   }
 }
 
@@ -242,6 +279,52 @@ export class InMemoryAttendanceRepo implements AttendanceRepo {
       }
     }
     return found;
+  }
+
+  async pageEntries(
+    academicYear: string,
+    afterEntryId: string | null,
+    limit: number,
+  ): Promise<{ session: AcdSessionRow; entry: AcdEntryRow }[]> {
+    const rows: { session: AcdSessionRow; entry: AcdEntryRow }[] = [];
+    for (const entry of [...this.entries.values()].sort((a, b) => a.id.localeCompare(b.id))) {
+      const session = this.sessions.get(entry.sessionId);
+      if (session === undefined || session.academicYear !== academicYear) {
+        continue;
+      }
+      if (afterEntryId !== null && entry.id <= afterEntryId) {
+        continue;
+      }
+      rows.push({ session, entry });
+      if (rows.length === limit) {
+        break;
+      }
+    }
+    return rows;
+  }
+
+  async recentSessionDensity(
+    sectionId: string,
+    limit: number,
+  ): Promise<{ heldOn: string; slot: string; presentPct: number; students: number }[]> {
+    const sessions = [...this.sessions.values()]
+      .filter((session) => session.sectionId === sectionId)
+      .sort((a, b) => b.heldOn.localeCompare(a.heldOn))
+      .slice(0, limit);
+    const result = [];
+    for (const session of sessions) {
+      const entries = await this.entriesForSession(session.id);
+      const present = entries.filter(
+        (entry) => entry.status === "present" || entry.status === "late",
+      ).length;
+      result.push({
+        heldOn: session.heldOn,
+        slot: session.slot,
+        presentPct: entries.length === 0 ? 0 : Math.round((present / entries.length) * 100),
+        students: entries.length,
+      });
+    }
+    return result;
   }
 }
 
@@ -363,6 +446,28 @@ export class InMemoryMarksRepo implements MarksRepo {
 
   async marksForAssessment(assessmentId: string): Promise<AcdMarkRow[]> {
     return [...this.marks.values()].filter((mark) => mark.assessmentId === assessmentId);
+  }
+
+  async pageMarks(
+    academicYear: string,
+    afterMarkId: string | null,
+    limit: number,
+  ): Promise<{ mark: AcdMarkRow; assessment: AcdAssessmentRow }[]> {
+    const rows: { mark: AcdMarkRow; assessment: AcdAssessmentRow }[] = [];
+    for (const mark of [...this.marks.values()].sort((a, b) => a.id.localeCompare(b.id))) {
+      const assessment = this.assessments.get(mark.assessmentId);
+      if (assessment === undefined || assessment.academicYear !== academicYear) {
+        continue;
+      }
+      if (afterMarkId !== null && mark.id <= afterMarkId) {
+        continue;
+      }
+      rows.push({ mark, assessment });
+      if (rows.length === limit) {
+        break;
+      }
+    }
+    return rows;
   }
 
   async marksForStudent(

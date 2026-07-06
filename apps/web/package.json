@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@vidya/module-academics": "workspace:*",
+    "@vidya/module-analytics": "workspace:*",
     "@vidya/module-identity": "workspace:*",
     "@vidya/module-people": "workspace:*",
     "@vidya/module-system": "workspace:*",

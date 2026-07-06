@@ -7506,6 +7506,2012 @@
           }
         }
       }
+    },
+    "/api/v1/analytics/dashboard": {
+      "get": {
+        "summary": "The caller's role-adaptive dashboard (the permission mirror)",
+        "description": "Tiles are derived from the caller's grants — the response contains only nodes their scope covers, and every number inside is served under constituent-closure + the minimum-cohort rule (ADR-0018).\n\n**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "analytics"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}$"
+            },
+            "required": true,
+            "name": "academicYear",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Scope-derived tiles",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "academicYear": {
+                      "type": "string"
+                    },
+                    "names": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "string"
+                      }
+                    },
+                    "tiles": {
+                      "type": "array",
+                      "items": {
+                        "oneOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "teacher-class"
+                                ]
+                              },
+                              "classId": {
+                                "type": "string"
+                              },
+                              "subjectId": {
+                                "type": "string"
+                              },
+                              "attendance": {
+                                "oneOf": [
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "state": {
+                                        "type": "string",
+                                        "enum": [
+                                          "ok"
+                                        ]
+                                      },
+                                      "value": {
+                                        "type": "object",
+                                        "properties": {
+                                          "pct": {
+                                            "type": "number"
+                                          },
+                                          "sessions": {
+                                            "type": "number"
+                                          },
+                                          "distinctStudents": {
+                                            "type": "number"
+                                          },
+                                          "monthly": {
+                                            "type": "array",
+                                            "items": {
+                                              "type": "object",
+                                              "properties": {
+                                                "month": {
+                                                  "type": "string"
+                                                },
+                                                "pct": {
+                                                  "type": "number"
+                                                }
+                                              },
+                                              "required": [
+                                                "month",
+                                                "pct"
+                                              ]
+                                            }
+                                          }
+                                        },
+                                        "required": [
+                                          "pct",
+                                          "sessions",
+                                          "distinctStudents",
+                                          "monthly"
+                                        ]
+                                      }
+                                    },
+                                    "required": [
+                                      "state",
+                                      "value"
+                                    ]
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "state": {
+                                        "type": "string",
+                                        "enum": [
+                                          "insufficient-cohort"
+                                        ]
+                                      },
+                                      "minCohort": {
+                                        "type": "number"
+                                      }
+                                    },
+                                    "required": [
+                                      "state",
+                                      "minCohort"
+                                    ]
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "state": {
+                                        "type": "string",
+                                        "enum": [
+                                          "no-data"
+                                        ]
+                                      }
+                                    },
+                                    "required": [
+                                      "state"
+                                    ]
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "state": {
+                                        "type": "string",
+                                        "enum": [
+                                          "denied"
+                                        ]
+                                      },
+                                      "deniedSubjectId": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "state"
+                                    ]
+                                  }
+                                ]
+                              },
+                              "marks": {
+                                "oneOf": [
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "state": {
+                                        "type": "string",
+                                        "enum": [
+                                          "ok"
+                                        ]
+                                      },
+                                      "value": {
+                                        "type": "object",
+                                        "properties": {
+                                          "avgPct": {
+                                            "type": "number"
+                                          },
+                                          "nMarks": {
+                                            "type": "number"
+                                          },
+                                          "distinctStudents": {
+                                            "type": "number"
+                                          },
+                                          "monthly": {
+                                            "type": "array",
+                                            "items": {
+                                              "type": "object",
+                                              "properties": {
+                                                "month": {
+                                                  "type": "string"
+                                                },
+                                                "avgPct": {
+                                                  "type": "number"
+                                                }
+                                              },
+                                              "required": [
+                                                "month",
+                                                "avgPct"
+                                              ]
+                                            }
+                                          }
+                                        },
+                                        "required": [
+                                          "avgPct",
+                                          "nMarks",
+                                          "distinctStudents",
+                                          "monthly"
+                                        ]
+                                      }
+                                    },
+                                    "required": [
+                                      "state",
+                                      "value"
+                                    ]
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "state": {
+                                        "type": "string",
+                                        "enum": [
+                                          "insufficient-cohort"
+                                        ]
+                                      },
+                                      "minCohort": {
+                                        "type": "number"
+                                      }
+                                    },
+                                    "required": [
+                                      "state",
+                                      "minCohort"
+                                    ]
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "state": {
+                                        "type": "string",
+                                        "enum": [
+                                          "no-data"
+                                        ]
+                                      }
+                                    },
+                                    "required": [
+                                      "state"
+                                    ]
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "state": {
+                                        "type": "string",
+                                        "enum": [
+                                          "denied"
+                                        ]
+                                      },
+                                      "deniedSubjectId": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "state"
+                                    ]
+                                  }
+                                ]
+                              },
+                              "atRisk": {
+                                "type": "number"
+                              },
+                              "strip": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "sectionId": {
+                                      "type": "string"
+                                    },
+                                    "name": {
+                                      "type": "string"
+                                    },
+                                    "days": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "object",
+                                        "properties": {
+                                          "heldOn": {
+                                            "type": "string"
+                                          },
+                                          "presentPct": {
+                                            "type": "number"
+                                          }
+                                        },
+                                        "required": [
+                                          "heldOn",
+                                          "presentPct"
+                                        ]
+                                      }
+                                    }
+                                  },
+                                  "required": [
+                                    "sectionId",
+                                    "name",
+                                    "days"
+                                  ]
+                                }
+                              }
+                            },
+                            "required": [
+                              "type",
+                              "classId",
+                              "subjectId",
+                              "attendance",
+                              "marks",
+                              "atRisk",
+                              "strip"
+                            ]
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "class"
+                                ]
+                              },
+                              "classId": {
+                                "type": "string"
+                              },
+                              "attendance": {
+                                "oneOf": [
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "state": {
+                                        "type": "string",
+                                        "enum": [
+                                          "ok"
+                                        ]
+                                      },
+                                      "value": {
+                                        "type": "object",
+                                        "properties": {
+                                          "pct": {
+                                            "type": "number"
+                                          },
+                                          "sessions": {
+                                            "type": "number"
+                                          },
+                                          "distinctStudents": {
+                                            "type": "number"
+                                          },
+                                          "monthly": {
+                                            "type": "array",
+                                            "items": {
+                                              "type": "object",
+                                              "properties": {
+                                                "month": {
+                                                  "type": "string"
+                                                },
+                                                "pct": {
+                                                  "type": "number"
+                                                }
+                                              },
+                                              "required": [
+                                                "month",
+                                                "pct"
+                                              ]
+                                            }
+                                          }
+                                        },
+                                        "required": [
+                                          "pct",
+                                          "sessions",
+                                          "distinctStudents",
+                                          "monthly"
+                                        ]
+                                      }
+                                    },
+                                    "required": [
+                                      "state",
+                                      "value"
+                                    ]
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "state": {
+                                        "type": "string",
+                                        "enum": [
+                                          "insufficient-cohort"
+                                        ]
+                                      },
+                                      "minCohort": {
+                                        "type": "number"
+                                      }
+                                    },
+                                    "required": [
+                                      "state",
+                                      "minCohort"
+                                    ]
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "state": {
+                                        "type": "string",
+                                        "enum": [
+                                          "no-data"
+                                        ]
+                                      }
+                                    },
+                                    "required": [
+                                      "state"
+                                    ]
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "state": {
+                                        "type": "string",
+                                        "enum": [
+                                          "denied"
+                                        ]
+                                      },
+                                      "deniedSubjectId": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "state"
+                                    ]
+                                  }
+                                ]
+                              },
+                              "marks": {
+                                "oneOf": [
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "state": {
+                                        "type": "string",
+                                        "enum": [
+                                          "ok"
+                                        ]
+                                      },
+                                      "value": {
+                                        "type": "object",
+                                        "properties": {
+                                          "avgPct": {
+                                            "type": "number"
+                                          },
+                                          "nMarks": {
+                                            "type": "number"
+                                          },
+                                          "distinctStudents": {
+                                            "type": "number"
+                                          },
+                                          "monthly": {
+                                            "type": "array",
+                                            "items": {
+                                              "type": "object",
+                                              "properties": {
+                                                "month": {
+                                                  "type": "string"
+                                                },
+                                                "avgPct": {
+                                                  "type": "number"
+                                                }
+                                              },
+                                              "required": [
+                                                "month",
+                                                "avgPct"
+                                              ]
+                                            }
+                                          }
+                                        },
+                                        "required": [
+                                          "avgPct",
+                                          "nMarks",
+                                          "distinctStudents",
+                                          "monthly"
+                                        ]
+                                      }
+                                    },
+                                    "required": [
+                                      "state",
+                                      "value"
+                                    ]
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "state": {
+                                        "type": "string",
+                                        "enum": [
+                                          "insufficient-cohort"
+                                        ]
+                                      },
+                                      "minCohort": {
+                                        "type": "number"
+                                      }
+                                    },
+                                    "required": [
+                                      "state",
+                                      "minCohort"
+                                    ]
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "state": {
+                                        "type": "string",
+                                        "enum": [
+                                          "no-data"
+                                        ]
+                                      }
+                                    },
+                                    "required": [
+                                      "state"
+                                    ]
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "state": {
+                                        "type": "string",
+                                        "enum": [
+                                          "denied"
+                                        ]
+                                      },
+                                      "deniedSubjectId": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "state"
+                                    ]
+                                  }
+                                ]
+                              },
+                              "atRisk": {
+                                "type": "number"
+                              },
+                              "strip": {
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "sectionId": {
+                                      "type": "string"
+                                    },
+                                    "name": {
+                                      "type": "string"
+                                    },
+                                    "days": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "object",
+                                        "properties": {
+                                          "heldOn": {
+                                            "type": "string"
+                                          },
+                                          "presentPct": {
+                                            "type": "number"
+                                          }
+                                        },
+                                        "required": [
+                                          "heldOn",
+                                          "presentPct"
+                                        ]
+                                      }
+                                    }
+                                  },
+                                  "required": [
+                                    "sectionId",
+                                    "name",
+                                    "days"
+                                  ]
+                                }
+                              }
+                            },
+                            "required": [
+                              "type",
+                              "classId",
+                              "attendance",
+                              "marks",
+                              "atRisk",
+                              "strip"
+                            ]
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "department"
+                                ]
+                              },
+                              "departmentId": {
+                                "type": "string"
+                              },
+                              "attendance": {
+                                "oneOf": [
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "state": {
+                                        "type": "string",
+                                        "enum": [
+                                          "ok"
+                                        ]
+                                      },
+                                      "value": {
+                                        "type": "object",
+                                        "properties": {
+                                          "pct": {
+                                            "type": "number"
+                                          },
+                                          "sessions": {
+                                            "type": "number"
+                                          },
+                                          "distinctStudents": {
+                                            "type": "number"
+                                          },
+                                          "monthly": {
+                                            "type": "array",
+                                            "items": {
+                                              "type": "object",
+                                              "properties": {
+                                                "month": {
+                                                  "type": "string"
+                                                },
+                                                "pct": {
+                                                  "type": "number"
+                                                }
+                                              },
+                                              "required": [
+                                                "month",
+                                                "pct"
+                                              ]
+                                            }
+                                          }
+                                        },
+                                        "required": [
+                                          "pct",
+                                          "sessions",
+                                          "distinctStudents",
+                                          "monthly"
+                                        ]
+                                      }
+                                    },
+                                    "required": [
+                                      "state",
+                                      "value"
+                                    ]
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "state": {
+                                        "type": "string",
+                                        "enum": [
+                                          "insufficient-cohort"
+                                        ]
+                                      },
+                                      "minCohort": {
+                                        "type": "number"
+                                      }
+                                    },
+                                    "required": [
+                                      "state",
+                                      "minCohort"
+                                    ]
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "state": {
+                                        "type": "string",
+                                        "enum": [
+                                          "no-data"
+                                        ]
+                                      }
+                                    },
+                                    "required": [
+                                      "state"
+                                    ]
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "state": {
+                                        "type": "string",
+                                        "enum": [
+                                          "denied"
+                                        ]
+                                      },
+                                      "deniedSubjectId": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "state"
+                                    ]
+                                  }
+                                ]
+                              },
+                              "marks": {
+                                "oneOf": [
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "state": {
+                                        "type": "string",
+                                        "enum": [
+                                          "ok"
+                                        ]
+                                      },
+                                      "value": {
+                                        "type": "object",
+                                        "properties": {
+                                          "avgPct": {
+                                            "type": "number"
+                                          },
+                                          "nMarks": {
+                                            "type": "number"
+                                          },
+                                          "distinctStudents": {
+                                            "type": "number"
+                                          },
+                                          "monthly": {
+                                            "type": "array",
+                                            "items": {
+                                              "type": "object",
+                                              "properties": {
+                                                "month": {
+                                                  "type": "string"
+                                                },
+                                                "avgPct": {
+                                                  "type": "number"
+                                                }
+                                              },
+                                              "required": [
+                                                "month",
+                                                "avgPct"
+                                              ]
+                                            }
+                                          }
+                                        },
+                                        "required": [
+                                          "avgPct",
+                                          "nMarks",
+                                          "distinctStudents",
+                                          "monthly"
+                                        ]
+                                      }
+                                    },
+                                    "required": [
+                                      "state",
+                                      "value"
+                                    ]
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "state": {
+                                        "type": "string",
+                                        "enum": [
+                                          "insufficient-cohort"
+                                        ]
+                                      },
+                                      "minCohort": {
+                                        "type": "number"
+                                      }
+                                    },
+                                    "required": [
+                                      "state",
+                                      "minCohort"
+                                    ]
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "state": {
+                                        "type": "string",
+                                        "enum": [
+                                          "no-data"
+                                        ]
+                                      }
+                                    },
+                                    "required": [
+                                      "state"
+                                    ]
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "state": {
+                                        "type": "string",
+                                        "enum": [
+                                          "denied"
+                                        ]
+                                      },
+                                      "deniedSubjectId": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "state"
+                                    ]
+                                  }
+                                ]
+                              },
+                              "atRisk": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "type",
+                              "departmentId",
+                              "attendance",
+                              "marks",
+                              "atRisk"
+                            ]
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "type": {
+                                "type": "string",
+                                "enum": [
+                                  "college"
+                                ]
+                              },
+                              "collegeId": {
+                                "type": "string"
+                              },
+                              "attendance": {
+                                "oneOf": [
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "state": {
+                                        "type": "string",
+                                        "enum": [
+                                          "ok"
+                                        ]
+                                      },
+                                      "value": {
+                                        "type": "object",
+                                        "properties": {
+                                          "pct": {
+                                            "type": "number"
+                                          },
+                                          "sessions": {
+                                            "type": "number"
+                                          },
+                                          "distinctStudents": {
+                                            "type": "number"
+                                          },
+                                          "monthly": {
+                                            "type": "array",
+                                            "items": {
+                                              "type": "object",
+                                              "properties": {
+                                                "month": {
+                                                  "type": "string"
+                                                },
+                                                "pct": {
+                                                  "type": "number"
+                                                }
+                                              },
+                                              "required": [
+                                                "month",
+                                                "pct"
+                                              ]
+                                            }
+                                          }
+                                        },
+                                        "required": [
+                                          "pct",
+                                          "sessions",
+                                          "distinctStudents",
+                                          "monthly"
+                                        ]
+                                      }
+                                    },
+                                    "required": [
+                                      "state",
+                                      "value"
+                                    ]
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "state": {
+                                        "type": "string",
+                                        "enum": [
+                                          "insufficient-cohort"
+                                        ]
+                                      },
+                                      "minCohort": {
+                                        "type": "number"
+                                      }
+                                    },
+                                    "required": [
+                                      "state",
+                                      "minCohort"
+                                    ]
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "state": {
+                                        "type": "string",
+                                        "enum": [
+                                          "no-data"
+                                        ]
+                                      }
+                                    },
+                                    "required": [
+                                      "state"
+                                    ]
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "state": {
+                                        "type": "string",
+                                        "enum": [
+                                          "denied"
+                                        ]
+                                      },
+                                      "deniedSubjectId": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "state"
+                                    ]
+                                  }
+                                ]
+                              },
+                              "marks": {
+                                "oneOf": [
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "state": {
+                                        "type": "string",
+                                        "enum": [
+                                          "ok"
+                                        ]
+                                      },
+                                      "value": {
+                                        "type": "object",
+                                        "properties": {
+                                          "avgPct": {
+                                            "type": "number"
+                                          },
+                                          "nMarks": {
+                                            "type": "number"
+                                          },
+                                          "distinctStudents": {
+                                            "type": "number"
+                                          },
+                                          "monthly": {
+                                            "type": "array",
+                                            "items": {
+                                              "type": "object",
+                                              "properties": {
+                                                "month": {
+                                                  "type": "string"
+                                                },
+                                                "avgPct": {
+                                                  "type": "number"
+                                                }
+                                              },
+                                              "required": [
+                                                "month",
+                                                "avgPct"
+                                              ]
+                                            }
+                                          }
+                                        },
+                                        "required": [
+                                          "avgPct",
+                                          "nMarks",
+                                          "distinctStudents",
+                                          "monthly"
+                                        ]
+                                      }
+                                    },
+                                    "required": [
+                                      "state",
+                                      "value"
+                                    ]
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "state": {
+                                        "type": "string",
+                                        "enum": [
+                                          "insufficient-cohort"
+                                        ]
+                                      },
+                                      "minCohort": {
+                                        "type": "number"
+                                      }
+                                    },
+                                    "required": [
+                                      "state",
+                                      "minCohort"
+                                    ]
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "state": {
+                                        "type": "string",
+                                        "enum": [
+                                          "no-data"
+                                        ]
+                                      }
+                                    },
+                                    "required": [
+                                      "state"
+                                    ]
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "state": {
+                                        "type": "string",
+                                        "enum": [
+                                          "denied"
+                                        ]
+                                      },
+                                      "deniedSubjectId": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "state"
+                                    ]
+                                  }
+                                ]
+                              },
+                              "atRisk": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "type",
+                              "collegeId",
+                              "attendance",
+                              "marks",
+                              "atRisk"
+                            ]
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "academicYear",
+                    "names",
+                    "tiles"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Access denied by the role/scope policy (problem+json)"
+          }
+        }
+      }
+    },
+    "/api/v1/analytics/rollups/{level}/{nodeId}": {
+      "get": {
+        "summary": "Attendance + marks rollups for one org node",
+        "description": "Attendance and single-subject marks check the node's constituent ref; the cross-subject overall is served only under explicit per-subject closure. Aggregates under the minimum cohort are withheld as a designed state.\n\n**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "analytics"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "section",
+                "class",
+                "department",
+                "college"
+              ]
+            },
+            "required": true,
+            "name": "level",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "nodeId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}$"
+            },
+            "required": true,
+            "name": "academicYear",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Scope-served rollups",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "node": {
+                      "type": "object",
+                      "properties": {
+                        "level": {
+                          "type": "string",
+                          "enum": [
+                            "section",
+                            "class",
+                            "department",
+                            "college"
+                          ]
+                        },
+                        "nodeId": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "level",
+                        "nodeId",
+                        "name"
+                      ]
+                    },
+                    "attendance": {
+                      "oneOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "state": {
+                              "type": "string",
+                              "enum": [
+                                "ok"
+                              ]
+                            },
+                            "value": {
+                              "type": "object",
+                              "properties": {
+                                "pct": {
+                                  "type": "number"
+                                },
+                                "sessions": {
+                                  "type": "number"
+                                },
+                                "distinctStudents": {
+                                  "type": "number"
+                                },
+                                "monthly": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "month": {
+                                        "type": "string"
+                                      },
+                                      "pct": {
+                                        "type": "number"
+                                      }
+                                    },
+                                    "required": [
+                                      "month",
+                                      "pct"
+                                    ]
+                                  }
+                                }
+                              },
+                              "required": [
+                                "pct",
+                                "sessions",
+                                "distinctStudents",
+                                "monthly"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "state",
+                            "value"
+                          ]
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "state": {
+                              "type": "string",
+                              "enum": [
+                                "insufficient-cohort"
+                              ]
+                            },
+                            "minCohort": {
+                              "type": "number"
+                            }
+                          },
+                          "required": [
+                            "state",
+                            "minCohort"
+                          ]
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "state": {
+                              "type": "string",
+                              "enum": [
+                                "no-data"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "state"
+                          ]
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "state": {
+                              "type": "string",
+                              "enum": [
+                                "denied"
+                              ]
+                            },
+                            "deniedSubjectId": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "state"
+                          ]
+                        }
+                      ]
+                    },
+                    "marks": {
+                      "type": "object",
+                      "properties": {
+                        "bySubject": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "subjectId": {
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "summary": {
+                                "oneOf": [
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "state": {
+                                        "type": "string",
+                                        "enum": [
+                                          "ok"
+                                        ]
+                                      },
+                                      "value": {
+                                        "type": "object",
+                                        "properties": {
+                                          "avgPct": {
+                                            "type": "number"
+                                          },
+                                          "nMarks": {
+                                            "type": "number"
+                                          },
+                                          "distinctStudents": {
+                                            "type": "number"
+                                          },
+                                          "monthly": {
+                                            "type": "array",
+                                            "items": {
+                                              "type": "object",
+                                              "properties": {
+                                                "month": {
+                                                  "type": "string"
+                                                },
+                                                "avgPct": {
+                                                  "type": "number"
+                                                }
+                                              },
+                                              "required": [
+                                                "month",
+                                                "avgPct"
+                                              ]
+                                            }
+                                          }
+                                        },
+                                        "required": [
+                                          "avgPct",
+                                          "nMarks",
+                                          "distinctStudents",
+                                          "monthly"
+                                        ]
+                                      }
+                                    },
+                                    "required": [
+                                      "state",
+                                      "value"
+                                    ]
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "state": {
+                                        "type": "string",
+                                        "enum": [
+                                          "insufficient-cohort"
+                                        ]
+                                      },
+                                      "minCohort": {
+                                        "type": "number"
+                                      }
+                                    },
+                                    "required": [
+                                      "state",
+                                      "minCohort"
+                                    ]
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "state": {
+                                        "type": "string",
+                                        "enum": [
+                                          "no-data"
+                                        ]
+                                      }
+                                    },
+                                    "required": [
+                                      "state"
+                                    ]
+                                  },
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "state": {
+                                        "type": "string",
+                                        "enum": [
+                                          "denied"
+                                        ]
+                                      },
+                                      "deniedSubjectId": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "state"
+                                    ]
+                                  }
+                                ]
+                              }
+                            },
+                            "required": [
+                              "subjectId",
+                              "name",
+                              "summary"
+                            ]
+                          }
+                        },
+                        "overall": {
+                          "oneOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "state": {
+                                  "type": "string",
+                                  "enum": [
+                                    "ok"
+                                  ]
+                                },
+                                "value": {
+                                  "type": "object",
+                                  "properties": {
+                                    "avgPct": {
+                                      "type": "number"
+                                    },
+                                    "nMarks": {
+                                      "type": "number"
+                                    },
+                                    "distinctStudents": {
+                                      "type": "number"
+                                    },
+                                    "monthly": {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "object",
+                                        "properties": {
+                                          "month": {
+                                            "type": "string"
+                                          },
+                                          "avgPct": {
+                                            "type": "number"
+                                          }
+                                        },
+                                        "required": [
+                                          "month",
+                                          "avgPct"
+                                        ]
+                                      }
+                                    }
+                                  },
+                                  "required": [
+                                    "avgPct",
+                                    "nMarks",
+                                    "distinctStudents",
+                                    "monthly"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "state",
+                                "value"
+                              ]
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "state": {
+                                  "type": "string",
+                                  "enum": [
+                                    "insufficient-cohort"
+                                  ]
+                                },
+                                "minCohort": {
+                                  "type": "number"
+                                }
+                              },
+                              "required": [
+                                "state",
+                                "minCohort"
+                              ]
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "state": {
+                                  "type": "string",
+                                  "enum": [
+                                    "no-data"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "state"
+                              ]
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "state": {
+                                  "type": "string",
+                                  "enum": [
+                                    "denied"
+                                  ]
+                                },
+                                "deniedSubjectId": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "state"
+                              ]
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "bySubject",
+                        "overall"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "node",
+                    "attendance",
+                    "marks"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "The caller's scope covers nothing at this node",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such org node",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/analytics/at-risk/{level}/{nodeId}": {
+      "get": {
+        "summary": "At-risk students under a node (field-gated per caller)",
+        "description": "Each entry is component-gated: attendance figures for callers covering the student's section; per-subject scores per subject scope; the overall figure and the low-marks reason only under full cross-subject closure. Entries with no visible flagged reason are omitted.\n\n**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "analytics"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "section",
+                "class",
+                "department",
+                "college"
+              ]
+            },
+            "required": true,
+            "name": "level",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "nodeId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}$"
+            },
+            "required": true,
+            "name": "academicYear",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Visible at-risk entries",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "students": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "studentId": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "attendancePct": {
+                            "type": "number",
+                            "nullable": true
+                          },
+                          "subjectPcts": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "number"
+                            }
+                          },
+                          "overallPct": {
+                            "type": "number",
+                            "nullable": true
+                          },
+                          "reasons": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "enum": [
+                                "low-attendance",
+                                "low-marks"
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "studentId",
+                          "name",
+                          "attendancePct",
+                          "subjectPcts",
+                          "overallPct",
+                          "reasons"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "students"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Access denied by the role/scope policy (problem+json)"
+          },
+          "404": {
+            "description": "No such org node",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/analytics/students/{studentId}/performance": {
+      "get": {
+        "summary": "One student's attendance + marks trends (live, filtered at source)",
+        "description": "Computed fresh from #4's read model with the ScopeChecker run PER RECORD before any arithmetic. The overall average appears only when no mark was filtered out (closure).\n\n**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "analytics"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "studentId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}$"
+            },
+            "required": true,
+            "name": "academicYear",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The caller's view of this student",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "studentId": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "attendance": {
+                      "type": "object",
+                      "nullable": true,
+                      "properties": {
+                        "pct": {
+                          "type": "number"
+                        },
+                        "total": {
+                          "type": "number"
+                        },
+                        "monthly": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "month": {
+                                "type": "string"
+                              },
+                              "pct": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "month",
+                              "pct"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "pct",
+                        "total",
+                        "monthly"
+                      ]
+                    },
+                    "subjects": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "subjectId": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "avgPct": {
+                            "type": "number"
+                          },
+                          "series": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "label": {
+                                  "type": "string"
+                                },
+                                "pct": {
+                                  "type": "number"
+                                }
+                              },
+                              "required": [
+                                "label",
+                                "pct"
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "subjectId",
+                          "name",
+                          "avgPct",
+                          "series"
+                        ]
+                      }
+                    },
+                    "overallPct": {
+                      "type": "number",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "studentId",
+                    "name",
+                    "attendance",
+                    "subjects",
+                    "overallPct"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "No record of this student is within the caller's scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such student",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/analytics/recompute": {
+      "post": {
+        "summary": "Rebuild a year's rollups now (admin)",
+        "description": "Enqueues the same worker job the nightly schedule runs. Audited.\n\n**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "analytics"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "academicYear": {
+                    "type": "string",
+                    "pattern": "^\\d{4}-\\d{2}$"
+                  }
+                },
+                "required": [
+                  "academicYear"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Rebuild enqueued",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "enqueued": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    }
+                  },
+                  "required": [
+                    "enqueued"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Access denied by the role/scope policy (problem+json)"
+          }
+        }
+      }
     }
   }
 }

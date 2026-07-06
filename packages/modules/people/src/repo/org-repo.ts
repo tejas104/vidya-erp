@@ -57,6 +57,7 @@ export interface OrgRepo {
   findCollegeByCode(code: string): Promise<PplCollegeRow | null>;
 
   listColleges(): Promise<PplCollegeRow[]>;
+  listSectionsOfClass(classId: string): Promise<PplSectionRow[]>;
   getTree(collegeId: string): Promise<OrgTree | null>;
 
   renameUnit(unitType: OrgUnitType, id: string, name: string): Promise<boolean>;
@@ -143,6 +144,14 @@ export function createOrgRepo(db: Db): OrgRepo {
 
     async listColleges() {
       return db.select().from(pplColleges).orderBy(asc(pplColleges.name));
+    },
+
+    async listSectionsOfClass(classId) {
+      return db
+        .select()
+        .from(pplSections)
+        .where(eq(pplSections.classId, classId))
+        .orderBy(asc(pplSections.name));
     },
 
     async getTree(collegeId) {

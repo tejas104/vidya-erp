@@ -54,6 +54,17 @@ export interface AttendanceRepo {
   ): Promise<{ session: AcdSessionRow; entry: AcdEntryRow }[]>;
   /** Which of these sections have any session on the date. */
   sectionsWithSessionOn(date: string, sectionIds: readonly string[]): Promise<Set<string>>;
+  /** Keyset page over a year's entries (analytics read model, #5). */
+  pageEntries(
+    academicYear: string,
+    afterEntryId: string | null,
+    limit: number,
+  ): Promise<{ session: AcdSessionRow; entry: AcdEntryRow }[]>;
+  /** A section's most recent sessions with present-percentage (register strip). */
+  recentSessionDensity(
+    sectionId: string,
+    limit: number,
+  ): Promise<{ heldOn: string; slot: string; presentPct: number; students: number }[]>;
 }
 
 export function createAttendanceRepo(db: Db): AttendanceRepo {
@@ -170,6 +181,48 @@ export function createAttendanceRepo(db: Db): AttendanceRepo {
         )
         .orderBy(desc(acdAttendanceSessions.heldOn));
       return rows;
+    },
+
+    async pageEntries(academicYear, afterEntryId, limit) {
+      const conditions = [eq(acdAttendanceSessions.academicYear, academicYear)];
+      if (afterEntryId !== null) {
+        conditions.push(gte(acdAttendanceEntries.id, afterEntryId));
+      }
+      const rows = await db
+        .select({ session: acdAttendanceSessions, entry: acdAttendanceEntries })
+        .from(acdAttendanceEntries)
+        .innerJoin(
+          acdAttendanceSessions,
+          eq(acdAttendanceEntries.sessionId, acdAttendanceSessions.id),
+        )
+        .where(and(...conditions))
+        .orderBy(acdAttendanceEntries.id)
+        .limit(limit + (afterEntryId === null ? 0 : 1));
+      // Keyset uses >= then drops the pivot row itself.
+      return afterEntryId === null ? rows : rows.filter((row) => row.entry.id !== afterEntryId);
+    },
+
+    async recentSessionDensity(sectionId, limit) {
+      const sessions = await db
+        .select()
+        .from(acdAttendanceSessions)
+        .where(eq(acdAttendanceSessions.sectionId, sectionId))
+        .orderBy(desc(acdAttendanceSessions.heldOn), desc(acdAttendanceSessions.slot))
+        .limit(limit);
+      const result = [];
+      for (const session of sessions) {
+        const entries = await this.entriesForSession(session.id);
+        const present = entries.filter(
+          (entry) => entry.status === "present" || entry.status === "late",
+        ).length;
+        result.push({
+          heldOn: session.heldOn,
+          slot: session.slot,
+          presentPct: entries.length === 0 ? 0 : Math.round((present / entries.length) * 100),
+          students: entries.length,
+        });
+      }
+      return result;
     },
 
     async sectionsWithSessionOn(date, sectionIds) {

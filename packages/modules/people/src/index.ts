@@ -73,6 +73,8 @@ export interface PeopleModuleDeps {
 export interface PeopleDirectory {
   sectionPath(sectionId: string): Promise<OrgPath | null>;
   classPath(classId: string): Promise<OrgPath | null>;
+  departmentPath(departmentId: string): Promise<OrgPath | null>;
+  collegeExists(collegeId: string): Promise<boolean>;
   /** Live enrollments of a section: who attendance can be marked for. */
   sectionRoster(sectionId: string): Promise<{ studentId: string; academicYear: string }[]>;
   /** Enrollment-derived org position; `{collegeId}` for unenrolled students. */
@@ -83,6 +85,14 @@ export interface PeopleDirectory {
   subjectDepartment(subjectId: string): Promise<string | null>;
   /** Sections with at least one live enrollment (attendance gap scan). */
   sectionsWithLiveEnrollment(): Promise<string[]>;
+  /** A class's sections (id + display name), for dashboard tiles (#5). */
+  sectionsOfClass(classId: string): Promise<{ sectionId: string; name: string }[]>;
+  /**
+   * Display names for opaque org/people ids (routed by id prefix across
+   * colleges, departments, classes, sections, subjects and students).
+   * Unknown ids are simply absent from the result.
+   */
+  namesFor(ids: readonly string[]): Promise<Map<string, string>>;
 }
 
 /** What composition roots and other modules may use. */
@@ -157,6 +167,8 @@ export function createPeopleModule(deps: PeopleModuleDeps): RuntimeModule<People
       directory: {
         sectionPath: (sectionId) => orgRepo.pathForSection(sectionId),
         classPath: (classId) => orgRepo.pathForClass(classId),
+        departmentPath: (departmentId) => orgRepo.pathForDepartment(departmentId),
+        collegeExists: async (collegeId) => (await orgRepo.getCollege(collegeId)) !== null,
         sectionRoster: async (sectionId) =>
           (await peopleRepo.roster(sectionId)).map((entry) => ({
             studentId: entry.student.id,
@@ -170,6 +182,36 @@ export function createPeopleModule(deps: PeopleModuleDeps): RuntimeModule<People
         subjectDepartment: async (subjectId) =>
           (await orgRepo.getSubject(subjectId))?.departmentId ?? null,
         sectionsWithLiveEnrollment: () => peopleRepo.sectionsWithLiveEnrollment(),
+        sectionsOfClass: async (classId) =>
+          (await orgRepo.listSectionsOfClass(classId)).map((section) => ({
+            sectionId: section.id,
+            name: section.name,
+          })),
+        namesFor: async (ids) => {
+          const names = new Map<string, string>();
+          for (const id of ids) {
+            if (id.startsWith("col_")) {
+              const row = await orgRepo.getCollege(id);
+              if (row !== null) names.set(id, row.name);
+            } else if (id.startsWith("dep_")) {
+              const row = await orgRepo.getDepartment(id);
+              if (row !== null) names.set(id, row.name);
+            } else if (id.startsWith("cls_")) {
+              const row = await orgRepo.getClass(id);
+              if (row !== null) names.set(id, row.name);
+            } else if (id.startsWith("sec_")) {
+              const row = await orgRepo.getSection(id);
+              if (row !== null) names.set(id, row.name);
+            } else if (id.startsWith("sub_")) {
+              const row = await orgRepo.getSubject(id);
+              if (row !== null) names.set(id, row.name);
+            } else if (id.startsWith("stu_")) {
+              const row = await peopleRepo.getStudent(id);
+              if (row !== null) names.set(id, row.fullName);
+            }
+          }
+          return names;
+        },
       },
       bootstrapCollege: (input) => org.bootstrapCollege(input),
     },

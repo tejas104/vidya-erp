@@ -5,6 +5,7 @@ import { systemModuleDefinition } from "@vidya/module-system";
 import { identityModuleDefinition } from "@vidya/module-identity";
 import { peopleModuleDefinition } from "@vidya/module-people";
 import { academicsModuleDefinition } from "@vidya/module-academics";
+import { analyticsModuleDefinition } from "@vidya/module-analytics";
 
 /**
  * Tooling-side module registry. New modules are added here (one line) and in
@@ -16,6 +17,7 @@ export const moduleDefinitions: readonly ModuleDefinition[] = [
   identityModuleDefinition,
   peopleModuleDefinition,
   academicsModuleDefinition,
+  analyticsModuleDefinition,
 ];
 
 const require = createRequire(import.meta.url);

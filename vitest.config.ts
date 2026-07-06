@@ -60,6 +60,10 @@ export default defineConfig({
         "packages/modules/academics/src/repo/**",
         "packages/modules/academics/src/db/**",
         "packages/modules/academics/src/index.ts",
+        // Analytics: same policy.
+        "packages/modules/analytics/src/repo/**",
+        "packages/modules/analytics/src/db/**",
+        "packages/modules/analytics/src/index.ts",
       ],
       thresholds: {
         lines: 80,
@@ -91,6 +95,20 @@ export default defineConfig({
           statements: 100,
         },
         "packages/modules/academics/src/service/**": {
+          lines: 95,
+          functions: 95,
+          branches: 95,
+          statements: 95,
+        },
+        // #5: the aggregation-scope surface carries the 100% bar; the
+        // serving/precompute services the 95% bar.
+        "packages/modules/analytics/src/aggregation-scope.ts": {
+          lines: 100,
+          functions: 100,
+          branches: 100,
+          statements: 100,
+        },
+        "packages/modules/analytics/src/service/**": {
           lines: 95,
           functions: 95,
           branches: 95,

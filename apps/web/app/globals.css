@@ -1,0 +1,671 @@
+/* ============================================================================
+ * Vidya — "The Register" design system.
+ *
+ * Light mode is ruled ledger paper: a cool off-white, ink-navy text, and the
+ * faint horizontal rules that structure every list the way a paper register
+ * rules its rows. Dark mode is NOT an inversion — it is the blackboard: deep
+ * slate-green with chalk-ivory ink, designed as its own mode.
+ *
+ * The signature is the register strip: a row of day-cells inked by each day's
+ * attendance density. Boldness is spent there; everything else stays quiet.
+ * ========================================================================== */
+
+:root {
+  color-scheme: light;
+
+  /* --- surfaces (ruled ledger paper) --- */
+  --paper: #faf9f4;
+  --paper-raised: #fffefb;
+  --paper-sunken: #f2efe6;
+  --rule: #e6e1d3;
+  --rule-strong: #d6cfbc;
+
+  /* --- ink --- */
+  --ink: #1a2233;
+  --ink-2: #565c68;
+  --ink-3: #8b8f98;
+
+  /* --- meaning --- */
+  --accent: #b23a2e;        /* examiner's red — at-risk underline, reserved */
+  --accent-soft: #f3e0dc;
+  --good: #1e7a4e;          /* present / healthy */
+  --good-soft: #dcefe3;
+  --warn: #b7791f;          /* watch */
+  --warn-soft: #f4e9d2;
+
+  /* --- register-strip sequential ink (present density, single hue) --- */
+  --strip-0: #edeade;       /* empty-but-recorded */
+  --strip-1: #cfe3d3;
+  --strip-2: #9fccab;
+  --strip-3: #5faa77;
+  --strip-4: #1e7a4e;
+
+  /* --- categorical subject hues, FIXED ORDER (validated; always direct-labelled) --- */
+  --series-1: #2a78d6;
+  --series-2: #1baf7a;
+  --series-3: #4a3aa7;
+  --series-4: #eb6834;
+  --series-5: #008300;
+  --series-6: #e87ba4;
+
+  /* --- single-series chart hue (sparklines) --- */
+  --line: #2a78d6;
+
+  /* --- geometry --- */
+  --radius: 10px;
+  --radius-sm: 6px;
+  --rule-width: 1px;
+  --focus: #2a78d6;
+
+  /* --- type --- */
+  --font-display: var(--font-bricolage), "Segoe UI", system-ui, sans-serif;
+  --font-body: var(--font-atkinson), "Segoe UI", system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, "Cascadia Code", monospace;
+
+  --shadow: 0 1px 2px rgba(26, 34, 51, 0.06), 0 4px 16px rgba(26, 34, 51, 0.05);
+}
+
+/* The blackboard — its own mode, from the same ramps. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #18211d;
+    --paper-raised: #1f2a25;
+    --paper-sunken: #141c19;
+    --rule: #2c3a33;
+    --rule-strong: #3d5049;
+    --ink: #ece8da;
+    --ink-2: #b7bfb4;
+    --ink-3: #83908a;
+    --accent: #e8837a;
+    --accent-soft: #33221f;
+    --good: #6fcf97;
+    --good-soft: #1c2c23;
+    --warn: #e3b341;
+    --warn-soft: #2c2717;
+    --strip-0: #23302a;
+    --strip-1: #2c4536;
+    --strip-2: #3a6b4c;
+    --strip-3: #4f9268;
+    --strip-4: #6fcf97;
+    --series-1: #3987e5;
+    --series-2: #199e70;
+    --series-3: #9085e9;
+    --series-4: #d95926;
+    --series-5: #3ba55c;
+    --series-6: #d55181;
+    --line: #6da7ec;
+    --focus: #6da7ec;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 28px rgba(0, 0, 0, 0.35);
+  }
+}
+
+:root[data-theme="dark"] {
+  --paper: #18211d;
+  --paper-raised: #1f2a25;
+  --paper-sunken: #141c19;
+  --rule: #2c3a33;
+  --rule-strong: #3d5049;
+  --ink: #ece8da;
+  --ink-2: #b7bfb4;
+  --ink-3: #83908a;
+  --accent: #e8837a;
+  --accent-soft: #33221f;
+  --good: #6fcf97;
+  --good-soft: #1c2c23;
+  --warn: #e3b341;
+  --warn-soft: #2c2717;
+  --strip-0: #23302a;
+  --strip-1: #2c4536;
+  --strip-2: #3a6b4c;
+  --strip-3: #4f9268;
+  --strip-4: #6fcf97;
+  --series-1: #3987e5;
+  --series-2: #199e70;
+  --series-3: #9085e9;
+  --series-4: #d95926;
+  --series-5: #3ba55c;
+  --series-6: #d55181;
+  --line: #6da7ec;
+  --focus: #6da7ec;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 28px rgba(0, 0, 0, 0.35);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  min-height: 100dvh;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  margin: 0;
+}
+
+a {
+  color: inherit;
+}
+
+/* Visible keyboard focus everywhere — the accessibility floor, unannounced. */
+:focus-visible {
+  outline: 2.5px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+.num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+/* --- layout scaffolding --- */
+.masthead {
+  border-bottom: var(--rule-width) solid var(--rule-strong);
+  background: var(--paper);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.masthead-inner {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 14px 24px;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.wordmark {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 20px;
+  letter-spacing: -0.03em;
+}
+
+.wordmark span {
+  color: var(--accent);
+}
+
+.masthead-meta {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  color: var(--ink-3);
+  display: flex;
+  gap: 16px;
+  align-items: baseline;
+}
+
+.page {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 28px 24px 80px;
+}
+
+.page-title {
+  font-size: clamp(26px, 4vw, 38px);
+  margin-bottom: 4px;
+}
+
+.page-lede {
+  color: var(--ink-2);
+  margin: 0 0 28px;
+  max-width: 62ch;
+}
+
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--ink-3);
+  margin-bottom: 8px;
+}
+
+/* --- the register card --- */
+.card {
+  background: var(--paper-raised);
+  border: var(--rule-width) solid var(--rule);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 20px;
+}
+
+.grid {
+  display: grid;
+  gap: 18px;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+}
+
+.tile-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.tile-kind {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--ink-3);
+}
+
+.tile-name {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 19px;
+  margin-top: 2px;
+}
+
+/* --- stat row --- */
+.stats {
+  display: flex;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.stat {
+  min-width: 92px;
+}
+
+.stat-value {
+  font-family: var(--font-mono);
+  font-size: 30px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  color: var(--ink);
+}
+
+.stat-value.muted {
+  color: var(--ink-3);
+  font-size: 20px;
+}
+
+.stat-label {
+  font-size: 12.5px;
+  color: var(--ink-2);
+  margin-top: 6px;
+}
+
+.stat-sub {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-3);
+}
+
+/* --- withheld / empty designed states --- */
+.state {
+  border: 1px dashed var(--rule-strong);
+  border-radius: var(--radius-sm);
+  padding: 14px 16px;
+  color: var(--ink-2);
+  font-size: 13.5px;
+  background: var(--paper-sunken);
+}
+
+.state strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* --- the register strip (the signature) --- */
+.strip {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.strip-row {
+  display: grid;
+  grid-template-columns: 78px 1fr;
+  align-items: center;
+  gap: 10px;
+}
+
+.strip-label {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--ink-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.strip-cells {
+  display: flex;
+  gap: 2px;
+  min-width: 0;
+}
+
+.strip-cell {
+  width: 13px;
+  height: 21px;
+  flex: none;
+  border-radius: 3px;
+  border: 1px solid var(--rule);
+  background: var(--paper-sunken);
+}
+
+.strip-cell[data-d="0"] { background: var(--strip-0); }
+.strip-cell[data-d="1"] { background: var(--strip-1); }
+.strip-cell[data-d="2"] { background: var(--strip-2); }
+.strip-cell[data-d="3"] { background: var(--strip-3); }
+.strip-cell[data-d="4"] { background: var(--strip-4); border-color: transparent; }
+
+.strip-empty {
+  font-size: 12.5px;
+  color: var(--ink-3);
+  padding: 4px 0;
+}
+
+/* --- at-risk --- */
+.risk-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  flex: none;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  padding: 4px 11px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.risk-count.clear {
+  background: var(--good-soft);
+  color: var(--good);
+}
+
+.risk-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.risk-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--rule);
+}
+
+.risk-row:last-child {
+  border-bottom: none;
+}
+
+.risk-name {
+  font-weight: 600;
+  /* the examiner's underline — always paired with the reason label, never color alone */
+  text-decoration: underline;
+  text-decoration-color: var(--accent);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+}
+
+.risk-reasons {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.chip {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--rule-strong);
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+
+.chip.serious {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.risk-figs {
+  display: flex;
+  gap: 16px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+
+.risk-figs .k {
+  color: var(--ink-3);
+  font-size: 11px;
+  display: block;
+}
+
+/* --- chart bits --- */
+.legend {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin: 4px 0 10px;
+}
+
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+
+.legend-swatch {
+  width: 11px;
+  height: 11px;
+  border-radius: 3px;
+  flex: none;
+}
+
+.barrow {
+  display: grid;
+  grid-template-columns: 130px 1fr 52px;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 0;
+}
+
+.barrow-label {
+  font-size: 13px;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bartrack {
+  height: 12px;
+  background: var(--paper-sunken);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.barfill {
+  height: 100%;
+  border-radius: 6px;
+}
+
+.barrow-val {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  text-align: right;
+  color: var(--ink);
+}
+
+.section {
+  margin-top: 36px;
+}
+
+.section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  border-bottom: 2px solid var(--rule-strong);
+  padding-bottom: 8px;
+  margin-bottom: 18px;
+}
+
+.section-head h2 {
+  font-size: 22px;
+}
+
+/* --- controls --- */
+.btn {
+  font-family: var(--font-body);
+  font-size: 15px;
+  font-weight: 600;
+  padding: 11px 20px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--ink);
+  background: var(--ink);
+  color: var(--paper-raised);
+  cursor: pointer;
+  transition: transform 0.08s ease, opacity 0.15s ease;
+}
+
+.btn:hover {
+  opacity: 0.9;
+}
+
+.btn:active {
+  transform: translateY(1px);
+}
+
+.btn.ghost {
+  background: transparent;
+  color: var(--ink);
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.field {
+  display: block;
+  margin-bottom: 16px;
+}
+
+.field label {
+  display: block;
+  font-size: 13px;
+  color: var(--ink-2);
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+
+.field input {
+  width: 100%;
+  font-family: var(--font-body);
+  font-size: 16px;
+  padding: 11px 13px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--rule-strong);
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.field input:focus-visible {
+  border-color: var(--focus);
+}
+
+.theme-toggle {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  background: none;
+  border: 1px solid var(--rule-strong);
+  color: var(--ink-2);
+  border-radius: 999px;
+  padding: 4px 12px;
+  cursor: pointer;
+}
+
+.linklike {
+  color: var(--line);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  font-weight: 600;
+}
+
+.formerror {
+  color: var(--accent);
+  font-size: 14px;
+  margin: 4px 0 16px;
+  min-height: 1.2em;
+}
+
+/* Motion, used once (the strip reveal), and only if welcome. */
+@media (prefers-reduced-motion: no-preference) {
+  .reveal {
+    animation: rise 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  }
+  .reveal:nth-child(2) { animation-delay: 0.05s; }
+  .reveal:nth-child(3) { animation-delay: 0.1s; }
+  .reveal:nth-child(4) { animation-delay: 0.15s; }
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: none; }
+  }
+}
+
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 8px;
+  background: var(--ink);
+  color: var(--paper-raised);
+  padding: 8px 14px;
+  border-radius: 6px;
+  z-index: 100;
+}
+
+.skip-link:focus {
+  left: 8px;
+}
+
+@media (max-width: 560px) {
+  .masthead-inner,
+  .page {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+  .barrow {
+    grid-template-columns: 96px 1fr 44px;
+  }
+}

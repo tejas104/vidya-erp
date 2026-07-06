@@ -23,6 +23,11 @@ import { createSystemModule } from "@vidya/module-system";
 import { createIdentityCore, createIdentityModule } from "@vidya/module-identity";
 import { IMPORT_JOB_NAME, PEOPLE_MODULE_NAME, createPeopleModule } from "@vidya/module-people";
 import { createAcademicsModule } from "@vidya/module-academics";
+import {
+  ANALYTICS_MODULE_NAME,
+  ROLLUP_JOB_NAME,
+  createAnalyticsModule,
+} from "@vidya/module-analytics";
 
 /**
  * COMPOSITION ROOT — web process.
@@ -149,7 +154,25 @@ function buildWebRuntime(): WebRuntime {
       ),
   });
 
-  const modules: RuntimeModule<unknown>[] = [system, identity, people, academics];
+  const analyticsQueue = createModuleQueue({
+    module: ANALYTICS_MODULE_NAME,
+    redisUrl: config.redis.url,
+  });
+  lifecycle.onShutdown("analytics-queue", () => analyticsQueue.close());
+  const analytics = createAnalyticsModule({
+    db,
+    metrics,
+    audit: system.service.audit,
+    scopeChecker: identityCore.scopeChecker,
+    academicsRead: academics.service.readModel,
+    peopleDirectory: people.service.directory,
+    config: config.analytics,
+    enqueueRollup: async (payload) => {
+      await analyticsQueue.queue.add(ROLLUP_JOB_NAME, payload);
+    },
+  });
+
+  const modules: RuntimeModule<unknown>[] = [system, identity, people, academics, analytics];
 
   const routeDeps: RouteDependencies = {
     logger,
