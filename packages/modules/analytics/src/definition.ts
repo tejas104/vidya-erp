@@ -99,6 +99,13 @@ const ADMIN_ONLY = { public: false as const, requirement: { rolesAnyOf: ["admin"
 const ANY_AUTHENTICATED = { public: false as const, requirement: {} };
 const yearQuery = z.object({ academicYear: academicYearSchema });
 
+const compareLevelSchema = z.enum(["college", "department", "class"]);
+const distributionLevelSchema = z.enum(["class", "section"]);
+const histogramSchema = z.object({
+  total: z.number(),
+  bands: z.array(z.object({ label: z.string(), count: z.number() })),
+});
+
 const routes: RouteSpec[] = [
   {
     id: "analytics.dashboard",
@@ -219,6 +226,60 @@ const routes: RouteSpec[] = [
     audit: { action: "analytics.recompute-requested", resourceType: "rollup" },
     responses: {
       202: { description: "Rebuild enqueued", schema: z.object({ enqueued: z.literal(true) }) },
+    },
+  },
+  {
+    id: "analytics.compare",
+    module: MODULE_NAME,
+    method: "GET",
+    path: "/api/v1/analytics/compare/{level}/{nodeId}",
+    summary: "Compare a node's children (departments / classes / sections)",
+    description:
+      "Each child's attendance + overall marks are served through the same constituent-closure and minimum-cohort path as a rollup; children the caller can't read come back as designed 'denied' states, not errors.",
+    tags: ["analytics"],
+    auth: ANY_AUTHENTICATED,
+    request: { params: z.object({ level: compareLevelSchema, nodeId: idSchema }), query: yearQuery },
+    responses: {
+      200: {
+        description: "Per-child comparison",
+        schema: z.object({
+          parent: z.object({ level: compareLevelSchema, nodeId: z.string(), name: z.string() }),
+          childLevel: scopeLevelSchema,
+          children: z.array(
+            z.object({
+              nodeId: z.string(),
+              name: z.string(),
+              attendance: aggStateSchema(attendanceSummarySchema),
+              marks: aggStateSchema(marksSummarySchema),
+              atRisk: z.number(),
+            }),
+          ),
+        }),
+      },
+      404: { description: "No such node", schema: problemSchema },
+    },
+  },
+  {
+    id: "analytics.distribution",
+    module: MODULE_NAME,
+    method: "GET",
+    path: "/api/v1/analytics/distribution/{level}/{nodeId}",
+    summary: "Marks/attendance distribution histogram (class or section)",
+    description:
+      "Server-side histogram COUNTS only (never identifiable rows), withheld below the minimum cohort. Class or section only — aggregate levels use /compare.",
+    tags: ["analytics"],
+    auth: ANY_AUTHENTICATED,
+    request: { params: z.object({ level: distributionLevelSchema, nodeId: idSchema }), query: yearQuery },
+    responses: {
+      200: {
+        description: "Distribution buckets",
+        schema: z.object({
+          node: z.object({ level: distributionLevelSchema, nodeId: z.string(), name: z.string() }),
+          marks: aggStateSchema(histogramSchema),
+          attendance: aggStateSchema(histogramSchema),
+        }),
+      },
+      404: { description: "No such node", schema: problemSchema },
     },
   },
 ];

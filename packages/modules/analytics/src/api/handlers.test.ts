@@ -161,4 +161,36 @@ describe("analytics handlers", () => {
       ).status,
     ).toBe(404);
   });
+
+  it("compare returns named children with served slots; 404 unknown parent", async () => {
+    const { handlers } = await makeHarness();
+    const principal = caller("p-1", ["principal"], [{ role: "principal", org: paths.college }]);
+    const ok = await handlers["analytics.compare"]!(
+      ctx(principal, { params: { level: "department", nodeId: ORG.departmentId }, query: { academicYear: YEAR } }),
+    );
+    expect(ok.status).toBe(200);
+    const body = ok.body as { parent: { name: string }; childLevel: string; children: unknown[] };
+    expect(body.parent.name).toBe("Science");
+    expect(body.childLevel).toBe("class");
+    expect(
+      (await handlers["analytics.compare"]!(
+        ctx(principal, { params: { level: "college", nodeId: "col_ghost" }, query: { academicYear: YEAR } }),
+      )).status,
+    ).toBe(404);
+  });
+
+  it("distribution 404s unknown nodes and returns histogram states", async () => {
+    const { handlers } = await makeHarness();
+    const principal = caller("p-2", ["principal"], [{ role: "principal", org: paths.college }]);
+    expect(
+      (await handlers["analytics.distribution"]!(
+        ctx(principal, { params: { level: "section", nodeId: "sec_ghost" }, query: { academicYear: YEAR } }),
+      )).status,
+    ).toBe(404);
+    const ok = await handlers["analytics.distribution"]!(
+      ctx(principal, { params: { level: "class", nodeId: ORG.classId }, query: { academicYear: YEAR } }),
+    );
+    expect(ok.status).toBe(200);
+    expect((ok.body as { marks: { state: string } }).marks.state).toBeDefined();
+  });
 });

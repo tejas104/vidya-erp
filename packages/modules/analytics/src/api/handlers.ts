@@ -125,6 +125,44 @@ export function createAnalyticsHandlers(deps: AnalyticsHandlerDeps): Record<stri
     };
   };
 
+  const compare: RouteHandler = async (ctx) => {
+    const principal = ctx.principal as Principal;
+    const params = ctx.request.params as { level: "college" | "department" | "class"; nodeId: string };
+    const query = ctx.request.query as { academicYear: string };
+    const result = await deps.query.childrenRollups(principal, params.level, params.nodeId, query.academicYear);
+    if (result === null) {
+      return notFound();
+    }
+    const names = await deps.directory.namesFor([params.nodeId]);
+    return {
+      status: 200,
+      body: {
+        parent: { level: params.level, nodeId: params.nodeId, name: names.get(params.nodeId) ?? params.nodeId },
+        childLevel: result.childLevel,
+        children: result.children,
+      },
+    };
+  };
+
+  const distribution: RouteHandler = async (ctx) => {
+    const principal = ctx.principal as Principal;
+    const params = ctx.request.params as { level: "class" | "section"; nodeId: string };
+    const query = ctx.request.query as { academicYear: string };
+    const result = await deps.query.distribution(principal, params.level, params.nodeId, query.academicYear);
+    if (result.state === "not-found") {
+      return notFound();
+    }
+    const names = await deps.directory.namesFor([params.nodeId]);
+    return {
+      status: 200,
+      body: {
+        node: { level: params.level, nodeId: params.nodeId, name: names.get(params.nodeId) ?? params.nodeId },
+        marks: result.marks,
+        attendance: result.attendance,
+      },
+    };
+  };
+
   const recompute: RouteHandler = async (ctx) => {
     const body = ctx.request.body as { academicYear: string };
     await deps.enqueueRollup({ academicYear: body.academicYear, source: "api" });
@@ -141,5 +179,7 @@ export function createAnalyticsHandlers(deps: AnalyticsHandlerDeps): Record<stri
     "analytics.at-risk": atRisk,
     "analytics.student-performance": studentPerformance,
     "analytics.recompute": recompute,
+    "analytics.compare": compare,
+    "analytics.distribution": distribution,
   };
 }
