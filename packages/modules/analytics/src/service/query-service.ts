@@ -384,6 +384,51 @@ export class QueryService {
   }
 
   /**
+   * Per-child comparison under a node: college→departments, department→classes,
+   * class→sections. Each child's aggregates are served through the same
+   * closure + minimum-cohort path as a rollup, so out-of-scope children come
+   * back as designed "denied" states, never errors.
+   */
+  async childrenRollups(
+    principal: Principal,
+    level: "college" | "department" | "class",
+    nodeId: string,
+    academicYear: string,
+  ): Promise<{
+    childLevel: ScopeLevel;
+    children: {
+      nodeId: string;
+      name: string;
+      attendance: AggState<AttendanceSummary> | { state: "denied" };
+      marks: AggState<MarksSummary> | { state: "denied"; deniedSubjectId?: string };
+      atRisk: number;
+    }[];
+  } | null> {
+    if ((await this.nodePath(level, nodeId)) === null) {
+      return null;
+    }
+    const childLevel: ScopeLevel =
+      level === "college" ? "department" : level === "department" ? "class" : "section";
+    const listed =
+      level === "college"
+        ? (await this.deps.directory.departmentsOfCollege(nodeId)).map((d) => ({ id: d.departmentId, name: d.name }))
+        : level === "department"
+          ? (await this.deps.directory.classesOfDepartment(nodeId)).map((c) => ({ id: c.classId, name: c.name }))
+          : (await this.deps.directory.sectionsOfClass(nodeId)).map((s) => ({ id: s.sectionId, name: s.name }));
+
+    const children = [];
+    for (const child of listed) {
+      const childNode = await this.nodePath(childLevel, child.id);
+      if (childNode === null) continue;
+      const attendance = await this.nodeAttendance(principal, child.id, childNode, academicYear);
+      const marks = (await this.nodeMarks(principal, child.id, childNode, academicYear)).overall;
+      const atRisk = (await this.atRisk(principal, childLevel, child.id, academicYear)).length;
+      children.push({ nodeId: child.id, name: child.name, attendance, marks, atRisk });
+    }
+    return { childLevel, children };
+  }
+
+  /**
    * THE PERMISSION MIRROR (approved decision 6): tiles are derived from
    * the caller's grants, so the UI only ever receives what the scope
    * allows — there is nothing to hide client-side. Every number inside a

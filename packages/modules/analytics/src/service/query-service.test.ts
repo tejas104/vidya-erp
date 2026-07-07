@@ -555,3 +555,27 @@ describe("dashboard — the permission mirror", () => {
     expect(sectionA?.days.map((day) => day.heldOn)).toEqual(["2026-07-02"]);
   });
 });
+
+describe("QueryService.childrenRollups", () => {
+  it("returns null for an unknown parent node", async () => {
+    const { service } = await makeService();
+    expect(await service.childrenRollups(principal, "college", "col_ghost", YEAR)).toBeNull();
+  });
+
+  it("lists a college's departments with per-child served aggregates", async () => {
+    const { repo, service } = await makeService();
+    await repo.replaceYear(YEAR, {
+      attendance: [{
+        scopeLevel: "department", nodeId: ORG.departmentId, ...paths.department,
+        academicYear: YEAR, period: "YTD", sessions: 10, present: 90, absent: 10, late: 0, excused: 0, distinctStudents: 8,
+      }],
+      marks: [], flags: [],
+    });
+    const result = await service.childrenRollups(principal, "college", ORG.collegeId, YEAR);
+    expect(result).not.toBeNull();
+    expect(result!.childLevel).toBe("department");
+    expect(result!.children).toHaveLength(1);
+    expect(result!.children[0]!.name).toBe("Science");
+    expect(result!.children[0]!.attendance.state).toBe("ok");
+  });
+});
