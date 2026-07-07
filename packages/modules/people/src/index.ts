@@ -87,6 +87,10 @@ export interface PeopleDirectory {
   sectionsWithLiveEnrollment(): Promise<string[]>;
   /** A class's sections (id + display name), for dashboard tiles (#5). */
   sectionsOfClass(classId: string): Promise<{ sectionId: string; name: string }[]>;
+  /** A college's departments (id + name), for cross-node comparison (analytics). */
+  departmentsOfCollege(collegeId: string): Promise<{ departmentId: string; name: string }[]>;
+  /** A department's classes (id + name), for cross-node comparison (analytics). */
+  classesOfDepartment(departmentId: string): Promise<{ classId: string; name: string }[]>;
   /**
    * Display names for opaque org/people ids (routed by id prefix across
    * colleges, departments, classes, sections, subjects and students).
@@ -186,6 +190,16 @@ export function createPeopleModule(deps: PeopleModuleDeps): RuntimeModule<People
           (await orgRepo.listSectionsOfClass(classId)).map((section) => ({
             sectionId: section.id,
             name: section.name,
+          })),
+        departmentsOfCollege: async (collegeId) =>
+          (await orgRepo.listDepartmentsOfCollege(collegeId)).map((department) => ({
+            departmentId: department.id,
+            name: department.name,
+          })),
+        classesOfDepartment: async (departmentId) =>
+          (await orgRepo.listClassesOfDepartment(departmentId)).map((klass) => ({
+            classId: klass.id,
+            name: klass.name,
           })),
         namesFor: async (ids) => {
           const names = new Map<string, string>();

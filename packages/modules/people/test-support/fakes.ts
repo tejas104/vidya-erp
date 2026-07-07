@@ -150,6 +150,18 @@ export class InMemoryOrgRepo implements OrgRepo {
       .sort((a, b) => a.name.localeCompare(b.name));
   }
 
+  async listDepartmentsOfCollege(collegeId: string): Promise<PplDepartmentRow[]> {
+    return [...this.departments.values()]
+      .filter((department) => department.collegeId === collegeId)
+      .sort((a, b) => a.code.localeCompare(b.code));
+  }
+
+  async listClassesOfDepartment(departmentId: string): Promise<PplClassRow[]> {
+    return [...this.classes.values()]
+      .filter((classRow) => classRow.departmentId === departmentId)
+      .sort((a, b) => a.code.localeCompare(b.code));
+  }
+
   async getTree(collegeId: string): Promise<OrgTree | null> {
     const college = this.colleges.get(collegeId);
     if (college === undefined) {

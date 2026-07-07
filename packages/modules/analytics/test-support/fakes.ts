@@ -132,8 +132,9 @@ export class FakeDirectory implements PeopleDirectory {
   async collegeExists(collegeId: string): Promise<boolean> {
     return collegeId === ORG.collegeId;
   }
-  async sectionRoster() {
-    return [];
+  roster: { studentId: string; academicYear: string }[] = [];
+  async sectionRoster(sectionId: string) {
+    return sectionId === ORG.sectionA ? this.roster : [];
   }
   async studentPosition(studentId: string): Promise<OrgPath | null> {
     return this.positions.get(studentId) ?? null;
@@ -154,6 +155,12 @@ export class FakeDirectory implements PeopleDirectory {
           { sectionId: ORG.sectionB, name: "B" },
         ]
       : [];
+  }
+  async departmentsOfCollege(collegeId: string) {
+    return collegeId === ORG.collegeId ? [{ departmentId: ORG.departmentId, name: "Science" }] : [];
+  }
+  async classesOfDepartment(departmentId: string) {
+    return departmentId === ORG.departmentId ? [{ classId: ORG.classId, name: "BSc Year 1" }] : [];
   }
   async namesFor(ids: readonly string[]): Promise<Map<string, string>> {
     const result = new Map<string, string>();

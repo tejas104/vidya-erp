@@ -146,6 +146,13 @@ export class FakePeopleDirectory implements PeopleDirectory {
     return [];
   }
 
+  async departmentsOfCollege(): Promise<{ departmentId: string; name: string }[]> {
+    return [];
+  }
+  async classesOfDepartment(): Promise<{ classId: string; name: string }[]> {
+    return [];
+  }
+
   async namesFor(ids: readonly string[]): Promise<Map<string, string>> {
     const names = new Map<string, string>([
       [ORG.collegeId, "Test College"],
