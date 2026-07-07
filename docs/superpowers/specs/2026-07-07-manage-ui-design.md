@@ -5,6 +5,10 @@
 - **Scope:** Round 2 of the UI enhancement. Round 1 (analytics dashboard) is
   done. This round adds the **write/management** screens that let staff operate
   the system through the UI instead of API/scripts.
+- **Roadmap position:** This is **Layer 1** of the full college-ERP roadmap
+  (`2026-07-07-erp-roadmap.md`) — making the *existing* backend operable via UI.
+  New modules (fees, timetable, results/GPA, homework, QR, documents) are
+  Layer 2+, each its own later design→plan→build.
 
 ## Context
 
