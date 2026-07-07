@@ -91,12 +91,59 @@ export interface AtRiskEntry {
   reasons: ("low-attendance" | "low-marks")[];
 }
 
+export type ReportParams =
+  | { kind: "student-performance"; studentId: string }
+  | { kind: "section-attendance"; sectionId: string }
+  | { kind: "marks-summary"; classId: string }
+  | { kind: "at-risk"; level: string; nodeId: string };
+
+export interface ReportView {
+  id: string;
+  kind: string;
+  format: "pdf" | "csv";
+  status: "pending" | "running" | "completed" | "failed";
+  rows: number;
+  error: string | null;
+}
+
 export interface StudentPerformance {
   studentId: string;
   name: string;
   attendance: { pct: number; total: number; monthly: MonthPoint[] } | null;
   subjects: { subjectId: string; name: string; avgPct: number; series: { label: string; pct: number }[] }[];
   overallPct: number | null;
+}
+
+export interface NodeRollup {
+  node: { level: string; nodeId: string; name: string };
+  attendance: AggState<AttendanceSummary>;
+  marks: {
+    bySubject: { subjectId: string; name: string; summary: AggState<MarksSummary> }[];
+    overall: AggState<MarksSummary>;
+  };
+}
+
+export interface ComparisonChild {
+  nodeId: string;
+  name: string;
+  attendance: AggState<AttendanceSummary>;
+  marks: AggState<MarksSummary>;
+  atRisk: number;
+}
+export interface ComparisonReport {
+  parent: { level: string; nodeId: string; name: string };
+  childLevel: string;
+  children: ComparisonChild[];
+}
+
+export interface HistogramBand {
+  label: string;
+  count: number;
+}
+export interface DistributionResponse {
+  node: { level: string; nodeId: string; name: string };
+  marks: AggState<{ total: number; bands: HistogramBand[] }>;
+  attendance: AggState<{ total: number; bands: HistogramBand[] }>;
 }
 
 export class ApiError extends Error {
@@ -135,6 +182,12 @@ export const api = {
     get<StudentPerformance>(
       `/api/v1/analytics/students/${encodeURIComponent(studentId)}/performance?academicYear=${year}`,
     ),
+  rollup: (level: string, nodeId: string, year: string) =>
+    get<NodeRollup>(`/api/v1/analytics/rollups/${level}/${encodeURIComponent(nodeId)}?academicYear=${year}`),
+  compare: (level: string, nodeId: string, year: string) =>
+    get<ComparisonReport>(`/api/v1/analytics/compare/${level}/${encodeURIComponent(nodeId)}?academicYear=${year}`),
+  distribution: (level: string, nodeId: string, year: string) =>
+    get<DistributionResponse>(`/api/v1/analytics/distribution/${level}/${encodeURIComponent(nodeId)}?academicYear=${year}`),
   async login(username: string, password: string): Promise<void> {
     const response = await fetch("/api/v1/identity/auth/login", {
       method: "POST",
@@ -152,6 +205,21 @@ export const api = {
       () => undefined,
     );
   },
+  async requestReport(report: ReportParams, format: "pdf" | "csv", year: string): Promise<string> {
+    const response = await fetch("/api/v1/reports", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ format, academicYear: year, report }),
+    });
+    if (!response.ok) {
+      throw new ApiError(response.status, "could not request report");
+    }
+    return (await response.json() as { reportId: string }).reportId;
+  },
+  reportStatus: (reportId: string) => get<ReportView>(`/api/v1/reports/${encodeURIComponent(reportId)}`),
+  /** The scoped-download URL — the browser navigates to it; the server re-checks scope. */
+  downloadUrl: (reportId: string) => `/api/v1/reports/${encodeURIComponent(reportId)}/download`,
 };
 
 /** Categorical subject hue, fixed order (matches globals.css --series-*). */

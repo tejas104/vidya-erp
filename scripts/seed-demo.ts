@@ -1,0 +1,632 @@
+import {
+  RoleRequirementPolicy,
+  createDb,
+  createLogger,
+  createMetrics,
+  createObjectStorage,
+  createRedis,
+  defineRoute,
+  loadConfig,
+  type BoundRouteHandler,
+  type OrgDirectory,
+  type RouteDependencies,
+  type RouteSpec,
+} from "@vidya/platform";
+import { createSystemModule } from "@vidya/module-system";
+import { createIdentityCore, createIdentityModule } from "@vidya/module-identity";
+import { createPeopleModule } from "@vidya/module-people";
+import { createAcademicsModule } from "@vidya/module-academics";
+
+/**
+ * DEMO DATA SEEDER — a self-contained, non-production pilot dataset.
+ *
+ * This does NOT reach into repositories or bypass authorization. It composes
+ * the REAL modules and drives them through the same defineRoute pipeline the
+ * web app uses: every write is authenticated with a real session cookie, is
+ * gated by #2's ScopeChecker, and is audited. A class_teacher records the
+ * attendance; each subject teacher enters their own marks; the principal and
+ * HoD hold real college-/department-scoped grants. If a step would be denied
+ * by scope, the seed fails loudly — because that is exactly what the product
+ * does. The result is a database a reviewer can log into, one role at a time,
+ * and watch the permission mirror behave.
+ *
+ * SAFETY: refuses unless VIDYA_ALLOW_DEMO_SEED=true, and never runs when
+ * NODE_ENV=production. It owns a college with the fixed code "DEMO" and a
+ * dedicated demo admin; it is idempotent by fixed org codes (a second run is
+ * detected and short-circuits rather than duplicating the tree).
+ *
+ *   VIDYA_ALLOW_DEMO_SEED=true tsx scripts/seed-demo.ts
+ */
+
+const YEAR = "2026-27";
+const COLLEGE = { name: "Sunrise Institute of Technology", code: "DEMO" };
+const ADMIN = { username: "demo-admin", displayName: "Demo Administrator", password: "demo-admin-pass-2026!" };
+const STAFF_PASSWORD = "demo-staff-pass-2026!";
+const TEACHER_PASSWORD = "demo-teacher-pass-2026!";
+
+type Slot = { studentId: string; status: "present" | "absent" | "late" | "excused" };
+
+interface Credential {
+  role: string;
+  username: string;
+  password: string;
+  scope: string;
+}
+
+/** The demo tree, as data. The seed walks it to build everything. */
+const DEPARTMENTS = [
+  {
+    code: "CSE",
+    name: "Computer Science",
+    hod: { username: "demo-hod-cse", displayName: "Dr. Radhika Menon" },
+    classes: [
+      {
+        code: "FYCS",
+        name: "FY BSc Computer Science",
+        sections: ["A", "B"],
+        rosterSection: "A", // where students enrol and records are kept
+        classTeacher: { username: "demo-ct-fycs", displayName: "Sunil Kulkarni" },
+        subjects: [
+          { code: "DS", name: "Data Structures", teacher: { username: "demo-teacher-ds", displayName: "Anita Desai" } },
+          { code: "MTH", name: "Discrete Mathematics", teacher: { username: "demo-teacher-mth", displayName: "Vikram Rao" } },
+          { code: "DBMS", name: "Database Systems", teacher: { username: "demo-teacher-dbms", displayName: "Priya Nair" } },
+        ],
+        students: [
+          "Aarav Sharma", "Diya Patel", "Kabir Singh", "Meera Iyer",
+          "Rohan Gupta", "Saanvi Reddy", "Ishaan Khan", "Ananya Bose",
+          "Vivaan Joshi", "Aditi Rao", "Arnav Mehta", "Kavya Nair",
+          "Reyansh Shah", "Myra Kapoor",
+        ],
+      },
+    ],
+  },
+  {
+    code: "ECE",
+    name: "Electronics & Communication",
+    hod: { username: "demo-hod-ece", displayName: "Dr. Farhan Qureshi" },
+    classes: [
+      {
+        code: "FYEC",
+        name: "FY BSc Electronics",
+        sections: ["A"],
+        rosterSection: "A",
+        classTeacher: { username: "demo-ct-fyec", displayName: "Latha Krishnan" },
+        subjects: [
+          { code: "ELEC", name: "Basic Electronics", teacher: { username: "demo-teacher-elec", displayName: "Deepak Joshi" } },
+        ],
+        students: ["Tara Mehta", "Yash Chauhan", "Nisha Pillai", "Arjun Nair", "Zara Sheikh", "Dev Malhotra", "Ira Sinha", "Neel Verma", "Riya Das", "Om Bhat"],
+      },
+    ],
+  },
+] as const;
+
+function buildStack() {
+  const config = loadConfig();
+  const logger = createLogger({ level: "warn", serviceName: "vidya-seed-demo" });
+  const metrics = createMetrics({ serviceName: "vidya-seed-demo", defaultMetrics: false });
+  const { pool, db } = createDb({
+    url: config.database.url,
+    poolMax: 4,
+    logger,
+    applicationName: "vidya-seed-demo",
+  });
+  const redis = createRedis({ url: config.redis.url, logger, connectionName: "vidya-seed-demo" });
+  const objectStorage = createObjectStorage(config.s3);
+
+  const system = createSystemModule({
+    db,
+    metrics,
+    serviceVersion: "seed-demo",
+    isDraining: () => false,
+    infrastructureChecks: [],
+  });
+  const core = createIdentityCore({
+    redis,
+    session: {
+      ttlHours: config.identity.session.ttlHours,
+      idleMinutes: config.identity.session.idleMinutes,
+    },
+  });
+  const orgDirectoryRef: { current: OrgDirectory | null } = { current: null };
+  const identity = createIdentityModule({
+    db,
+    redis,
+    metrics,
+    audit: system.service.audit,
+    core,
+    config: config.identity,
+    orgDirectory: () => orgDirectoryRef.current,
+  });
+  const people = createPeopleModule({
+    db,
+    metrics,
+    audit: system.service.audit,
+    scopeChecker: core.scopeChecker,
+    identityGrants: identity.service.derivedGrants,
+    storage: { client: objectStorage, bucket: config.s3.bucket },
+    enqueueImport: async () => {
+      /* the demo does not use bulk CSV import */
+    },
+  });
+  orgDirectoryRef.current = people.service.orgDirectory;
+  const academics = createAcademicsModule({
+    db,
+    metrics,
+    audit: system.service.audit,
+    scopeChecker: core.scopeChecker,
+    peopleDirectory: people.service.directory,
+    readAudit: async (resourceType, resourceId, limit) =>
+      (await system.service.readAuditEventsForResource(resourceType, resourceId, limit)).map((row) => ({
+        action: row.action,
+        actorId: row.actorId,
+        occurredAt: row.occurredAt,
+        details: row.details,
+      })),
+  });
+
+  const routeDeps: RouteDependencies = {
+    logger,
+    authenticator: identity.service.authenticator,
+    accessPolicy: new RoleRequirementPolicy(),
+    auditLogger: system.service.audit,
+    metrics,
+  };
+  const specs = new Map<string, RouteSpec>();
+  const handlers: Record<string, BoundRouteHandler> = {};
+  for (const module of [identity, people, academics]) {
+    for (const route of module.definition.routes) {
+      specs.set(route.id, route);
+      handlers[route.id] = defineRoute(route, module.handlers[route.id]!, routeDeps);
+    }
+  }
+
+  async function call(
+    routeId: string,
+    options: { body?: unknown; cookie?: string; params?: Record<string, string>; query?: Record<string, string> } = {},
+  ): Promise<Response> {
+    const route = specs.get(routeId);
+    if (route === undefined) throw new Error(`unknown route ${routeId}`);
+    const headers: Record<string, string> = { "x-forwarded-for": "127.0.0.1" };
+    if (options.body !== undefined) headers["content-type"] = "application/json";
+    if (options.cookie !== undefined) headers.cookie = options.cookie;
+    const query = new URLSearchParams(options.query ?? {}).toString();
+    const request = new Request(`http://localhost${route.path}${query === "" ? "" : `?${query}`}`, {
+      method: route.method,
+      headers,
+      ...(options.body !== undefined ? { body: JSON.stringify(options.body) } : {}),
+    });
+    return handlers[routeId]!(request, { params: Promise.resolve(options.params ?? {}) });
+  }
+
+  async function close(): Promise<void> {
+    objectStorage.destroy();
+    redis.disconnect();
+    await pool.end();
+  }
+
+  return { config, call, identity, people, system, pool, close };
+}
+
+type Stack = ReturnType<typeof buildStack>;
+
+/** Reads a JSON body, throwing with the raw payload if the status isn't expected. */
+async function expectJson<T>(res: Response, allowed: number[], label: string): Promise<T> {
+  if (!allowed.includes(res.status)) {
+    const text = await res.text();
+    throw new Error(`${label}: expected ${allowed.join("/")}, got ${res.status} — ${text}`);
+  }
+  return (await res.json()) as T;
+}
+
+function cookieFrom(res: Response): string {
+  const token = /vidya_session=([^;]*)/.exec(res.headers.get("set-cookie") ?? "")?.[1] ?? "";
+  return `vidya_session=${token}`;
+}
+
+async function main(): Promise<void> {
+  if (process.env.VIDYA_ALLOW_DEMO_SEED !== "true") {
+    console.error(
+      "refused: demo seeding is off. Set VIDYA_ALLOW_DEMO_SEED=true to run it against a\n" +
+        "non-production database. It creates demo accounts with well-known passwords.",
+    );
+    process.exit(2);
+  }
+
+  const stack = buildStack();
+  const { call, config } = stack;
+
+  if (config.env === "production") {
+    console.error("refused: NODE_ENV=production. The demo seed is for pilots and evaluation only.");
+    await stack.close();
+    process.exit(2);
+  }
+
+  try {
+    const credentials: Credential[] = [];
+
+    // 1) The demo college and its dedicated admin (idempotent by code).
+    const college = await stack.people.service.bootstrapCollege({ name: COLLEGE.name, code: COLLEGE.code });
+    const collegeId = college.collegeId;
+    console.log(`college: ${COLLEGE.name} (${collegeId})${college.created ? " — created" : " — exists"}`);
+
+    try {
+      await stack.identity.service.bootstrapAdmin({
+        username: ADMIN.username,
+        displayName: ADMIN.displayName,
+        password: ADMIN.password,
+        collegeId,
+      });
+      console.log(`admin: ${ADMIN.username} — created`);
+    } catch (error) {
+      if (!(error instanceof Error && error.message.includes("bootstrap refused"))) throw error;
+      console.log(`admin: bootstrap refused (an admin already exists) — signing in as ${ADMIN.username}`);
+    }
+    const adminLogin = await call("identity.login", { body: { username: ADMIN.username, password: ADMIN.password } });
+    if (adminLogin.status !== 200) {
+      throw new Error(
+        "cannot sign in as the demo admin. This database already has a different admin.\n" +
+          "The demo seed expects a fresh, non-production database (see docs/getting-started.md).",
+      );
+    }
+    const adminCookie = cookieFrom(adminLogin);
+    credentials.push({ role: "admin", username: ADMIN.username, password: ADMIN.password, scope: "college-wide" });
+
+    /** Creates an identity user with an active password (create → reset → active). */
+    async function provisionUser(
+      username: string,
+      displayName: string,
+      roles: string[],
+      password: string,
+    ): Promise<string> {
+      const created = await call("identity.user-create", {
+        cookie: adminCookie,
+        body: { username, displayName, collegeId, temporaryPassword: "temporary-pass-123", roles },
+      });
+      const { id } = await expectJson<{ id: string }>(created, [201], `user-create ${username}`);
+      const reset = await call("identity.password-reset-init", { cookie: adminCookie, params: { userId: id } });
+      const { token } = await expectJson<{ token: string }>(reset, [200, 201], `reset-init ${username}`);
+      const confirm = await call("identity.password-reset-confirm", { body: { token, newPassword: password } });
+      if (confirm.status !== 200) throw new Error(`reset-confirm ${username}: ${confirm.status}`);
+      return id;
+    }
+
+    // 2) The principal — college-wide, sees every department.
+    const principalId = await provisionUser("demo-principal", "Dr. Sudha Menon", ["principal"], STAFF_PASSWORD);
+    const principalGrant = await call("identity.grant-add", {
+      cookie: adminCookie,
+      params: { userId: principalId },
+      body: { role: "principal", collegeId },
+    });
+    await expectJson(principalGrant, [201], "principal grant");
+    credentials.push({ role: "principal", username: "demo-principal", password: STAFF_PASSWORD, scope: "college-wide" });
+
+    // 3) Walk the tree: departments → HoD, classes → sections/subjects/teachers → students.
+    for (const dept of DEPARTMENTS) {
+      const deptRes = await call("people.department-create", {
+        cookie: adminCookie,
+        body: { collegeId, name: dept.name, code: dept.code },
+      });
+      if (deptRes.status === 409) {
+        console.log("\nThe demo tree already exists in this database — nothing to rebuild.");
+        printCredentials(demoCredentials());
+        await stack.close();
+        return;
+      }
+      const departmentId = (await expectJson<{ id: string }>(deptRes, [201], `department ${dept.code}`)).id;
+      console.log(`  department: ${dept.name}`);
+
+      const hodId = await provisionUser(dept.hod.username, dept.hod.displayName, ["hod"], STAFF_PASSWORD);
+      await expectJson(
+        await call("identity.grant-add", {
+          cookie: adminCookie,
+          params: { userId: hodId },
+          body: { role: "hod", collegeId, departmentId },
+        }),
+        [201],
+        `hod grant ${dept.code}`,
+      );
+      credentials.push({
+        role: "hod",
+        username: dept.hod.username,
+        password: STAFF_PASSWORD,
+        scope: `${dept.name} department`,
+      });
+
+      for (const klass of dept.classes) {
+        const classId = (
+          await expectJson<{ id: string }>(
+            await call("people.class-create", {
+              cookie: adminCookie,
+              body: { departmentId, name: klass.name, code: klass.code },
+            }),
+            [201],
+            `class ${klass.code}`,
+          )
+        ).id;
+
+        const sectionIds = new Map<string, string>();
+        for (const sectionName of klass.sections) {
+          const sectionId = (
+            await expectJson<{ id: string }>(
+              await call("people.section-create", { cookie: adminCookie, body: { classId, name: sectionName } }),
+              [201],
+              `section ${klass.code}-${sectionName}`,
+            )
+          ).id;
+          sectionIds.set(sectionName, sectionId);
+        }
+        const rosterSectionId = sectionIds.get(klass.rosterSection)!;
+
+        // Subjects + one subject teacher each (derived grant via assignment).
+        const subjectTeacherCookies = new Map<string, string>();
+        const subjectIds = new Map<string, string>();
+        for (const subject of klass.subjects) {
+          const subjectId = (
+            await expectJson<{ id: string }>(
+              await call("people.subject-create", {
+                cookie: adminCookie,
+                body: { departmentId, name: subject.name, code: `${subject.code}-${klass.code}` },
+              }),
+              [201],
+              `subject ${subject.code}`,
+            )
+          ).id;
+          subjectIds.set(subject.code, subjectId);
+          const cookie = await provisionTeacher(
+            stack,
+            adminCookie,
+            collegeId,
+            subject.teacher.username,
+            subject.teacher.displayName,
+            classId,
+            { kind: "subject_teacher", subjectId },
+          );
+          subjectTeacherCookies.set(subject.code, cookie);
+          credentials.push({
+            role: "teacher",
+            username: subject.teacher.username,
+            password: TEACHER_PASSWORD,
+            scope: `${subject.name} · ${klass.name}`,
+          });
+        }
+
+        // Class teacher (class-wide, records attendance, reads every subject).
+        const classTeacherCookie = await provisionTeacher(
+          stack,
+          adminCookie,
+          collegeId,
+          klass.classTeacher.username,
+          klass.classTeacher.displayName,
+          classId,
+          { kind: "class_teacher" },
+        );
+        credentials.push({
+          role: "class_teacher",
+          username: klass.classTeacher.username,
+          password: TEACHER_PASSWORD,
+          scope: `${klass.name} (all subjects)`,
+        });
+
+        // Students → enrol in the roster section.
+        const studentIds: string[] = [];
+        for (let i = 0; i < klass.students.length; i++) {
+          const fullName = klass.students[i]!;
+          const studentId = (
+            await expectJson<{ id: string }>(
+              await call("people.student-create", {
+                cookie: adminCookie,
+                body: { collegeId, admissionNo: `${klass.code}-${String(i + 1).padStart(3, "0")}`, fullName },
+              }),
+              [201],
+              `student ${fullName}`,
+            )
+          ).id;
+          const enroll = await call("people.student-enroll", {
+            cookie: adminCookie,
+            params: { studentId },
+            body: { sectionId: rosterSectionId, academicYear: YEAR },
+          });
+          if (enroll.status !== 200) throw new Error(`enroll ${fullName}: ${enroll.status}`);
+          studentIds.push(studentId);
+        }
+        console.log(`    class: ${klass.name} — ${studentIds.length} students, ${klass.subjects.length} subjects`);
+
+        // 4) Attendance (class teacher) over a run of school days. Student 0 is
+        //    the designated struggler so the at-risk surface has something real.
+        const days = attendanceDays();
+        for (let d = 0; d < days.length; d++) {
+          const entries: Slot[] = studentIds.map((studentId, s) => ({
+            studentId,
+            status: attendanceStatus(s, d),
+          }));
+          const recorded = await call("academics.attendance-record", {
+            cookie: classTeacherCookie,
+            body: { sectionId: rosterSectionId, heldOn: days[d]!, slot: "day", academicYear: YEAR, entries },
+          });
+          if (recorded.status !== 201) throw new Error(`attendance ${klass.code} ${days[d]}: ${recorded.status}`);
+        }
+        console.log(`    attendance: ${days.length} days recorded by ${klass.classTeacher.username}`);
+
+        // 5) Marks — each subject teacher creates assessments and enters scores.
+        for (const subject of klass.subjects) {
+          const teacherCookie = subjectTeacherCookies.get(subject.code)!;
+          const subjectId = subjectIds.get(subject.code)!;
+          for (const assessment of [
+            { kind: "quiz" as const, name: "Quiz 1", maxScore: 10 },
+            { kind: "quiz" as const, name: "Unit Test 1", maxScore: 20 },
+            { kind: "exam" as const, name: "Assignment 1", maxScore: 25 },
+            { kind: "exam" as const, name: "Midterm", maxScore: 100 },
+            { kind: "quiz" as const, name: "Quiz 2", maxScore: 10 },
+          ]) {
+            const assessmentId = (
+              await expectJson<{ id: string }>(
+                await call("academics.assessment-create", {
+                  cookie: teacherCookie,
+                  body: {
+                    classId,
+                    subjectId,
+                    kind: assessment.kind,
+                    name: assessment.name,
+                    academicYear: YEAR,
+                    maxScore: assessment.maxScore,
+                  },
+                }),
+                [201],
+                `assessment ${subject.code} ${assessment.name}`,
+              )
+            ).id;
+            const entries = studentIds.map((studentId, s) => ({
+              studentId,
+              score: markScore(s, assessment.maxScore),
+            }));
+            const entered = await call("academics.marks-enter", {
+              cookie: teacherCookie,
+              params: { assessmentId },
+              body: { entries },
+            });
+            if (entered.status !== 200) throw new Error(`marks ${subject.code} ${assessment.name}: ${entered.status}`);
+          }
+        }
+        console.log(`    marks: entered for every subject by its own teacher`);
+      }
+    }
+
+    // 6) Flip any resolvable manual grants (principal/HoD) to verified.
+    await call("identity.grants-verify", { cookie: adminCookie });
+
+    console.log("\n✓ Demo data seeded through the real scoped, audited chain.");
+    printCredentials(credentials);
+    await stack.close();
+  } catch (error) {
+    await stack.close();
+    throw error;
+  }
+}
+
+/** Creates identity user + teacher record + link + assignment; returns a live session cookie. */
+async function provisionTeacher(
+  stack: Stack,
+  adminCookie: string,
+  collegeId: string,
+  username: string,
+  displayName: string,
+  classId: string,
+  assignment: { kind: "subject_teacher" | "class_teacher"; subjectId?: string },
+): Promise<string> {
+  const created = await stack.call("identity.user-create", {
+    cookie: adminCookie,
+    body: { username, displayName, collegeId, temporaryPassword: "temporary-pass-123", roles: [] },
+  });
+  const userId = (await expectJson<{ id: string }>(created, [201], `teacher user ${username}`)).id;
+  const reset = await stack.call("identity.password-reset-init", { cookie: adminCookie, params: { userId } });
+  const { token } = await expectJson<{ token: string }>(reset, [200, 201], `teacher reset ${username}`);
+  const confirm = await stack.call("identity.password-reset-confirm", {
+    body: { token, newPassword: TEACHER_PASSWORD },
+  });
+  if (confirm.status !== 200) throw new Error(`teacher reset-confirm ${username}: ${confirm.status}`);
+
+  const teacherId = (
+    await expectJson<{ id: string }>(
+      await stack.call("people.teacher-create", {
+        cookie: adminCookie,
+        body: { collegeId, staffNo: `S-${username}`, fullName: displayName },
+      }),
+      [201],
+      `teacher record ${username}`,
+    )
+  ).id;
+  await stack.call("people.teacher-link-identity", {
+    cookie: adminCookie,
+    params: { teacherId },
+    body: { identityUserId: userId },
+  });
+  const assignmentRes = await stack.call("people.assignment-create", {
+    cookie: adminCookie,
+    params: { teacherId },
+    body: {
+      classId,
+      ...(assignment.subjectId !== undefined ? { subjectId: assignment.subjectId } : {}),
+      kind: assignment.kind,
+      academicYear: YEAR,
+    },
+  });
+  await expectJson(assignmentRes, [201], `assignment ${username}`);
+  return login(stack, username, TEACHER_PASSWORD);
+}
+
+async function login(stack: Stack, username: string, password: string): Promise<string> {
+  const res = await stack.call("identity.login", { body: { username, password } });
+  if (res.status !== 200) throw new Error(`login ${username}: ${res.status}`);
+  return cookieFrom(res);
+}
+
+/** Every weekday from 2026-06-01 to the demo anchor 2026-07-06 (AY 2026-27). */
+function attendanceDays(): string[] {
+  const days: string[] = [];
+  const cursor = new Date("2026-06-01T00:00:00Z");
+  const end = new Date("2026-07-06T00:00:00Z");
+  while (cursor <= end) {
+    const dow = cursor.getUTCDay();
+    if (dow !== 0 && dow !== 6) days.push(cursor.toISOString().slice(0, 10));
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+  return days;
+}
+
+/** Student 0 misses ~40% of days (low-attendance flag); others attend reliably. */
+function attendanceStatus(studentIndex: number, dayIndex: number): Slot["status"] {
+  if (studentIndex === 0) return dayIndex % 5 < 2 ? "absent" : "present";
+  if (studentIndex === 1 && dayIndex % 7 === 3) return "late";
+  return dayIndex % 11 === 6 ? "absent" : "present";
+}
+
+/** Student 0 scores below the pass line (low-marks flag); others spread 55–92%. */
+function markScore(studentIndex: number, maxScore: number): number {
+  const pct = studentIndex === 0 ? 34 : 55 + ((studentIndex * 37) % 38);
+  return Math.round((pct / 100) * maxScore);
+}
+
+/** The credential list, derived from the demo tree (for the already-seeded path). */
+function demoCredentials(): Credential[] {
+  const creds: Credential[] = [
+    { role: "admin", username: ADMIN.username, password: ADMIN.password, scope: "college-wide" },
+    { role: "principal", username: "demo-principal", password: STAFF_PASSWORD, scope: "college-wide" },
+  ];
+  for (const dept of DEPARTMENTS) {
+    creds.push({ role: "hod", username: dept.hod.username, password: STAFF_PASSWORD, scope: `${dept.name} department` });
+    for (const klass of dept.classes) {
+      creds.push({
+        role: "class_teacher",
+        username: klass.classTeacher.username,
+        password: TEACHER_PASSWORD,
+        scope: `${klass.name} (all subjects)`,
+      });
+      for (const subject of klass.subjects) {
+        creds.push({
+          role: "teacher",
+          username: subject.teacher.username,
+          password: TEACHER_PASSWORD,
+          scope: `${subject.name} · ${klass.name}`,
+        });
+      }
+    }
+  }
+  return creds;
+}
+
+function printCredentials(credentials: Credential[]): void {
+  console.log("\nSign-in credentials (demo only — never reuse these passwords):\n");
+  const width = Math.max(...credentials.map((c) => c.username.length), 8);
+  for (const cred of credentials) {
+    console.log(
+      `  ${cred.role.padEnd(13)} ${cred.username.padEnd(width)}  ${cred.password.padEnd(24)} ${cred.scope}`,
+    );
+  }
+  console.log("\nOpen the web app, sign in as each role, and watch the dashboard show only that");
+  console.log("role's scope. Generate a student report as the class teacher to see a scoped export.");
+}
+
+main().catch((error: unknown) => {
+  console.error("\nseed-demo failed:", error instanceof Error ? error.message : error);
+  process.exit(1);
+});
