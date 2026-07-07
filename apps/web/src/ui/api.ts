@@ -146,6 +146,29 @@ export interface DistributionResponse {
   attendance: AggState<{ total: number; bands: HistogramBand[] }>;
 }
 
+export type AttendanceStatus = "present" | "absent" | "late" | "excused";
+export interface RecordAttendanceBody {
+  sectionId: string; heldOn: string; slot: string; academicYear: string;
+  entries: { studentId: string; status: AttendanceStatus }[];
+}
+export interface SessionView {
+  id: string; sectionId: string; heldOn: string; slot: string; academicYear: string; takenBy: string;
+  entries: { studentId: string; status: AttendanceStatus }[];
+}
+export interface SessionSummary {
+  id: string; heldOn: string; slot: string; academicYear: string;
+  counts: { present: number; absent: number; late: number; excused: number };
+}
+export type AssessmentKind = "exam" | "quiz" | "assignment";
+export interface AssessmentView {
+  id: string; classId: string; subjectId: string; kind: AssessmentKind; name: string;
+  academicYear: string; maxScore: number; heldOn: string | null;
+}
+export interface CreateAssessmentBody {
+  classId: string; subjectId: string; kind: AssessmentKind; name: string;
+  academicYear: string; maxScore: number; heldOn?: string;
+}
+
 export class ApiError extends Error {
   constructor(
     readonly status: number,
@@ -163,6 +186,27 @@ async function get<T>(path: string): Promise<T> {
   }
   return (await response.json()) as T;
 }
+
+type Json = unknown;
+
+async function send<T>(method: string, path: string, body?: Json): Promise<T> {
+  const response = await fetch(path, {
+    method,
+    credentials: "same-origin",
+    headers: { accept: "application/json", ...(body !== undefined ? { "content-type": "application/json" } : {}) },
+    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+  });
+  if (!response.ok) {
+    const problem = (await response.json().catch(() => ({}))) as { title?: string; message?: string };
+    throw new ApiError(response.status, problem.title ?? problem.message ?? `request failed (${response.status})`);
+  }
+  if (response.status === 204) return undefined as T;
+  return (await response.json()) as T;
+}
+const post = <T>(path: string, body: Json) => send<T>("POST", path, body);
+const patch = <T>(path: string, body: Json) => send<T>("PATCH", path, body);
+const put = <T>(path: string, body: Json) => send<T>("PUT", path, body);
+const del = <T>(path: string) => send<T>("DELETE", path);
 
 /** Academic year rolls over in June (matches the server's academicYearForDate). */
 export function currentAcademicYear(now: Date = new Date()): string {
@@ -188,6 +232,41 @@ export const api = {
     get<ComparisonReport>(`/api/v1/analytics/compare/${level}/${encodeURIComponent(nodeId)}?academicYear=${year}`),
   distribution: (level: string, nodeId: string, year: string) =>
     get<DistributionResponse>(`/api/v1/analytics/distribution/${level}/${encodeURIComponent(nodeId)}?academicYear=${year}`),
+  // people
+  sectionRoster: (sectionId: string) =>
+    get<{ students: { id: string; fullName: string; admissionNo: string }[] }>(
+      `/api/v1/people/sections/${encodeURIComponent(sectionId)}/roster`,
+    ),
+  // academics — attendance
+  recordAttendance: (body: RecordAttendanceBody) =>
+    post<SessionView>("/api/v1/academics/attendance/sessions", body),
+  sessionAttendance: (sectionId: string, opts: { from?: string; to?: string; limit?: number } = {}) => {
+    const q = new URLSearchParams();
+    if (opts.from) q.set("from", opts.from);
+    if (opts.to) q.set("to", opts.to);
+    if (opts.limit) q.set("limit", String(opts.limit));
+    return get<{ sessions: SessionSummary[] }>(`/api/v1/academics/sections/${encodeURIComponent(sectionId)}/attendance?${q}`);
+  },
+  getSession: (sessionId: string) =>
+    get<SessionView>(`/api/v1/academics/attendance/sessions/${encodeURIComponent(sessionId)}`),
+  correctAttendance: (sessionId: string, studentId: string, status: AttendanceStatus) =>
+    patch<{ studentId: string; status: AttendanceStatus }>(
+      `/api/v1/academics/attendance/sessions/${encodeURIComponent(sessionId)}/entries/${encodeURIComponent(studentId)}`,
+      { status },
+    ),
+  // academics — marks
+  classAssessments: (classId: string, year: string) =>
+    get<{ assessments: AssessmentView[] }>(`/api/v1/academics/classes/${encodeURIComponent(classId)}/assessments?academicYear=${year}`),
+  createAssessment: (body: CreateAssessmentBody) => post<AssessmentView>("/api/v1/academics/assessments", body),
+  enterMarks: (assessmentId: string, entries: { studentId: string; score: number }[]) =>
+    put<{ created: number; updated: number; unchanged: number }>(
+      `/api/v1/academics/assessments/${encodeURIComponent(assessmentId)}/marks`,
+      { entries },
+    ),
+  assessmentMarks: (assessmentId: string) =>
+    get<{ marks: { id: string; assessmentId: string; studentId: string; score: number }[] }>(
+      `/api/v1/academics/assessments/${encodeURIComponent(assessmentId)}/marks`,
+    ),
   async login(username: string, password: string): Promise<void> {
     const response = await fetch("/api/v1/identity/auth/login", {
       method: "POST",
