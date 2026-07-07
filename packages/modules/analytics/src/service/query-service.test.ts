@@ -579,3 +579,31 @@ describe("QueryService.childrenRollups", () => {
     expect(result!.children[0]!.attendance.state).toBe("ok");
   });
 });
+
+describe("QueryService.distribution", () => {
+  it("404s (not-found) for an unknown node", async () => {
+    const { service } = await makeService();
+    const r = await service.distribution(principal, "section", "sec_ghost", YEAR);
+    expect(r.state).toBe("not-found");
+  });
+
+  it("withholds a below-cohort marks distribution", async () => {
+    const repo = new InMemoryRollupsRepo();
+    const directory = new FakeDirectory();
+    const read = new FakeAcademicsRead();
+    // Roster of 3 students (< minCohort 5) on section A, each with one visible mark.
+    directory.roster = [1, 2, 3].map((n) => ({ studentId: `stu_${n}`, academicYear: YEAR }));
+    for (const n of [1, 2, 3]) {
+      directory.positions.set(`stu_${n}`, paths.sectionA);
+      read.marks.push({
+        markId: `m_${n}`, studentId: `stu_${n}`, academicYear: YEAR, assessmentName: "T1", kind: "test",
+        scorePct: 60, heldOn: "2026-06-10", recordedAt: "2026-06-10",
+        position: { collegeId: ORG.collegeId, departmentId: ORG.departmentId, classId: ORG.classId, subjectId: ORG.mathId },
+      });
+    }
+    const service = new QueryService({ repo, academicsRead: read, directory, scopeChecker: core.scopeChecker, minCohort: 5 });
+    const r = await service.distribution(principal, "section", ORG.sectionA, YEAR);
+    expect(r.state).toBe("ok");
+    if (r.state === "ok") expect(r.marks.state).toBe("insufficient-cohort");
+  });
+});

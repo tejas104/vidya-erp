@@ -12,6 +12,25 @@ import type { AnlAttendanceRollupRow, AnlMarksRollupRow, AnlStudentFlagRow } fro
 
 const YTD = "YTD";
 
+export interface Distribution {
+  readonly total: number;
+  readonly bands: readonly { label: string; count: number }[];
+}
+
+const MARKS_BANDS = [
+  { label: "0–40", lo: 0, hi: 40 },
+  { label: "40–55", lo: 40, hi: 55 },
+  { label: "55–70", lo: 55, hi: 70 },
+  { label: "70–85", lo: 70, hi: 85 },
+  { label: "85–100", lo: 85, hi: 100.0001 },
+];
+const ATT_BANDS = [
+  { label: "<50", lo: 0, hi: 50 },
+  { label: "50–75", lo: 50, hi: 75 },
+  { label: "75–90", lo: 75, hi: 90 },
+  { label: "≥90", lo: 90, hi: 100.0001 },
+];
+
 export interface QueryServiceDeps {
   readonly repo: RollupsRepo;
   readonly academicsRead: AcademicsReadModel;
@@ -534,5 +553,63 @@ export class QueryService {
       strip.push({ sectionId: section.sectionId, name: section.name, days });
     }
     return strip;
+  }
+
+  /**
+   * A cohort node's marks/attendance histogram — COUNTS only, never
+   * identifiable rows, withheld below the minimum cohort. Class or section
+   * only; aggregate levels use childrenRollups (comparison) instead.
+   */
+  async distribution(
+    principal: Principal,
+    level: "class" | "section",
+    nodeId: string,
+    academicYear: string,
+  ): Promise<
+    { state: "not-found" } | { state: "ok"; marks: AggState<Distribution>; attendance: AggState<Distribution> }
+  > {
+    if ((await this.nodePath(level, nodeId)) === null) {
+      return { state: "not-found" };
+    }
+    const studentIds = new Set<string>();
+    if (level === "section") {
+      for (const entry of await this.deps.directory.sectionRoster(nodeId)) studentIds.add(entry.studentId);
+    } else {
+      for (const section of await this.deps.directory.sectionsOfClass(nodeId)) {
+        for (const entry of await this.deps.directory.sectionRoster(section.sectionId)) {
+          studentIds.add(entry.studentId);
+        }
+      }
+    }
+    const marksVals: number[] = [];
+    const attVals: number[] = [];
+    for (const studentId of studentIds) {
+      const perf = await this.studentPerformance(principal, studentId, academicYear);
+      if (perf.state !== "ok") continue;
+      if (perf.overallPct !== null) marksVals.push(perf.overallPct);
+      if (perf.attendance !== null) attVals.push(perf.attendance.pct);
+    }
+    return {
+      state: "ok",
+      marks: this.bucket(marksVals, MARKS_BANDS),
+      attendance: this.bucket(attVals, ATT_BANDS),
+    };
+  }
+
+  private bucket(
+    values: number[],
+    bands: { label: string; lo: number; hi: number }[],
+  ): AggState<Distribution> {
+    if (values.length === 0) return { state: "no-data" };
+    if (!cohortSufficient(values.length, this.deps.minCohort)) {
+      return { state: "insufficient-cohort", minCohort: this.deps.minCohort };
+    }
+    return {
+      state: "ok",
+      value: {
+        total: values.length,
+        bands: bands.map((b) => ({ label: b.label, count: values.filter((v) => v >= b.lo && v < b.hi).length })),
+      },
+    };
   }
 }
