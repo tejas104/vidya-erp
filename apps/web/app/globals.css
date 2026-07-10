@@ -63,6 +63,21 @@
   --font-mono: var(--font-plex-mono), ui-monospace, "Cascadia Code", monospace;
 
   --shadow: 0 1px 2px rgba(26, 34, 51, 0.06), 0 4px 16px rgba(26, 34, 51, 0.05);
+
+  /* --- scale & surfaces (app shell) --- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --surface: var(--paper-raised);
+  --surface-2: var(--paper-sunken);
+  --scrim: rgba(26, 34, 51, 0.45);
+  --side-bg: #f4f1e8;
+  --side-active: #ece7d8;
+  --shadow-2: 0 4px 12px rgba(26, 34, 51, 0.10), 0 16px 40px rgba(26, 34, 51, 0.12);
 }
 
 /* The blackboard — its own mode, from the same ramps. */
@@ -96,6 +111,11 @@
     --line: #6da7ec;
     --focus: #6da7ec;
     --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 28px rgba(0, 0, 0, 0.35);
+
+    --scrim: rgba(0, 0, 0, 0.55);
+    --side-bg: #141c19;
+    --side-active: #23302a;
+    --shadow-2: 0 4px 12px rgba(0, 0, 0, 0.45), 0 20px 48px rgba(0, 0, 0, 0.4);
   }
 }
 
@@ -128,6 +148,11 @@
   --line: #6da7ec;
   --focus: #6da7ec;
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 28px rgba(0, 0, 0, 0.35);
+
+  --scrim: rgba(0, 0, 0, 0.55);
+  --side-bg: #141c19;
+  --side-active: #23302a;
+  --shadow-2: 0 4px 12px rgba(0, 0, 0, 0.45), 0 20px 48px rgba(0, 0, 0, 0.4);
 }
 
 * {
