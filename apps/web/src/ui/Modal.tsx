@@ -2,6 +2,7 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Icon } from "./Icon";
+import { pushOverlay, popOverlay, isTopOverlay } from "./overlayStack";
 
 const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -24,6 +25,7 @@ export function Modal({
 
   useEffect(() => {
     if (!open) return;
+    const overlayId = pushOverlay();
     openerRef.current = document.activeElement;
     const panel = panelRef.current;
     const focusables = () => Array.from(panel?.querySelectorAll<HTMLElement>(FOCUSABLE) ?? []);
@@ -35,6 +37,7 @@ export function Modal({
 
     function onKey(event: KeyboardEvent) {
       if (event.key === "Escape") {
+        if (!isTopOverlay(overlayId)) return;
         event.stopPropagation();
         onClose();
         return;
@@ -55,6 +58,7 @@ export function Modal({
     document.addEventListener("keydown", onKey);
     return () => {
       document.removeEventListener("keydown", onKey);
+      popOverlay(overlayId);
       (openerRef.current as HTMLElement | null)?.focus?.();
     };
   }, [open, onClose]);

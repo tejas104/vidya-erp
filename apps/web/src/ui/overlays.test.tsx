@@ -29,6 +29,26 @@ describe("Modal", () => {
   });
 });
 
+describe("stacked overlays", () => {
+  it("Escape closes only the topmost overlay", () => {
+    const closeOuter = vi.fn();
+    const closeInner = vi.fn();
+    render(
+      <>
+        <Modal open onClose={closeOuter} title="Outer">
+          <p>outer</p>
+        </Modal>
+        <Modal open onClose={closeInner} title="Inner">
+          <p>inner</p>
+        </Modal>
+      </>,
+    );
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(closeInner).toHaveBeenCalledTimes(1);
+    expect(closeOuter).not.toHaveBeenCalled();
+  });
+});
+
 function ToastFixture() {
   const toast = useToast();
   return <button onClick={() => toast.show("Saved", "good")}>fire</button>;

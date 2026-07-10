@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Icon, type IconName } from "./Icon";
+import { pushOverlay, popOverlay, isTopOverlay } from "./overlayStack";
 
 export interface MenuItem {
   label: string;
@@ -14,11 +15,16 @@ export function Menu({ label, items }: { label: ReactNode; items: MenuItem[] }) 
 
   useEffect(() => {
     if (!open) return;
+    const overlayId = pushOverlay();
     function onDown(event: MouseEvent) {
       if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
     }
     function onKey(event: KeyboardEvent) {
-      if (event.key === "Escape") setOpen(false);
+      if (event.key === "Escape") {
+        if (!isTopOverlay(overlayId)) return;
+        setOpen(false);
+        return;
+      }
       if (event.key === "ArrowDown" || event.key === "ArrowUp") {
         const buttons = Array.from(rootRef.current?.querySelectorAll<HTMLButtonElement>(".ui-menu-item") ?? []);
         if (buttons.length === 0) return;
@@ -36,6 +42,7 @@ export function Menu({ label, items }: { label: ReactNode; items: MenuItem[] }) 
     return () => {
       document.removeEventListener("mousedown", onDown);
       document.removeEventListener("keydown", onKey);
+      popOverlay(overlayId);
     };
   }, [open]);
 
