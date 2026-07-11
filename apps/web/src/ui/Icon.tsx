@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 export const ICON_NAMES = [
   "dashboard", "attendance", "marks", "menu", "close", "chevronDown",
   "moon", "sun", "signOut", "check", "alert", "info",
+  "org", "students", "teachers",
 ] as const;
 export type IconName = (typeof ICON_NAMES)[number];
 
@@ -58,6 +59,28 @@ const PATHS: Record<IconName, ReactNode> = {
     <>
       <circle cx="12" cy="12" r="10" />
       <path d="M12 16v-4m0-4h.01" />
+    </>
+  ),
+  org: (
+    <>
+      <rect x="9" y="3" width="6" height="5" rx="1" />
+      <rect x="3" y="16" width="6" height="5" rx="1" />
+      <rect x="15" y="16" width="6" height="5" rx="1" />
+      <path d="M12 8v3M6 16v-3h12v3" />
+    </>
+  ),
+  students: (
+    <>
+      <path d="M17 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2" />
+      <circle cx="10" cy="7" r="4" />
+      <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
+    </>
+  ),
+  teachers: (
+    <>
+      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="m17 11 2 2 4-4" />
     </>
   ),
 };

@@ -169,6 +169,36 @@ export interface CreateAssessmentBody {
   academicYear: string; maxScore: number; heldOn?: string;
 }
 
+export interface CollegeView { id: string; name: string; code: string }
+export interface DepartmentView { id: string; collegeId: string; name: string; code: string }
+export interface ClassView { id: string; departmentId: string; name: string; code: string }
+export interface SectionView { id: string; classId: string; name: string }
+export interface SubjectView { id: string; departmentId: string; name: string; code: string }
+export interface OrgTree {
+  college: CollegeView;
+  departments: (DepartmentView & {
+    classes: (ClassView & { sections: SectionView[] })[];
+    subjects: SubjectView[];
+  })[];
+}
+export interface StudentView {
+  id: string; collegeId: string; admissionNo: string; fullName: string;
+  status: "active" | "inactive";
+  enrollment: { sectionId: string; academicYear: string } | null;
+}
+export interface TeacherView {
+  id: string; collegeId: string; staffNo: string; fullName: string;
+  status: "active" | "inactive"; identityUserId: string | null;
+}
+export interface AssignmentView {
+  id: string; teacherId: string; classId: string; subjectId: string | null;
+  kind: "subject_teacher" | "class_teacher"; academicYear: string;
+}
+export interface UserView {
+  id: string; username: string; displayName: string; status: string; roles: string[];
+}
+export type OrgUnitType = "college" | "department" | "class" | "section" | "subject";
+
 export class ApiError extends Error {
   constructor(
     readonly status: number,
@@ -234,9 +264,7 @@ export const api = {
     get<DistributionResponse>(`/api/v1/analytics/distribution/${level}/${encodeURIComponent(nodeId)}?academicYear=${year}`),
   // people
   sectionRoster: (sectionId: string) =>
-    get<{ students: { id: string; fullName: string; admissionNo: string }[] }>(
-      `/api/v1/people/sections/${encodeURIComponent(sectionId)}/roster`,
-    ),
+    get<{ students: StudentView[] }>(`/api/v1/people/sections/${encodeURIComponent(sectionId)}/roster`),
   // academics — attendance
   recordAttendance: (body: RecordAttendanceBody) =>
     post<SessionView>("/api/v1/academics/attendance/sessions", body),
@@ -267,6 +295,50 @@ export const api = {
     get<{ marks: { id: string; assessmentId: string; studentId: string; score: number }[] }>(
       `/api/v1/academics/assessments/${encodeURIComponent(assessmentId)}/marks`,
     ),
+  // people — org
+  colleges: () => get<{ colleges: CollegeView[] }>("/api/v1/people/colleges"),
+  collegeTree: (collegeId: string) => get<OrgTree>(`/api/v1/people/colleges/${encodeURIComponent(collegeId)}/tree`),
+  createDepartment: (body: { collegeId: string; name: string; code: string }) =>
+    post<DepartmentView>("/api/v1/people/departments", body),
+  createClass: (body: { departmentId: string; name: string; code: string }) =>
+    post<ClassView>("/api/v1/people/classes", body),
+  createSection: (body: { classId: string; name: string }) => post<SectionView>("/api/v1/people/sections", body),
+  createSubject: (body: { departmentId: string; name: string; code: string }) =>
+    post<SubjectView>("/api/v1/people/subjects", body),
+  renameOrgUnit: (unitType: OrgUnitType, unitId: string, name: string) =>
+    patch<{ ok: true }>(`/api/v1/people/org/${unitType}/${encodeURIComponent(unitId)}`, { name }),
+  deleteOrgUnit: (unitType: OrgUnitType, unitId: string) =>
+    del<{ ok: true }>(`/api/v1/people/org/${unitType}/${encodeURIComponent(unitId)}`),
+  // people — students
+  createStudent: (body: { collegeId: string; admissionNo: string; fullName: string }) =>
+    post<StudentView>("/api/v1/people/students", body),
+  updateStudent: (studentId: string, body: { fullName?: string; status?: "active" | "inactive" }) =>
+    patch<StudentView>(`/api/v1/people/students/${encodeURIComponent(studentId)}`, body),
+  enrollStudent: (studentId: string, body: { sectionId: string; academicYear: string }) =>
+    post<{ enrollmentId: string; previousEnrollmentId: string | null }>(
+      `/api/v1/people/students/${encodeURIComponent(studentId)}/enrollment`,
+      body,
+    ),
+  // people — teachers
+  createTeacher: (body: { collegeId: string; staffNo: string; fullName: string }) =>
+    post<TeacherView>("/api/v1/people/teachers", body),
+  getTeacher: (teacherId: string) => get<TeacherView>(`/api/v1/people/teachers/${encodeURIComponent(teacherId)}`),
+  linkTeacherIdentity: (teacherId: string, identityUserId: string | null) =>
+    post<{ teacher: TeacherView; grants: { upserted: number; removed: number } }>(
+      `/api/v1/people/teachers/${encodeURIComponent(teacherId)}/identity-link`,
+      { identityUserId },
+    ),
+  createTeacherAssignment: (
+    teacherId: string,
+    body: { classId: string; subjectId?: string; kind: "subject_teacher" | "class_teacher"; academicYear: string },
+  ) => post<AssignmentView>(`/api/v1/people/teachers/${encodeURIComponent(teacherId)}/assignments`, body),
+  removeAssignment: (assignmentId: string) =>
+    del<{ ok: true }>(`/api/v1/people/assignments/${encodeURIComponent(assignmentId)}`),
+  classTeacherAssignments: (classId: string) =>
+    get<{ assignments: AssignmentView[] }>(`/api/v1/people/classes/${encodeURIComponent(classId)}/assignments`),
+  // identity (admin)
+  listUsers: (collegeId: string) =>
+    get<{ users: UserView[] }>(`/api/v1/identity/users?collegeId=${encodeURIComponent(collegeId)}&limit=200`),
   async login(username: string, password: string): Promise<void> {
     const response = await fetch("/api/v1/identity/auth/login", {
       method: "POST",

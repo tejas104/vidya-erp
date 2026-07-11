@@ -36,6 +36,13 @@ describe("Sidebar (role-gated)", () => {
     render(<Sidebar roles={["principal"]} open={false} onClose={() => {}} />);
     expect(screen.getByRole("link", { name: /dashboard/i })).toHaveAttribute("aria-current", "page");
   });
+  it("an admin sees the Administration group", () => {
+    render(<Sidebar roles={["admin"]} open={false} onClose={() => {}} />);
+    expect(screen.getByText("Administration")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /organisation/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /students/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /teachers/i })).toBeInTheDocument();
+  });
 });
 
 describe("Topbar", () => {
