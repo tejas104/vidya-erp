@@ -75,6 +75,11 @@ export const grantInputSchema = z
           ctx.addIssue({ code: "custom", path: ["role"], message: `${grant.role} grants are college-wide only` });
         }
         break;
+      case "student":
+        // Students are self-scoped via the people-module identity link (W1) —
+        // they never hold org grants; access authority is the link itself.
+        ctx.addIssue({ code: "custom", path: ["role"], message: "student access is self-scoped; no grants" });
+        break;
     }
   });
 

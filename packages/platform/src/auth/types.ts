@@ -12,7 +12,7 @@
 // Roles & org scope (approved model, Vidya #2)
 // ---------------------------------------------------------------------------
 
-export const ROLES = ["admin", "principal", "hod", "class_teacher", "teacher"] as const;
+export const ROLES = ["admin", "principal", "hod", "class_teacher", "teacher", "student"] as const;
 export type Role = (typeof ROLES)[number];
 
 /**

@@ -101,6 +101,11 @@ function grantAllows(grant: ScopeGrant, action: AccessAction, resource: Resource
         default:
           return false;
       }
+    case "student":
+      // Students never hold org grants (rejected at grant input); their only
+      // authority is record self-ownership (ownerUserId) or the portal's
+      // identity link. FAIL CLOSED here.
+      return false;
   }
 }
 
