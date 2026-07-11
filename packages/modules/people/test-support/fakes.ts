@@ -372,6 +372,15 @@ export class InMemoryPeopleRepo implements PeopleRepo {
     return null;
   }
 
+  async findTeacherByIdentityUser(identityUserId: string): Promise<PplTeacherRow | null> {
+    for (const teacher of this.teachers.values()) {
+      if (teacher.identityUserId === identityUserId) {
+        return teacher;
+      }
+    }
+    return null;
+  }
+
   async createTeacher(input: {
     collegeId: string;
     staffNo: string;

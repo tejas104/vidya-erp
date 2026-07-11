@@ -83,6 +83,10 @@ export interface PeopleDirectory {
   studentByIdentityUser(
     identityUserId: string,
   ): Promise<{ studentId: string; collegeId: string; fullName: string; admissionNo: string; status: string } | null>;
+  /** Timetable self-scope: the teacher linked to this identity sign-in, if any. */
+  teacherByIdentityUser(
+    identityUserId: string,
+  ): Promise<{ teacherId: string; collegeId: string; fullName: string } | null>;
   /** Which of these student ids exist (batched). */
   studentsExist(studentIds: readonly string[]): Promise<Set<string>>;
   /** The department a subject belongs to, or null. */
@@ -197,6 +201,12 @@ export function createPeopleModule(deps: PeopleModuleDeps): RuntimeModule<People
                 admissionNo: student.admissionNo,
                 status: student.status,
               };
+        },
+        teacherByIdentityUser: async (identityUserId) => {
+          const teacher = await peopleRepo.findTeacherByIdentityUser(identityUserId);
+          return teacher === null
+            ? null
+            : { teacherId: teacher.id, collegeId: teacher.collegeId, fullName: teacher.fullName };
         },
         studentsExist: (studentIds) => peopleRepo.findExistingStudentIds(studentIds),
         subjectDepartment: async (subjectId) =>

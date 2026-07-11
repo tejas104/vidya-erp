@@ -68,6 +68,8 @@ export interface PeopleRepo {
   }): Promise<PplTeacherRow>;
   getTeacher(id: string): Promise<PplTeacherRow | null>;
   findTeacherByStaffNo(collegeId: string, staffNo: string): Promise<PplTeacherRow | null>;
+  /** The teacher linked to an identity sign-in (timetable self-scope), if any. */
+  findTeacherByIdentityUser(identityUserId: string): Promise<PplTeacherRow | null>;
   updateTeacher(
     id: string,
     patch: { fullName?: string; status?: PersonStatus; identityUserId?: string | null },
@@ -242,6 +244,15 @@ export function createPeopleRepo(db: Db): PeopleRepo {
         .select()
         .from(pplTeachers)
         .where(and(eq(pplTeachers.collegeId, collegeId), eq(pplTeachers.staffNo, staffNo)))
+        .limit(1);
+      return rows[0] ?? null;
+    },
+
+    async findTeacherByIdentityUser(identityUserId) {
+      const rows = await db
+        .select()
+        .from(pplTeachers)
+        .where(eq(pplTeachers.identityUserId, identityUserId))
         .limit(1);
       return rows[0] ?? null;
     },

@@ -148,6 +148,10 @@ export class FakeDirectory implements PeopleDirectory {
   } | null> {
     return null;
   }
+
+  async teacherByIdentityUser(): Promise<{ teacherId: string; collegeId: string; fullName: string } | null> {
+    return null;
+  }
   async studentsExist(studentIds: readonly string[]): Promise<Set<string>> {
     return new Set(studentIds.filter((id) => this.positions.has(id)));
   }
