@@ -41,6 +41,9 @@ export default function StudentsPage() {
   const [admissionNo, setAdmissionNo] = useState("");
   const [fullName, setFullName] = useState("");
   const [saving, setSaving] = useState(false);
+  const [linking, setLinking] = useState<StudentView | null>(null);
+  const [linkUserId, setLinkUserId] = useState("");
+  const [users, setUsers] = useState<{ id: string; username: string; displayName: string }[]>([]);
 
   useEffect(() => {
     (async () => {
@@ -55,6 +58,11 @@ export default function StudentsPage() {
         setTree(loaded);
         const first = sectionOptions(loaded)[0];
         if (first) setSectionId(first.sectionId);
+        try {
+          setUsers((await api.listUsers(college.id)).users);
+        } catch {
+          setUsers([]);
+        }
       } catch {
         setFailed(true);
       }
@@ -106,6 +114,24 @@ export default function StudentsPage() {
     }
   }
 
+  async function submitLink() {
+    if (!linking || linkUserId === "") return;
+    setSaving(true);
+    try {
+      await api.linkStudentIdentity(linking.id, linkUserId === "__unlink" ? null : linkUserId);
+      toast.show(
+        linkUserId === "__unlink" ? `${linking.fullName} unlinked.` : `${linking.fullName} linked to a sign-in.`,
+        "good",
+      );
+      setLinking(null);
+      await loadRoster();
+    } catch (caught) {
+      toast.show(caught instanceof ApiError ? caught.message : "Couldn't update the link.", "danger");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function toggleStatus(student: StudentView) {
     const next = student.status === "active" ? "inactive" : "active";
     try {
@@ -142,7 +168,10 @@ export default function StudentsPage() {
       header: "",
       align: "right",
       render: (row) => (
-        <span style={{ display: "inline-flex", gap: 8 }}>
+        <span style={{ display: "inline-flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+          <Button variant="ghost" onClick={() => { setLinkUserId(""); setLinking(row); }}>
+            {row.identityUserId === null ? "Link sign-in" : "Sign-in ✓"}
+          </Button>
           <Button variant="ghost" onClick={() => { setTransferTo(""); setTransfer(row); }}>Transfer</Button>
           <Button variant="ghost" onClick={() => void toggleStatus(row)}>
             {row.status === "active" ? "Deactivate" : "Reactivate"}
@@ -231,6 +260,34 @@ export default function StudentsPage() {
               .map((option) => (
                 <option key={option.sectionId} value={option.sectionId}>{option.label}</option>
               ))}
+          </select>
+        </Field>
+      </Modal>
+
+      <Modal
+        open={linking !== null}
+        onClose={() => setLinking(null)}
+        title={`Sign-in for ${linking?.fullName ?? ""}`}
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setLinking(null)}>Cancel</Button>
+            <Button onClick={() => void submitLink()} loading={saving} disabled={linkUserId === ""}>
+              Save link
+            </Button>
+          </>
+        }
+      >
+        <Field
+          label="Identity user"
+          htmlFor="stu-link"
+          hint="The linked sign-in gets the student portal (their own attendance and marks only)."
+        >
+          <select id="stu-link" value={linkUserId} onChange={(event) => setLinkUserId(event.target.value)}>
+            <option value="">Choose…</option>
+            {linking?.identityUserId !== null ? <option value="__unlink">— Unlink current sign-in —</option> : null}
+            {users.map((user) => (
+              <option key={user.id} value={user.id}>{user.displayName} ({user.username})</option>
+            ))}
           </select>
         </Field>
       </Modal>

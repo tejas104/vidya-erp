@@ -87,6 +87,11 @@ export default function DashboardPage() {
       try {
         const me = await api.session();
         if (!alive) return;
+        // A pure student sign-in lives in the portal, not the staff register.
+        if (me.roles.length > 0 && me.roles.every((role) => role === "student")) {
+          window.location.replace("/portal");
+          return;
+        }
         setSession(me);
         const dash = await api.dashboard(year);
         if (!alive) return;

@@ -43,6 +43,7 @@ const COLLEGE = { name: "Sunrise Institute of Technology", code: "DEMO" };
 const ADMIN = { username: "demo-admin", displayName: "Demo Administrator", password: "demo-admin-pass-2026!" };
 const STAFF_PASSWORD = "demo-staff-pass-2026!";
 const TEACHER_PASSWORD = "demo-teacher-pass-2026!";
+const STUDENT_PASSWORD = "demo-student-pass-2026!";
 
 type Slot = { studentId: string; status: "present" | "absent" | "late" | "excused" };
 
@@ -243,6 +244,8 @@ async function main(): Promise<void> {
 
   try {
     const credentials: Credential[] = [];
+    let portalStudentId: string | null = null;
+    let portalStudentName = "";
 
     // 1) The demo college and its dedicated admin (idempotent by code).
     const college = await stack.people.service.bootstrapCollege({ name: COLLEGE.name, code: COLLEGE.code });
@@ -428,6 +431,10 @@ async function main(): Promise<void> {
           });
           if (enroll.status !== 200) throw new Error(`enroll ${fullName}: ${enroll.status}`);
           studentIds.push(studentId);
+          if (portalStudentId === null) {
+            portalStudentId = studentId; // the first seeded student gets the demo portal sign-in
+            portalStudentName = fullName;
+          }
         }
         console.log(`    class: ${klass.name} — ${studentIds.length} students, ${klass.subjects.length} subjects`);
 
@@ -491,7 +498,25 @@ async function main(): Promise<void> {
       }
     }
 
-    // 6) Flip any resolvable manual grants (principal/HoD) to verified.
+    // 6) The student portal sign-in (W1): a real student login linked to the
+    //    first seeded student — self-scoped, no grants.
+    if (portalStudentId !== null) {
+      const studentUserId = await provisionUser("demo-student", portalStudentName, ["student"], STUDENT_PASSWORD);
+      const linked = await call("people.student-link-identity", {
+        cookie: adminCookie,
+        params: { studentId: portalStudentId },
+        body: { identityUserId: studentUserId },
+      });
+      await expectJson(linked, [200], "student identity link");
+      credentials.push({
+        role: "student",
+        username: "demo-student",
+        password: STUDENT_PASSWORD,
+        scope: `self — ${portalStudentName} (portal)`,
+      });
+    }
+
+    // 7) Flip any resolvable manual grants (principal/HoD) to verified.
     await call("identity.grants-verify", { cookie: adminCookie });
 
     console.log("\n✓ Demo data seeded through the real scoped, audited chain.");
@@ -591,6 +616,7 @@ function demoCredentials(): Credential[] {
   const creds: Credential[] = [
     { role: "admin", username: ADMIN.username, password: ADMIN.password, scope: "college-wide" },
     { role: "principal", username: "demo-principal", password: STAFF_PASSWORD, scope: "college-wide" },
+    { role: "student", username: "demo-student", password: STUDENT_PASSWORD, scope: "self (portal)" },
   ];
   for (const dept of DEPARTMENTS) {
     creds.push({ role: "hod", username: dept.hod.username, password: STAFF_PASSWORD, scope: `${dept.name} department` });

@@ -5,7 +5,7 @@
  * permits (the permission mirror).
  */
 
-export type Role = "admin" | "principal" | "hod" | "class_teacher" | "teacher";
+export type Role = "admin" | "principal" | "hod" | "class_teacher" | "teacher" | "student";
 
 export interface Session {
   userId: string;
@@ -186,6 +186,7 @@ export interface OrgTree {
 export interface StudentView {
   id: string; collegeId: string; admissionNo: string; fullName: string;
   status: "active" | "inactive";
+  identityUserId: string | null;
   enrollment: { sectionId: string; academicYear: string } | null;
 }
 export interface TeacherView {
@@ -217,6 +218,26 @@ export interface ImportView {
   errors: { row: number; message: string }[];
 }
 export type OrgUnitType = "college" | "department" | "class" | "section" | "subject";
+
+export interface PortalMe {
+  student: { id: string; admissionNo: string; fullName: string; status: string };
+  enrollment: { sectionId: string; sectionName: string; className: string; academicYear: string } | null;
+}
+export interface PortalAttendance {
+  counts: { present: number; absent: number; late: number; excused: number };
+  pct: number | null;
+  monthly: { month: string; pct: number }[];
+  sessions: { heldOn: string; status: AttendanceStatus }[];
+}
+export interface PortalMarks {
+  subjects: {
+    subjectId: string;
+    name: string;
+    avgPct: number;
+    marks: { assessmentName: string; kind: string; pct: number; heldOn: string | null }[];
+  }[];
+  overallPct: number | null;
+}
 
 export class ApiError extends Error {
   constructor(
@@ -378,6 +399,16 @@ export const api = {
   getImport: (importId: string) => get<ImportView>(`/api/v1/people/imports/${encodeURIComponent(importId)}`),
   // reporting
   listReports: (limit = 25) => get<{ reports: ReportView[] }>(`/api/v1/reports?limit=${limit}`),
+  // people — student identity link (W1)
+  linkStudentIdentity: (studentId: string, identityUserId: string | null) =>
+    post<{ student: StudentView }>(
+      `/api/v1/people/students/${encodeURIComponent(studentId)}/identity-link`,
+      { identityUserId },
+    ),
+  // portal (student self-scope)
+  portalMe: () => get<PortalMe>("/api/v1/portal/me"),
+  portalAttendance: (year: string) => get<PortalAttendance>(`/api/v1/portal/attendance?academicYear=${year}`),
+  portalMarks: (year: string) => get<PortalMarks>(`/api/v1/portal/marks?academicYear=${year}`),
   async login(username: string, password: string): Promise<void> {
     const response = await fetch("/api/v1/identity/auth/login", {
       method: "POST",
