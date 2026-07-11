@@ -198,7 +198,7 @@ export default function UsersPage() {
     for (const subject of dept.subjects) names.set(subject.id, subject.name);
   }
   const grantLabel = (grant: UserView["grants"][number]) => {
-    const parts = [grant.role];
+    const parts: string[] = [grant.role];
     if (grant.departmentId) parts.push(names.get(grant.departmentId) ?? grant.departmentId);
     if (grant.classId) parts.push(names.get(grant.classId) ?? grant.classId);
     if (grant.subjectId) parts.push(names.get(grant.subjectId) ?? grant.subjectId);
