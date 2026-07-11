@@ -53,6 +53,7 @@ import {
   REPORT_JOB_NAME,
   createReportingModule,
 } from "@vidya/module-reporting";
+import { createPortalModule } from "@vidya/module-portal";
 import { createMetricsServer } from "./metrics-server";
 
 const RESET_CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
@@ -204,6 +205,13 @@ async function main(): Promise<void> {
     },
   });
 
+  // Portal (W1): no jobs — included so the module inventory stays uniform
+  // across processes (registry ↔ composition parity checks).
+  const portal = createPortalModule({
+    peopleDirectory: people.service.directory,
+    academicsRead: academics.service.readModel,
+  });
+
   const modules: RuntimeModule<unknown>[] = [
     system,
     identity,
@@ -211,6 +219,7 @@ async function main(): Promise<void> {
     academics,
     analytics,
     reporting,
+    portal,
   ];
 
   for (const module of modules) {

@@ -33,6 +33,7 @@ import {
   REPORT_JOB_NAME,
   createReportingModule,
 } from "@vidya/module-reporting";
+import { createPortalModule } from "@vidya/module-portal";
 
 /**
  * COMPOSITION ROOT — web process.
@@ -193,6 +194,13 @@ function buildWebRuntime(): WebRuntime {
     },
   });
 
+  // Portal (W1): no tables, no jobs — self-scoped student views composed
+  // from people + academics public reads.
+  const portal = createPortalModule({
+    peopleDirectory: people.service.directory,
+    academicsRead: academics.service.readModel,
+  });
+
   const modules: RuntimeModule<unknown>[] = [
     system,
     identity,
@@ -200,6 +208,7 @@ function buildWebRuntime(): WebRuntime {
     academics,
     analytics,
     reporting,
+    portal,
   ];
 
   const routeDeps: RouteDependencies = {

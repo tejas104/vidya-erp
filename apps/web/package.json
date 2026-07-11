@@ -16,6 +16,7 @@
     "@vidya/module-identity": "workspace:*",
     "@vidya/module-people": "workspace:*",
     "@vidya/module-reporting": "workspace:*",
+    "@vidya/module-portal": "workspace:*",
     "@vidya/module-system": "workspace:*",
     "@vidya/platform": "workspace:*",
     "next": "^16.0.0",
