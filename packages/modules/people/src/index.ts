@@ -248,6 +248,9 @@ export function createPeopleModule(deps: PeopleModuleDeps): RuntimeModule<People
             } else if (id.startsWith("stu_")) {
               const row = await peopleRepo.getStudent(id);
               if (row !== null) names.set(id, row.fullName);
+            } else if (id.startsWith("tch_")) {
+              const row = await peopleRepo.getTeacher(id);
+              if (row !== null) names.set(id, row.fullName);
             }
           }
           return names;
