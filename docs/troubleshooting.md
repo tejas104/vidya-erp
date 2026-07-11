@@ -168,6 +168,29 @@ usually means the session expired (→ it should redirect to /login) or the
 API is down (check /ready). In production, a missing `TRUSTED_ORIGINS` or a
 non-Secure cookie over plain http will break the session round-trip.
 
+## A report stays "pending" / "Preparing…" forever
+
+Generation is a worker job. Check the worker replica is up and draining the
+reporting queue, and that MinIO is reachable. A generation error lands on the
+row as `status=failed` with an `error` (not an infinite retry) — inspect
+`rpt_reports` and the worker logs, fix the cause, and request again. The UI
+gives up polling after 30s and shows an error.
+
+## 403 downloading a report you can see the link for
+
+By design (ADR-0020): downloads are scope-checked, not authorized by the URL.
+You get 403 if you are not the original requester, or if your scope no longer
+covers the report's target (e.g. a grant was revoked after you requested it).
+Request a fresh report as the account that actually has scope.
+
+## The demo seeder refuses to run
+
+`scripts/seed-demo.ts` requires `VIDYA_ALLOW_DEMO_SEED=true` and refuses under
+`NODE_ENV=production` (it creates accounts with well-known passwords). Set both
+correctly and run against a throwaway database only — see
+docs/getting-started.md. If it reports "cannot sign in as the demo admin", the
+database already has a different admin: use a fresh database.
+
 ## Migration runner errors
 
 - `no paired rollback file` — write the `.down.sql`; pairing is mandatory.

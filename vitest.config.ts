@@ -1,4 +1,7 @@
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
+
+const webSrc = fileURLToPath(new URL("./apps/web/src", import.meta.url));
 
 export default defineConfig({
   test: {
@@ -11,6 +14,20 @@ export default defineConfig({
           // The argon2 conformance tests hash with production cost
           // parameters (64 MiB, t=3) — deliberately slow.
           testTimeout: 30_000,
+        },
+      },
+      {
+        // The frontend tests (#6): React Testing Library on jsdom. Pages are
+        // pure API consumers, so mocked fetch/api drives every flow — no
+        // browser binary. Covers login, the permission-mirror dashboard, a
+        // scoped report generate+download, and a withheld-cohort state.
+        resolve: { alias: { "@": webSrc } },
+        esbuild: { jsx: "automatic", jsxImportSource: "react" },
+        test: {
+          name: "ui",
+          environment: "jsdom",
+          include: ["apps/web/src/**/*.test.tsx"],
+          setupFiles: ["./apps/web/test/setup-ui.ts"],
         },
       },
       {
@@ -64,6 +81,12 @@ export default defineConfig({
         "packages/modules/analytics/src/repo/**",
         "packages/modules/analytics/src/db/**",
         "packages/modules/analytics/src/index.ts",
+        // Reporting: same policy; render/pdf is exercised by integration
+        // (binary output is asserted end-to-end, not unit-diffed).
+        "packages/modules/reporting/src/repo/**",
+        "packages/modules/reporting/src/db/**",
+        "packages/modules/reporting/src/index.ts",
+        "packages/modules/reporting/src/render/pdf.ts",
       ],
       thresholds: {
         lines: 80,
@@ -109,6 +132,19 @@ export default defineConfig({
           statements: 100,
         },
         "packages/modules/analytics/src/service/**": {
+          lines: 95,
+          functions: 95,
+          branches: 95,
+          statements: 95,
+        },
+        // #6: the CSV-injection escape is a security control — 100% bar.
+        "packages/modules/reporting/src/escape-csv.ts": {
+          lines: 100,
+          functions: 100,
+          branches: 100,
+          statements: 100,
+        },
+        "packages/modules/reporting/src/service/**": {
           lines: 95,
           functions: 95,
           branches: 95,

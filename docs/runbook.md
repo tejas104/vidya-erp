@@ -163,6 +163,29 @@ queue/observability/pg/redis close → exit. No drain delay (no LB).
   behind TLS (session cookie is Secure) and set `TRUSTED_ORIGINS` to the
   browser origin.
 
+## Reporting operations (#6)
+
+- **Generation is a worker job.** A request returns 202 + a `reportId`; the
+  worker generates the PDF/CSV, uploads it to object storage, and marks the
+  row `completed` (`vidya_reports_total{status}`; `reporting.report-generated`
+  audit). The UI polls status; a CLI/API caller polls `GET /api/v1/reports/{id}`.
+- **"A report is stuck pending/running":** confirm the worker replica is up and
+  draining the reporting queue (same BullMQ posture as imports/rollups) and
+  that MinIO is reachable. A generation error is captured on the row
+  (`status=failed`, `error`), not retried into a storm — inspect the row and
+  the worker logs, fix the cause, request again.
+- **Download is scope-checked, not URL-secret.** A 403 on download is by design
+  when the caller is not the original requester, or their current scope no
+  longer covers the target (ADR-0020). It is NOT a bug; the object key never
+  grants access. Every download is audited (`reporting.report-downloaded`).
+- **Artifacts** live in the `vidya` bucket under random UUID keys; only
+  metadata is in `rpt_reports`. There is no retention sweep yet (recorded
+  debt) — old artifacts are harmless (access is re-checked) but accumulate.
+- **Demo data:** `scripts/seed-demo.ts` builds a `DEMO` college through the
+  real chain; it refuses unless `VIDYA_ALLOW_DEMO_SEED=true` and refuses under
+  `NODE_ENV=production`. See docs/getting-started.md. Never run it against a
+  production database.
+
 ## Routine checks
 
 - `GET /ready` on every replica after deploys.

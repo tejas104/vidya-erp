@@ -99,8 +99,10 @@ export {
 export {
   createObjectStorage,
   ensureBucket,
+  getObjectBytes,
   getObjectText,
   pingObjectStorage,
+  putObjectBytes,
   putObjectText,
   type ObjectStorageClient,
   type ObjectStorageOptions,

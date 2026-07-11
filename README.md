@@ -1,4 +1,4 @@
-# Project Vidya — modular monolith (#1 foundation → #5 analytics + dashboards)
+# Project Vidya — modular monolith (#1 foundation → #6 reporting + MVP polish)
 
 On-premise College Information & Analytics System. Assignment #1 built the
 Next.js modular-monolith skeleton (module system with build-failing
@@ -21,6 +21,13 @@ performance views, at-risk surfacing and org rollups — every aggregate
 built only from records the caller may read (constituent-closure) and
 withheld below a 5-student minimum cohort (ADR-0018) — plus "The Register"
 dashboards (role-adaptive, dark-mode, permission-reflective; ADR-0019).
+Assignment #6 is the MVP finish line: scope-filtered PDF/CSV **reporting**,
+built ONLY through #5's disclosure surface so a report inherits closure + the
+cohort rule (a report is a disclosure surface, not an exemption); generation
+as a worker job with the requester's scope snapshot; downloads scope-checked,
+never URL-secret; CSV cells formula-injection-escaped (ADR-0020/0021). Plus
+the polish: React Testing Library frontend tests, a demo-data seeder that
+drives the real scoped chain, and docs/getting-started.md.
 
 ## Layout
 
@@ -41,7 +48,10 @@ packages/modules/academics attendance + marks, scope-traced (acd_)
 packages/modules/analytics rollups + at-risk under constituent-closure +
                           minimum-cohort (anl_); the /dashboard UI lives
                           in apps/web/app + apps/web/src/ui
-scripts/                  migrate, openapi, todo/ownership checks, registry
+packages/modules/reporting scope-filtered PDF/CSV reports through #5's read
+                          model, scoped download, CSV-injection escaping (rpt_)
+scripts/                  migrate, openapi, checks, registry, create-admin,
+                          seed-demo (demo data via the real scoped chain)
 tests/integration         Postgres/Redis/BullMQ end-to-end suite
 docs/                     ADRs, diagrams, threat model, runbook, reviews
 ```
@@ -73,14 +83,20 @@ pnpm dev:worker   # worker (second terminal)
 
 # quality gates (what CI runs)
 pnpm typecheck && pnpm lint && pnpm test:coverage
+pnpm test:ui   # frontend tests (React Testing Library on jsdom)
 pnpm check:todos && pnpm check:ownership && pnpm openapi:check
 
 # database
 pnpm db:migrate ; pnpm db:status ; pnpm db:rollback
 
-# one-time platform bootstrap (after the human core lands)
+# one-time platform bootstrap (creates the college + first admin)
 VIDYA_ADMIN_PASSWORD=<strong> pnpm exec tsx scripts/create-admin.ts \
-  --username root-admin --display-name "Root Admin" --college-id col-main
+  --username root-admin --display-name "Root Admin" \
+  --college-name "Your College" --college-code MAIN
+
+# demo data through the real scoped, audited chain (non-production; see
+# docs/getting-started.md) — refused unless allowed and refused in production
+VIDYA_ALLOW_DEMO_SEED=true pnpm seed:demo
 
 # integration suite (needs DATABASE_URL/REDIS_URL, e.g. the compose stack)
 pnpm test:integration
@@ -88,18 +104,22 @@ pnpm test:integration
 
 ### Expected green-path output
 
-- `pnpm test:coverage` → `Test Files 45 passed`, `Tests 433 passed`,
-  coverage ≥ 80% globally (verified 92.7% / 87.2% branches), ≥ 95% on the
-  identity/derivation/academics/analytics service seams, and **100%** on
-  the two scope-integration surfaces (`academics/src/resource-refs.ts`,
-  `analytics/src/aggregation-scope.ts`). The worked scope traces (#4) and
-  aggregation-scope examples (#5) run against the REAL human-owned checker.
+- `pnpm test:coverage` → `Test Files 51 passed`, `Tests 480 passed`,
+  coverage ≥ 80% globally (verified 93.1% / 87.5% branches), ≥ 95% on the
+  identity/derivation/academics/analytics/reporting service seams, and
+  **100%** on the scope-integration surfaces (`academics/src/resource-refs.ts`,
+  `analytics/src/aggregation-scope.ts`, `reporting/src/escape-csv.ts`). The
+  worked scope traces (#4), aggregation-scope examples (#5) and CSV-injection
+  cases (#6) run against the REAL human-owned checker / escape control.
+- `pnpm test:ui` → `Tests 10 passed` (3 files): login, the permission-mirror
+  dashboard, a scoped report generate→download, and the withheld-cohort state.
 - `pnpm lint` → exit 0. (Try a deep import like
   `import x from "@vidya/module-people/src/db/schema"` anywhere — the
   build fails with a Constitution message. That's the feature.)
 - `pnpm db:migrate` → `system/0000_audit_log`, `identity/0000_identity`,
   `identity/0001_grant_provenance`, `people/0000_people`,
-  `academics/0000_academics`, `analytics/0000_analytics`.
+  `academics/0000_academics`, `analytics/0000_analytics`,
+  `reporting/0000_reporting`.
 - `pnpm dev` → the UI at `/login` → `/dashboard` (role-adaptive) and
   `/students/{id}`; toggle paper/chalk (light/dark) from the masthead.
 - `pnpm test:integration` (CI / Docker machine, incl. MinIO) → migrations

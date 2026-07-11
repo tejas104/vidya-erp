@@ -141,6 +141,24 @@ single-row INSERT to state-changing routes only.
    irrelevant at runtime; a compile step is recorded debt if cold-start
    frequency ever matters.
 
+## Reporting (#6)
+
+Report generation is a **queued worker job** (202 + poll), off the request
+path — a large export never blocks an HTTP handler. Each report's cost is
+bounded by the requester's scope (it reads only what they can see, through the
+same read model the dashboard uses). `canProduce` — the access decision run at
+both request and download — is a cheap read-model call that does no rendering,
+so an out-of-scope request is rejected without generating anything. PDF is
+rendered in-memory with pdfkit and streamed to a Buffer (no filesystem, no
+Chromium); CSV is a string builder. Failures are captured on the `rpt_reports`
+row, not retried into a storm.
+
+Watch items when reporting sees real load: (a) very large sections/classes
+produce large artifacts — object storage handles the size, but consider
+paginated or summarized report kinds before whole-college exports; (b) no
+retention sweep yet, so `rpt_reports` + objects grow (recorded debt — add a
+TTL job); (c) report requests share the platform-wide global rate-limit note.
+
 ## Deliberate non-optimizations
 
 No caching layer, no read replicas, no CDN concerns — none has a workload

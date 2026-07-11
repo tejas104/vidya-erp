@@ -78,3 +78,27 @@ export async function getObjectText(
   }
   return result.Body.transformToString("utf8");
 }
+
+export async function putObjectBytes(
+  client: S3Client,
+  bucket: string,
+  key: string,
+  body: Uint8Array,
+  contentType: string,
+): Promise<void> {
+  await client.send(
+    new PutObjectCommand({ Bucket: bucket, Key: key, Body: body, ContentType: contentType }),
+  );
+}
+
+export async function getObjectBytes(
+  client: S3Client,
+  bucket: string,
+  key: string,
+): Promise<Uint8Array> {
+  const result = await client.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+  if (result.Body === undefined) {
+    throw new Error(`object ${bucket}/${key} has no body`);
+  }
+  return result.Body.transformToByteArray();
+}

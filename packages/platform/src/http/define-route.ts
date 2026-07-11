@@ -77,10 +77,16 @@ function toResponse(result: RouteResult, requestId: string): Response {
   };
   if (result.contentType !== undefined) {
     headers["content-type"] = result.contentType;
-    return new Response(typeof result.body === "string" ? result.body : "", {
-      status: result.status,
-      headers,
-    });
+    // Binary artifacts (e.g. a report PDF) pass through as bytes; text
+    // bodies as strings; anything else becomes empty. The copy re-backs the
+    // bytes with a plain ArrayBuffer so they satisfy the Response BodyInit type.
+    const body =
+      typeof result.body === "string"
+        ? result.body
+        : result.body instanceof Uint8Array
+          ? new Uint8Array(result.body)
+          : "";
+    return new Response(body, { status: result.status, headers });
   }
   headers["content-type"] = "application/json";
   return new Response(result.body === undefined ? null : JSON.stringify(result.body), {

@@ -21,6 +21,7 @@
 | `tsx` | worker | Runs TypeScript sources directly (esbuild transform). Type safety is guaranteed by `tsc --noEmit` in CI over exactly these sources; a compile-to-JS step for the worker is recorded as technical debt (docs/review-gate.md), not a correctness gap. |
 | `argon2` | module-identity | Native libargon2 binding for the human-owned PasswordHasher (argon2id, ADR-0012). Native reference implementation chosen over pure-JS ports: cost parameters only defend if the hash actually costs that much. |
 | `csv-parse` | module-people | Bulk-import CSV parsing (quotes, embedded commas/newlines, BOM). Mature, dependency-free, no native code. Excel `.xlsx` parsing was deliberately rejected (heavyweight parsers with a poor security track record); colleges export CSV from Excel. |
+| `pdfkit` | module-reporting | Pure-JS PDF generation for report export (ADR-0021). Chosen over headless Chromium to avoid a ~300MB browser + sandbox + native attack surface on the on-prem worker; uses built-in Helvetica (no font files, no CDN); streams to a Buffer. No postinstall build script. CSV export needs no library (a string builder + the ADR-0020 escape). |
 
 ## Development dependencies
 
@@ -34,6 +35,9 @@
 | `eslint-import-resolver-typescript` | Resolves workspace imports so boundaries can classify them. |
 | `@asteasolutions/zod-to-openapi` | OpenAPI generation from RouteSpecs (ADR-0007). |
 | `@types/node`, `@types/pg`, `@types/react`, `@types/react-dom` | Type declarations. |
+| `@types/pdfkit` | pdfkit type declarations (module-reporting; ADR-0021). |
+| `@testing-library/react`, `@testing-library/dom`, `@testing-library/jest-dom` | Frontend component tests (#6): render + query + DOM matchers. Pages are pure API consumers, so mocked `api` drives every flow — no browser binary. |
+| `jsdom` | DOM environment for the vitest `ui` project (frontend tests run on jsdom, not a real browser). |
 | `pino-pretty` | Optional human-readable log formatting in local dev only. |
 
 \* `drizzle-kit` is intentionally **not installed yet**: #1's only migration

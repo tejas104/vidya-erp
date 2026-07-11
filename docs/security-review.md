@@ -1,4 +1,35 @@
-# Security review — Vidya #1 foundation + #2 identity + #3 people + #4 academics
+# Security review — Vidya #1 foundation + #2 identity + #3 people + #4 academics + #5 analytics + #6 reporting
+
+## <a id="reporting"></a>#6: A report is a disclosure surface (EXECUTED)
+
+Reporting adds no new data — it re-renders #4/#5 data as downloadable
+artifacts — so the review is about the artifact as a disclosure surface. Three
+controls, executed unit + re-proven over real Postgres/MinIO in
+`tests/integration/reporting-flow.int.test.ts`:
+
+1. **Scope-filtering.** A report is assembled ONLY through #5's
+   `AnalyticsReadModel` + #4's read model, inheriting constituent-closure, the
+   K=5 cohort rule and at-risk field-gating unchanged (ADR-0020). Reporting owns
+   no direct-record query and never re-derives scope. `canProduce` refuses an
+   out-of-scope target at request time (403) before any job is enqueued; the
+   worker generates with the requester's stored scope snapshot, so an artifact
+   can never exceed what the requester could see. Below-K aggregates print a
+   withheld-cohort note, not a number.
+2. **Scoped download (no URL-guessing).** The artifact's object key is a random
+   UUID but is NEVER the access boundary. Download requires
+   `requested_by === caller` AND a fresh `canProduce` re-check of the caller's
+   CURRENT scope — a second authenticated user handed the `reportId`, or a
+   requester whose grant was revoked, gets 403 before any bytes are read.
+   Request, generation and download are each audited.
+3. **CSV/Excel formula-injection.** Every CSV cell passes through `escapeCsvCell`
+   (one page, 100%-gated): apostrophe-prefix dangerous leaders (`= + - @ \t \r`),
+   then RFC-4180 quote. `renderCsv` has no raw-cell path. Proven with a student
+   named `=Ravi` — the cell is stored as text, never a live formula.
+
+Full detail + worked-example table: ADR-0020; leak analysis:
+docs/threat-model-reporting.md. PDF uses pdfkit (pure-JS, no Chromium/sandbox
+surface; ADR-0021). **The three controls require human verification**
+(review-gate-6). #6 required ZERO human-core changes.
 
 ## <a id="aggregation-scope"></a>#5: Scope-filtered aggregation + the minimum-cohort rule (EXECUTED)
 

@@ -23,6 +23,7 @@ import { createIdentityCore, createIdentityModule } from "@vidya/module-identity
 import { createPeopleModule } from "@vidya/module-people";
 import { createAcademicsModule } from "@vidya/module-academics";
 import { createAnalyticsModule } from "@vidya/module-analytics";
+import { createReportingModule } from "@vidya/module-reporting";
 
 export const ADMIN_USERNAME = "int-admin";
 export const ADMIN_PASSWORD = "integration-admin-pass-1";
@@ -130,6 +131,18 @@ export function buildStack() {
     },
   });
 
+  const enqueuedReports: { reportId: string; source: string }[] = [];
+  const reporting = createReportingModule({
+    db,
+    metrics,
+    audit: system.service.audit,
+    analyticsRead: analytics.service.readModel,
+    storage: { client: objectStorage, bucket: process.env.S3_BUCKET ?? "vidya-int" },
+    enqueueReport: async (payload) => {
+      enqueuedReports.push(payload);
+    },
+  });
+
   const routeDeps: RouteDependencies = {
     logger,
     authenticator: identity.service.authenticator,
@@ -139,7 +152,7 @@ export function buildStack() {
   };
   const specs = new Map<string, RouteSpec>();
   const handlers: Record<string, BoundRouteHandler> = {};
-  for (const module of [identity, people, academics, analytics]) {
+  for (const module of [identity, people, academics, analytics, reporting]) {
     for (const route of module.definition.routes) {
       specs.set(route.id, route);
       handlers[route.id] = defineRoute(route, module.handlers[route.id]!, routeDeps);
@@ -224,9 +237,11 @@ export function buildStack() {
     people,
     academics,
     analytics,
+    reporting,
     core,
     enqueuedImports,
     enqueuedRollups,
+    enqueuedReports,
     call,
     sessionCookie,
     login,

@@ -29,6 +29,7 @@ import {
 import { createRollupsRepo } from "./repo/rollups-repo";
 import { RollupBuilder } from "./service/rollup-builder";
 import { QueryService } from "./service/query-service";
+import { createAnalyticsReadModel, type AnalyticsReadModel } from "./service/read-model";
 import { createAnalyticsHandlers } from "./api/handlers";
 import { createRollupProcessor } from "./jobs/rollup-rebuild";
 
@@ -47,6 +48,13 @@ export {
   cohortSufficient,
   marksAggRef,
 } from "./aggregation-scope";
+export type {
+  AnalyticsReadModel,
+  AtRiskReportEntry,
+  NodeRollupsReport,
+  RosterAttendanceReport,
+  StudentPerformanceReport,
+} from "./service/read-model";
 
 export interface AnalyticsModuleDeps {
   readonly db: Db;
@@ -65,8 +73,13 @@ export interface AnalyticsModuleDeps {
   readonly enqueueRollup: (payload: z.infer<typeof rollupJobPayloadSchema>) => Promise<void>;
 }
 
-/** No cross-module service yet — dashboards consume the versioned HTTP API. */
-export type AnalyticsService = Record<string, never>;
+/**
+ * The analytics public service: a scoped read model the reporting module
+ * (#6) consumes so exports inherit the disclosure rules of ADR-0018.
+ */
+export interface AnalyticsService {
+  readonly readModel: AnalyticsReadModel;
+}
 
 export function createAnalyticsModule(deps: AnalyticsModuleDeps): RuntimeModule<AnalyticsService> {
   const repo = createRollupsRepo(deps.db);
@@ -108,7 +121,9 @@ export function createAnalyticsModule(deps: AnalyticsModuleDeps): RuntimeModule<
       },
     },
     readinessChecks: [],
-    service: {},
+    service: {
+      readModel: createAnalyticsReadModel(query, deps.peopleDirectory),
+    },
   };
   assertModuleWiring(module);
   return module;
