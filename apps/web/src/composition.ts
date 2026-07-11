@@ -28,6 +28,11 @@ import {
   ROLLUP_JOB_NAME,
   createAnalyticsModule,
 } from "@vidya/module-analytics";
+import {
+  REPORTING_MODULE_NAME,
+  REPORT_JOB_NAME,
+  createReportingModule,
+} from "@vidya/module-reporting";
 
 /**
  * COMPOSITION ROOT — web process.
@@ -172,7 +177,30 @@ function buildWebRuntime(): WebRuntime {
     },
   });
 
-  const modules: RuntimeModule<unknown>[] = [system, identity, people, academics, analytics];
+  const reportingQueue = createModuleQueue({
+    module: REPORTING_MODULE_NAME,
+    redisUrl: config.redis.url,
+  });
+  lifecycle.onShutdown("reporting-queue", () => reportingQueue.close());
+  const reporting = createReportingModule({
+    db,
+    metrics,
+    audit: system.service.audit,
+    analyticsRead: analytics.service.readModel,
+    storage: { client: objectStorage, bucket: config.s3.bucket },
+    enqueueReport: async (payload) => {
+      await reportingQueue.queue.add(REPORT_JOB_NAME, payload);
+    },
+  });
+
+  const modules: RuntimeModule<unknown>[] = [
+    system,
+    identity,
+    people,
+    academics,
+    analytics,
+    reporting,
+  ];
 
   const routeDeps: RouteDependencies = {
     logger,

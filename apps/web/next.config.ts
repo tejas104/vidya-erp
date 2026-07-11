@@ -18,13 +18,18 @@ const nextConfig: NextConfig = {
     "@vidya/module-people",
     "@vidya/module-academics",
     "@vidya/module-analytics",
+    "@vidya/module-reporting",
   ],
   // Infrastructure clients with native/dynamic requires stay external to the
-  // server bundle.
+  // server bundle. pdfkit (report PDF rendering, worker-only) is a CJS package
+  // with heavy transitive deps (fontkit) — kept external so Turbopack doesn't
+  // compile it (which emits an @swc/helpers decorator helper Next's pinned
+  // copy doesn't re-export) and it is `require`d at runtime instead.
   serverExternalPackages: [
     "@aws-sdk/client-s3",
     "bullmq",
     "ioredis",
+    "pdfkit",
     "pg",
     "pino",
     "prom-client",

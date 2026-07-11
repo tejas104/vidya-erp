@@ -2,6 +2,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { api, currentAcademicYear, type AttendanceStatus } from "@/ui/api";
 import { useMutation } from "@/ui/useMutation";
+import { useToast } from "@/ui/Toast";
+import { PageHeader } from "@/ui/PageHeader";
 
 export const dynamic = "force-dynamic";
 const STATUSES: AttendanceStatus[] = ["present", "absent", "late", "excused"];
@@ -17,6 +19,7 @@ export default function AttendancePage() {
   const [roster, setRoster] = useState<Student[]>([]);
   const [marks, setMarks] = useState<Record<string, AttendanceStatus>>({});
   const save = useMutation(api.recordAttendance);
+  const toast = useToast();
 
   // Populate the section picker from the caller's class/teacher tiles.
   useEffect(() => {
@@ -43,17 +46,20 @@ export default function AttendancePage() {
   }, [sectionId]);
 
   async function submit() {
-    await save.run({
+    const saved = await save.run({
       sectionId, heldOn, slot: "day", academicYear: year,
       entries: roster.map((s) => ({ studentId: s.id, status: marks[s.id] ?? "present" })),
     });
+    if (saved) toast.show("Attendance saved — recompute analytics to see it on the dashboard.", "good");
   }
 
   return (
     <>
-      <p className="eyebrow">Attendance</p>
-      <h1 className="page-title">Record attendance</h1>
-      <p className="page-lede">Mark the roster for a section and date. You can only record for a class you teach.</p>
+      <PageHeader
+        eyebrow="Attendance"
+        title="Record attendance"
+        lede="Mark the roster for a section and date. You can only record for a class you teach."
+      />
 
       {sections.length === 0 ? (
         <div className="state"><strong>No sections you can record for.</strong> Attendance is recorded by a class teacher.</div>
@@ -93,7 +99,6 @@ export default function AttendancePage() {
             <button className="btn" type="button" disabled={save.phase.name === "saving" || roster.length === 0} onClick={submit}>
               {save.phase.name === "saving" ? "Saving…" : "Save attendance"}
             </button>
-            {save.phase.name === "done" ? <span className="num" style={{ color: "var(--series-1)" }}>Saved. Recompute analytics to see it in the dashboard.</span> : null}
             {save.phase.name === "error" ? <span className="formerror" role="alert" style={{ margin: 0 }}>{save.phase.message}</span> : null}
           </div>
         </>

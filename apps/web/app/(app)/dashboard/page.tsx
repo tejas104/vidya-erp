@@ -13,7 +13,7 @@ import {
   type Session,
   type Tile,
 } from "@/ui/api";
-import { Masthead } from "@/ui/Masthead";
+import { PageHeader } from "@/ui/PageHeader";
 import {
   AttendanceSlot,
   CompareBars,
@@ -144,20 +144,10 @@ export default function DashboardPage() {
   }, [year]);
 
   if (error !== null) {
-    return (
-      <>
-        <Masthead year={year} />
-        <main id="main" className="page"><div className="state">{error}</div></main>
-      </>
-    );
+    return <div className="state">{error}</div>;
   }
   if (dashboard === null || session === null) {
-    return (
-      <>
-        <Masthead year={year} />
-        <main id="main" className="page"><p className="page-lede">Opening the register…</p></main>
-      </>
-    );
+    return <p className="page-lede">Opening the register…</p>;
   }
 
   const focusTile = focus?.tile ?? null;
@@ -168,14 +158,11 @@ export default function DashboardPage() {
 
   return (
     <>
-      <Masthead who={session.displayName} year={year} />
-      <main id="main" className="page">
-        <p className="eyebrow">{session.roles.join(" · ")}</p>
-        <h1 className="page-title">Good day, {session.displayName.split(" ")[0]}.</h1>
-        <p className="page-lede">
-          Every figure here is drawn only from records you're allowed to read. Rooms outside your scope simply
-          don't appear.
-        </p>
+      <PageHeader
+        eyebrow={session.roles.join(" · ")}
+        title={`Good day, ${session.displayName.split(" ")[0]}.`}
+        lede="Every figure here is drawn only from records you're allowed to read. Rooms outside your scope simply don't appear."
+      />
 
         {dashboard.tiles.length === 0 ? (
           <div className="state">
@@ -312,7 +299,6 @@ export default function DashboardPage() {
             </div>
           )}
         </section>
-      </main>
     </>
   );
 }

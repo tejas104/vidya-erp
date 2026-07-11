@@ -5,11 +5,11 @@ import {
   api,
   ApiError,
   currentAcademicYear,
-  type Session,
   type StudentPerformance,
 } from "@/ui/api";
-import { Masthead } from "@/ui/Masthead";
 import { Sparkline, StatTile, SubjectBars } from "@/ui/charts";
+import { ReportButton } from "@/ui/ReportButton";
+import { currentAcademicYear as ay } from "@/ui/api";
 
 export const dynamic = "force-dynamic";
 
@@ -23,21 +23,11 @@ type LoadState =
 export default function StudentPage({ params }: { params: Promise<{ studentId: string }> }) {
   const { studentId } = use(params);
   const year = useMemo(() => currentAcademicYear(), []);
-  const [session, setSession] = useState<Session | null>(null);
   const [load, setLoad] = useState<LoadState>({ state: "loading" });
 
   useEffect(() => {
     let alive = true;
     (async () => {
-      try {
-        const me = await api.session();
-        if (alive) setSession(me);
-      } catch (caught) {
-        if (caught instanceof ApiError && caught.status === 401) {
-          window.location.href = "/login";
-        }
-        return;
-      }
       try {
         const data = await api.studentPerformance(studentId, year);
         if (alive) setLoad({ state: "ok", data });
@@ -55,11 +45,9 @@ export default function StudentPage({ params }: { params: Promise<{ studentId: s
 
   return (
     <>
-      <Masthead who={session?.displayName} year={year} />
-      <main id="main" className="page">
-        <a className="linklike" href="/dashboard">
-          ← Back to the register
-        </a>
+      <a className="linklike" href="/dashboard">
+        ← Back to the register
+      </a>
         {load.state === "loading" ? <p className="page-lede" style={{ marginTop: 20 }}>Loading…</p> : null}
 
         {load.state === "forbidden" ? (
@@ -79,8 +67,7 @@ export default function StudentPage({ params }: { params: Promise<{ studentId: s
           </div>
         ) : null}
 
-        {load.state === "ok" ? <StudentBody data={load.data} /> : null}
-      </main>
+      {load.state === "ok" ? <StudentBody data={load.data} /> : null}
     </>
   );
 }
@@ -96,6 +83,20 @@ function StudentBody({ data }: { data: StudentPerformance }) {
         Computed from exactly the attendance and marks you're permitted to read. The overall figure
         appears only when you can see every subject.
       </p>
+      <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 24 }}>
+        <ReportButton
+          params={{ kind: "student-performance", studentId: data.studentId }}
+          year={ay()}
+          format="pdf"
+          label="Download report (PDF)"
+        />
+        <ReportButton
+          params={{ kind: "student-performance", studentId: data.studentId }}
+          year={ay()}
+          format="csv"
+          label="Export (CSV)"
+        />
+      </div>
 
       <div className="card" style={{ marginBottom: 28 }}>
         <div className="stats">

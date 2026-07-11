@@ -2,6 +2,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { api, currentAcademicYear, type AssessmentKind, type AssessmentView } from "@/ui/api";
 import { useMutation } from "@/ui/useMutation";
+import { useToast } from "@/ui/Toast";
+import { PageHeader } from "@/ui/PageHeader";
 
 export const dynamic = "force-dynamic";
 const KINDS: AssessmentKind[] = ["quiz", "exam", "assignment"];
@@ -20,6 +22,7 @@ export default function MarksPage() {
   const [roster, setRoster] = useState<Student[]>([]);
   const [scores, setScores] = useState<Record<string, string>>({});
   const create = useMutation(api.createAssessment);
+  const toast = useToast();
   const enter = useMutation((assessmentId: string, entries: { studentId: string; score: number }[]) => api.enterMarks(assessmentId, entries));
 
   useEffect(() => {
@@ -44,24 +47,34 @@ export default function MarksPage() {
   async function onCreate() {
     if (!target) return;
     const created = await create.run({ classId: target.classId, subjectId: target.subjectId, kind, name, academicYear: year, maxScore: Number(maxScore) });
-    if (created) { setActive(created); setName(""); setScores({}); }
+    if (created) {
+      setActive(created);
+      setName("");
+      setScores({});
+      toast.show(`Assessment "${created.name}" created.`, "good");
+    }
   }
   async function onEnter() {
     if (!active) return;
     const entries = roster.filter((s) => scores[s.id] !== undefined && scores[s.id] !== "").map((s) => ({ studentId: s.id, score: Number(scores[s.id]) }));
-    if (entries.length > 0) await enter.run(active.id, entries);
+    if (entries.length > 0) {
+      const result = await enter.run(active.id, entries);
+      if (result) toast.show("Marks saved.", "good");
+    }
   }
 
   if (targets.length === 0) {
-    return (<><p className="eyebrow">Marks</p><h1 className="page-title">Enter marks</h1>
-      <div className="state"><strong>No subject you teach.</strong> Marks are entered by a subject teacher.</div></>);
+    return (
+      <>
+        <PageHeader eyebrow="Marks" title="Enter marks" lede="Create an assessment for your subject, then enter each student's score." />
+        <div className="state"><strong>No subject you teach.</strong> Marks are entered by a subject teacher.</div>
+      </>
+    );
   }
 
   return (
     <>
-      <p className="eyebrow">Marks</p>
-      <h1 className="page-title">Enter marks</h1>
-      <p className="page-lede">Create an assessment for your subject, then enter each student's score.</p>
+      <PageHeader eyebrow="Marks" title="Enter marks" lede="Create an assessment for your subject, then enter each student's score." />
 
       <label className="field" style={{ maxWidth: 360 }}>
         <span>Class · subject</span>
@@ -103,7 +116,6 @@ export default function MarksPage() {
             <button className="btn" type="button" disabled={enter.phase.name === "saving"} onClick={onEnter}>
               {enter.phase.name === "saving" ? "Saving…" : "Save marks"}
             </button>
-            {enter.phase.name === "done" ? <span className="num" style={{ color: "var(--series-1)" }}>Marks saved.</span> : null}
             {enter.phase.name === "error" ? <span className="formerror" role="alert" style={{ margin: 0 }}>{enter.phase.message}</span> : null}
           </div>
         </section>
