@@ -31,7 +31,10 @@ export class UnitInUseError extends Error {
 }
 
 function pgErrorCode(error: unknown): string | undefined {
-  return (error as { code?: string }).code;
+  // drizzle >=0.44 wraps driver errors in DrizzleQueryError; the pg code rides on .cause
+  const direct = (error as { code?: string }).code;
+  if (direct !== undefined) return direct;
+  return (error as { cause?: { code?: string } }).cause?.code;
 }
 
 export interface OrgTree {
