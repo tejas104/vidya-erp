@@ -62,6 +62,7 @@ function studentView(student: PplStudentRow, enrollment: PplEnrollmentRow | null
     admissionNo: student.admissionNo,
     fullName: student.fullName,
     status: student.status,
+    identityUserId: student.identityUserId,
     enrollment:
       enrollment === null
         ? null
@@ -415,6 +416,51 @@ export function createPeopleHandlers(deps: PeopleHandlerDeps): Record<string, Ro
         details: {
           before: { fullName: student.fullName, status: student.status },
           after: { fullName: updated.fullName, status: updated.status },
+        },
+      },
+    };
+  };
+
+  const studentLinkIdentity: RouteHandler = async (ctx) => {
+    const principal = ctx.principal as Principal;
+    const params = ctx.request.params as { studentId: string };
+    const body = ctx.request.body as { identityUserId: string | null };
+    const student = await deps.people.getStudent(params.studentId);
+    if (student === null) {
+      return notFound();
+    }
+    const position = await deps.people.studentOrgPosition(student);
+    const scope = checkScope(deps.scopeChecker, ctx, principal, "update", {
+      module: "people",
+      resourceType: "student",
+      org: position,
+    });
+    if (!scope.ok) {
+      return scope.result;
+    }
+    let updated;
+    try {
+      updated = await deps.people.linkStudentIdentity(params.studentId, body.identityUserId);
+    } catch (error) {
+      const code =
+        (error as { code?: string }).code ?? (error as { cause?: { code?: string } }).cause?.code;
+      if (code === "23505") {
+        return { status: 409, body: { message: "that sign-in is already linked to another student" } };
+      }
+      throw error;
+    }
+    if (updated === null) {
+      return notFound();
+    }
+    const enrollment = await deps.people.latestActiveEnrollment(updated.id);
+    return {
+      status: 200,
+      body: { student: studentView(updated, enrollment) },
+      audit: {
+        resourceId: updated.id,
+        details: {
+          before: { identityUserId: student.identityUserId },
+          after: { identityUserId: updated.identityUserId },
         },
       },
     };
@@ -816,6 +862,7 @@ export function createPeopleHandlers(deps: PeopleHandlerDeps): Record<string, Ro
     "people.student-create": studentCreate,
     "people.student-get": studentGet,
     "people.student-update": studentUpdate,
+    "people.student-link-identity": studentLinkIdentity,
     "people.student-enroll": studentEnroll,
     "people.section-roster": sectionRoster,
     "people.teacher-create": teacherCreate,

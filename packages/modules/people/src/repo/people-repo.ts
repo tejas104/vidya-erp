@@ -45,9 +45,11 @@ export interface PeopleRepo {
   }): Promise<PplStudentRow>;
   getStudent(id: string): Promise<PplStudentRow | null>;
   findStudentByAdmissionNo(collegeId: string, admissionNo: string): Promise<PplStudentRow | null>;
+  /** The student linked to an identity sign-in (W1 portal), if any. */
+  findStudentByIdentityUser(identityUserId: string): Promise<PplStudentRow | null>;
   updateStudent(
     id: string,
-    patch: { fullName?: string; status?: PersonStatus },
+    patch: { fullName?: string; status?: PersonStatus; identityUserId?: string | null },
   ): Promise<PplStudentRow | null>;
 
   /** Batched existence lookups for the bulk importer. */
@@ -133,12 +135,22 @@ export function createPeopleRepo(db: Db): PeopleRepo {
       return rows[0] ?? null;
     },
 
+    async findStudentByIdentityUser(identityUserId) {
+      const rows = await db
+        .select()
+        .from(pplStudents)
+        .where(eq(pplStudents.identityUserId, identityUserId))
+        .limit(1);
+      return rows[0] ?? null;
+    },
+
     async updateStudent(id, patch) {
       const rows = await db
         .update(pplStudents)
         .set({
           ...(patch.fullName !== undefined ? { fullName: patch.fullName } : {}),
           ...(patch.status !== undefined ? { status: patch.status } : {}),
+          ...(patch.identityUserId !== undefined ? { identityUserId: patch.identityUserId } : {}),
           updatedAt: new Date(),
         })
         .where(eq(pplStudents.id, id))

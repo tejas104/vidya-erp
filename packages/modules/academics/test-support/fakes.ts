@@ -103,6 +103,16 @@ export class FakePeopleDirectory implements PeopleDirectory {
     return [];
   }
 
+  async studentByIdentityUser(): Promise<{
+    studentId: string;
+    collegeId: string;
+    fullName: string;
+    admissionNo: string;
+    status: string;
+  } | null> {
+    return null;
+  }
+
   async studentPosition(studentId: string): Promise<OrgPath | null> {
     if (studentId === ORG.studentA1 || studentId === ORG.studentA2) {
       return {

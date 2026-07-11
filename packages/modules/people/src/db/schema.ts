@@ -68,6 +68,8 @@ export const pplStudents = pgTable("ppl_students", {
   fullName: text("full_name").notNull(),
   status: text("status").notNull().default("active"),
   sourceImportId: text("source_import_id"),
+  /** Opaque identity user id (W1 student-portal link) — no cross-module FK. */
+  identityUserId: text("identity_user_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [

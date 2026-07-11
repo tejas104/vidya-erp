@@ -49,6 +49,7 @@ export const studentViewSchema = z.object({
   admissionNo: z.string(),
   fullName: z.string(),
   status: z.enum(["active", "inactive"]),
+  identityUserId: z.string().nullable(),
   enrollment: z
     .object({
       sectionId: z.string(),
@@ -310,6 +311,27 @@ const routes: RouteSpec[] = [
       },
       403: { description: "Scope check denied (source or target)", schema: problemSchema },
       404: { description: "No such student or section", schema: problemSchema },
+    },
+  },
+  {
+    id: "people.student-link-identity",
+    module: MODULE_NAME,
+    method: "POST",
+    path: "/api/v1/people/students/{studentId}/identity-link",
+    summary: "Link (or unlink) the student to an identity sign-in (admin)",
+    description:
+      "W1 student portal: the link is the student's ONLY access authority — students hold no scope grants. One sign-in per student (unique).",
+    tags: ["people-students"],
+    auth: ADMIN_ONLY,
+    request: {
+      params: z.object({ studentId: idSchema }),
+      body: z.object({ identityUserId: idSchema.nullable() }),
+    },
+    audit: { action: "people.student-identity-linked", resourceType: "student" },
+    responses: {
+      200: { description: "Link updated", schema: z.object({ student: studentViewSchema }) },
+      404: { description: "No such student", schema: problemSchema },
+      409: { description: "That sign-in is already linked to another student", schema: problemSchema },
     },
   },
   {

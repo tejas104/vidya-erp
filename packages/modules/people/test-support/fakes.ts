@@ -278,6 +278,7 @@ export class InMemoryPeopleRepo implements PeopleRepo {
       fullName: input.fullName,
       status: "active",
       sourceImportId: input.sourceImportId ?? null,
+      identityUserId: null,
       createdAt: now(),
       updatedAt: now(),
     };
@@ -342,15 +343,33 @@ export class InMemoryPeopleRepo implements PeopleRepo {
 
   async updateStudent(
     id: string,
-    patch: { fullName?: string; status?: "active" | "inactive" },
+    patch: { fullName?: string; status?: "active" | "inactive"; identityUserId?: string | null },
   ): Promise<PplStudentRow | null> {
     const student = this.students.get(id);
     if (student === undefined) {
       return null;
     }
+    if (patch.identityUserId != null) {
+      for (const [otherId, other] of this.students) {
+        if (otherId !== id && other.identityUserId === patch.identityUserId) {
+          const error = new Error("duplicate identity link") as Error & { code: string };
+          error.code = "23505";
+          throw error;
+        }
+      }
+    }
     const updated = { ...student, ...patch, updatedAt: now() };
     this.students.set(id, updated);
     return updated;
+  }
+
+  async findStudentByIdentityUser(identityUserId: string): Promise<PplStudentRow | null> {
+    for (const student of this.students.values()) {
+      if (student.identityUserId === identityUserId) {
+        return student;
+      }
+    }
+    return null;
   }
 
   async createTeacher(input: {

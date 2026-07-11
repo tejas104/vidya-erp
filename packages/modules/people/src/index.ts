@@ -79,6 +79,10 @@ export interface PeopleDirectory {
   sectionRoster(sectionId: string): Promise<{ studentId: string; academicYear: string }[]>;
   /** Enrollment-derived org position; `{collegeId}` for unenrolled students. */
   studentPosition(studentId: string): Promise<OrgPath | null>;
+  /** W1 portal: the student linked to this identity sign-in, if any. */
+  studentByIdentityUser(
+    identityUserId: string,
+  ): Promise<{ studentId: string; collegeId: string; fullName: string; admissionNo: string; status: string } | null>;
   /** Which of these student ids exist (batched). */
   studentsExist(studentIds: readonly string[]): Promise<Set<string>>;
   /** The department a subject belongs to, or null. */
@@ -181,6 +185,18 @@ export function createPeopleModule(deps: PeopleModuleDeps): RuntimeModule<People
         studentPosition: async (studentId) => {
           const student = await peopleRepo.getStudent(studentId);
           return student === null ? null : people.studentOrgPosition(student);
+        },
+        studentByIdentityUser: async (identityUserId) => {
+          const student = await peopleRepo.findStudentByIdentityUser(identityUserId);
+          return student === null
+            ? null
+            : {
+                studentId: student.id,
+                collegeId: student.collegeId,
+                fullName: student.fullName,
+                admissionNo: student.admissionNo,
+                status: student.status,
+              };
         },
         studentsExist: (studentIds) => peopleRepo.findExistingStudentIds(studentIds),
         subjectDepartment: async (subjectId) =>

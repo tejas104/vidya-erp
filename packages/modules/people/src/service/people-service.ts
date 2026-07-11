@@ -46,6 +46,15 @@ export class PeopleService {
     return this.deps.repo.updateStudent(id, patch);
   }
 
+  /** W1 portal: link/unlink a student to an identity sign-in (mirrors teachers). */
+  linkStudentIdentity(id: string, identityUserId: string | null): Promise<PplStudentRow | null> {
+    return this.deps.repo.updateStudent(id, { identityUserId });
+  }
+
+  getStudentByIdentityUser(identityUserId: string): Promise<PplStudentRow | null> {
+    return this.deps.repo.findStudentByIdentityUser(identityUserId);
+  }
+
   /** The student's org position: live enrollment's section path, else college. */
   async studentOrgPosition(student: PplStudentRow): Promise<OrgPath> {
     const enrollment = await this.deps.repo.latestActiveEnrollment(student.id);
