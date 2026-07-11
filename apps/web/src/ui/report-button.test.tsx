@@ -19,7 +19,7 @@ vi.mock("./api", async (importOriginal) => {
 const params: ReportParams = { kind: "student-performance", studentId: "stu-1" };
 
 function view(status: ReportView["status"]): ReportView {
-  return { id: "rpt_abc", kind: "student-performance", format: "pdf", status, rows: 3, error: null };
+  return { id: "rpt_abc", kind: "student-performance", format: "pdf", academicYear: "2026-27", status, rows: 3, error: null, createdAt: "2026-07-11T00:00:00Z" };
 }
 
 beforeEach(() => {

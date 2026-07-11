@@ -101,9 +101,11 @@ export interface ReportView {
   id: string;
   kind: string;
   format: "pdf" | "csv";
+  academicYear: string;
   status: "pending" | "running" | "completed" | "failed";
   rows: number;
   error: string | null;
+  createdAt: string;
 }
 
 export interface StudentPerformance {
@@ -194,8 +196,25 @@ export interface AssignmentView {
   id: string; teacherId: string; classId: string; subjectId: string | null;
   kind: "subject_teacher" | "class_teacher"; academicYear: string;
 }
+export interface GrantView {
+  id: string; role: Role; collegeId: string;
+  departmentId: string | null; classId: string | null; sectionId: string | null; subjectId: string | null;
+  verified: boolean; source: "manual" | "derived";
+}
+export interface GrantInput {
+  role: Role; collegeId: string;
+  departmentId?: string; classId?: string; sectionId?: string; subjectId?: string;
+}
 export interface UserView {
-  id: string; username: string; displayName: string; status: string; roles: string[];
+  id: string; username: string; displayName: string;
+  status: "active" | "disabled" | "must_reset";
+  collegeId: string; roles: Role[]; grants: GrantView[]; createdAt: string;
+}
+export interface ImportView {
+  id: string; kind: "students" | "teachers"; collegeId: string;
+  status: "pending" | "running" | "completed" | "failed";
+  dryRun: boolean; totalRows: number; okRows: number; errorRows: number;
+  errors: { row: number; message: string }[];
 }
 export type OrgUnitType = "college" | "department" | "class" | "section" | "subject";
 
@@ -339,6 +358,26 @@ export const api = {
   // identity (admin)
   listUsers: (collegeId: string) =>
     get<{ users: UserView[] }>(`/api/v1/identity/users?collegeId=${encodeURIComponent(collegeId)}&limit=200`),
+  createUser: (body: { username: string; displayName: string; collegeId: string; temporaryPassword: string; roles: Role[] }) =>
+    post<UserView>("/api/v1/identity/users", body),
+  updateUser: (userId: string, body: { displayName?: string; status?: "active" | "disabled" }) =>
+    patch<UserView>(`/api/v1/identity/users/${encodeURIComponent(userId)}`, body),
+  setUserRoles: (userId: string, roles: Role[]) =>
+    put<{ roles: Role[] }>(`/api/v1/identity/users/${encodeURIComponent(userId)}/roles`, { roles }),
+  addGrant: (userId: string, body: GrantInput) =>
+    post<GrantView>(`/api/v1/identity/users/${encodeURIComponent(userId)}/grants`, body),
+  removeGrant: (userId: string, grantId: string) =>
+    del<{ ok: true }>(`/api/v1/identity/users/${encodeURIComponent(userId)}/grants/${encodeURIComponent(grantId)}`),
+  verifyGrants: () =>
+    post<{ verified: number; unresolved: { grantId: string; reason: string }[] }>("/api/v1/identity/grants/verify", {}),
+  passwordResetInit: (userId: string) =>
+    post<{ token: string; expiresAt: string }>(`/api/v1/identity/users/${encodeURIComponent(userId)}/password-reset`, {}),
+  // people — imports
+  createImport: (body: { kind: "students" | "teachers"; collegeId: string; academicYear?: string; dryRun: boolean; csv: string }) =>
+    post<{ importId: string }>("/api/v1/people/imports", body),
+  getImport: (importId: string) => get<ImportView>(`/api/v1/people/imports/${encodeURIComponent(importId)}`),
+  // reporting
+  listReports: (limit = 25) => get<{ reports: ReportView[] }>(`/api/v1/reports?limit=${limit}`),
   async login(username: string, password: string): Promise<void> {
     const response = await fetch("/api/v1/identity/auth/login", {
       method: "POST",

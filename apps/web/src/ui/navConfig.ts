@@ -24,6 +24,9 @@ export const NAV: NavEntry[] = [
   { href: "/manage/org", label: "Organisation", icon: "org", group: "Administration", roles: ["admin"] },
   { href: "/manage/students", label: "Students", icon: "students", group: "Administration", roles: ["admin"] },
   { href: "/manage/teachers", label: "Teachers", icon: "teachers", group: "Administration", roles: ["admin"] },
+  { href: "/manage/users", label: "Users", icon: "key", group: "Administration", roles: ["admin"] },
+  { href: "/manage/import", label: "Import", icon: "upload", group: "Administration", roles: ["admin"] },
+  { href: "/manage/reports", label: "Reports", icon: "file", group: "Reports", roles: ALL },
 ];
 
 export function visibleNav(roles: Role[]): { group: string; entries: NavEntry[] }[] {

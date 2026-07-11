@@ -26,6 +26,22 @@ describe("people api methods", () => {
     expect(url).toBe("/api/v1/people/org/section/sec_9");
     expect(init.method).toBe("DELETE");
   });
+  it("createUser POSTs the identity body", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(okJson({ id: "u_9", username: "pw.user", displayName: "PW", status: "must_reset", collegeId: "col_1", roles: ["hod"], grants: [], createdAt: "2026-07-11" }, 201));
+    vi.stubGlobal("fetch", fetchMock);
+    await api.createUser({ username: "pw.user", displayName: "PW", collegeId: "col_1", temporaryPassword: "temp-pass-123", roles: ["hod"] });
+    const [url, init] = fetchMock.mock.calls[0]!;
+    expect(url).toBe("/api/v1/identity/users");
+    expect(JSON.parse(init.body)).toEqual({ username: "pw.user", displayName: "PW", collegeId: "col_1", temporaryPassword: "temp-pass-123", roles: ["hod"] });
+  });
+  it("createImport POSTs kind+csv+dryRun", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(okJson({ importId: "imp_1" }, 202));
+    vi.stubGlobal("fetch", fetchMock);
+    await api.createImport({ kind: "students", collegeId: "col_1", dryRun: true, csv: "admission_no,full_name\nX-1,A B" });
+    const [url, init] = fetchMock.mock.calls[0]!;
+    expect(url).toBe("/api/v1/people/imports");
+    expect(JSON.parse(init.body)).toMatchObject({ kind: "students", dryRun: true });
+  });
   it("createTeacherAssignment posts kind+year to the teacher path", async () => {
     const fetchMock = vi.fn().mockResolvedValue(okJson({ id: "asg_1", teacherId: "tch_1", classId: "cls_1", subjectId: null, kind: "class_teacher", academicYear: "2026-27" }, 201));
     vi.stubGlobal("fetch", fetchMock);

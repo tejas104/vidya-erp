@@ -42,6 +42,13 @@ describe("Sidebar (role-gated)", () => {
     expect(screen.getByRole("link", { name: /organisation/i })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /students/i })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /teachers/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /users/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /import/i })).toBeInTheDocument();
+  });
+  it("every role sees Reports", () => {
+    render(<Sidebar roles={["teacher"]} open={false} onClose={() => {}} />);
+    expect(screen.getByRole("link", { name: /reports/i })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /users/i })).not.toBeInTheDocument();
   });
 });
 
