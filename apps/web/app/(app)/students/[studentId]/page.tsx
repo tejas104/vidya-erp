@@ -9,7 +9,6 @@ import {
 } from "@/ui/api";
 import { Sparkline, StatTile, SubjectBars } from "@/ui/charts";
 import { ReportButton } from "@/ui/ReportButton";
-import { currentAcademicYear as ay } from "@/ui/api";
 
 export const dynamic = "force-dynamic";
 
@@ -67,12 +66,12 @@ export default function StudentPage({ params }: { params: Promise<{ studentId: s
           </div>
         ) : null}
 
-      {load.state === "ok" ? <StudentBody data={load.data} /> : null}
+      {load.state === "ok" ? <StudentBody data={load.data} year={year} /> : null}
     </>
   );
 }
 
-function StudentBody({ data }: { data: StudentPerformance }) {
+function StudentBody({ data, year }: { data: StudentPerformance; year: string }) {
   return (
     <>
       <p className="eyebrow" style={{ marginTop: 18 }}>
@@ -86,13 +85,13 @@ function StudentBody({ data }: { data: StudentPerformance }) {
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 24 }}>
         <ReportButton
           params={{ kind: "student-performance", studentId: data.studentId }}
-          year={ay()}
+          year={year}
           format="pdf"
           label="Download report (PDF)"
         />
         <ReportButton
           params={{ kind: "student-performance", studentId: data.studentId }}
-          year={ay()}
+          year={year}
           format="csv"
           label="Export (CSV)"
         />
