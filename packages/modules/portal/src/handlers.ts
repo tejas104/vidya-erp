@@ -1,10 +1,18 @@
 import type { Principal, RouteHandler } from "@vidya/platform";
 import type { AcademicsReadModel } from "@vidya/module-academics";
 import type { PeopleDirectory } from "@vidya/module-people";
+import type { TimetableReadModel } from "@vidya/module-timetable";
 
 export interface PortalHandlerDeps {
   readonly directory: PeopleDirectory;
   readonly academicsRead: AcademicsReadModel;
+  readonly timetableRead: TimetableReadModel;
+}
+
+/** JS getDay() → Mon=1..Sat=6 (Sunday → 0 = no periods today). */
+function collegeDayOfWeek(date = new Date()): number {
+  const jsDay = date.getDay();
+  return jsDay === 0 ? 0 : jsDay;
 }
 
 function notLinked() {
@@ -131,9 +139,46 @@ export function createPortalHandlers(deps: PortalHandlerDeps): Record<string, Ro
     return { status: 200, body: { subjects, overallPct } };
   };
 
+  /** The student's live section (via link + enrollment position), or null. */
+  async function ownSection(principal: Principal): Promise<{ sectionId: string; collegeId: string } | null> {
+    const student = await linkedStudent(principal);
+    if (student === null) return null;
+    const position = await deps.directory.studentPosition(student.studentId);
+    if (position?.sectionId === undefined) return { sectionId: "", collegeId: student.collegeId };
+    return { sectionId: position.sectionId, collegeId: student.collegeId };
+  }
+
+  const myTimetable: RouteHandler = async (ctx) => {
+    const own = await ownSection(ctx.principal as Principal);
+    if (own === null) {
+      return notLinked();
+    }
+    const query = ctx.request.query as { academicYear: string };
+    const periods = await deps.timetableRead.periods(own.collegeId);
+    const entries = own.sectionId === "" ? [] : await deps.timetableRead.sectionGrid(own.sectionId, query.academicYear);
+    return { status: 200, body: { periods, entries } };
+  };
+
+  const myToday: RouteHandler = async (ctx) => {
+    const own = await ownSection(ctx.principal as Principal);
+    if (own === null) {
+      return notLinked();
+    }
+    const query = ctx.request.query as { academicYear: string };
+    const day = collegeDayOfWeek();
+    const periods = await deps.timetableRead.periods(own.collegeId);
+    const entries =
+      day === 0 || own.sectionId === ""
+        ? []
+        : await deps.timetableRead.sectionDay(own.sectionId, query.academicYear, day);
+    return { status: 200, body: { dayOfWeek: day, periods, entries } };
+  };
+
   return {
     "portal.me": me,
     "portal.my-attendance": myAttendance,
     "portal.my-marks": myMarks,
+    "portal.my-timetable": myTimetable,
+    "portal.my-today": myToday,
   };
 }

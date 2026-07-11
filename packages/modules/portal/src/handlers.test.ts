@@ -60,7 +60,15 @@ function makeDeps(opts: { linked: boolean }) {
     ],
   } as unknown as AcademicsReadModel;
 
-  return { directory, academicsRead };
+  const timetableRead = {
+    periods: async () => [{ periodNo: 1, starts: "09:00", ends: "09:50" }],
+    sectionGrid: async () => [
+      { id: "tte_1", sectionId: "sec_1", subjectId: "sub_ds", subjectName: "Data Structures", teacherId: "tch_1", teacherName: "Anita Desai", room: "204", dayOfWeek: 1, periodNo: 1 },
+    ],
+    sectionDay: async () => [],
+  };
+
+  return { directory, academicsRead, timetableRead };
 }
 
 describe("portal handlers (self-scoped via the identity link)", () => {

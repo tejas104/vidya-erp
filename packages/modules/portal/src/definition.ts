@@ -73,6 +73,16 @@ const marksSchema = z.object({
 
 const yearQuery = z.object({ academicYear: academicYearSchema });
 
+const timetableEntrySchema = z.object({
+  id: z.string(),
+  subjectName: z.string(),
+  teacherName: z.string(),
+  room: z.string(),
+  dayOfWeek: z.number(),
+  periodNo: z.number(),
+});
+const periodSchema = z.object({ periodNo: z.number(), starts: z.string(), ends: z.string() });
+
 const routes: RouteSpec[] = [
   {
     id: "portal.me",
@@ -98,6 +108,44 @@ const routes: RouteSpec[] = [
     request: { query: yearQuery },
     responses: {
       200: { description: "Own attendance", schema: attendanceSchema },
+      404: { description: "This sign-in is not linked to a student record", schema: problemSchema },
+    },
+  },
+  {
+    id: "portal.my-timetable",
+    module: MODULE_NAME,
+    method: "GET",
+    path: "/api/v1/portal/timetable",
+    summary: "The signed-in student's weekly timetable (self-scoped)",
+    tags: ["portal"],
+    auth: STUDENT_ONLY,
+    request: { query: yearQuery },
+    responses: {
+      200: {
+        description: "Weekly grid + period template",
+        schema: z.object({ periods: z.array(periodSchema), entries: z.array(timetableEntrySchema) }),
+      },
+      404: { description: "This sign-in is not linked to a student record", schema: problemSchema },
+    },
+  },
+  {
+    id: "portal.my-today",
+    module: MODULE_NAME,
+    method: "GET",
+    path: "/api/v1/portal/today",
+    summary: "The signed-in student's periods for today (self-scoped)",
+    tags: ["portal"],
+    auth: STUDENT_ONLY,
+    request: { query: yearQuery },
+    responses: {
+      200: {
+        description: "Today's ordered periods (empty on Sundays or when unenrolled)",
+        schema: z.object({
+          dayOfWeek: z.number(),
+          periods: z.array(periodSchema),
+          entries: z.array(timetableEntrySchema),
+        }),
+      },
       404: { description: "This sign-in is not linked to a student record", schema: problemSchema },
     },
   },

@@ -14,6 +14,7 @@
   "dependencies": {
     "@vidya/module-academics": "workspace:*",
     "@vidya/module-people": "workspace:*",
+    "@vidya/module-timetable": "workspace:*",
     "@vidya/platform": "workspace:*",
     "zod": "^3.25.0"
   },

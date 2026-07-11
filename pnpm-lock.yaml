@@ -50,6 +50,9 @@ importers:
       '@vidya/module-system':
         specifier: workspace:*
         version: link:packages/modules/system
+      '@vidya/module-timetable':
+        specifier: workspace:*
+        version: link:packages/modules/timetable
       '@vidya/platform':
         specifier: workspace:*
         version: link:packages/platform
@@ -116,6 +119,9 @@ importers:
       '@vidya/module-system':
         specifier: workspace:*
         version: link:../../packages/modules/system
+      '@vidya/module-timetable':
+        specifier: workspace:*
+        version: link:../../packages/modules/timetable
       '@vidya/platform':
         specifier: workspace:*
         version: link:../../packages/platform
@@ -165,6 +171,9 @@ importers:
       '@vidya/module-system':
         specifier: workspace:*
         version: link:../../packages/modules/system
+      '@vidya/module-timetable':
+        specifier: workspace:*
+        version: link:../../packages/modules/timetable
       '@vidya/platform':
         specifier: workspace:*
         version: link:../../packages/platform
@@ -323,6 +332,9 @@ importers:
       '@vidya/module-people':
         specifier: workspace:*
         version: link:../people
+      '@vidya/module-timetable':
+        specifier: workspace:*
+        version: link:../timetable
       '@vidya/platform':
         specifier: workspace:*
         version: link:../../platform

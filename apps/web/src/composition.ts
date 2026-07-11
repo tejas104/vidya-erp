@@ -34,6 +34,7 @@ import {
   createReportingModule,
 } from "@vidya/module-reporting";
 import { createPortalModule } from "@vidya/module-portal";
+import { createTimetableModule } from "@vidya/module-timetable";
 
 /**
  * COMPOSITION ROOT — web process.
@@ -194,11 +195,20 @@ function buildWebRuntime(): WebRuntime {
     },
   });
 
+  // --- timetable ---
+  const timetable = createTimetableModule({
+    db,
+    audit: system.service.audit,
+    scopeChecker: identityCore.scopeChecker,
+    peopleDirectory: people.service.directory,
+  });
+
   // Portal (W1): no tables, no jobs — self-scoped student views composed
-  // from people + academics public reads.
+  // from people + academics public reads (+ timetable read model).
   const portal = createPortalModule({
     peopleDirectory: people.service.directory,
     academicsRead: academics.service.readModel,
+    timetableRead: timetable.service.readModel,
   });
 
   const modules: RuntimeModule<unknown>[] = [
@@ -208,6 +218,7 @@ function buildWebRuntime(): WebRuntime {
     academics,
     analytics,
     reporting,
+    timetable,
     portal,
   ];
 

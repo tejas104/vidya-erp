@@ -12,6 +12,7 @@
 import { assertModuleWiring, type RuntimeModule } from "@vidya/platform";
 import type { AcademicsReadModel } from "@vidya/module-academics";
 import type { PeopleDirectory } from "@vidya/module-people";
+import type { TimetableReadModel } from "@vidya/module-timetable";
 import { portalModuleDefinition } from "./definition";
 import { createPortalHandlers } from "./handlers";
 
@@ -20,6 +21,7 @@ export { MODULE_NAME as PORTAL_MODULE_NAME, portalModuleDefinition } from "./def
 export interface PortalModuleDeps {
   readonly peopleDirectory: PeopleDirectory;
   readonly academicsRead: AcademicsReadModel;
+  readonly timetableRead: TimetableReadModel;
 }
 
 export function createPortalModule(deps: PortalModuleDeps): RuntimeModule<Record<string, never>> {
@@ -28,6 +30,7 @@ export function createPortalModule(deps: PortalModuleDeps): RuntimeModule<Record
     handlers: createPortalHandlers({
       directory: deps.peopleDirectory,
       academicsRead: deps.academicsRead,
+      timetableRead: deps.timetableRead,
     }),
     jobProcessors: {},
     readinessChecks: [],

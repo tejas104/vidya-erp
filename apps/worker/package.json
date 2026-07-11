@@ -16,6 +16,7 @@
     "@vidya/module-people": "workspace:*",
     "@vidya/module-reporting": "workspace:*",
     "@vidya/module-portal": "workspace:*",
+    "@vidya/module-timetable": "workspace:*",
     "@vidya/module-system": "workspace:*",
     "@vidya/platform": "workspace:*",
     "tsx": "^4.20.0"
