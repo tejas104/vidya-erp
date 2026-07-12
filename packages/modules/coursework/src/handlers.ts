@@ -309,8 +309,8 @@ export function createCourseworkHandlers(deps: CourseworkHandlerDeps): Record<st
     return {
       status: 200,
       body: bytes,
+      contentType: row.contentType,
       headers: {
-        "content-type": row.contentType,
         "content-disposition": `attachment; filename="${row.title.replace(/[^\w. -]/g, "_")}"`,
         "cache-control": "no-store",
       },
