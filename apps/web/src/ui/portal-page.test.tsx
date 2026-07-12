@@ -7,7 +7,7 @@ vi.mock("./api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./api")>();
   return {
     ...actual,
-    api: { ...actual.api, portalMe: vi.fn(), portalAttendance: vi.fn(), portalMarks: vi.fn(), portalTimetable: vi.fn(), portalToday: vi.fn() },
+    api: { ...actual.api, portalMe: vi.fn(), portalAttendance: vi.fn(), portalMarks: vi.fn(), portalTimetable: vi.fn(), portalToday: vi.fn(), cwkMyAssignments: vi.fn(), cwkMyMaterials: vi.fn() },
   };
 });
 
@@ -32,6 +32,8 @@ beforeEach(() => {
     periods: [{ periodNo: 1, starts: "09:00", ends: "09:50" }],
     entries: [{ id: "tte_1", sectionId: "sec_1", subjectId: "sub_1", subjectName: "Data Structures", teacherId: "tch_1", teacherName: "Anita Desai", room: "204", dayOfWeek: 1, periodNo: 1 }],
   });
+  (api.cwkMyAssignments as ReturnType<typeof vi.fn>).mockResolvedValue({ assignments: [] });
+  (api.cwkMyMaterials as ReturnType<typeof vi.fn>).mockResolvedValue({ materials: [] });
   (api.portalMarks as ReturnType<typeof vi.fn>).mockResolvedValue({
     subjects: [
       {

@@ -4,12 +4,18 @@ import {
   api,
   ApiError,
   currentAcademicYear,
+  type CwkAssignment,
+  type CwkMaterial,
   type PortalAttendance,
   type PortalMarks,
   type PortalMe,
   type TtEntry,
   type TtPeriod,
 } from "@/ui/api";
+import { useToast } from "@/ui/Toast";
+import { Button } from "@/ui/Button";
+import { Field } from "@/ui/Field";
+import { Modal } from "@/ui/Modal";
 import { PageHeader } from "@/ui/PageHeader";
 import { Card } from "@/ui/Card";
 import { Badge } from "@/ui/Badge";
@@ -31,6 +37,8 @@ type Load =
       marks: PortalMarks;
       timetable: { periods: TtPeriod[]; entries: TtEntry[] };
       today: { dayOfWeek: number; periods: TtPeriod[]; entries: TtEntry[] };
+      assignments: CwkAssignment[];
+      materials: CwkMaterial[];
     };
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -43,21 +51,54 @@ const STATUS_TONE: Record<string, "good" | "warn" | "danger"> = {
 };
 
 export default function PortalPage() {
+  const toast = useToast();
   const year = useMemo(() => currentAcademicYear(), []);
   const [load, setLoad] = useState<Load>({ state: "loading" });
+  const [reloadTick, setReloadTick] = useState(0);
+  const [submitFor, setSubmitFor] = useState<CwkAssignment | null>(null);
+  const [submitText, setSubmitText] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  async function submitWork() {
+    if (!submitFor) return;
+    setSubmitting(true);
+    try {
+      await api.cwkSubmit(submitFor.id, { body: submitText });
+      toast.show(`Submitted "${submitFor.title}".`, "good");
+      setSubmitFor(null);
+      setSubmitText("");
+      setReloadTick((t) => t + 1);
+    } catch (caught) {
+      toast.show(caught instanceof ApiError ? caught.message : "Couldn't submit.", "danger");
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   useEffect(() => {
     let alive = true;
     (async () => {
       try {
         const me = await api.portalMe();
-        const [attendance, marks, timetable, today] = await Promise.all([
+        const [attendance, marks, timetable, today, cwkA, cwkM] = await Promise.all([
           api.portalAttendance(year),
           api.portalMarks(year),
           api.portalTimetable(year).catch(() => ({ periods: [], entries: [] })),
           api.portalToday(year).catch(() => ({ dayOfWeek: 0, periods: [], entries: [] })),
+          api.cwkMyAssignments(year).catch(() => ({ assignments: [] as CwkAssignment[] })),
+          api.cwkMyMaterials(year).catch(() => ({ materials: [] as CwkMaterial[] })),
         ]);
-        if (alive) setLoad({ state: "ok", me, attendance, marks, timetable, today });
+        if (alive)
+          setLoad({
+            state: "ok",
+            me,
+            attendance,
+            marks,
+            timetable,
+            today,
+            assignments: cwkA.assignments,
+            materials: cwkM.materials,
+          });
       } catch (caught) {
         if (!alive) return;
         if (caught instanceof ApiError && caught.status === 404) setLoad({ state: "unlinked" });
@@ -67,7 +108,7 @@ export default function PortalPage() {
     return () => {
       alive = false;
     };
-  }, [year]);
+  }, [year, reloadTick]);
 
   if (load.state === "loading") return <Skeleton lines={5} />;
   if (load.state === "unlinked") {
@@ -80,7 +121,7 @@ export default function PortalPage() {
   }
   if (load.state === "error") return <EmptyState title="Couldn't load your register." message="Try again shortly." />;
 
-  const { me, attendance, marks, timetable, today } = load;
+  const { me, attendance, marks, timetable, today, assignments, materials } = load;
   const gridCell = (day: number, periodNo: number) =>
     timetable.entries.find((entry) => entry.dayOfWeek === day && entry.periodNo === periodNo);
   const sessionColumns: Column<PortalAttendance["sessions"][number]>[] = [
@@ -181,6 +222,82 @@ export default function PortalPage() {
           </div>
         </section>
       ) : null}
+
+      <section className="section" aria-label="My assignments">
+        <div className="section-head">
+          <h2>Assignments</h2>
+          <span className="stat-sub num">{assignments.length}</span>
+        </div>
+        {assignments.length === 0 ? (
+          <EmptyState title="No assignments yet." message="Work your teachers assign appears here." />
+        ) : (
+          <Card>
+            {assignments.map((assignment) => (
+              <div key={assignment.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "9px 0", borderTop: "1px solid var(--rule)" }}>
+                <span>
+                  <strong>{assignment.title}</strong>{" "}
+                  <span style={{ opacity: 0.65, fontSize: 13 }}>{assignment.subjectName} · due <span className="num">{assignment.dueOn}</span></span>
+                </span>
+                <span style={{ display: "inline-flex", gap: 8, alignItems: "center" }}>
+                  {assignment.mySubmission ? (
+                    assignment.mySubmission.score !== null ? (
+                      <Badge tone="good">scored {assignment.mySubmission.score}{assignment.maxScore !== null ? `/${assignment.maxScore}` : ""}</Badge>
+                    ) : (
+                      <>
+                        <Badge>submitted</Badge>
+                        <Button variant="ghost" onClick={() => { setSubmitText(""); setSubmitFor(assignment); }}>Resubmit</Button>
+                      </>
+                    )
+                  ) : (
+                    <>
+                      <Badge tone="warn">pending</Badge>
+                      <Button variant="ghost" onClick={() => { setSubmitText(""); setSubmitFor(assignment); }}>Submit</Button>
+                    </>
+                  )}
+                </span>
+              </div>
+            ))}
+          </Card>
+        )}
+      </section>
+
+      {materials.length > 0 ? (
+        <section className="section" aria-label="Study material">
+          <div className="section-head"><h2>Study material</h2></div>
+          <Card>
+            {materials.map((material) => (
+              <div key={material.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "8px 0", borderTop: "1px solid var(--rule)", fontSize: 14 }}>
+                <span>
+                  <strong>{material.title}</strong>{" "}
+                  <span style={{ opacity: 0.65, fontSize: 13 }}>{material.subjectName} · {(material.sizeBytes / 1024).toFixed(1)} KB</span>
+                </span>
+                <a className="btn ghost" href={api.cwkMaterialUrl(material.id)} download>Download</a>
+              </div>
+            ))}
+          </Card>
+        </section>
+      ) : null}
+
+      <Modal
+        open={submitFor !== null}
+        onClose={() => setSubmitFor(null)}
+        title={`Submit — ${submitFor?.title ?? ""}`}
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setSubmitFor(null)}>Cancel</Button>
+            <Button onClick={() => void submitWork()} loading={submitting} disabled={submitText.trim() === ""}>
+              Submit work
+            </Button>
+          </>
+        }
+      >
+        {submitFor?.instructions ? (
+          <p style={{ marginTop: 0, fontSize: 13.5, whiteSpace: "pre-wrap", opacity: 0.8 }}>{submitFor.instructions}</p>
+        ) : null}
+        <Field label="Your answer" htmlFor="cwk-answer">
+          <textarea id="cwk-answer" rows={6} value={submitText} onChange={(event) => setSubmitText(event.target.value)} />
+        </Field>
+      </Modal>
 
       {attendance.monthly.length > 0 ? (
         <section className="section" aria-label="Attendance trend">

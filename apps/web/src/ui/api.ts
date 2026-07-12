@@ -252,6 +252,41 @@ export interface TtToday {
   entries: (TtEntry & { sectionName: string; className: string })[];
 }
 
+// --- coursework ---
+export interface CwkAssignment {
+  id: string;
+  classId: string;
+  subjectId: string;
+  subjectName: string;
+  title: string;
+  instructions: string;
+  dueOn: string;
+  maxScore: number | null;
+  academicYear: string;
+  submissions?: number;
+  mySubmission?: { submittedAt: string; score: number | null; feedback: string | null } | null;
+}
+export interface CwkSubmission {
+  id: string;
+  studentId: string;
+  studentName: string;
+  body: string;
+  hasFile: boolean;
+  submittedAt: string;
+  score: number | null;
+  feedback: string | null;
+}
+export interface CwkMaterial {
+  id: string;
+  classId: string;
+  subjectId: string;
+  subjectName: string;
+  title: string;
+  contentType: string;
+  sizeBytes: number;
+  createdAt: string;
+}
+
 export interface PortalMarks {
   subjects: {
     subjectId: string;
@@ -451,6 +486,31 @@ export const api = {
       `/api/v1/timetable/sections/${encodeURIComponent(sectionId)}/grid?academicYear=${year}`,
     ),
   ttMyToday: (year: string) => get<TtToday>(`/api/v1/timetable/my/today?academicYear=${year}`),
+  // --- coursework ---
+  cwkCreateAssignment: (body: {
+    classId: string; subjectId: string; title: string; instructions?: string;
+    dueOn: string; maxScore?: number; academicYear: string;
+  }) => post<CwkAssignment>("/api/v1/coursework/assignments", body),
+  cwkClassAssignments: (classId: string, year: string) =>
+    get<{ assignments: CwkAssignment[] }>(`/api/v1/coursework/classes/${encodeURIComponent(classId)}/assignments?academicYear=${year}`),
+  cwkDeleteAssignment: (assignmentId: string) =>
+    del<{ ok: true }>(`/api/v1/coursework/assignments/${encodeURIComponent(assignmentId)}`),
+  cwkSubmissions: (assignmentId: string) =>
+    get<{ submissions: CwkSubmission[] }>(`/api/v1/coursework/assignments/${encodeURIComponent(assignmentId)}/submissions`),
+  cwkEvaluate: (submissionId: string, body: { score: number; feedback?: string }) =>
+    post<CwkSubmission>(`/api/v1/coursework/submissions/${encodeURIComponent(submissionId)}/evaluate`, body),
+  cwkUploadMaterial: (body: {
+    classId: string; subjectId: string; title: string; contentType: string; dataBase64: string; academicYear: string;
+  }) => post<CwkMaterial>("/api/v1/coursework/materials", body),
+  cwkClassMaterials: (classId: string, year: string) =>
+    get<{ materials: CwkMaterial[] }>(`/api/v1/coursework/classes/${encodeURIComponent(classId)}/materials?academicYear=${year}`),
+  cwkMaterialUrl: (materialId: string) => `/api/v1/coursework/materials/${encodeURIComponent(materialId)}/download`,
+  cwkMyAssignments: (year: string) =>
+    get<{ assignments: CwkAssignment[] }>(`/api/v1/coursework/my/assignments?academicYear=${year}`),
+  cwkSubmit: (assignmentId: string, body: { body: string; contentType?: string; dataBase64?: string }) =>
+    post<{ ok: true; submittedAt: string }>(`/api/v1/coursework/my/assignments/${encodeURIComponent(assignmentId)}/submission`, body),
+  cwkMyMaterials: (year: string) =>
+    get<{ materials: CwkMaterial[] }>(`/api/v1/coursework/my/materials?academicYear=${year}`),
   async login(username: string, password: string): Promise<void> {
     const response = await fetch("/api/v1/identity/auth/login", {
       method: "POST",
