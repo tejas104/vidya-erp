@@ -98,11 +98,12 @@ export default function TimetablePage() {
   const section = tree ? sectionOptions(tree).find((option) => option.sectionId === sectionId) : undefined;
 
   // teacher picker = teachers assigned to the section's class
+  const sectionClassId = section?.classId;
   useEffect(() => {
     (async () => {
-      if (!section) return;
+      if (sectionClassId === undefined) return;
       try {
-        const { assignments } = await api.classTeacherAssignments(section.classId);
+        const { assignments } = await api.classTeacherAssignments(sectionClassId);
         const ids = [...new Set(assignments.map((a) => a.teacherId))];
         const resolved = await Promise.all(
           ids.map(async (id) => {
@@ -119,7 +120,7 @@ export default function TimetablePage() {
         setTeachers([]);
       }
     })();
-  }, [section]);
+  }, [sectionClassId]);
 
   async function savePeriods() {
     if (!tree) return;
