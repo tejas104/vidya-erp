@@ -229,6 +229,29 @@ export interface PortalAttendance {
   monthly: { month: string; pct: number }[];
   sessions: { heldOn: string; status: AttendanceStatus }[];
 }
+// --- timetable ---
+export interface TtPeriod {
+  periodNo: number;
+  starts: string;
+  ends: string;
+}
+export interface TtEntry {
+  id: string;
+  sectionId: string;
+  subjectId: string;
+  subjectName: string;
+  teacherId: string;
+  teacherName: string;
+  room: string;
+  dayOfWeek: number;
+  periodNo: number;
+}
+export interface TtToday {
+  dayOfWeek: number;
+  periods: TtPeriod[];
+  entries: (TtEntry & { sectionName: string; className: string })[];
+}
+
 export interface PortalMarks {
   subjects: {
     subjectId: string;
@@ -409,6 +432,25 @@ export const api = {
   portalMe: () => get<PortalMe>("/api/v1/portal/me"),
   portalAttendance: (year: string) => get<PortalAttendance>(`/api/v1/portal/attendance?academicYear=${year}`),
   portalMarks: (year: string) => get<PortalMarks>(`/api/v1/portal/marks?academicYear=${year}`),
+  portalTimetable: (year: string) =>
+    get<{ periods: TtPeriod[]; entries: TtEntry[] }>(`/api/v1/portal/timetable?academicYear=${year}`),
+  portalToday: (year: string) =>
+    get<{ dayOfWeek: number; periods: TtPeriod[]; entries: TtEntry[] }>(`/api/v1/portal/today?academicYear=${year}`),
+  // --- timetable ---
+  ttPeriodsGet: (collegeId: string) =>
+    get<{ periods: TtPeriod[] }>(`/api/v1/timetable/colleges/${encodeURIComponent(collegeId)}/periods`),
+  ttPeriodsSet: (collegeId: string, periods: TtPeriod[]) =>
+    put<{ ok: true }>(`/api/v1/timetable/colleges/${encodeURIComponent(collegeId)}/periods`, { periods }),
+  ttEntryCreate: (body: {
+    sectionId: string; subjectId: string; teacherId: string; room?: string;
+    dayOfWeek: number; periodNo: number; academicYear: string;
+  }) => post<TtEntry>("/api/v1/timetable/entries", body),
+  ttEntryDelete: (entryId: string) => del<{ ok: true }>(`/api/v1/timetable/entries/${encodeURIComponent(entryId)}`),
+  ttSectionGrid: (sectionId: string, year: string) =>
+    get<{ periods: TtPeriod[]; entries: TtEntry[] }>(
+      `/api/v1/timetable/sections/${encodeURIComponent(sectionId)}/grid?academicYear=${year}`,
+    ),
+  ttMyToday: (year: string) => get<TtToday>(`/api/v1/timetable/my/today?academicYear=${year}`),
   async login(username: string, password: string): Promise<void> {
     const response = await fetch("/api/v1/identity/auth/login", {
       method: "POST",

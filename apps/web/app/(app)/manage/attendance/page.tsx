@@ -32,7 +32,13 @@ export default function AttendancePage() {
         }
       }
       setSections(opts);
-      if (opts[0]) setSectionId(opts[0].sectionId);
+      // --- timetable hand-off: ?sectionId=...&date=... preselects ---
+      const params = new URLSearchParams(window.location.search);
+      const wanted = params.get("sectionId");
+      const wantedDate = params.get("date");
+      if (wanted !== null && opts.some((o) => o.sectionId === wanted)) setSectionId(wanted);
+      else if (opts[0]) setSectionId(opts[0].sectionId);
+      if (wantedDate !== null && /^\d{4}-\d{2}-\d{2}$/.test(wantedDate)) setHeldOn(wantedDate);
     }).catch(() => setSections([]));
   }, [year]);
 

@@ -7,7 +7,7 @@ vi.mock("./api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./api")>();
   return {
     ...actual,
-    api: { ...actual.api, portalMe: vi.fn(), portalAttendance: vi.fn(), portalMarks: vi.fn() },
+    api: { ...actual.api, portalMe: vi.fn(), portalAttendance: vi.fn(), portalMarks: vi.fn(), portalTimetable: vi.fn(), portalToday: vi.fn() },
   };
 });
 
@@ -22,6 +22,15 @@ beforeEach(() => {
     pct: 80,
     monthly: [{ month: "2026-06", pct: 75 }, { month: "2026-07", pct: 90 }],
     sessions: [{ heldOn: "2026-07-10", status: "present" }],
+  });
+  (api.portalTimetable as ReturnType<typeof vi.fn>).mockResolvedValue({
+    periods: [{ periodNo: 1, starts: "09:00", ends: "09:50" }],
+    entries: [{ id: "tte_1", sectionId: "sec_1", subjectId: "sub_1", subjectName: "Data Structures", teacherId: "tch_1", teacherName: "Anita Desai", room: "204", dayOfWeek: 1, periodNo: 1 }],
+  });
+  (api.portalToday as ReturnType<typeof vi.fn>).mockResolvedValue({
+    dayOfWeek: 1,
+    periods: [{ periodNo: 1, starts: "09:00", ends: "09:50" }],
+    entries: [{ id: "tte_1", sectionId: "sec_1", subjectId: "sub_1", subjectName: "Data Structures", teacherId: "tch_1", teacherName: "Anita Desai", room: "204", dayOfWeek: 1, periodNo: 1 }],
   });
   (api.portalMarks as ReturnType<typeof vi.fn>).mockResolvedValue({
     subjects: [

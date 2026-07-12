@@ -12,6 +12,7 @@ import {
   type NodeRollup,
   type Session,
   type Tile,
+  type TtToday,
 } from "@/ui/api";
 import { PageHeader } from "@/ui/PageHeader";
 import {
@@ -76,6 +77,7 @@ export default function DashboardPage() {
   const [dashboard, setDashboard] = useState<Dashboard | null>(null);
   const [atRisk, setAtRisk] = useState<AtRiskEntry[]>([]);
   const [focus, setFocus] = useState<Focus | null>(null);
+  const [today, setToday] = useState<TtToday | null>(null);
   const [rollup, setRollup] = useState<NodeRollup | null>(null);
   const [compare, setCompare] = useState<ComparisonReport | null>(null);
   const [distribution, setDistribution] = useState<DistributionResponse | null>(null);
@@ -93,6 +95,12 @@ export default function DashboardPage() {
           return;
         }
         setSession(me);
+        // --- timetable: the teaching roles get a Today card ---
+        if (me.roles.includes("teacher") || me.roles.includes("class_teacher")) {
+          api.ttMyToday(year).then((t) => {
+            if (alive) setToday(t);
+          }).catch(() => undefined);
+        }
         const dash = await api.dashboard(year);
         if (!alive) return;
         setDashboard(dash);
@@ -176,6 +184,44 @@ export default function DashboardPage() {
           </div>
         ) : (
           <>
+            {/* TODAY (teaching roles, from the timetable) */}
+            {today !== null ? (
+              <section className="section" aria-label="Today's schedule" style={{ marginTop: 0 }}>
+                <div className="section-head">
+                  <h2>Today</h2>
+                  <span className="stat-sub num">{today.entries.length} period{today.entries.length === 1 ? "" : "s"}</span>
+                </div>
+                <div className="card">
+                  {today.dayOfWeek === 0 || today.entries.length === 0 ? (
+                    <p className="strip-empty">No classes scheduled today.</p>
+                  ) : (
+                    today.entries.map((entry) => {
+                      const period = today.periods.find((p) => p.periodNo === entry.periodNo);
+                      return (
+                        <div key={entry.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap", padding: "9px 0", borderTop: "1px solid var(--rule)" }}>
+                          <span>
+                            <span className="num" style={{ marginRight: 10 }}>
+                              P{entry.periodNo}{period ? ` · ${period.starts}–${period.ends}` : ""}
+                            </span>
+                            <strong>{entry.subjectName}</strong>{" "}
+                            <span style={{ opacity: 0.7 }}>
+                              {entry.className} · Sec {entry.sectionName}
+                              {entry.room !== "" ? ` · ${entry.room}` : ""}
+                            </span>
+                          </span>
+                          {session.roles.includes("class_teacher") ? (
+                            <a className="btn ghost" href={`/manage/attendance?sectionId=${encodeURIComponent(entry.sectionId)}`}>
+                              Open · mark attendance
+                            </a>
+                          ) : null}
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </section>
+            ) : null}
+
             {/* KPI ROW */}
             <section className="stats" aria-label="Key figures" style={{ marginBottom: 24 }}>
               {kpiAttendance ? <AttendanceSlot slot={kpiAttendance} /> : null}

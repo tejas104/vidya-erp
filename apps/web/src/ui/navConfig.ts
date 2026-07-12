@@ -22,6 +22,8 @@ export const NAV: NavEntry[] = [
   { href: "/portal", label: "My register", icon: "students", group: "My studies", roles: ["student"] },
   { href: "/manage/attendance", label: "Attendance", icon: "attendance", group: "Teaching", roles: ["class_teacher", "admin"] },
   { href: "/manage/marks", label: "Marks", icon: "marks", group: "Teaching", roles: ["teacher", "admin"] },
+  // --- timetable ---
+  { href: "/manage/timetable", label: "Timetable", icon: "attendance", group: "Administration", roles: ["admin"] },
   { href: "/manage/org", label: "Organisation", icon: "org", group: "Administration", roles: ["admin"] },
   { href: "/manage/students", label: "Students", icon: "students", group: "Administration", roles: ["admin"] },
   { href: "/manage/teachers", label: "Teachers", icon: "teachers", group: "Administration", roles: ["admin"] },

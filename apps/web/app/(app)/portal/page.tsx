@@ -7,6 +7,8 @@ import {
   type PortalAttendance,
   type PortalMarks,
   type PortalMe,
+  type TtEntry,
+  type TtPeriod,
 } from "@/ui/api";
 import { PageHeader } from "@/ui/PageHeader";
 import { Card } from "@/ui/Card";
@@ -22,7 +24,16 @@ type Load =
   | { state: "loading" }
   | { state: "unlinked" }
   | { state: "error" }
-  | { state: "ok"; me: PortalMe; attendance: PortalAttendance; marks: PortalMarks };
+  | {
+      state: "ok";
+      me: PortalMe;
+      attendance: PortalAttendance;
+      marks: PortalMarks;
+      timetable: { periods: TtPeriod[]; entries: TtEntry[] };
+      today: { dayOfWeek: number; periods: TtPeriod[]; entries: TtEntry[] };
+    };
+
+const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 const STATUS_TONE: Record<string, "good" | "warn" | "danger"> = {
   present: "good",
@@ -40,8 +51,13 @@ export default function PortalPage() {
     (async () => {
       try {
         const me = await api.portalMe();
-        const [attendance, marks] = await Promise.all([api.portalAttendance(year), api.portalMarks(year)]);
-        if (alive) setLoad({ state: "ok", me, attendance, marks });
+        const [attendance, marks, timetable, today] = await Promise.all([
+          api.portalAttendance(year),
+          api.portalMarks(year),
+          api.portalTimetable(year).catch(() => ({ periods: [], entries: [] })),
+          api.portalToday(year).catch(() => ({ dayOfWeek: 0, periods: [], entries: [] })),
+        ]);
+        if (alive) setLoad({ state: "ok", me, attendance, marks, timetable, today });
       } catch (caught) {
         if (!alive) return;
         if (caught instanceof ApiError && caught.status === 404) setLoad({ state: "unlinked" });
@@ -64,7 +80,9 @@ export default function PortalPage() {
   }
   if (load.state === "error") return <EmptyState title="Couldn't load your register." message="Try again shortly." />;
 
-  const { me, attendance, marks } = load;
+  const { me, attendance, marks, timetable, today } = load;
+  const gridCell = (day: number, periodNo: number) =>
+    timetable.entries.find((entry) => entry.dayOfWeek === day && entry.periodNo === periodNo);
   const sessionColumns: Column<PortalAttendance["sessions"][number]>[] = [
     { key: "heldOn", header: "Date", render: (row) => <span className="num">{row.heldOn}</span> },
     { key: "status", header: "Status", render: (row) => <Badge tone={STATUS_TONE[row.status] ?? "warn"}>{row.status}</Badge> },
@@ -96,6 +114,73 @@ export default function PortalPage() {
         />
         <StatTile value={String(attendance.counts.absent)} label="Days absent" />
       </section>
+
+      {today.entries.length > 0 ? (
+        <section className="section" aria-label="Today's classes">
+          <div className="section-head"><h2>Today</h2></div>
+          <Card>
+            {today.entries.map((entry) => {
+              const period = today.periods.find((p) => p.periodNo === entry.periodNo);
+              return (
+                <div key={entry.id} style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", padding: "8px 0", borderTop: "1px solid var(--rule)", fontSize: 14 }}>
+                  <span>
+                    <span className="num" style={{ marginRight: 10 }}>
+                      P{entry.periodNo}{period ? ` · ${period.starts}–${period.ends}` : ""}
+                    </span>
+                    <strong>{entry.subjectName}</strong>
+                  </span>
+                  <span style={{ opacity: 0.7 }}>
+                    {entry.teacherName}
+                    {entry.room !== "" ? ` · ${entry.room}` : ""}
+                  </span>
+                </div>
+              );
+            })}
+          </Card>
+        </section>
+      ) : null}
+
+      {timetable.entries.length > 0 ? (
+        <section className="section" aria-label="My timetable">
+          <div className="section-head"><h2>My timetable</h2></div>
+          <div className="ui-tablewrap">
+            <table className="ui-table" style={{ minWidth: 700 }}>
+              <thead>
+                <tr>
+                  <th scope="col">Period</th>
+                  {DAYS.map((day) => (<th key={day} scope="col">{day}</th>))}
+                </tr>
+              </thead>
+              <tbody>
+                {timetable.periods.map((period) => (
+                  <tr key={period.periodNo}>
+                    <td>
+                      <strong>P{period.periodNo}</strong>{" "}
+                      <span className="num" style={{ opacity: 0.6, fontSize: 12 }}>{period.starts}–{period.ends}</span>
+                    </td>
+                    {DAYS.map((_, index) => {
+                      const entry = gridCell(index + 1, period.periodNo);
+                      return (
+                        <td key={index} style={{ fontSize: 12.5 }}>
+                          {entry ? (
+                            <>
+                              <strong>{entry.subjectName}</strong>
+                              <br />
+                              <span style={{ opacity: 0.7 }}>{entry.teacherName}{entry.room !== "" ? ` · ${entry.room}` : ""}</span>
+                            </>
+                          ) : (
+                            <span style={{ opacity: 0.3 }}>—</span>
+                          )}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      ) : null}
 
       {attendance.monthly.length > 0 ? (
         <section className="section" aria-label="Attendance trend">

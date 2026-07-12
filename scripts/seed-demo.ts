@@ -16,6 +16,7 @@ import { createSystemModule } from "@vidya/module-system";
 import { createIdentityCore, createIdentityModule } from "@vidya/module-identity";
 import { createPeopleModule } from "@vidya/module-people";
 import { createAcademicsModule } from "@vidya/module-academics";
+import { createTimetableModule } from "@vidya/module-timetable";
 
 /**
  * DEMO DATA SEEDER — a self-contained, non-production pilot dataset.
@@ -174,7 +175,14 @@ function buildStack() {
   };
   const specs = new Map<string, RouteSpec>();
   const handlers: Record<string, BoundRouteHandler> = {};
-  for (const module of [identity, people, academics]) {
+  const timetable = createTimetableModule({
+    db,
+    audit: system.service.audit,
+    scopeChecker: core.scopeChecker,
+    peopleDirectory: people.service.directory,
+  });
+
+  for (const module of [identity, people, academics, timetable]) {
     for (const route of module.definition.routes) {
       specs.set(route.id, route);
       handlers[route.id] = defineRoute(route, module.handlers[route.id]!, routeDeps);
@@ -273,6 +281,23 @@ async function main(): Promise<void> {
     }
     const adminCookie = cookieFrom(adminLogin);
     credentials.push({ role: "admin", username: ADMIN.username, password: ADMIN.password, scope: "college-wide" });
+
+    // The college's period template (timetable spine): P1–P6.
+    const periodsSet = await call("timetable.periods-set", {
+      cookie: adminCookie,
+      params: { collegeId },
+      body: {
+        periods: [
+          { periodNo: 1, starts: "09:00", ends: "09:50" },
+          { periodNo: 2, starts: "10:00", ends: "10:50" },
+          { periodNo: 3, starts: "11:00", ends: "11:50" },
+          { periodNo: 4, starts: "12:00", ends: "12:50" },
+          { periodNo: 5, starts: "14:00", ends: "14:50" },
+          { periodNo: 6, starts: "15:00", ends: "15:50" },
+        ],
+      },
+    });
+    if (periodsSet.status !== 200) throw new Error(`periods-set: ${periodsSet.status}`);
 
     /** Creates an identity user with an active password (create → reset → active). */
     async function provisionUser(
@@ -495,6 +520,48 @@ async function main(): Promise<void> {
           }
         }
         console.log(`    marks: entered for every subject by its own teacher`);
+
+        // 5b) Timetable: P1–P3 Mon–Fri for the roster section, subjects
+        //     rotating, each taught by its own subject teacher (room = the
+        //     class code, so classes never clash on rooms).
+        const assignmentsRes = await expectJson<{
+          assignments: { teacherId: string; subjectId: string | null; kind: string }[];
+        }>(
+          await call("people.class-assignments", { cookie: adminCookie, params: { classId } }),
+          [200],
+          `assignments for timetable ${klass.code}`,
+        );
+        const teacherOfSubject = new Map(
+          assignmentsRes.assignments
+            .filter((a) => a.kind === "subject_teacher" && a.subjectId !== null)
+            .map((a) => [a.subjectId!, a.teacherId]),
+        );
+        const subjectIdList = [...subjectIds.values()];
+        let slotIndex = 0;
+        for (let day = 1; day <= 5; day++) {
+          for (let periodNo = 1; periodNo <= 3; periodNo++) {
+            const subjectId = subjectIdList[slotIndex % subjectIdList.length]!;
+            slotIndex++;
+            const teacherId = teacherOfSubject.get(subjectId);
+            if (teacherId === undefined) continue;
+            const scheduled = await call("timetable.entry-create", {
+              cookie: adminCookie,
+              body: {
+                sectionId: rosterSectionId,
+                subjectId,
+                teacherId,
+                room: klass.code,
+                dayOfWeek: day,
+                periodNo,
+                academicYear: YEAR,
+              },
+            });
+            if (scheduled.status !== 201 && scheduled.status !== 409) {
+              throw new Error(`timetable ${klass.code} d${day}p${periodNo}: ${scheduled.status}`);
+            }
+          }
+        }
+        console.log(`    timetable: P1–P3 Mon–Fri scheduled`);
       }
     }
 
