@@ -46,6 +46,7 @@
     "@vidya/module-reporting": "workspace:*",
     "@vidya/module-portal": "workspace:*",
     "@vidya/module-timetable": "workspace:*",
+    "@vidya/module-coursework": "workspace:*",
     "@vidya/module-system": "workspace:*",
     "@vidya/platform": "workspace:*",
     "@vitest/coverage-v8": "^3.2.0",

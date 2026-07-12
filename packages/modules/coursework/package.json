@@ -1,0 +1,26 @@
+{
+  "name": "@vidya/module-coursework",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Vidya coursework module (cwk_): assignments with student submissions and evaluation, plus notes/study material in object storage — the faculty↔student daily content loop. Teacher authority mirrors marks (subject scope); student access is the identity link.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@vidya/module-people": "workspace:*",
+    "@vidya/platform": "workspace:*",
+    "drizzle-orm": "^0.44.2",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "pino": "^9.7.0",
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.0"
+  }
+}

@@ -9,6 +9,7 @@ import { analyticsModuleDefinition } from "@vidya/module-analytics";
 import { reportingModuleDefinition } from "@vidya/module-reporting";
 import { portalModuleDefinition } from "@vidya/module-portal";
 import { timetableModuleDefinition } from "@vidya/module-timetable";
+import { courseworkModuleDefinition } from "@vidya/module-coursework";
 
 /**
  * Tooling-side module registry. New modules are added here (one line) and in
@@ -24,6 +25,7 @@ export const moduleDefinitions: readonly ModuleDefinition[] = [
   reportingModuleDefinition,
   portalModuleDefinition,
   timetableModuleDefinition,
+  courseworkModuleDefinition,
 ];
 
 const require = createRequire(import.meta.url);

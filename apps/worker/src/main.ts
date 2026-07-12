@@ -55,6 +55,7 @@ import {
 } from "@vidya/module-reporting";
 import { createPortalModule } from "@vidya/module-portal";
 import { createTimetableModule } from "@vidya/module-timetable";
+import { createCourseworkModule } from "@vidya/module-coursework";
 import { createMetricsServer } from "./metrics-server";
 
 const RESET_CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
@@ -216,6 +217,15 @@ async function main(): Promise<void> {
     peopleDirectory: people.service.directory,
   });
 
+  // --- coursework ---
+  const coursework = createCourseworkModule({
+    db,
+    audit: system.service.audit,
+    scopeChecker: identityCore.scopeChecker,
+    peopleDirectory: people.service.directory,
+    storage: { client: objectStorage, bucket: config.s3.bucket },
+  });
+
   const portal = createPortalModule({
     peopleDirectory: people.service.directory,
     academicsRead: academics.service.readModel,
@@ -230,6 +240,7 @@ async function main(): Promise<void> {
     analytics,
     reporting,
     timetable,
+    coursework,
     portal,
   ];
 
