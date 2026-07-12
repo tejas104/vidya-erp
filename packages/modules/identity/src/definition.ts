@@ -80,6 +80,18 @@ export const grantInputSchema = z
         // they never hold org grants; access authority is the link itself.
         ctx.addIssue({ code: "custom", path: ["role"], message: "student access is self-scoped; no grants" });
         break;
+      case "accountant":
+        // College-wide like principal/admin; writes are confined to the fees
+        // module by grantAllows, not by narrowing the grant.
+        if (
+          grant.departmentId !== undefined ||
+          grant.classId !== undefined ||
+          grant.sectionId !== undefined ||
+          grant.subjectId !== undefined
+        ) {
+          ctx.addIssue({ code: "custom", path: ["role"], message: "accountant grants are college-wide only" });
+        }
+        break;
     }
   });
 

@@ -5,7 +5,7 @@
  * permits (the permission mirror).
  */
 
-export type Role = "admin" | "principal" | "hod" | "class_teacher" | "teacher" | "student";
+export type Role = "admin" | "principal" | "hod" | "class_teacher" | "teacher" | "student" | "accountant";
 
 export interface Session {
   userId: string;

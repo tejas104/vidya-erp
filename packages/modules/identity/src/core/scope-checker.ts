@@ -106,6 +106,20 @@ function grantAllows(grant: ScopeGrant, action: AccessAction, resource: Resource
       // authority is record self-ownership (ownerUserId) or the portal's
       // identity link. FAIL CLOSED here.
       return false;
+    case "accountant":
+      // Reads/exports college-wide (dues chasing needs rosters and fee
+      // state); writes only fees-module records — never academic or
+      // identity ones.
+      switch (action) {
+        case "read":
+        case "export":
+          return true;
+        case "create":
+        case "update":
+          return resource.module === "fees";
+        default:
+          return false;
+      }
   }
 }
 
