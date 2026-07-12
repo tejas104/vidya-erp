@@ -94,6 +94,11 @@ export default function DashboardPage() {
           window.location.replace("/portal");
           return;
         }
+        // --- fees: a pure accountant sign-in lives at the counter, not the staff register ---
+        if (me.roles.length > 0 && me.roles.every((role) => role === "accountant")) {
+          window.location.replace("/manage/fees");
+          return;
+        }
         setSession(me);
         // --- timetable: the teaching roles get a Today card ---
         if (me.roles.includes("teacher") || me.roles.includes("class_teacher")) {

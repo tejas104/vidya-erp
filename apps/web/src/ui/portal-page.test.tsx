@@ -7,7 +7,7 @@ vi.mock("./api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./api")>();
   return {
     ...actual,
-    api: { ...actual.api, portalMe: vi.fn(), portalAttendance: vi.fn(), portalMarks: vi.fn(), portalTimetable: vi.fn(), portalToday: vi.fn(), cwkMyAssignments: vi.fn(), cwkMyMaterials: vi.fn() },
+    api: { ...actual.api, portalMe: vi.fn(), portalAttendance: vi.fn(), portalMarks: vi.fn(), portalTimetable: vi.fn(), portalToday: vi.fn(), cwkMyAssignments: vi.fn(), cwkMyMaterials: vi.fn(), feesMyFees: vi.fn() },
   };
 });
 
@@ -34,6 +34,16 @@ beforeEach(() => {
   });
   (api.cwkMyAssignments as ReturnType<typeof vi.fn>).mockResolvedValue({ assignments: [] });
   (api.cwkMyMaterials as ReturnType<typeof vi.fn>).mockResolvedValue({ materials: [] });
+  (api.feesMyFees as ReturnType<typeof vi.fn>).mockResolvedValue({
+    invoices: [{
+      id: "inv_1", collegeId: "col_1", departmentId: "dep_1", classId: "cls_1", sectionId: "sec_1",
+      studentId: "stu_1", studentName: "Aarav Sharma", admissionNo: "FYCS-001",
+      structureId: "str_1", headId: "head_1", headName: "Tuition", academicYear: "2026-27",
+      amountPaise: 50_000, dueOn: "2026-08-01", status: "part", paidPaise: 25_000, duesPaise: 25_000,
+      payments: [{ id: "pay_1", invoiceId: "inv_1", receiptNo: 12, amountPaise: 25_000, mode: "upi", ref: "", receivedBy: "u_acct", receivedAt: "2026-07-01T09:00:00Z" }],
+      adjustments: [],
+    }],
+  });
   (api.portalMarks as ReturnType<typeof vi.fn>).mockResolvedValue({
     subjects: [
       {
@@ -51,6 +61,19 @@ describe("/portal (student self-view)", () => {
     expect(await screen.findByText(/Hello, Aarav\./)).toBeInTheDocument();
     expect(screen.getAllByText("80%").length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText(/Data Structures/).length).toBeGreaterThanOrEqual(1);
+  });
+  it("shows my fees with dues headline and receipt history", async () => {
+    render(<PortalPage />);
+    expect(await screen.findByText("My fees")).toBeInTheDocument();
+    expect(screen.getByText("Dues: ₹250.00")).toBeInTheDocument();
+    expect(screen.getByText("#12")).toBeInTheDocument();
+    expect(screen.getByText("part")).toBeInTheDocument();
+  });
+  it("hides the fees section when the fees module doesn't answer", async () => {
+    (api.feesMyFees as ReturnType<typeof vi.fn>).mockRejectedValue(new Error("not deployed"));
+    render(<PortalPage />);
+    await screen.findByText(/Hello, Aarav\./);
+    expect(screen.queryByText("My fees")).not.toBeInTheDocument();
   });
   it("shows the unlinked state on 404", async () => {
     const { ApiError } = await import("./api");

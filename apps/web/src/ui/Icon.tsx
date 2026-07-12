@@ -7,10 +7,19 @@ export const ICON_NAMES = [
   "dashboard", "attendance", "marks", "menu", "close", "chevronDown",
   "moon", "sun", "signOut", "check", "alert", "info",
   "org", "students", "teachers", "key", "upload", "file",
+  "rupee",
 ] as const;
 export type IconName = (typeof ICON_NAMES)[number];
 
 const PATHS: Record<IconName, ReactNode> = {
+  rupee: (
+    <>
+      <path d="M6 3h12M6 8h12" />
+      <path d="M9 13c6.667 0 6.667-10 0-10" />
+      <path d="M6 13h3" />
+      <path d="m6 13 8.5 8" />
+    </>
+  ),
   dashboard: (
     <>
       <rect x="3" y="3" width="7" height="7" rx="1.5" />

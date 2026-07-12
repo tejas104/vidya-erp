@@ -2,9 +2,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   api, ApiError, currentAcademicYear,
-  type AdjustmentKind, type FeeInvoiceView, type FeePaymentView, type PaymentMode,
+  type AdjustmentKind, type FeeCollectionSummary, type FeeGenerationRunView, type FeeHeadView,
+  type FeeInvoiceView, type FeePaymentView, type FeeStructureView, type PaymentMode,
 } from "@/ui/api";
 import { formatPaise, formatPaiseInWords } from "@/ui/money";
+import { Tabs } from "@/ui/Tabs";
+import { StatTile } from "@/ui/charts";
 import { useToast } from "@/ui/Toast";
 import { PageHeader } from "@/ui/PageHeader";
 import { Button } from "@/ui/Button";
@@ -19,6 +22,7 @@ import { Skeleton } from "@/ui/Skeleton";
 export const dynamic = "force-dynamic";
 
 type SectionOption = { id: string; label: string };
+type ClassOption = { id: string; label: string };
 
 const MODES: PaymentMode[] = ["cash", "upi", "card", "bank", "gateway"];
 const KINDS: AdjustmentKind[] = ["scholarship", "fine", "refund", "waiver"];
@@ -87,27 +91,73 @@ export default function FeesPage() {
   const [adjAmount, setAdjAmount] = useState("");
   const [reason, setReason] = useState("");
   const [confirmWaive, setConfirmWaive] = useState(false);
+  // tabs (Setup is admin-only; the server enforces regardless)
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [tab, setTab] = useState("counter");
+  // setup tab
+  const [classes, setClasses] = useState<ClassOption[]>([]);
+  const [heads, setHeads] = useState<FeeHeadView[]>([]);
+  const [newHead, setNewHead] = useState("");
+  const [classId, setClassId] = useState("");
+  const [structures, setStructures] = useState<FeeStructureView[]>([]);
+  const [structOpen, setStructOpen] = useState(false);
+  const [structHeadId, setStructHeadId] = useState("");
+  const [structAmount, setStructAmount] = useState("");
+  const [structDue, setStructDue] = useState(today);
+  const [structInst, setStructInst] = useState("1");
+  const [confirmGenerate, setConfirmGenerate] = useState(false);
+  const [run, setRun] = useState<FeeGenerationRunView | null>(null);
+  // collections tab
+  const [from, setFrom] = useState(today);
+  const [to, setTo] = useState(today);
+  const [summary, setSummary] = useState<FeeCollectionSummary | null>(null);
 
   useEffect(() => {
+    api.session().then((me) => setIsAdmin(me.roles.includes("admin"))).catch(() => undefined);
     api.colleges()
       .then(async ({ colleges }) => {
         const college = colleges[0];
         if (!college) { setSections([]); return; }
         setCollegeId(college.id);
         const tree = await api.collegeTree(college.id);
-        const found: SectionOption[] = [];
+        const foundSections: SectionOption[] = [];
+        const foundClasses: ClassOption[] = [];
         for (const dep of tree.departments) {
           for (const cls of dep.classes) {
-            for (const sec of cls.sections) found.push({ id: sec.id, label: `${cls.name} · ${sec.name}` });
+            foundClasses.push({ id: cls.id, label: cls.name });
+            for (const sec of cls.sections) foundSections.push({ id: sec.id, label: `${cls.name} · ${sec.name}` });
           }
         }
-        setSections(found);
+        setSections(foundSections);
+        setClasses(foundClasses);
         api.feesDefaulters(college.id, year)
           .then((r) => setDefaulters(r.defaulters))
           .catch(() => setDefaulters([]));
+        api.feesHeads(college.id)
+          .then((r) => setHeads(r.heads))
+          .catch(() => setHeads([]));
       })
       .catch(() => setSections([]));
   }, [year]);
+
+  const loadStructures = useCallback(async () => {
+    if (classId === "") { setStructures([]); return; }
+    try {
+      setStructures((await api.feesStructures(classId, year)).structures);
+    } catch {
+      setStructures([]);
+    }
+  }, [classId, year]);
+  useEffect(() => { void loadStructures(); }, [loadStructures]);
+
+  // poll a generation run until it settles
+  useEffect(() => {
+    if (!run || run.status === "completed" || run.status === "failed") return;
+    const timer = setTimeout(() => {
+      api.feesGenerateStatus(run.id).then(setRun).catch(() => undefined);
+    }, 1200);
+    return () => clearTimeout(timer);
+  }, [run]);
 
   const loadInvoices = useCallback(async () => {
     if (sectionId === "") { setInvoices([]); return; }
@@ -181,6 +231,75 @@ export default function FeesPage() {
     }
   }
 
+  async function addHead() {
+    if (collegeId === null || newHead.trim() === "") return;
+    setSaving(true);
+    try {
+      const head = await api.feesCreateHead({ collegeId, name: newHead.trim() });
+      setHeads((rows) => [...rows, head]);
+      setNewHead("");
+      toast.show(`Head "${head.name}" added.`, "good");
+    } catch (caught) {
+      toast.show(caught instanceof ApiError ? caught.message : "Couldn't add the head.", "danger");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function removeHead(head: FeeHeadView) {
+    try {
+      await api.feesDeleteHead(head.id);
+      setHeads((rows) => rows.filter((row) => row.id !== head.id));
+      toast.show(`Head "${head.name}" deleted.`, "good");
+    } catch (caught) {
+      toast.show(caught instanceof ApiError ? caught.message : "Couldn't delete — still used by a structure.", "danger");
+    }
+  }
+
+  async function createStructure() {
+    const paise = parseRupees(structAmount);
+    if (classId === "" || structHeadId === "" || paise === null) return;
+    setSaving(true);
+    try {
+      await api.feesCreateStructure({
+        classId, headId: structHeadId, academicYear: year,
+        amountPaise: paise, dueOn: structDue, installmentNo: Number(structInst) || 1,
+      });
+      toast.show("Structure set.", "good");
+      setStructOpen(false);
+      setStructAmount("");
+      await loadStructures();
+    } catch (caught) {
+      toast.show(caught instanceof ApiError ? caught.message : "Couldn't set the structure.", "danger");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function startGenerate() {
+    setConfirmGenerate(false);
+    if (classId === "") return;
+    try {
+      const { runId } = await api.feesGenerate({ classId, academicYear: year });
+      setRun({
+        id: runId, collegeId: collegeId ?? "", classId, academicYear: year,
+        status: "pending", invoicesCreated: 0, invoicesSkipped: 0, error: null,
+      });
+    } catch (caught) {
+      toast.show(caught instanceof ApiError ? caught.message : "Couldn't start the run.", "danger");
+    }
+  }
+
+  async function loadSummary() {
+    if (collegeId === null) return;
+    try {
+      setSummary(await api.feesCollectionSummary(collegeId, from, to));
+    } catch (caught) {
+      setSummary(null);
+      toast.show(caught instanceof ApiError ? caught.message : "Couldn't load collections.", "danger");
+    }
+  }
+
   if (sections === null) return <Skeleton lines={5} />;
 
   const q = query.trim().toLowerCase();
@@ -221,6 +340,19 @@ export default function FeesPage() {
     },
   ];
 
+  const structureColumns: Column<FeeStructureView>[] = [
+    { key: "head", header: "Head", render: (row) => <strong>{row.headName}</strong> },
+    { key: "inst", header: "Inst.", align: "right", render: (row) => <span className="num">{row.installmentNo}</span> },
+    { key: "amount", header: "Amount", align: "right", render: (row) => <span className="num">{formatPaise(row.amountPaise)}</span> },
+    { key: "due", header: "Due on", render: (row) => <span className="num">{row.dueOn}</span> },
+  ];
+
+  const modeColumns: Column<FeeCollectionSummary["byMode"][number]>[] = [
+    { key: "mode", header: "Mode", render: (row) => <Badge>{row.mode}</Badge> },
+    { key: "count", header: "Receipts", align: "right", render: (row) => <span className="num">{row.count}</span> },
+    { key: "total", header: "Collected", align: "right", render: (row) => <strong className="num">{formatPaise(row.totalPaise)}</strong> },
+  ];
+
   const defaulterColumns: Column<FeeInvoiceView>[] = [
     {
       key: "student", header: "Student",
@@ -244,6 +376,18 @@ export default function FeesPage() {
         lede="Open a section's ledger, take a payment, hand over the receipt."
       />
 
+      <Tabs
+        tabs={[
+          { id: "counter", label: "Counter" },
+          ...(isAdmin ? [{ id: "setup", label: "Setup" }] : []),
+          { id: "collections", label: "Collections" },
+        ]}
+        active={tab}
+        onChange={setTab}
+      />
+
+      {tab === "counter" ? (
+        <>
       <div style={{ display: "flex", gap: "var(--space-4)", flexWrap: "wrap", alignItems: "flex-end" }}>
         <Field label="Section" htmlFor="fee-section">
           <select id="fee-section" value={sectionId} onChange={(event) => setSectionId(event.target.value)} style={{ minWidth: 220 }}>
@@ -279,6 +423,94 @@ export default function FeesPage() {
           empty={{ title: `No outstanding dues for ${year}.`, message: "Every generated invoice is settled." }}
         />
       </section>
+        </>
+      ) : null}
+
+      {tab === "setup" && isAdmin ? (
+        <>
+          <section className="section" aria-label="Fee heads">
+            <div className="section-head"><h2>Fee heads</h2></div>
+            <div style={{ display: "grid", gap: 0 }}>
+              {heads.map((head) => (
+                <div key={head.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: "1px solid var(--rule)", padding: "6px 0" }}>
+                  <span>{head.name}</span>
+                  <Button variant="ghost" onClick={() => void removeHead(head)}>Delete</Button>
+                </div>
+              ))}
+              {heads.length === 0 ? (
+                <p style={{ fontSize: 13.5, color: "var(--ink-2)" }}>No heads yet — add Tuition, Library, Lab…</p>
+              ) : null}
+            </div>
+            <div style={{ display: "flex", gap: "var(--space-3)", alignItems: "flex-end", marginTop: "var(--space-3)" }}>
+              <Field label="New head" htmlFor="head-name">
+                <input id="head-name" placeholder="e.g. Tuition" value={newHead} onChange={(event) => setNewHead(event.target.value)} />
+              </Field>
+              <Button onClick={() => void addHead()} loading={saving} disabled={newHead.trim() === ""}>Add head</Button>
+            </div>
+          </section>
+
+          <section className="section" aria-label="Class structures">
+            <div className="section-head">
+              <h2>Class structures · {year}</h2>
+              <span style={{ display: "inline-flex", gap: 8 }}>
+                <Button variant="ghost" onClick={() => setStructOpen(true)} disabled={classId === "" || heads.length === 0}>Set structure</Button>
+                <Button onClick={() => setConfirmGenerate(true)} disabled={classId === "" || structures.length === 0}>Generate invoices</Button>
+              </span>
+            </div>
+            <Field label="Class" htmlFor="fee-class">
+              <select id="fee-class" value={classId} onChange={(event) => setClassId(event.target.value)} style={{ maxWidth: 280 }}>
+                <option value="">Pick a class…</option>
+                {classes.map((cls) => <option key={cls.id} value={cls.id}>{cls.label}</option>)}
+              </select>
+            </Field>
+            {run ? (
+              <p className="num" style={{ fontSize: 13 }} aria-live="polite">
+                {run.status === "failed"
+                  ? `Generation failed: ${run.error ?? "unknown error"}`
+                  : run.status === "completed"
+                    ? `Generated — created ${run.invoicesCreated} · skipped ${run.invoicesSkipped}`
+                    : `Generating… created ${run.invoicesCreated} · skipped ${run.invoicesSkipped}`}
+              </p>
+            ) : null}
+            {classId === "" ? (
+              <EmptyState title="Pick a class to see its fee structures." message="One row per head, year and installment." />
+            ) : (
+              <DataTable
+                columns={structureColumns} rows={structures} rowKey={(row) => row.id}
+                empty={{ title: `No structures for ${year}.`, message: "Set one with the button above — invoices generate from structures." }}
+              />
+            )}
+          </section>
+        </>
+      ) : null}
+
+      {tab === "collections" ? (
+        <section className="section" aria-label="Collections">
+          <div style={{ display: "flex", gap: "var(--space-4)", flexWrap: "wrap", alignItems: "flex-end", marginBottom: "var(--space-4)" }}>
+            <Field label="From" htmlFor="col-from">
+              <input id="col-from" type="date" value={from} onChange={(event) => setFrom(event.target.value)} />
+            </Field>
+            <Field label="To" htmlFor="col-to">
+              <input id="col-to" type="date" value={to} onChange={(event) => setTo(event.target.value)} />
+            </Field>
+            <Button onClick={() => void loadSummary()}>Show collections</Button>
+          </div>
+          {summary === null ? (
+            <EmptyState title="Pick a range and show collections." message="Totals come from issued receipts — reconcile the cash box against them." />
+          ) : (
+            <>
+              <section className="stats" aria-label="Collection totals" style={{ marginBottom: "var(--space-4)" }}>
+                <StatTile value={formatPaise(summary.totalPaise)} label="Collected" sub={`${summary.from} → ${summary.to}`} />
+                <StatTile value={String(summary.byMode.reduce((n, m) => n + m.count, 0))} label="Receipts issued" />
+              </section>
+              <DataTable
+                columns={modeColumns} rows={summary.byMode} rowKey={(row) => row.mode}
+                empty={{ title: "No collections in this range.", message: "Payments recorded at the counter appear here." }}
+              />
+            </>
+          )}
+        </section>
+      ) : null}
 
       {/* RECORD PAYMENT → COUNTERFOIL */}
       <Modal
@@ -356,6 +588,54 @@ export default function FeesPage() {
           </Field>
         </div>
       </Modal>
+
+      {/* SET STRUCTURE */}
+      <Modal
+        open={structOpen}
+        onClose={() => setStructOpen(false)}
+        title={`Set structure — ${classes.find((cls) => cls.id === classId)?.label ?? ""} · ${year}`}
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setStructOpen(false)}>Cancel</Button>
+            <Button
+              onClick={() => void createStructure()}
+              loading={saving}
+              disabled={structHeadId === "" || parseRupees(structAmount) === null}
+            >
+              Set structure
+            </Button>
+          </>
+        }
+      >
+        <div style={{ display: "grid", gap: "var(--space-3)" }}>
+          <Field label="Head" htmlFor="struct-head">
+            <select id="struct-head" value={structHeadId} onChange={(event) => setStructHeadId(event.target.value)}>
+              <option value="">Pick a head…</option>
+              {heads.map((head) => <option key={head.id} value={head.id}>{head.name}</option>)}
+            </select>
+          </Field>
+          <div style={{ display: "flex", gap: "var(--space-4)", flexWrap: "wrap" }}>
+            <Field label="Amount (₹)" htmlFor="struct-amount">
+              <input id="struct-amount" inputMode="decimal" value={structAmount} onChange={(event) => setStructAmount(event.target.value)} style={{ width: 140 }} />
+            </Field>
+            <Field label="Due on" htmlFor="struct-due">
+              <input id="struct-due" type="date" value={structDue} onChange={(event) => setStructDue(event.target.value)} />
+            </Field>
+            <Field label="Installment" htmlFor="struct-inst">
+              <input id="struct-inst" type="number" min={1} max={12} value={structInst} onChange={(event) => setStructInst(event.target.value)} style={{ width: 90 }} />
+            </Field>
+          </div>
+        </div>
+      </Modal>
+
+      <ConfirmDialog
+        open={confirmGenerate}
+        title="Generate invoices"
+        message={`Generate invoices for ${classes.find((cls) => cls.id === classId)?.label ?? ""} · ${year}? Students already invoiced are skipped, so re-running is safe.`}
+        confirmLabel="Generate"
+        onConfirm={() => void startGenerate()}
+        onCancel={() => setConfirmGenerate(false)}
+      />
 
       <ConfirmDialog
         open={confirmWaive}

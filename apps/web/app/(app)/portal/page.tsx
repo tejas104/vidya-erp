@@ -6,6 +6,7 @@ import {
   currentAcademicYear,
   type CwkAssignment,
   type CwkMaterial,
+  type FeeMyInvoice,
   type PortalAttendance,
   type PortalMarks,
   type PortalMe,
@@ -23,6 +24,7 @@ import { StatTile, Sparkline, SubjectBars, TrendLine } from "@/ui/charts";
 import { DataTable, type Column } from "@/ui/DataTable";
 import { EmptyState } from "@/ui/EmptyState";
 import { Skeleton } from "@/ui/Skeleton";
+import { formatPaise } from "@/ui/money";
 
 export const dynamic = "force-dynamic";
 
@@ -39,6 +41,8 @@ type Load =
       today: { dayOfWeek: number; periods: TtPeriod[]; entries: TtEntry[] };
       assignments: CwkAssignment[];
       materials: CwkMaterial[];
+      /** null = fees module not answering (unlicensed / not deployed) — the section stays hidden. */
+      fees: FeeMyInvoice[] | null;
     };
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -88,6 +92,7 @@ export default function PortalPage() {
           api.cwkMyAssignments(year).catch(() => ({ assignments: [] as CwkAssignment[] })),
           api.cwkMyMaterials(year).catch(() => ({ materials: [] as CwkMaterial[] })),
         ]);
+        const fees = await api.feesMyFees().then((r) => r.invoices).catch(() => null);
         if (alive)
           setLoad({
             state: "ok",
@@ -98,6 +103,7 @@ export default function PortalPage() {
             today,
             assignments: cwkA.assignments,
             materials: cwkM.materials,
+            fees,
           });
       } catch (caught) {
         if (!alive) return;
@@ -121,7 +127,9 @@ export default function PortalPage() {
   }
   if (load.state === "error") return <EmptyState title="Couldn't load your register." message="Try again shortly." />;
 
-  const { me, attendance, marks, timetable, today, assignments, materials } = load;
+  const { me, attendance, marks, timetable, today, assignments, materials, fees } = load;
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const totalDues = fees === null ? 0 : fees.reduce((sum, invoice) => sum + invoice.duesPaise, 0);
   const gridCell = (day: number, periodNo: number) =>
     timetable.entries.find((entry) => entry.dayOfWeek === day && entry.periodNo === periodNo);
   const sessionColumns: Column<PortalAttendance["sessions"][number]>[] = [
@@ -343,6 +351,62 @@ export default function PortalPage() {
           </>
         )}
       </section>
+
+      {fees !== null ? (
+        <section className="section" aria-label="My fees">
+          <div className="section-head">
+            <h2>My fees</h2>
+            <span className="stat-sub num">
+              {totalDues > 0 ? `Dues: ${formatPaise(totalDues)}` : `No dues — you're clear for ${year}`}
+            </span>
+          </div>
+          {fees.length === 0 ? (
+            <EmptyState title="No invoices yet." message="Fee invoices appear here once the office generates them." />
+          ) : (
+            <div style={{ display: "grid", gap: "var(--space-2)" }}>
+              {fees.map((invoice) => (
+                <details key={invoice.id} className="card" style={{ padding: "var(--space-3) var(--space-4)" }}>
+                  <summary style={{ cursor: "pointer", display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                    <span>
+                      <strong>{invoice.headName}</strong>{" "}
+                      <span className="num" style={{ opacity: 0.6, fontSize: 12.5 }}>due {invoice.dueOn}</span>
+                    </span>
+                    <span style={{ display: "inline-flex", gap: 8, alignItems: "center" }}>
+                      <span className="num">{formatPaise(invoice.duesPaise)} due</span>
+                      {invoice.status === "paid" ? <Badge tone="good">paid</Badge>
+                        : invoice.status === "waived" ? <Badge>waived</Badge>
+                        : invoice.status === "part" ? <Badge tone="warn">part</Badge>
+                        : invoice.dueOn < todayIso ? <Badge tone="danger">overdue</Badge>
+                        : <Badge>pending</Badge>}
+                    </span>
+                  </summary>
+                  <div style={{ marginTop: "var(--space-2)", display: "grid", gap: 4, fontSize: 13.5 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between" }}>
+                      <span>Invoice amount</span>
+                      <span className="num">{formatPaise(invoice.amountPaise)}</span>
+                    </div>
+                    {invoice.payments.map((payment) => (
+                      <div key={payment.id} style={{ display: "flex", justifyContent: "space-between" }}>
+                        <span>
+                          Receipt <span className="num">#{payment.receiptNo}</span> · {payment.mode} ·{" "}
+                          <span className="num">{payment.receivedAt.slice(0, 10)}</span>
+                        </span>
+                        <span className="num">− {formatPaise(payment.amountPaise)}</span>
+                      </div>
+                    ))}
+                    {invoice.adjustments.map((adjustment) => (
+                      <div key={adjustment.id} style={{ display: "flex", justifyContent: "space-between" }}>
+                        <span>{adjustment.kind}{adjustment.reason !== "" ? ` — ${adjustment.reason}` : ""}</span>
+                        <span className="num">{adjustment.kind === "fine" ? "+" : "−"} {formatPaise(adjustment.amountPaise)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </details>
+              ))}
+            </div>
+          )}
+        </section>
+      ) : null}
 
       <section className="section" aria-label="Recent sessions">
         <div className="section-head"><h2>Recent attendance</h2></div>

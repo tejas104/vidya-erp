@@ -10,9 +10,13 @@ vi.mock("./api", async (importOriginal) => {
     ...actual,
     api: {
       ...actual.api,
-      colleges: vi.fn(), collegeTree: vi.fn(),
+      session: vi.fn(), colleges: vi.fn(), collegeTree: vi.fn(),
       feesDefaulters: vi.fn(), feesSectionInvoices: vi.fn(),
       feesRecordPayment: vi.fn(), feesAddAdjustment: vi.fn(),
+      feesHeads: vi.fn(), feesCreateHead: vi.fn(), feesDeleteHead: vi.fn(),
+      feesStructures: vi.fn(), feesCreateStructure: vi.fn(),
+      feesGenerate: vi.fn(), feesGenerateStatus: vi.fn(),
+      feesCollectionSummary: vi.fn(),
     },
   };
 });
@@ -47,6 +51,9 @@ function mock<T extends keyof typeof api>(name: T) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mock("session").mockResolvedValue({ userId: "u_acct", displayName: "Asha", roles: ["accountant"], grants: [] });
+  mock("feesHeads").mockResolvedValue({ heads: [] });
+  mock("feesStructures").mockResolvedValue({ structures: [] });
   mock("colleges").mockResolvedValue({ colleges: [tree.college] });
   mock("collegeTree").mockResolvedValue(tree);
   mock("feesDefaulters").mockResolvedValue({ defaulters: [overdueInvoice] });
@@ -103,5 +110,37 @@ describe("/manage/fees — the counter", () => {
     fireEvent.click(screen.getByRole("button", { name: /take payment/i }));
     fireEvent.click(screen.getByRole("button", { name: /record payment/i }));
     expect(await screen.findByText("Invoice is waived — no further payments accepted")).toBeInTheDocument();
+  });
+
+  it("hides the Setup tab from the accountant", async () => {
+    render(<ToastProvider><FeesPage /></ToastProvider>);
+    await screen.findByLabelText("Section");
+    expect(screen.queryByRole("tab", { name: "Setup" })).not.toBeInTheDocument();
+  });
+
+  it("lets the admin add a fee head from the Setup tab", async () => {
+    mock("session").mockResolvedValue({ userId: "u_adm", displayName: "Admin", roles: ["admin"], grants: [] });
+    mock("feesCreateHead").mockResolvedValue({ id: "head_9", collegeId: "col_1", name: "Tuition" });
+    render(<ToastProvider><FeesPage /></ToastProvider>);
+    await screen.findByLabelText("Section");
+    fireEvent.click(await screen.findByRole("tab", { name: "Setup" }));
+    fireEvent.change(screen.getByLabelText("New head"), { target: { value: "Tuition" } });
+    fireEvent.click(screen.getByRole("button", { name: /add head/i }));
+    await waitFor(() => expect(api.feesCreateHead).toHaveBeenCalledWith({ collegeId: "col_1", name: "Tuition" }));
+    expect(screen.getByText("Tuition")).toBeInTheDocument();
+  });
+
+  it("shows collection totals by mode", async () => {
+    mock("feesCollectionSummary").mockResolvedValue({
+      from: "2026-07-13", to: "2026-07-13", totalPaise: 150_000,
+      byMode: [{ mode: "cash", totalPaise: 100_000, count: 2 }, { mode: "upi", totalPaise: 50_000, count: 1 }],
+    });
+    render(<ToastProvider><FeesPage /></ToastProvider>);
+    await screen.findByLabelText("Section");
+    fireEvent.click(screen.getByRole("tab", { name: "Collections" }));
+    fireEvent.click(screen.getByRole("button", { name: /show collections/i }));
+    expect(await screen.findByText("₹1,500.00")).toBeInTheDocument();
+    expect(screen.getByText("Receipts issued")).toBeInTheDocument();
+    expect(screen.getByText("₹1,000.00")).toBeInTheDocument();
   });
 });
