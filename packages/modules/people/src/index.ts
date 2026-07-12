@@ -89,6 +89,8 @@ export interface PeopleDirectory {
   ): Promise<{ teacherId: string; collegeId: string; fullName: string } | null>;
   /** Which of these student ids exist (batched). */
   studentsExist(studentIds: readonly string[]): Promise<Set<string>>;
+  /** Batched student display info for ledger views (fees). Unknown ids absent. */
+  studentsBrief(studentIds: readonly string[]): Promise<Map<string, { fullName: string; admissionNo: string }>>;
   /** The department a subject belongs to, or null. */
   subjectDepartment(subjectId: string): Promise<string | null>;
   /** Sections with at least one live enrollment (attendance gap scan). */
@@ -209,6 +211,14 @@ export function createPeopleModule(deps: PeopleModuleDeps): RuntimeModule<People
             : { teacherId: teacher.id, collegeId: teacher.collegeId, fullName: teacher.fullName };
         },
         studentsExist: (studentIds) => peopleRepo.findExistingStudentIds(studentIds),
+        studentsBrief: async (studentIds) => {
+          const briefs = new Map<string, { fullName: string; admissionNo: string }>();
+          for (const id of new Set(studentIds)) {
+            const row = await peopleRepo.getStudent(id);
+            if (row !== null) briefs.set(id, { fullName: row.fullName, admissionNo: row.admissionNo });
+          }
+          return briefs;
+        },
         subjectDepartment: async (subjectId) =>
           (await orgRepo.getSubject(subjectId))?.departmentId ?? null,
         sectionsWithLiveEnrollment: () => peopleRepo.sectionsWithLiveEnrollment(),
