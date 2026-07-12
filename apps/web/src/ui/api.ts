@@ -287,6 +287,86 @@ export interface CwkMaterial {
   createdAt: string;
 }
 
+// --- fees ---
+export type PaymentMode = "cash" | "upi" | "card" | "bank" | "gateway";
+export type InvoiceStatus = "pending" | "part" | "paid" | "waived";
+export type AdjustmentKind = "scholarship" | "fine" | "refund" | "waiver";
+export interface FeeHeadView {
+  id: string;
+  collegeId: string;
+  name: string;
+}
+export interface FeeStructureView {
+  id: string;
+  collegeId: string;
+  departmentId: string;
+  classId: string;
+  headId: string;
+  headName: string;
+  academicYear: string;
+  amountPaise: number;
+  dueOn: string;
+  installmentNo: number;
+}
+export interface FeeInvoiceView {
+  id: string;
+  collegeId: string;
+  departmentId: string;
+  classId: string;
+  sectionId: string;
+  studentId: string;
+  studentName: string;
+  admissionNo: string;
+  structureId: string;
+  headId: string;
+  headName: string;
+  academicYear: string;
+  amountPaise: number;
+  dueOn: string;
+  status: InvoiceStatus;
+  paidPaise: number;
+  duesPaise: number;
+}
+export interface FeePaymentView {
+  id: string;
+  invoiceId: string;
+  receiptNo: number;
+  amountPaise: number;
+  mode: PaymentMode;
+  ref: string;
+  receivedBy: string;
+  receivedAt: string;
+}
+export interface FeeAdjustmentView {
+  id: string;
+  invoiceId: string;
+  kind: AdjustmentKind;
+  amountPaise: number;
+  reason: string;
+  actor: string;
+  createdAt: string;
+}
+export interface FeeGenerationRunView {
+  id: string;
+  collegeId: string;
+  classId: string;
+  academicYear: string;
+  status: "pending" | "running" | "completed" | "failed";
+  invoicesCreated: number;
+  invoicesSkipped: number;
+  error: string | null;
+}
+export interface FeeCollectionSummary {
+  from: string;
+  to: string;
+  totalPaise: number;
+  byMode: { mode: PaymentMode; totalPaise: number; count: number }[];
+}
+export type FeeMyInvoice = FeeInvoiceView & {
+  payments: FeePaymentView[];
+  adjustments: FeeAdjustmentView[];
+};
+
 export interface PortalMarks {
   subjects: {
     subjectId: string;
@@ -511,6 +591,43 @@ export const api = {
     post<{ ok: true; submittedAt: string }>(`/api/v1/coursework/my/assignments/${encodeURIComponent(assignmentId)}/submission`, body),
   cwkMyMaterials: (year: string) =>
     get<{ materials: CwkMaterial[] }>(`/api/v1/coursework/my/materials?academicYear=${year}`),
+  // --- fees ---
+  feesCreateHead: (body: { collegeId: string; name: string }) =>
+    post<FeeHeadView>("/api/v1/fees/heads", body),
+  feesHeads: (collegeId: string) =>
+    get<{ heads: FeeHeadView[] }>(`/api/v1/fees/heads?collegeId=${encodeURIComponent(collegeId)}`),
+  feesDeleteHead: (headId: string) => del<{ ok: true }>(`/api/v1/fees/heads/${encodeURIComponent(headId)}`),
+  feesCreateStructure: (body: {
+    classId: string; headId: string; academicYear: string;
+    amountPaise: number; dueOn: string; installmentNo?: number;
+  }) => post<FeeStructureView>("/api/v1/fees/structures", body),
+  feesStructures: (classId: string, year: string) =>
+    get<{ structures: FeeStructureView[] }>(
+      `/api/v1/fees/classes/${encodeURIComponent(classId)}/structures?academicYear=${year}`,
+    ),
+  feesGenerate: (body: { classId: string; academicYear: string }) =>
+    post<{ runId: string }>("/api/v1/fees/generate", body),
+  feesGenerateStatus: (runId: string) =>
+    get<FeeGenerationRunView>(`/api/v1/fees/generate/${encodeURIComponent(runId)}`),
+  feesStudentInvoices: (studentId: string) =>
+    get<{ invoices: FeeInvoiceView[] }>(`/api/v1/fees/students/${encodeURIComponent(studentId)}/invoices`),
+  feesSectionInvoices: (sectionId: string, year: string) =>
+    get<{ invoices: FeeInvoiceView[] }>(
+      `/api/v1/fees/sections/${encodeURIComponent(sectionId)}/invoices?academicYear=${year}`,
+    ),
+  feesRecordPayment: (body: { invoiceId: string; amountPaise: number; mode: PaymentMode; ref?: string }) =>
+    post<{ payment: FeePaymentView; invoice: FeeInvoiceView }>("/api/v1/fees/payments", body),
+  feesAddAdjustment: (body: { invoiceId: string; kind: AdjustmentKind; amountPaise: number; reason?: string }) =>
+    post<{ adjustment: FeeAdjustmentView; invoice: FeeInvoiceView }>("/api/v1/fees/adjustments", body),
+  feesMyFees: () => get<{ invoices: FeeMyInvoice[] }>("/api/v1/fees/my-fees"),
+  feesCollectionSummary: (collegeId: string, from: string, to: string) =>
+    get<FeeCollectionSummary>(
+      `/api/v1/fees/collections/summary?collegeId=${encodeURIComponent(collegeId)}&from=${from}&to=${to}`,
+    ),
+  feesDefaulters: (collegeId: string, year: string) =>
+    get<{ defaulters: FeeInvoiceView[] }>(
+      `/api/v1/fees/defaulters?collegeId=${encodeURIComponent(collegeId)}&academicYear=${year}`,
+    ),
   async login(username: string, password: string): Promise<void> {
     const response = await fetch("/api/v1/identity/auth/login", {
       method: "POST",
