@@ -6,6 +6,7 @@ import {
   currentAcademicYear,
   type CwkAssignment,
   type CwkMaterial,
+  type ExamSlotView,
   type FeeMyInvoice,
   type MyResults,
   type PortalAttendance,
@@ -48,6 +49,8 @@ type Load =
       fees: FeeMyInvoice[] | null;
       /** null = results module not answering — the section stays hidden. */
       results: MyResults | null;
+      /** null = exams module not answering — the section stays hidden. */
+      exams: ExamSlotView[] | null;
     };
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -99,6 +102,7 @@ export default function PortalPage() {
         ]);
         const fees = await api.feesMyFees().then((r) => r.invoices).catch(() => null);
         const results = await api.resMyResults().catch(() => null);
+        const exams = await api.exmMySchedule().then((r) => r.slots).catch(() => null);
         if (alive)
           setLoad({
             state: "ok",
@@ -111,6 +115,7 @@ export default function PortalPage() {
             materials: cwkM.materials,
             fees,
             results,
+            exams,
           });
       } catch (caught) {
         if (!alive) return;
@@ -134,7 +139,7 @@ export default function PortalPage() {
   }
   if (load.state === "error") return <EmptyState title="Couldn't load your register." message="Try again shortly." />;
 
-  const { me, attendance, marks, timetable, today, assignments, materials, fees, results } = load;
+  const { me, attendance, marks, timetable, today, assignments, materials, fees, results, exams } = load;
   const todayIso = new Date().toISOString().slice(0, 10);
   const totalDues = fees === null ? 0 : fees.reduce((sum, invoice) => sum + invoice.duesPaise, 0);
   const gridCell = (day: number, periodNo: number) =>
@@ -399,6 +404,58 @@ export default function PortalPage() {
                 </Card>
               ))}
             </div>
+          )}
+        </section>
+      ) : null}
+
+      {/* --- exams --- */}
+      {exams !== null ? (
+        <section className="section" aria-label="My exams">
+          <div className="section-head">
+            <h2>My exams</h2>
+            {exams.length > 0 ? (
+              <ReportButton
+                params={{ kind: "hall-ticket", studentId: me.student.id }}
+                year={year}
+                label="Download hall ticket (PDF)"
+              />
+            ) : null}
+          </div>
+          {exams.length === 0 ? (
+            <EmptyState title="No exams scheduled." message="Your exam timetable appears here when the office publishes it." />
+          ) : (
+            <>
+              {(() => {
+                const next = exams.find((slot) => slot.onDate >= todayIso);
+                return next !== undefined ? (
+                  <Card title={`Next: ${next.subjectName}`}>
+                    <div style={{ display: "flex", gap: 14, flexWrap: "wrap", alignItems: "baseline" }}>
+                      <span className="num" style={{ fontSize: 22, fontWeight: 600 }}>{next.onDate}</span>
+                      <span className="num">{next.starts}–{next.ends}</span>
+                      {next.room !== "" ? <Badge>{`Room ${next.room}`}</Badge> : null}
+                      <span style={{ opacity: 0.65, fontSize: 13 }}>{next.seriesName}</span>
+                    </div>
+                  </Card>
+                ) : null;
+              })()}
+              <div className="ui-tablewrap" style={{ marginTop: "var(--space-3)" }}>
+                <table className="ui-table">
+                  <thead>
+                    <tr><th scope="col">Date</th><th scope="col">Time</th><th scope="col">Paper</th><th scope="col">Room</th></tr>
+                  </thead>
+                  <tbody>
+                    {exams.map((slot) => (
+                      <tr key={slot.id}>
+                        <td><span className="num">{slot.onDate}</span></td>
+                        <td><span className="num">{slot.starts}–{slot.ends}</span></td>
+                        <td><strong>{slot.subjectName}</strong> <span style={{ opacity: 0.6, fontSize: 12.5 }}>{slot.seriesName}</span></td>
+                        <td>{slot.room === "" ? "—" : slot.room}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </section>
       ) : null}

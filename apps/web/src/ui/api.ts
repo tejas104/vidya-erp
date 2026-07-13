@@ -96,7 +96,8 @@ export type ReportParams =
   | { kind: "section-attendance"; sectionId: string }
   | { kind: "marks-summary"; classId: string }
   | { kind: "at-risk"; level: string; nodeId: string }
-  | { kind: "grade-card"; studentId: string };
+  | { kind: "grade-card"; studentId: string }
+  | { kind: "hall-ticket"; studentId: string };
 
 export interface ReportView {
   id: string;
@@ -439,6 +440,28 @@ export interface MyResults {
   cgpa: number | null;
 }
 
+// --- exams ---
+export interface ExamSeriesView {
+  id: string;
+  collegeId: string;
+  name: string;
+  academicYear: string;
+  term: string;
+  slotCount: number;
+}
+export interface ExamSlotView {
+  id: string;
+  seriesId: string;
+  seriesName: string;
+  classId: string;
+  subjectId: string;
+  subjectName: string;
+  onDate: string;
+  starts: string;
+  ends: string;
+  room: string;
+}
+
 export interface PortalMarks {
   subjects: {
     subjectId: string;
@@ -730,6 +753,24 @@ export const api = {
   resPublish: (body: { classId: string; academicYear: string; term: string; scaleId: string }) =>
     post<PublicationView>("/api/v1/results/publish", body),
   resMyResults: () => get<MyResults>("/api/v1/results/my-results"),
+  // --- exams ---
+  exmCreateSeries: (body: { collegeId: string; name: string; academicYear: string; term: string }) =>
+    post<ExamSeriesView>("/api/v1/exams/series", body),
+  exmSeries: (collegeId: string, year: string) =>
+    get<{ series: ExamSeriesView[] }>(
+      `/api/v1/exams/series?collegeId=${encodeURIComponent(collegeId)}&academicYear=${year}`,
+    ),
+  exmDeleteSeries: (seriesId: string) => del<{ ok: true }>(`/api/v1/exams/series/${encodeURIComponent(seriesId)}`),
+  exmCreateSlot: (body: {
+    seriesId: string; classId: string; subjectId: string;
+    onDate: string; starts: string; ends: string; room?: string;
+  }) => post<ExamSlotView & { clash?: string }>("/api/v1/exams/slots", body),
+  exmDeleteSlot: (slotId: string) => del<{ ok: true }>(`/api/v1/exams/slots/${encodeURIComponent(slotId)}`),
+  exmClassSchedule: (classId: string, year: string) =>
+    get<{ slots: ExamSlotView[] }>(
+      `/api/v1/exams/classes/${encodeURIComponent(classId)}/schedule?academicYear=${year}`,
+    ),
+  exmMySchedule: () => get<{ slots: ExamSlotView[] }>("/api/v1/exams/my-schedule"),
   async login(username: string, password: string): Promise<void> {
     const response = await fetch("/api/v1/identity/auth/login", {
       method: "POST",

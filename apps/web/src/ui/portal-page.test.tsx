@@ -7,7 +7,7 @@ vi.mock("./api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./api")>();
   return {
     ...actual,
-    api: { ...actual.api, portalMe: vi.fn(), portalAttendance: vi.fn(), portalMarks: vi.fn(), portalTimetable: vi.fn(), portalToday: vi.fn(), cwkMyAssignments: vi.fn(), cwkMyMaterials: vi.fn(), feesMyFees: vi.fn(), resMyResults: vi.fn() },
+    api: { ...actual.api, portalMe: vi.fn(), portalAttendance: vi.fn(), portalMarks: vi.fn(), portalTimetable: vi.fn(), portalToday: vi.fn(), cwkMyAssignments: vi.fn(), cwkMyMaterials: vi.fn(), feesMyFees: vi.fn(), resMyResults: vi.fn(), exmMySchedule: vi.fn() },
   };
 });
 
@@ -50,6 +50,13 @@ beforeEach(() => {
       subjects: [{ subjectId: "sub_1", subjectName: "Data Structures", credits: 4, pct: 78.5, grade: "B+", points: 8 }],
     }],
     cgpa: 8.3,
+  });
+  (api.exmMySchedule as ReturnType<typeof vi.fn>).mockResolvedValue({
+    slots: [{
+      id: "slt_1", seriesId: "ser_1", seriesName: "Midterm", classId: "cls_1",
+      subjectId: "sub_1", subjectName: "Data Structures",
+      onDate: "2099-11-02", starts: "09:00", ends: "12:00", room: "12",
+    }],
   });
   (api.portalMarks as ReturnType<typeof vi.fn>).mockResolvedValue({
     subjects: [
@@ -99,6 +106,18 @@ describe("/portal (student self-view)", () => {
     render(<PortalPage />);
     await screen.findByText(/Hello, Aarav\./);
     expect(screen.queryByText("My results")).not.toBeInTheDocument();
+  });
+  it("highlights the next exam and offers the hall ticket", async () => {
+    render(<PortalPage />);
+    expect(await screen.findByText("My exams")).toBeInTheDocument();
+    expect(screen.getByText(/Next: Data Structures/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /download hall ticket/i })).toBeInTheDocument();
+  });
+  it("shows the exams empty state when nothing is scheduled", async () => {
+    (api.exmMySchedule as ReturnType<typeof vi.fn>).mockResolvedValue({ slots: [] });
+    render(<PortalPage />);
+    expect(await screen.findByText("No exams scheduled.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /download hall ticket/i })).not.toBeInTheDocument();
   });
   it("shows the unlinked state on 404", async () => {
     const { ApiError } = await import("./api");
