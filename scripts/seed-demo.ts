@@ -17,6 +17,7 @@ import { createIdentityCore, createIdentityModule } from "@vidya/module-identity
 import { createPeopleModule } from "@vidya/module-people";
 import { createAcademicsModule } from "@vidya/module-academics";
 import { createTimetableModule } from "@vidya/module-timetable";
+import { INVOICE_GENERATE_JOB_NAME, createFeesModule } from "@vidya/module-fees";
 
 /**
  * DEMO DATA SEEDER — a self-contained, non-production pilot dataset.
@@ -45,6 +46,7 @@ const ADMIN = { username: "demo-admin", displayName: "Demo Administrator", passw
 const STAFF_PASSWORD = "demo-staff-pass-2026!";
 const TEACHER_PASSWORD = "demo-teacher-pass-2026!";
 const STUDENT_PASSWORD = "demo-student-pass-2026!";
+const ACCOUNTANT_PASSWORD = "demo-accountant-pass-2026!";
 
 type Slot = { studentId: string; status: "present" | "absent" | "late" | "excused" };
 
@@ -182,7 +184,18 @@ function buildStack() {
     peopleDirectory: people.service.directory,
   });
 
-  for (const module of [identity, people, academics, timetable]) {
+  // --- fees --- (the seed has no worker: generate runs its processor inline)
+  const fees: ReturnType<typeof createFeesModule> = createFeesModule({
+    db,
+    audit: system.service.audit,
+    scopeChecker: core.scopeChecker,
+    peopleDirectory: people.service.directory,
+    enqueueGenerate: async (payload) => {
+      await fees.jobProcessors[INVOICE_GENERATE_JOB_NAME]!(payload, { logger, jobId: "seed-inline", attempt: 1 });
+    },
+  });
+
+  for (const module of [identity, people, academics, timetable, fees]) {
     for (const route of module.definition.routes) {
       specs.set(route.id, route);
       handlers[route.id] = defineRoute(route, module.handlers[route.id]!, routeDeps);
@@ -254,6 +267,8 @@ async function main(): Promise<void> {
     const credentials: Credential[] = [];
     let portalStudentId: string | null = null;
     let portalStudentName = "";
+    let feesClassId: string | null = null;
+    let feesSectionId: string | null = null;
 
     // 1) The demo college and its dedicated admin (idempotent by code).
     const college = await stack.people.service.bootstrapCollege({ name: COLLEGE.name, code: COLLEGE.code });
@@ -460,6 +475,10 @@ async function main(): Promise<void> {
             portalStudentId = studentId; // the first seeded student gets the demo portal sign-in
             portalStudentName = fullName;
           }
+          if (feesClassId === null) {
+            feesClassId = classId; // fees demo data targets the first seeded class
+            feesSectionId = rosterSectionId;
+          }
         }
         console.log(`    class: ${klass.name} — ${studentIds.length} students, ${klass.subjects.length} subjects`);
 
@@ -583,6 +602,130 @@ async function main(): Promise<void> {
       });
     }
 
+    // 6b) Fees (M4): the accountant sign-in, heads, structures for the first
+    //     class, generated invoices (inline processor), and payments through
+    //     the accountant's own session so receipts carry the right actor.
+    if (feesClassId !== null && feesSectionId !== null) {
+      const accountantId = await provisionUser("demo-accountant", "Kiran Rao", ["accountant"], ACCOUNTANT_PASSWORD);
+      await expectJson(
+        await call("identity.grant-add", {
+          cookie: adminCookie,
+          params: { userId: accountantId },
+          body: { role: "accountant", collegeId },
+        }),
+        [201],
+        "accountant grant",
+      );
+      credentials.push({
+        role: "accountant",
+        username: "demo-accountant",
+        password: ACCOUNTANT_PASSWORD,
+        scope: "college-wide (fees)",
+      });
+
+      const tuitionHeadId = (
+        await expectJson<{ id: string }>(
+          await call("fees.head-create", { cookie: adminCookie, body: { collegeId, name: "Tuition" } }),
+          [201],
+          "fee head Tuition",
+        )
+      ).id;
+      const libraryHeadId = (
+        await expectJson<{ id: string }>(
+          await call("fees.head-create", { cookie: adminCookie, body: { collegeId, name: "Library" } }),
+          [201],
+          "fee head Library",
+        )
+      ).id;
+
+      // Tuition installment 1 fell due before the demo anchor → overdue rows exist.
+      await expectJson(
+        await call("fees.structure-create", {
+          cookie: adminCookie,
+          body: { classId: feesClassId, headId: tuitionHeadId, academicYear: YEAR, amountPaise: 5_000_000, dueOn: "2026-07-01", installmentNo: 1 },
+        }),
+        [201],
+        "structure tuition-1",
+      );
+      await expectJson(
+        await call("fees.structure-create", {
+          cookie: adminCookie,
+          body: { classId: feesClassId, headId: libraryHeadId, academicYear: YEAR, amountPaise: 200_000, dueOn: "2026-09-01", installmentNo: 1 },
+        }),
+        [201],
+        "structure library-1",
+      );
+
+      // Generate invoices — the seed stack runs the worker's processor inline.
+      const runRes = await expectJson<{ runId: string }>(
+        await call("fees.invoices-generate", { cookie: adminCookie, body: { classId: feesClassId, academicYear: YEAR } }),
+        [202],
+        "invoice generation",
+      );
+      const run = await expectJson<{ status: string; invoicesCreated: number; error: string | null }>(
+        await call("fees.generate-get", { cookie: adminCookie, params: { runId: runRes.runId } }),
+        [200],
+        "generation run state",
+      );
+      if (run.status !== "completed") throw new Error(`invoice generation ${run.status}: ${run.error ?? "?"}`);
+      console.log(`  fees: ${run.invoicesCreated} invoices generated for the first class`);
+
+      // Payments at the counter (accountant session): the portal student pays
+      // tuition in part (portal shows a live receipt trail); the next student
+      // clears theirs in full; one scholarship shrinks the struggler's dues.
+      const accountantCookie = await login(stack, "demo-accountant", ACCOUNTANT_PASSWORD);
+      const sectionInvoices = await expectJson<{
+        invoices: { id: string; studentId: string; headId: string; amountPaise: number }[];
+      }>(
+        await call("fees.section-invoices", {
+          cookie: accountantCookie,
+          params: { sectionId: feesSectionId },
+          query: { academicYear: YEAR },
+        }),
+        [200],
+        "section invoices",
+      );
+      const tuitionOf = (studentId: string) =>
+        sectionInvoices.invoices.find((inv) => inv.studentId === studentId && inv.headId === tuitionHeadId);
+      const byStudent = [...new Set(sectionInvoices.invoices.map((inv) => inv.studentId))];
+      const portalTuition = portalStudentId !== null ? tuitionOf(portalStudentId) : undefined;
+      if (portalTuition !== undefined) {
+        await expectJson(
+          await call("fees.payment-record", {
+            cookie: accountantCookie,
+            body: { invoiceId: portalTuition.id, amountPaise: 2_000_000, mode: "upi", ref: "UPI-DEMO-001" },
+          }),
+          [201],
+          "part payment (portal student)",
+        );
+      }
+      const fullPayer = byStudent.find((id) => id !== portalStudentId);
+      const fullTuition = fullPayer !== undefined ? tuitionOf(fullPayer) : undefined;
+      if (fullTuition !== undefined) {
+        await expectJson(
+          await call("fees.payment-record", {
+            cookie: accountantCookie,
+            body: { invoiceId: fullTuition.id, amountPaise: fullTuition.amountPaise, mode: "cash" },
+          }),
+          [201],
+          "full payment",
+        );
+      }
+      const strugglerId = byStudent.find((id) => id !== portalStudentId && id !== fullPayer);
+      const strugglerTuition = strugglerId !== undefined ? tuitionOf(strugglerId) : undefined;
+      if (strugglerTuition !== undefined) {
+        await expectJson(
+          await call("fees.adjustment-add", {
+            cookie: accountantCookie,
+            body: { invoiceId: strugglerTuition.id, kind: "scholarship", amountPaise: 1_000_000, reason: "Merit scholarship 2026" },
+          }),
+          [201],
+          "scholarship adjustment",
+        );
+      }
+      console.log("  fees: part + full payments and a scholarship recorded at the counter");
+    }
+
     // 7) Flip any resolvable manual grants (principal/HoD) to verified.
     await call("identity.grants-verify", { cookie: adminCookie });
 
@@ -684,6 +827,7 @@ function demoCredentials(): Credential[] {
     { role: "admin", username: ADMIN.username, password: ADMIN.password, scope: "college-wide" },
     { role: "principal", username: "demo-principal", password: STAFF_PASSWORD, scope: "college-wide" },
     { role: "student", username: "demo-student", password: STUDENT_PASSWORD, scope: "self (portal)" },
+    { role: "accountant", username: "demo-accountant", password: ACCOUNTANT_PASSWORD, scope: "college-wide (fees)" },
   ];
   for (const dept of DEPARTMENTS) {
     creds.push({ role: "hod", username: dept.hod.username, password: STAFF_PASSWORD, scope: `${dept.name} department` });

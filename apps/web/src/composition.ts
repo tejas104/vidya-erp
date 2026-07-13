@@ -36,6 +36,7 @@ import {
 import { createPortalModule } from "@vidya/module-portal";
 import { createTimetableModule } from "@vidya/module-timetable";
 import { createCourseworkModule } from "@vidya/module-coursework";
+import { FEES_MODULE_NAME, INVOICE_GENERATE_JOB_NAME, createFeesModule } from "@vidya/module-fees";
 
 /**
  * COMPOSITION ROOT — web process.
@@ -215,6 +216,22 @@ function buildWebRuntime(): WebRuntime {
     storage: { client: objectStorage, bucket: config.s3.bucket },
   });
 
+  // --- fees ---
+  const feesQueue = createModuleQueue({
+    module: FEES_MODULE_NAME,
+    redisUrl: config.redis.url,
+  });
+  lifecycle.onShutdown("fees-queue", () => feesQueue.close());
+  const fees = createFeesModule({
+    db,
+    audit: system.service.audit,
+    scopeChecker: identityCore.scopeChecker,
+    peopleDirectory: people.service.directory,
+    enqueueGenerate: async (payload) => {
+      await feesQueue.queue.add(INVOICE_GENERATE_JOB_NAME, payload);
+    },
+  });
+
   const portal = createPortalModule({
     peopleDirectory: people.service.directory,
     academicsRead: academics.service.readModel,
@@ -230,6 +247,7 @@ function buildWebRuntime(): WebRuntime {
     reporting,
     timetable,
     coursework,
+    fees,
     portal,
   ];
 

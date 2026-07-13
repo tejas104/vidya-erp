@@ -242,7 +242,9 @@
                               "principal",
                               "hod",
                               "class_teacher",
-                              "teacher"
+                              "teacher",
+                              "student",
+                              "accountant"
                             ]
                           }
                         }
@@ -436,7 +438,9 @@
                           "principal",
                           "hod",
                           "class_teacher",
-                          "teacher"
+                          "teacher",
+                          "student",
+                          "accountant"
                         ]
                       }
                     },
@@ -452,7 +456,9 @@
                               "principal",
                               "hod",
                               "class_teacher",
-                              "teacher"
+                              "teacher",
+                              "student",
+                              "accountant"
                             ]
                           },
                           "org": {
@@ -766,7 +772,9 @@
                         "principal",
                         "hod",
                         "class_teacher",
-                        "teacher"
+                        "teacher",
+                        "student",
+                        "accountant"
                       ]
                     },
                     "maxItems": 5,
@@ -820,7 +828,9 @@
                           "principal",
                           "hod",
                           "class_teacher",
-                          "teacher"
+                          "teacher",
+                          "student",
+                          "accountant"
                         ]
                       }
                     },
@@ -839,7 +849,9 @@
                               "principal",
                               "hod",
                               "class_teacher",
-                              "teacher"
+                              "teacher",
+                              "student",
+                              "accountant"
                             ]
                           },
                           "collegeId": {
@@ -1028,7 +1040,9 @@
                                 "principal",
                                 "hod",
                                 "class_teacher",
-                                "teacher"
+                                "teacher",
+                                "student",
+                                "accountant"
                               ]
                             }
                           },
@@ -1047,7 +1061,9 @@
                                     "principal",
                                     "hod",
                                     "class_teacher",
-                                    "teacher"
+                                    "teacher",
+                                    "student",
+                                    "accountant"
                                   ]
                                 },
                                 "collegeId": {
@@ -1214,7 +1230,9 @@
                           "principal",
                           "hod",
                           "class_teacher",
-                          "teacher"
+                          "teacher",
+                          "student",
+                          "accountant"
                         ]
                       }
                     },
@@ -1233,7 +1251,9 @@
                               "principal",
                               "hod",
                               "class_teacher",
-                              "teacher"
+                              "teacher",
+                              "student",
+                              "accountant"
                             ]
                           },
                           "collegeId": {
@@ -1445,7 +1465,9 @@
                           "principal",
                           "hod",
                           "class_teacher",
-                          "teacher"
+                          "teacher",
+                          "student",
+                          "accountant"
                         ]
                       }
                     },
@@ -1464,7 +1486,9 @@
                               "principal",
                               "hod",
                               "class_teacher",
-                              "teacher"
+                              "teacher",
+                              "student",
+                              "accountant"
                             ]
                           },
                           "collegeId": {
@@ -1606,7 +1630,9 @@
                         "principal",
                         "hod",
                         "class_teacher",
-                        "teacher"
+                        "teacher",
+                        "student",
+                        "accountant"
                       ]
                     },
                     "maxItems": 5
@@ -1636,7 +1662,9 @@
                           "principal",
                           "hod",
                           "class_teacher",
-                          "teacher"
+                          "teacher",
+                          "student",
+                          "accountant"
                         ]
                       }
                     }
@@ -1724,7 +1752,9 @@
                       "principal",
                       "hod",
                       "class_teacher",
-                      "teacher"
+                      "teacher",
+                      "student",
+                      "accountant"
                     ]
                   },
                   "collegeId": {
@@ -1779,7 +1809,9 @@
                         "principal",
                         "hod",
                         "class_teacher",
-                        "teacher"
+                        "teacher",
+                        "student",
+                        "accountant"
                       ]
                     },
                     "collegeId": {
@@ -3333,6 +3365,10 @@
                         "inactive"
                       ]
                     },
+                    "identityUserId": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "enrollment": {
                       "type": "object",
                       "nullable": true,
@@ -3356,6 +3392,7 @@
                     "admissionNo",
                     "fullName",
                     "status",
+                    "identityUserId",
                     "enrollment"
                   ]
                 }
@@ -3482,6 +3519,10 @@
                         "inactive"
                       ]
                     },
+                    "identityUserId": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "enrollment": {
                       "type": "object",
                       "nullable": true,
@@ -3505,6 +3546,7 @@
                     "admissionNo",
                     "fullName",
                     "status",
+                    "identityUserId",
                     "enrollment"
                   ]
                 }
@@ -3649,6 +3691,10 @@
                         "inactive"
                       ]
                     },
+                    "identityUserId": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "enrollment": {
                       "type": "object",
                       "nullable": true,
@@ -3672,6 +3718,7 @@
                     "admissionNo",
                     "fullName",
                     "status",
+                    "identityUserId",
                     "enrollment"
                   ]
                 }
@@ -3855,6 +3902,188 @@
         }
       }
     },
+    "/api/v1/people/students/{studentId}/identity-link": {
+      "post": {
+        "summary": "Link (or unlink) the student to an identity sign-in (admin)",
+        "description": "W1 student portal: the link is the student's ONLY access authority — students hold no scope grants. One sign-in per student (unique).\n\n**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "people-students"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "studentId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "identityUserId": {
+                    "type": "string",
+                    "nullable": true,
+                    "minLength": 1,
+                    "maxLength": 64
+                  }
+                },
+                "required": [
+                  "identityUserId"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Link updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "student": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "collegeId": {
+                          "type": "string"
+                        },
+                        "admissionNo": {
+                          "type": "string"
+                        },
+                        "fullName": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "active",
+                            "inactive"
+                          ]
+                        },
+                        "identityUserId": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "enrollment": {
+                          "type": "object",
+                          "nullable": true,
+                          "properties": {
+                            "sectionId": {
+                              "type": "string"
+                            },
+                            "academicYear": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "sectionId",
+                            "academicYear"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "collegeId",
+                        "admissionNo",
+                        "fullName",
+                        "status",
+                        "identityUserId",
+                        "enrollment"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "student"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Access denied by the role/scope policy (problem+json)"
+          },
+          "404": {
+            "description": "No such student",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "That sign-in is already linked to another student",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/people/sections/{sectionId}/roster": {
       "get": {
         "summary": "The live roster of a section",
@@ -3911,6 +4140,10 @@
                               "inactive"
                             ]
                           },
+                          "identityUserId": {
+                            "type": "string",
+                            "nullable": true
+                          },
                           "enrollment": {
                             "type": "object",
                             "nullable": true,
@@ -3934,6 +4167,7 @@
                           "admissionNo",
                           "fullName",
                           "status",
+                          "identityUserId",
                           "enrollment"
                         ]
                       }
@@ -10812,6 +11046,5412 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/api/v1/portal/me": {
+      "get": {
+        "summary": "The signed-in student's own profile + live enrollment",
+        "description": "**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "portal"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The linked student",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "student": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "admissionNo": {
+                          "type": "string"
+                        },
+                        "fullName": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "admissionNo",
+                        "fullName",
+                        "status"
+                      ]
+                    },
+                    "enrollment": {
+                      "type": "object",
+                      "nullable": true,
+                      "properties": {
+                        "sectionId": {
+                          "type": "string"
+                        },
+                        "sectionName": {
+                          "type": "string"
+                        },
+                        "className": {
+                          "type": "string"
+                        },
+                        "academicYear": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "sectionId",
+                        "sectionName",
+                        "className",
+                        "academicYear"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "student",
+                    "enrollment"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Access denied by the role/scope policy (problem+json)"
+          },
+          "404": {
+            "description": "This sign-in is not linked to a student record",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/portal/attendance": {
+      "get": {
+        "summary": "The signed-in student's own attendance (self-scoped)",
+        "description": "**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "portal"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}$"
+            },
+            "required": true,
+            "name": "academicYear",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Own attendance",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "counts": {
+                      "type": "object",
+                      "properties": {
+                        "present": {
+                          "type": "number"
+                        },
+                        "absent": {
+                          "type": "number"
+                        },
+                        "late": {
+                          "type": "number"
+                        },
+                        "excused": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "present",
+                        "absent",
+                        "late",
+                        "excused"
+                      ]
+                    },
+                    "pct": {
+                      "type": "number",
+                      "nullable": true
+                    },
+                    "monthly": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "month": {
+                            "type": "string"
+                          },
+                          "pct": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "month",
+                          "pct"
+                        ]
+                      }
+                    },
+                    "sessions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "heldOn": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "present",
+                              "absent",
+                              "late",
+                              "excused"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "heldOn",
+                          "status"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "counts",
+                    "pct",
+                    "monthly",
+                    "sessions"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Access denied by the role/scope policy (problem+json)"
+          },
+          "404": {
+            "description": "This sign-in is not linked to a student record",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/portal/timetable": {
+      "get": {
+        "summary": "The signed-in student's weekly timetable (self-scoped)",
+        "description": "**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "portal"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}$"
+            },
+            "required": true,
+            "name": "academicYear",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Weekly grid + period template",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "periods": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "periodNo": {
+                            "type": "number"
+                          },
+                          "starts": {
+                            "type": "string"
+                          },
+                          "ends": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "periodNo",
+                          "starts",
+                          "ends"
+                        ]
+                      }
+                    },
+                    "entries": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "subjectName": {
+                            "type": "string"
+                          },
+                          "teacherName": {
+                            "type": "string"
+                          },
+                          "room": {
+                            "type": "string"
+                          },
+                          "dayOfWeek": {
+                            "type": "number"
+                          },
+                          "periodNo": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "subjectName",
+                          "teacherName",
+                          "room",
+                          "dayOfWeek",
+                          "periodNo"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "periods",
+                    "entries"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Access denied by the role/scope policy (problem+json)"
+          },
+          "404": {
+            "description": "This sign-in is not linked to a student record",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/portal/today": {
+      "get": {
+        "summary": "The signed-in student's periods for today (self-scoped)",
+        "description": "**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "portal"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}$"
+            },
+            "required": true,
+            "name": "academicYear",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Today's ordered periods (empty on Sundays or when unenrolled)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "dayOfWeek": {
+                      "type": "number"
+                    },
+                    "periods": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "periodNo": {
+                            "type": "number"
+                          },
+                          "starts": {
+                            "type": "string"
+                          },
+                          "ends": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "periodNo",
+                          "starts",
+                          "ends"
+                        ]
+                      }
+                    },
+                    "entries": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "subjectName": {
+                            "type": "string"
+                          },
+                          "teacherName": {
+                            "type": "string"
+                          },
+                          "room": {
+                            "type": "string"
+                          },
+                          "dayOfWeek": {
+                            "type": "number"
+                          },
+                          "periodNo": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "subjectName",
+                          "teacherName",
+                          "room",
+                          "dayOfWeek",
+                          "periodNo"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "dayOfWeek",
+                    "periods",
+                    "entries"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Access denied by the role/scope policy (problem+json)"
+          },
+          "404": {
+            "description": "This sign-in is not linked to a student record",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/portal/marks": {
+      "get": {
+        "summary": "The signed-in student's own marks by subject (self-scoped)",
+        "description": "**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "portal"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}$"
+            },
+            "required": true,
+            "name": "academicYear",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Own marks",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "subjects": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "subjectId": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "avgPct": {
+                            "type": "number"
+                          },
+                          "marks": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "assessmentName": {
+                                  "type": "string"
+                                },
+                                "kind": {
+                                  "type": "string"
+                                },
+                                "pct": {
+                                  "type": "number"
+                                },
+                                "heldOn": {
+                                  "type": "string",
+                                  "nullable": true
+                                }
+                              },
+                              "required": [
+                                "assessmentName",
+                                "kind",
+                                "pct",
+                                "heldOn"
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "subjectId",
+                          "name",
+                          "avgPct",
+                          "marks"
+                        ]
+                      }
+                    },
+                    "overallPct": {
+                      "type": "number",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "subjects",
+                    "overallPct"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Access denied by the role/scope policy (problem+json)"
+          },
+          "404": {
+            "description": "This sign-in is not linked to a student record",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/timetable/colleges/{collegeId}/periods": {
+      "get": {
+        "summary": "The college's period template",
+        "description": "**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "timetable"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "collegeId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Periods in order",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "periods": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "periodNo": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 12
+                          },
+                          "starts": {
+                            "type": "string",
+                            "pattern": "^\\d{2}:\\d{2}$"
+                          },
+                          "ends": {
+                            "type": "string",
+                            "pattern": "^\\d{2}:\\d{2}$"
+                          }
+                        },
+                        "required": [
+                          "periodNo",
+                          "starts",
+                          "ends"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "periods"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Access denied by the role/scope policy (problem+json)"
+          }
+        }
+      },
+      "put": {
+        "summary": "Replace the college's period template (admin)",
+        "description": "**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "timetable"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "collegeId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "periods": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "periodNo": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 12
+                        },
+                        "starts": {
+                          "type": "string",
+                          "pattern": "^\\d{2}:\\d{2}$"
+                        },
+                        "ends": {
+                          "type": "string",
+                          "pattern": "^\\d{2}:\\d{2}$"
+                        }
+                      },
+                      "required": [
+                        "periodNo",
+                        "starts",
+                        "ends"
+                      ]
+                    },
+                    "maxItems": 12
+                  }
+                },
+                "required": [
+                  "periods"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Template replaced",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Access denied by the role/scope policy (problem+json)"
+          },
+          "404": {
+            "description": "No such college",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/timetable/entries": {
+      "post": {
+        "summary": "Schedule a period (admin) — clash-checked by the database",
+        "description": "409 names the busy resource (section/teacher/room). 422 when the subject does not belong to the section's department.\n\n**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "timetable"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "sectionId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64
+                  },
+                  "subjectId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64
+                  },
+                  "teacherId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64
+                  },
+                  "room": {
+                    "type": "string",
+                    "maxLength": 32,
+                    "default": ""
+                  },
+                  "dayOfWeek": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 6
+                  },
+                  "periodNo": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 12
+                  },
+                  "academicYear": {
+                    "type": "string",
+                    "pattern": "^\\d{4}-\\d{2}$"
+                  }
+                },
+                "required": [
+                  "sectionId",
+                  "subjectId",
+                  "teacherId",
+                  "dayOfWeek",
+                  "periodNo",
+                  "academicYear"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Scheduled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "sectionId": {
+                      "type": "string"
+                    },
+                    "subjectId": {
+                      "type": "string"
+                    },
+                    "subjectName": {
+                      "type": "string"
+                    },
+                    "teacherId": {
+                      "type": "string"
+                    },
+                    "teacherName": {
+                      "type": "string"
+                    },
+                    "room": {
+                      "type": "string"
+                    },
+                    "dayOfWeek": {
+                      "type": "number"
+                    },
+                    "periodNo": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "sectionId",
+                    "subjectId",
+                    "subjectName",
+                    "teacherId",
+                    "teacherName",
+                    "room",
+                    "dayOfWeek",
+                    "periodNo"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Access denied by the role/scope policy (problem+json)"
+          },
+          "404": {
+            "description": "No such section/subject/teacher",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Section, teacher or room already booked in that period",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Subject not of the section's department",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/timetable/entries/{entryId}": {
+      "delete": {
+        "summary": "Unschedule a period (admin)",
+        "description": "**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "timetable"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "entryId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Removed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Access denied by the role/scope policy (problem+json)"
+          },
+          "404": {
+            "description": "No such entry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/timetable/sections/{sectionId}/grid": {
+      "get": {
+        "summary": "A section's weekly grid (scope-checked read)",
+        "description": "**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "timetable"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "sectionId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}$"
+            },
+            "required": true,
+            "name": "academicYear",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Weekly entries + the period template",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "periods": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "periodNo": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 12
+                          },
+                          "starts": {
+                            "type": "string",
+                            "pattern": "^\\d{2}:\\d{2}$"
+                          },
+                          "ends": {
+                            "type": "string",
+                            "pattern": "^\\d{2}:\\d{2}$"
+                          }
+                        },
+                        "required": [
+                          "periodNo",
+                          "starts",
+                          "ends"
+                        ]
+                      }
+                    },
+                    "entries": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "sectionId": {
+                            "type": "string"
+                          },
+                          "subjectId": {
+                            "type": "string"
+                          },
+                          "subjectName": {
+                            "type": "string"
+                          },
+                          "teacherId": {
+                            "type": "string"
+                          },
+                          "teacherName": {
+                            "type": "string"
+                          },
+                          "room": {
+                            "type": "string"
+                          },
+                          "dayOfWeek": {
+                            "type": "number"
+                          },
+                          "periodNo": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "sectionId",
+                          "subjectId",
+                          "subjectName",
+                          "teacherId",
+                          "teacherName",
+                          "room",
+                          "dayOfWeek",
+                          "periodNo"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "periods",
+                    "entries"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Scope check denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such section",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/timetable/my/today": {
+      "get": {
+        "summary": "The signed-in teacher's periods for today (self via the identity link)",
+        "description": "**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "timetable"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}$"
+            },
+            "required": true,
+            "name": "academicYear",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Today's ordered periods (empty on Sundays)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "dayOfWeek": {
+                      "type": "number"
+                    },
+                    "periods": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "periodNo": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 12
+                          },
+                          "starts": {
+                            "type": "string",
+                            "pattern": "^\\d{2}:\\d{2}$"
+                          },
+                          "ends": {
+                            "type": "string",
+                            "pattern": "^\\d{2}:\\d{2}$"
+                          }
+                        },
+                        "required": [
+                          "periodNo",
+                          "starts",
+                          "ends"
+                        ]
+                      }
+                    },
+                    "entries": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "sectionId": {
+                            "type": "string"
+                          },
+                          "subjectId": {
+                            "type": "string"
+                          },
+                          "subjectName": {
+                            "type": "string"
+                          },
+                          "teacherId": {
+                            "type": "string"
+                          },
+                          "teacherName": {
+                            "type": "string"
+                          },
+                          "room": {
+                            "type": "string"
+                          },
+                          "dayOfWeek": {
+                            "type": "number"
+                          },
+                          "periodNo": {
+                            "type": "number"
+                          },
+                          "sectionName": {
+                            "type": "string"
+                          },
+                          "className": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "sectionId",
+                          "subjectId",
+                          "subjectName",
+                          "teacherId",
+                          "teacherName",
+                          "room",
+                          "dayOfWeek",
+                          "periodNo",
+                          "sectionName",
+                          "className"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "dayOfWeek",
+                    "periods",
+                    "entries"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Access denied by the role/scope policy (problem+json)"
+          },
+          "404": {
+            "description": "This sign-in is not linked to a teacher record",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/coursework/assignments": {
+      "post": {
+        "summary": "Create an assignment (the subject's teacher)",
+        "description": "**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "coursework"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "classId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64
+                  },
+                  "subjectId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64
+                  },
+                  "title": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 160
+                  },
+                  "instructions": {
+                    "type": "string",
+                    "maxLength": 4000,
+                    "default": ""
+                  },
+                  "dueOn": {
+                    "type": "string",
+                    "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                  },
+                  "maxScore": {
+                    "type": "number",
+                    "minimum": 0,
+                    "exclusiveMinimum": true,
+                    "maximum": 9999
+                  },
+                  "academicYear": {
+                    "type": "string",
+                    "pattern": "^\\d{4}-\\d{2}$"
+                  }
+                },
+                "required": [
+                  "classId",
+                  "subjectId",
+                  "title",
+                  "dueOn",
+                  "academicYear"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "classId": {
+                      "type": "string"
+                    },
+                    "subjectId": {
+                      "type": "string"
+                    },
+                    "subjectName": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "instructions": {
+                      "type": "string"
+                    },
+                    "dueOn": {
+                      "type": "string"
+                    },
+                    "maxScore": {
+                      "type": "number",
+                      "nullable": true
+                    },
+                    "academicYear": {
+                      "type": "string"
+                    },
+                    "submissions": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "classId",
+                    "subjectId",
+                    "subjectName",
+                    "title",
+                    "instructions",
+                    "dueOn",
+                    "maxScore",
+                    "academicYear"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Not this subject's teacher",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such class/subject",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Duplicate title for subject/year",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Subject not of the class's department",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/coursework/classes/{classId}/assignments": {
+      "get": {
+        "summary": "A class's assignments (row-filtered by subject read scope)",
+        "description": "**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "coursework"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "classId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}$"
+            },
+            "required": true,
+            "name": "academicYear",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Assignments",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "assignments": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "classId": {
+                            "type": "string"
+                          },
+                          "subjectId": {
+                            "type": "string"
+                          },
+                          "subjectName": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "instructions": {
+                            "type": "string"
+                          },
+                          "dueOn": {
+                            "type": "string"
+                          },
+                          "maxScore": {
+                            "type": "number",
+                            "nullable": true
+                          },
+                          "academicYear": {
+                            "type": "string"
+                          },
+                          "submissions": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "classId",
+                          "subjectId",
+                          "subjectName",
+                          "title",
+                          "instructions",
+                          "dueOn",
+                          "maxScore",
+                          "academicYear"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "assignments"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Access denied by the role/scope policy (problem+json)"
+          },
+          "404": {
+            "description": "No such class",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/coursework/assignments/{assignmentId}": {
+      "delete": {
+        "summary": "Delete an assignment without submissions (the subject's teacher)",
+        "description": "**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "coursework"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "assignmentId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Access denied by the role/scope policy (problem+json)"
+          },
+          "404": {
+            "description": "No such assignment",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Submissions exist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/coursework/assignments/{assignmentId}/submissions": {
+      "get": {
+        "summary": "An assignment's submissions (the subject's teacher)",
+        "description": "**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "coursework"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "assignmentId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Submissions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "submissions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "studentId": {
+                            "type": "string"
+                          },
+                          "studentName": {
+                            "type": "string"
+                          },
+                          "body": {
+                            "type": "string"
+                          },
+                          "hasFile": {
+                            "type": "boolean"
+                          },
+                          "submittedAt": {
+                            "type": "string"
+                          },
+                          "score": {
+                            "type": "number",
+                            "nullable": true
+                          },
+                          "feedback": {
+                            "type": "string",
+                            "nullable": true
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "studentId",
+                          "studentName",
+                          "body",
+                          "hasFile",
+                          "submittedAt",
+                          "score",
+                          "feedback"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "submissions"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Scope denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such assignment",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/coursework/submissions/{submissionId}/evaluate": {
+      "post": {
+        "summary": "Score a submission (the subject's teacher; audited)",
+        "description": "**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "coursework"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "submissionId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "score": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 9999
+                  },
+                  "feedback": {
+                    "type": "string",
+                    "maxLength": 2000,
+                    "default": ""
+                  }
+                },
+                "required": [
+                  "score"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Evaluated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "studentId": {
+                      "type": "string"
+                    },
+                    "studentName": {
+                      "type": "string"
+                    },
+                    "body": {
+                      "type": "string"
+                    },
+                    "hasFile": {
+                      "type": "boolean"
+                    },
+                    "submittedAt": {
+                      "type": "string"
+                    },
+                    "score": {
+                      "type": "number",
+                      "nullable": true
+                    },
+                    "feedback": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "studentId",
+                    "studentName",
+                    "body",
+                    "hasFile",
+                    "submittedAt",
+                    "score",
+                    "feedback"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Access denied by the role/scope policy (problem+json)"
+          },
+          "404": {
+            "description": "No such submission",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Score exceeds the assignment's maxScore",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/coursework/materials": {
+      "post": {
+        "summary": "Upload a study material (the subject's teacher; ≤1MB)",
+        "description": "**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "coursework"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "classId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64
+                  },
+                  "subjectId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64
+                  },
+                  "title": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 160
+                  },
+                  "contentType": {
+                    "type": "string",
+                    "minLength": 3,
+                    "maxLength": 100
+                  },
+                  "dataBase64": {
+                    "type": "string",
+                    "maxLength": 1400000
+                  },
+                  "academicYear": {
+                    "type": "string",
+                    "pattern": "^\\d{4}-\\d{2}$"
+                  }
+                },
+                "required": [
+                  "classId",
+                  "subjectId",
+                  "title",
+                  "contentType",
+                  "dataBase64",
+                  "academicYear"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Uploaded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "classId": {
+                      "type": "string"
+                    },
+                    "subjectId": {
+                      "type": "string"
+                    },
+                    "subjectName": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "contentType": {
+                      "type": "string"
+                    },
+                    "sizeBytes": {
+                      "type": "number"
+                    },
+                    "createdAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "classId",
+                    "subjectId",
+                    "subjectName",
+                    "title",
+                    "contentType",
+                    "sizeBytes",
+                    "createdAt"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Not this subject's teacher",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such class/subject",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Subject not of the class's department",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/coursework/classes/{classId}/materials": {
+      "get": {
+        "summary": "A class's materials (staff scope; enrolled students via portal routes)",
+        "description": "**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "coursework"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "classId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}$"
+            },
+            "required": true,
+            "name": "academicYear",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Materials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "materials": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "classId": {
+                            "type": "string"
+                          },
+                          "subjectId": {
+                            "type": "string"
+                          },
+                          "subjectName": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "contentType": {
+                            "type": "string"
+                          },
+                          "sizeBytes": {
+                            "type": "number"
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "classId",
+                          "subjectId",
+                          "subjectName",
+                          "title",
+                          "contentType",
+                          "sizeBytes",
+                          "createdAt"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "materials"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Access denied by the role/scope policy (problem+json)"
+          },
+          "404": {
+            "description": "No such class",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/coursework/materials/{materialId}/download": {
+      "get": {
+        "summary": "Download a material (staff scope, or an enrolled student of the class)",
+        "description": "**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "coursework"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "materialId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The file bytes"
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Scope denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such material",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/coursework/my/assignments": {
+      "get": {
+        "summary": "The signed-in student's assignments with own submission status",
+        "description": "**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "coursework"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}$"
+            },
+            "required": true,
+            "name": "academicYear",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Assignments + own submission state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "assignments": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "classId": {
+                            "type": "string"
+                          },
+                          "subjectId": {
+                            "type": "string"
+                          },
+                          "subjectName": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "instructions": {
+                            "type": "string"
+                          },
+                          "dueOn": {
+                            "type": "string"
+                          },
+                          "maxScore": {
+                            "type": "number",
+                            "nullable": true
+                          },
+                          "academicYear": {
+                            "type": "string"
+                          },
+                          "submissions": {
+                            "type": "number"
+                          },
+                          "mySubmission": {
+                            "type": "object",
+                            "nullable": true,
+                            "properties": {
+                              "submittedAt": {
+                                "type": "string"
+                              },
+                              "score": {
+                                "type": "number",
+                                "nullable": true
+                              },
+                              "feedback": {
+                                "type": "string",
+                                "nullable": true
+                              }
+                            },
+                            "required": [
+                              "submittedAt",
+                              "score",
+                              "feedback"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "classId",
+                          "subjectId",
+                          "subjectName",
+                          "title",
+                          "instructions",
+                          "dueOn",
+                          "maxScore",
+                          "academicYear",
+                          "mySubmission"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "assignments"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Access denied by the role/scope policy (problem+json)"
+          },
+          "404": {
+            "description": "Sign-in not linked to a student",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/coursework/my/assignments/{assignmentId}/submission": {
+      "post": {
+        "summary": "Submit (or resubmit until evaluated) the signed-in student's work",
+        "description": "**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "coursework"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "assignmentId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "body": {
+                    "type": "string",
+                    "maxLength": 8000,
+                    "default": ""
+                  },
+                  "contentType": {
+                    "type": "string",
+                    "maxLength": 100
+                  },
+                  "dataBase64": {
+                    "type": "string",
+                    "maxLength": 1400000
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Saved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    },
+                    "submittedAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "submittedAt"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Access denied by the role/scope policy (problem+json)"
+          },
+          "404": {
+            "description": "No such assignment / not your class / unlinked",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Already evaluated — resubmission locked",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/coursework/my/materials": {
+      "get": {
+        "summary": "The signed-in student's class materials",
+        "description": "**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "coursework"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}$"
+            },
+            "required": true,
+            "name": "academicYear",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Materials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "materials": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "classId": {
+                            "type": "string"
+                          },
+                          "subjectId": {
+                            "type": "string"
+                          },
+                          "subjectName": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "contentType": {
+                            "type": "string"
+                          },
+                          "sizeBytes": {
+                            "type": "number"
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "classId",
+                          "subjectId",
+                          "subjectName",
+                          "title",
+                          "contentType",
+                          "sizeBytes",
+                          "createdAt"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "materials"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Access denied by the role/scope policy (problem+json)"
+          },
+          "404": {
+            "description": "Sign-in not linked to a student",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/fees/heads": {
+      "post": {
+        "summary": "Create a fee head (admin) — e.g. Tuition, Library, Lab",
+        "description": "**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "fees"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "collegeId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  }
+                },
+                "required": [
+                  "collegeId",
+                  "name"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "collegeId": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "collegeId",
+                    "name"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Access denied by the role/scope policy (problem+json)"
+          },
+          "404": {
+            "description": "No such college",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Duplicate name",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "summary": "List a college's fee heads",
+        "description": "**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "fees"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "collegeId",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Fee heads",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "heads": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "collegeId": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "collegeId",
+                          "name"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "heads"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Access denied by the role/scope policy (problem+json)"
+          }
+        }
+      }
+    },
+    "/api/v1/fees/heads/{headId}": {
+      "delete": {
+        "summary": "Delete a fee head (admin)",
+        "description": "RESTRICT: heads referenced by a fee structure answer 409.\n\n**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "fees"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "headId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Access denied by the role/scope policy (problem+json)"
+          },
+          "404": {
+            "description": "No such head",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Head still referenced by a structure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/fees/structures": {
+      "post": {
+        "summary": "Set a fee structure for a class (admin)",
+        "description": "One row per (class, head, academic year, installment). Invoices are generated separately (fees.invoices-generate) so a structure can be corrected before it goes out.\n\n**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "fees"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "classId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64
+                  },
+                  "headId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64
+                  },
+                  "academicYear": {
+                    "type": "string",
+                    "pattern": "^\\d{4}-\\d{2}$"
+                  },
+                  "amountPaise": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "exclusiveMinimum": true
+                  },
+                  "dueOn": {
+                    "type": "string",
+                    "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                  },
+                  "installmentNo": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 12,
+                    "default": 1
+                  }
+                },
+                "required": [
+                  "classId",
+                  "headId",
+                  "academicYear",
+                  "amountPaise",
+                  "dueOn"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "collegeId": {
+                      "type": "string"
+                    },
+                    "departmentId": {
+                      "type": "string"
+                    },
+                    "classId": {
+                      "type": "string"
+                    },
+                    "headId": {
+                      "type": "string"
+                    },
+                    "headName": {
+                      "type": "string"
+                    },
+                    "academicYear": {
+                      "type": "string"
+                    },
+                    "amountPaise": {
+                      "type": "number"
+                    },
+                    "dueOn": {
+                      "type": "string"
+                    },
+                    "installmentNo": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "collegeId",
+                    "departmentId",
+                    "classId",
+                    "headId",
+                    "headName",
+                    "academicYear",
+                    "amountPaise",
+                    "dueOn",
+                    "installmentNo"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Access denied by the role/scope policy (problem+json)"
+          },
+          "404": {
+            "description": "No such class or head",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A structure already exists for this class/head/year/installment",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/fees/classes/{classId}/structures": {
+      "get": {
+        "summary": "List a class's fee structures for a year",
+        "description": "**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "fees"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "classId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}$"
+            },
+            "required": true,
+            "name": "academicYear",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Structures",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "structures": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "collegeId": {
+                            "type": "string"
+                          },
+                          "departmentId": {
+                            "type": "string"
+                          },
+                          "classId": {
+                            "type": "string"
+                          },
+                          "headId": {
+                            "type": "string"
+                          },
+                          "headName": {
+                            "type": "string"
+                          },
+                          "academicYear": {
+                            "type": "string"
+                          },
+                          "amountPaise": {
+                            "type": "number"
+                          },
+                          "dueOn": {
+                            "type": "string"
+                          },
+                          "installmentNo": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "collegeId",
+                          "departmentId",
+                          "classId",
+                          "headId",
+                          "headName",
+                          "academicYear",
+                          "amountPaise",
+                          "dueOn",
+                          "installmentNo"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "structures"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Access denied by the role/scope policy (problem+json)"
+          },
+          "404": {
+            "description": "No such class",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/fees/generate": {
+      "post": {
+        "summary": "Generate invoices for every structure of a class (admin) — runs in the worker",
+        "description": "Idempotent: students already invoiced for a structure are skipped, so re-running after enrolling more students only invoices the new ones. Poll fees.generate-get for progress.\n\n**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "fees"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "classId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64
+                  },
+                  "academicYear": {
+                    "type": "string",
+                    "pattern": "^\\d{4}-\\d{2}$"
+                  }
+                },
+                "required": [
+                  "classId",
+                  "academicYear"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted and enqueued",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "runId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "runId"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Access denied by the role/scope policy (problem+json)"
+          },
+          "404": {
+            "description": "No such class",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/fees/generate/{runId}": {
+      "get": {
+        "summary": "Invoice-generation run status (admin) — for polling",
+        "description": "**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "fees"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "runId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Run state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "collegeId": {
+                      "type": "string"
+                    },
+                    "classId": {
+                      "type": "string"
+                    },
+                    "academicYear": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "pending",
+                        "running",
+                        "completed",
+                        "failed"
+                      ]
+                    },
+                    "invoicesCreated": {
+                      "type": "number"
+                    },
+                    "invoicesSkipped": {
+                      "type": "number"
+                    },
+                    "error": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "collegeId",
+                    "classId",
+                    "academicYear",
+                    "status",
+                    "invoicesCreated",
+                    "invoicesSkipped",
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Access denied by the role/scope policy (problem+json)"
+          },
+          "404": {
+            "description": "No such run",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/fees/students/{studentId}/invoices": {
+      "get": {
+        "summary": "A student's invoices (scope-checked read)",
+        "description": "**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "fees"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "studentId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Invoices",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "invoices": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "collegeId": {
+                            "type": "string"
+                          },
+                          "departmentId": {
+                            "type": "string"
+                          },
+                          "classId": {
+                            "type": "string"
+                          },
+                          "sectionId": {
+                            "type": "string"
+                          },
+                          "studentId": {
+                            "type": "string"
+                          },
+                          "studentName": {
+                            "type": "string"
+                          },
+                          "admissionNo": {
+                            "type": "string"
+                          },
+                          "structureId": {
+                            "type": "string"
+                          },
+                          "headId": {
+                            "type": "string"
+                          },
+                          "headName": {
+                            "type": "string"
+                          },
+                          "academicYear": {
+                            "type": "string"
+                          },
+                          "amountPaise": {
+                            "type": "number"
+                          },
+                          "dueOn": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "pending",
+                              "part",
+                              "paid",
+                              "waived"
+                            ]
+                          },
+                          "paidPaise": {
+                            "type": "number"
+                          },
+                          "duesPaise": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "collegeId",
+                          "departmentId",
+                          "classId",
+                          "sectionId",
+                          "studentId",
+                          "studentName",
+                          "admissionNo",
+                          "structureId",
+                          "headId",
+                          "headName",
+                          "academicYear",
+                          "amountPaise",
+                          "dueOn",
+                          "status",
+                          "paidPaise",
+                          "duesPaise"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "invoices"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Scope check denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such student",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/fees/sections/{sectionId}/invoices": {
+      "get": {
+        "summary": "A section's invoices (scope-checked read)",
+        "description": "**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "fees"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "sectionId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}$"
+            },
+            "required": true,
+            "name": "academicYear",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Invoices",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "invoices": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "collegeId": {
+                            "type": "string"
+                          },
+                          "departmentId": {
+                            "type": "string"
+                          },
+                          "classId": {
+                            "type": "string"
+                          },
+                          "sectionId": {
+                            "type": "string"
+                          },
+                          "studentId": {
+                            "type": "string"
+                          },
+                          "studentName": {
+                            "type": "string"
+                          },
+                          "admissionNo": {
+                            "type": "string"
+                          },
+                          "structureId": {
+                            "type": "string"
+                          },
+                          "headId": {
+                            "type": "string"
+                          },
+                          "headName": {
+                            "type": "string"
+                          },
+                          "academicYear": {
+                            "type": "string"
+                          },
+                          "amountPaise": {
+                            "type": "number"
+                          },
+                          "dueOn": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "pending",
+                              "part",
+                              "paid",
+                              "waived"
+                            ]
+                          },
+                          "paidPaise": {
+                            "type": "number"
+                          },
+                          "duesPaise": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "collegeId",
+                          "departmentId",
+                          "classId",
+                          "sectionId",
+                          "studentId",
+                          "studentName",
+                          "admissionNo",
+                          "structureId",
+                          "headId",
+                          "headName",
+                          "academicYear",
+                          "amountPaise",
+                          "dueOn",
+                          "status",
+                          "paidPaise",
+                          "duesPaise"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "invoices"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Scope check denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such section",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/fees/payments": {
+      "post": {
+        "summary": "Record a payment against an invoice (accountant/admin) — audited, monotonic receipt number",
+        "description": "**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "fees"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "invoiceId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64
+                  },
+                  "amountPaise": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "exclusiveMinimum": true
+                  },
+                  "mode": {
+                    "type": "string",
+                    "enum": [
+                      "cash",
+                      "upi",
+                      "card",
+                      "bank",
+                      "gateway"
+                    ]
+                  },
+                  "ref": {
+                    "type": "string",
+                    "maxLength": 128,
+                    "default": ""
+                  }
+                },
+                "required": [
+                  "invoiceId",
+                  "amountPaise",
+                  "mode"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Recorded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "payment": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "invoiceId": {
+                          "type": "string"
+                        },
+                        "receiptNo": {
+                          "type": "number"
+                        },
+                        "amountPaise": {
+                          "type": "number"
+                        },
+                        "mode": {
+                          "type": "string",
+                          "enum": [
+                            "cash",
+                            "upi",
+                            "card",
+                            "bank",
+                            "gateway"
+                          ]
+                        },
+                        "ref": {
+                          "type": "string"
+                        },
+                        "receivedBy": {
+                          "type": "string"
+                        },
+                        "receivedAt": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "invoiceId",
+                        "receiptNo",
+                        "amountPaise",
+                        "mode",
+                        "ref",
+                        "receivedBy",
+                        "receivedAt"
+                      ]
+                    },
+                    "invoice": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "collegeId": {
+                          "type": "string"
+                        },
+                        "departmentId": {
+                          "type": "string"
+                        },
+                        "classId": {
+                          "type": "string"
+                        },
+                        "sectionId": {
+                          "type": "string"
+                        },
+                        "studentId": {
+                          "type": "string"
+                        },
+                        "studentName": {
+                          "type": "string"
+                        },
+                        "admissionNo": {
+                          "type": "string"
+                        },
+                        "structureId": {
+                          "type": "string"
+                        },
+                        "headId": {
+                          "type": "string"
+                        },
+                        "headName": {
+                          "type": "string"
+                        },
+                        "academicYear": {
+                          "type": "string"
+                        },
+                        "amountPaise": {
+                          "type": "number"
+                        },
+                        "dueOn": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "pending",
+                            "part",
+                            "paid",
+                            "waived"
+                          ]
+                        },
+                        "paidPaise": {
+                          "type": "number"
+                        },
+                        "duesPaise": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "collegeId",
+                        "departmentId",
+                        "classId",
+                        "sectionId",
+                        "studentId",
+                        "studentName",
+                        "admissionNo",
+                        "structureId",
+                        "headId",
+                        "headName",
+                        "academicYear",
+                        "amountPaise",
+                        "dueOn",
+                        "status",
+                        "paidPaise",
+                        "duesPaise"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "payment",
+                    "invoice"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Access denied by the role/scope policy (problem+json)"
+          },
+          "404": {
+            "description": "No such invoice",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Invoice is waived — no further payments accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/fees/adjustments": {
+      "post": {
+        "summary": "Add an adjustment — scholarship, fine, refund or waiver (accountant/admin)",
+        "description": "**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "fees"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "invoiceId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64
+                  },
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "scholarship",
+                      "fine",
+                      "refund",
+                      "waiver"
+                    ]
+                  },
+                  "amountPaise": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "exclusiveMinimum": true
+                  },
+                  "reason": {
+                    "type": "string",
+                    "maxLength": 256,
+                    "default": ""
+                  }
+                },
+                "required": [
+                  "invoiceId",
+                  "kind",
+                  "amountPaise"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Recorded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "adjustment": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "invoiceId": {
+                          "type": "string"
+                        },
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "scholarship",
+                            "fine",
+                            "refund",
+                            "waiver"
+                          ]
+                        },
+                        "amountPaise": {
+                          "type": "number"
+                        },
+                        "reason": {
+                          "type": "string"
+                        },
+                        "actor": {
+                          "type": "string"
+                        },
+                        "createdAt": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "invoiceId",
+                        "kind",
+                        "amountPaise",
+                        "reason",
+                        "actor",
+                        "createdAt"
+                      ]
+                    },
+                    "invoice": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "collegeId": {
+                          "type": "string"
+                        },
+                        "departmentId": {
+                          "type": "string"
+                        },
+                        "classId": {
+                          "type": "string"
+                        },
+                        "sectionId": {
+                          "type": "string"
+                        },
+                        "studentId": {
+                          "type": "string"
+                        },
+                        "studentName": {
+                          "type": "string"
+                        },
+                        "admissionNo": {
+                          "type": "string"
+                        },
+                        "structureId": {
+                          "type": "string"
+                        },
+                        "headId": {
+                          "type": "string"
+                        },
+                        "headName": {
+                          "type": "string"
+                        },
+                        "academicYear": {
+                          "type": "string"
+                        },
+                        "amountPaise": {
+                          "type": "number"
+                        },
+                        "dueOn": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "pending",
+                            "part",
+                            "paid",
+                            "waived"
+                          ]
+                        },
+                        "paidPaise": {
+                          "type": "number"
+                        },
+                        "duesPaise": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "collegeId",
+                        "departmentId",
+                        "classId",
+                        "sectionId",
+                        "studentId",
+                        "studentName",
+                        "admissionNo",
+                        "structureId",
+                        "headId",
+                        "headName",
+                        "academicYear",
+                        "amountPaise",
+                        "dueOn",
+                        "status",
+                        "paidPaise",
+                        "duesPaise"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "adjustment",
+                    "invoice"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Access denied by the role/scope policy (problem+json)"
+          },
+          "404": {
+            "description": "No such invoice",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/fees/my-fees": {
+      "get": {
+        "summary": "The signed-in student's own fee status (self via the identity link)",
+        "description": "**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "fees"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Invoices with payment/adjustment history",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "invoices": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "collegeId": {
+                            "type": "string"
+                          },
+                          "departmentId": {
+                            "type": "string"
+                          },
+                          "classId": {
+                            "type": "string"
+                          },
+                          "sectionId": {
+                            "type": "string"
+                          },
+                          "studentId": {
+                            "type": "string"
+                          },
+                          "studentName": {
+                            "type": "string"
+                          },
+                          "admissionNo": {
+                            "type": "string"
+                          },
+                          "structureId": {
+                            "type": "string"
+                          },
+                          "headId": {
+                            "type": "string"
+                          },
+                          "headName": {
+                            "type": "string"
+                          },
+                          "academicYear": {
+                            "type": "string"
+                          },
+                          "amountPaise": {
+                            "type": "number"
+                          },
+                          "dueOn": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "pending",
+                              "part",
+                              "paid",
+                              "waived"
+                            ]
+                          },
+                          "paidPaise": {
+                            "type": "number"
+                          },
+                          "duesPaise": {
+                            "type": "number"
+                          },
+                          "payments": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "invoiceId": {
+                                  "type": "string"
+                                },
+                                "receiptNo": {
+                                  "type": "number"
+                                },
+                                "amountPaise": {
+                                  "type": "number"
+                                },
+                                "mode": {
+                                  "type": "string",
+                                  "enum": [
+                                    "cash",
+                                    "upi",
+                                    "card",
+                                    "bank",
+                                    "gateway"
+                                  ]
+                                },
+                                "ref": {
+                                  "type": "string"
+                                },
+                                "receivedBy": {
+                                  "type": "string"
+                                },
+                                "receivedAt": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "invoiceId",
+                                "receiptNo",
+                                "amountPaise",
+                                "mode",
+                                "ref",
+                                "receivedBy",
+                                "receivedAt"
+                              ]
+                            }
+                          },
+                          "adjustments": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string"
+                                },
+                                "invoiceId": {
+                                  "type": "string"
+                                },
+                                "kind": {
+                                  "type": "string",
+                                  "enum": [
+                                    "scholarship",
+                                    "fine",
+                                    "refund",
+                                    "waiver"
+                                  ]
+                                },
+                                "amountPaise": {
+                                  "type": "number"
+                                },
+                                "reason": {
+                                  "type": "string"
+                                },
+                                "actor": {
+                                  "type": "string"
+                                },
+                                "createdAt": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "invoiceId",
+                                "kind",
+                                "amountPaise",
+                                "reason",
+                                "actor",
+                                "createdAt"
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "collegeId",
+                          "departmentId",
+                          "classId",
+                          "sectionId",
+                          "studentId",
+                          "studentName",
+                          "admissionNo",
+                          "structureId",
+                          "headId",
+                          "headName",
+                          "academicYear",
+                          "amountPaise",
+                          "dueOn",
+                          "status",
+                          "paidPaise",
+                          "duesPaise",
+                          "payments",
+                          "adjustments"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "invoices"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Access denied by the role/scope policy (problem+json)"
+          },
+          "404": {
+            "description": "This sign-in is not linked to a student record",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/fees/collections/summary": {
+      "get": {
+        "summary": "Collection totals by mode over a date range (accountant/admin)",
+        "description": "**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "fees"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "collegeId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            },
+            "required": true,
+            "name": "from",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+            },
+            "required": true,
+            "name": "to",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Totals",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "from": {
+                      "type": "string"
+                    },
+                    "to": {
+                      "type": "string"
+                    },
+                    "totalPaise": {
+                      "type": "number"
+                    },
+                    "byMode": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "mode": {
+                            "type": "string",
+                            "enum": [
+                              "cash",
+                              "upi",
+                              "card",
+                              "bank",
+                              "gateway"
+                            ]
+                          },
+                          "totalPaise": {
+                            "type": "number"
+                          },
+                          "count": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "mode",
+                          "totalPaise",
+                          "count"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "from",
+                    "to",
+                    "totalPaise",
+                    "byMode"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Access denied by the role/scope policy (problem+json)"
+          }
+        }
+      }
+    },
+    "/api/v1/fees/defaulters": {
+      "get": {
+        "summary": "Students with outstanding dues (accountant/admin)",
+        "description": "**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "fees"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "collegeId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}$"
+            },
+            "required": true,
+            "name": "academicYear",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Outstanding invoices",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "defaulters": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "collegeId": {
+                            "type": "string"
+                          },
+                          "departmentId": {
+                            "type": "string"
+                          },
+                          "classId": {
+                            "type": "string"
+                          },
+                          "sectionId": {
+                            "type": "string"
+                          },
+                          "studentId": {
+                            "type": "string"
+                          },
+                          "studentName": {
+                            "type": "string"
+                          },
+                          "admissionNo": {
+                            "type": "string"
+                          },
+                          "structureId": {
+                            "type": "string"
+                          },
+                          "headId": {
+                            "type": "string"
+                          },
+                          "headName": {
+                            "type": "string"
+                          },
+                          "academicYear": {
+                            "type": "string"
+                          },
+                          "amountPaise": {
+                            "type": "number"
+                          },
+                          "dueOn": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "pending",
+                              "part",
+                              "paid",
+                              "waived"
+                            ]
+                          },
+                          "paidPaise": {
+                            "type": "number"
+                          },
+                          "duesPaise": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "collegeId",
+                          "departmentId",
+                          "classId",
+                          "sectionId",
+                          "studentId",
+                          "studentName",
+                          "admissionNo",
+                          "structureId",
+                          "headId",
+                          "headName",
+                          "academicYear",
+                          "amountPaise",
+                          "dueOn",
+                          "status",
+                          "paidPaise",
+                          "duesPaise"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "defaulters"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Access denied by the role/scope policy (problem+json)"
           }
         }
       }

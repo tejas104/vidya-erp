@@ -38,6 +38,9 @@ importers:
       '@vidya/module-coursework':
         specifier: workspace:*
         version: link:packages/modules/coursework
+      '@vidya/module-fees':
+        specifier: workspace:*
+        version: link:packages/modules/fees
       '@vidya/module-identity':
         specifier: workspace:*
         version: link:packages/modules/identity
@@ -110,6 +113,9 @@ importers:
       '@vidya/module-coursework':
         specifier: workspace:*
         version: link:../../packages/modules/coursework
+      '@vidya/module-fees':
+        specifier: workspace:*
+        version: link:../../packages/modules/fees
       '@vidya/module-identity':
         specifier: workspace:*
         version: link:../../packages/modules/identity
@@ -165,6 +171,9 @@ importers:
       '@vidya/module-coursework':
         specifier: workspace:*
         version: link:../../packages/modules/coursework
+      '@vidya/module-fees':
+        specifier: workspace:*
+        version: link:../../packages/modules/fees
       '@vidya/module-identity':
         specifier: workspace:*
         version: link:../../packages/modules/identity
