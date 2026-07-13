@@ -7,6 +7,7 @@ import {
   type CwkAssignment,
   type CwkMaterial,
   type FeeMyInvoice,
+  type MyResults,
   type PortalAttendance,
   type PortalMarks,
   type PortalMe,
@@ -26,6 +27,7 @@ import { EmptyState } from "@/ui/EmptyState";
 import { Skeleton } from "@/ui/Skeleton";
 import { formatPaise } from "@/ui/money";
 import { Noticeboard } from "@/ui/Noticeboard";
+import { ReportButton } from "@/ui/ReportButton";
 
 export const dynamic = "force-dynamic";
 
@@ -44,6 +46,8 @@ type Load =
       materials: CwkMaterial[];
       /** null = fees module not answering (unlicensed / not deployed) — the section stays hidden. */
       fees: FeeMyInvoice[] | null;
+      /** null = results module not answering — the section stays hidden. */
+      results: MyResults | null;
     };
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -94,6 +98,7 @@ export default function PortalPage() {
           api.cwkMyMaterials(year).catch(() => ({ materials: [] as CwkMaterial[] })),
         ]);
         const fees = await api.feesMyFees().then((r) => r.invoices).catch(() => null);
+        const results = await api.resMyResults().catch(() => null);
         if (alive)
           setLoad({
             state: "ok",
@@ -105,6 +110,7 @@ export default function PortalPage() {
             assignments: cwkA.assignments,
             materials: cwkM.materials,
             fees,
+            results,
           });
       } catch (caught) {
         if (!alive) return;
@@ -128,7 +134,7 @@ export default function PortalPage() {
   }
   if (load.state === "error") return <EmptyState title="Couldn't load your register." message="Try again shortly." />;
 
-  const { me, attendance, marks, timetable, today, assignments, materials, fees } = load;
+  const { me, attendance, marks, timetable, today, assignments, materials, fees, results } = load;
   const todayIso = new Date().toISOString().slice(0, 10);
   const totalDues = fees === null ? 0 : fees.reduce((sum, invoice) => sum + invoice.duesPaise, 0);
   const gridCell = (day: number, periodNo: number) =>
@@ -352,6 +358,50 @@ export default function PortalPage() {
           </>
         )}
       </section>
+
+      {/* --- results --- */}
+      {results !== null ? (
+        <section className="section" aria-label="My results">
+          <div className="section-head">
+            <h2>My results</h2>
+            {results.cgpa !== null ? (
+              <span className="stat-sub num">CGPA {results.cgpa.toFixed(2)}</span>
+            ) : null}
+          </div>
+          {results.terms.length === 0 ? (
+            <EmptyState
+              title="Results aren't published yet."
+              message="Your grade card appears here the moment the principal publishes a term."
+            />
+          ) : (
+            <div className="grid">
+              {results.terms.map((termResult) => (
+                <Card key={`${termResult.academicYear}-${termResult.term}`} title={`${termResult.term} · ${termResult.academicYear}`}>
+                  <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
+                    <span className="num" style={{ fontSize: 34, fontWeight: 600 }}>{termResult.sgpa.toFixed(2)}</span>
+                    <span style={{ fontSize: 13, opacity: 0.65 }}>SGPA</span>
+                  </div>
+                  <div style={{ marginTop: "var(--space-2)", display: "grid", gap: 4, fontSize: 13.5 }}>
+                    {termResult.subjects.map((subject) => (
+                      <div key={subject.subjectId} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                        <span>{subject.subjectName} <span style={{ opacity: 0.55 }}>({subject.credits} cr)</span></span>
+                        <Badge tone={subject.points === 0 ? "danger" : "good"}>{subject.grade}</Badge>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ marginTop: "var(--space-3)" }}>
+                    <ReportButton
+                      params={{ kind: "grade-card", studentId: me.student.id }}
+                      year={termResult.academicYear}
+                      label="Download grade card (PDF)"
+                    />
+                  </div>
+                </Card>
+              ))}
+            </div>
+          )}
+        </section>
+      ) : null}
 
       {/* --- notices --- */}
       <Noticeboard />

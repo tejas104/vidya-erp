@@ -28,6 +28,8 @@ export const NAV: NavEntry[] = [
   { href: "/manage/fees", label: "Fees", icon: "rupee", group: "Fees", roles: ["accountant", "admin"] },
   // --- notices ---
   { href: "/manage/notices", label: "Notices", icon: "file", group: "Administration", roles: ["admin", "principal"] },
+  // --- results ---
+  { href: "/manage/results", label: "Results", icon: "marks", group: "Administration", roles: ["admin", "principal"] },
   // --- timetable ---
   { href: "/manage/timetable", label: "Timetable", icon: "attendance", group: "Administration", roles: ["admin"] },
   { href: "/manage/org", label: "Organisation", icon: "org", group: "Administration", roles: ["admin"] },

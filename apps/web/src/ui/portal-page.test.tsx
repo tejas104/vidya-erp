@@ -7,7 +7,7 @@ vi.mock("./api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./api")>();
   return {
     ...actual,
-    api: { ...actual.api, portalMe: vi.fn(), portalAttendance: vi.fn(), portalMarks: vi.fn(), portalTimetable: vi.fn(), portalToday: vi.fn(), cwkMyAssignments: vi.fn(), cwkMyMaterials: vi.fn(), feesMyFees: vi.fn() },
+    api: { ...actual.api, portalMe: vi.fn(), portalAttendance: vi.fn(), portalMarks: vi.fn(), portalTimetable: vi.fn(), portalToday: vi.fn(), cwkMyAssignments: vi.fn(), cwkMyMaterials: vi.fn(), feesMyFees: vi.fn(), resMyResults: vi.fn() },
   };
 });
 
@@ -44,6 +44,13 @@ beforeEach(() => {
       adjustments: [],
     }],
   });
+  (api.resMyResults as ReturnType<typeof vi.fn>).mockResolvedValue({
+    terms: [{
+      term: "Term 1", academicYear: "2026-27", publishedAt: "2026-07-12T09:00:00Z", sgpa: 8.3,
+      subjects: [{ subjectId: "sub_1", subjectName: "Data Structures", credits: 4, pct: 78.5, grade: "B+", points: 8 }],
+    }],
+    cgpa: 8.3,
+  });
   (api.portalMarks as ReturnType<typeof vi.fn>).mockResolvedValue({
     subjects: [
       {
@@ -74,6 +81,24 @@ describe("/portal (student self-view)", () => {
     render(<PortalPage />);
     await screen.findByText(/Hello, Aarav\./);
     expect(screen.queryByText("My fees")).not.toBeInTheDocument();
+  });
+  it("shows a published term with big SGPA and grade chips", async () => {
+    render(<PortalPage />);
+    expect(await screen.findByText("My results")).toBeInTheDocument();
+    expect(screen.getAllByText("8.30").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText("B+")).toBeInTheDocument();
+    expect(screen.getByText("CGPA 8.30")).toBeInTheDocument();
+  });
+  it("shows the withheld state when nothing is published", async () => {
+    (api.resMyResults as ReturnType<typeof vi.fn>).mockResolvedValue({ terms: [], cgpa: null });
+    render(<PortalPage />);
+    expect(await screen.findByText("Results aren't published yet.")).toBeInTheDocument();
+  });
+  it("hides the results section when the results module doesn't answer", async () => {
+    (api.resMyResults as ReturnType<typeof vi.fn>).mockRejectedValue(new Error("not deployed"));
+    render(<PortalPage />);
+    await screen.findByText(/Hello, Aarav\./);
+    expect(screen.queryByText("My results")).not.toBeInTheDocument();
   });
   it("shows the unlinked state on 404", async () => {
     const { ApiError } = await import("./api");

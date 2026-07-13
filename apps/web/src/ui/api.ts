@@ -95,7 +95,8 @@ export type ReportParams =
   | { kind: "student-performance"; studentId: string }
   | { kind: "section-attendance"; sectionId: string }
   | { kind: "marks-summary"; classId: string }
-  | { kind: "at-risk"; level: string; nodeId: string };
+  | { kind: "at-risk"; level: string; nodeId: string }
+  | { kind: "grade-card"; studentId: string };
 
 export interface ReportView {
   id: string;
@@ -381,6 +382,63 @@ export type FeeMyInvoice = FeeInvoiceView & {
   adjustments: FeeAdjustmentView[];
 };
 
+// --- results ---
+export interface GradeBand {
+  minPct: number;
+  grade: string;
+  points: number;
+}
+export interface GradeScaleView {
+  id: string;
+  collegeId: string;
+  name: string;
+  bands: GradeBand[];
+  /** Referenced by a publication — frozen against edits. */
+  locked: boolean;
+}
+export interface SubjectCreditView {
+  subjectId: string;
+  subjectName: string;
+  credits: number;
+}
+export interface SubjectResult {
+  subjectId: string;
+  subjectName: string;
+  credits: number;
+  pct: number;
+  grade: string;
+  points: number;
+}
+export interface StudentResult {
+  studentId: string;
+  studentName: string;
+  admissionNo: string;
+  subjects: SubjectResult[];
+  sgpa: number;
+  rank: number;
+}
+export interface PublicationView {
+  id: string;
+  collegeId: string;
+  classId: string;
+  academicYear: string;
+  term: string;
+  scaleId: string;
+  publishedAt: string;
+  publishedBy: string;
+}
+export interface MyResultsTerm {
+  term: string;
+  academicYear: string;
+  publishedAt: string;
+  sgpa: number;
+  subjects: SubjectResult[];
+}
+export interface MyResults {
+  terms: MyResultsTerm[];
+  cgpa: number | null;
+}
+
 export interface PortalMarks {
   subjects: {
     subjectId: string;
@@ -651,6 +709,27 @@ export const api = {
     get<{ defaulters: FeeInvoiceView[] }>(
       `/api/v1/fees/defaulters?collegeId=${encodeURIComponent(collegeId)}&academicYear=${year}`,
     ),
+  // --- results ---
+  resCreateScale: (body: { collegeId: string; name: string; bands: GradeBand[] }) =>
+    post<GradeScaleView>("/api/v1/results/scales", body),
+  resScales: (collegeId: string) =>
+    get<{ scales: GradeScaleView[] }>(`/api/v1/results/scales?collegeId=${encodeURIComponent(collegeId)}`),
+  resUpdateScale: (scaleId: string, body: { name?: string; bands?: GradeBand[] }) =>
+    put<GradeScaleView>(`/api/v1/results/scales/${encodeURIComponent(scaleId)}`, body),
+  resDeleteScale: (scaleId: string) => del<{ ok: true }>(`/api/v1/results/scales/${encodeURIComponent(scaleId)}`),
+  resCredits: (classId: string, year: string) =>
+    get<{ credits: SubjectCreditView[] }>(
+      `/api/v1/results/classes/${encodeURIComponent(classId)}/credits?academicYear=${year}`,
+    ),
+  resSetCredits: (body: { classId: string; academicYear: string; entries: { subjectId: string; credits: number }[] }) =>
+    put<{ credits: SubjectCreditView[] }>("/api/v1/results/credits", body),
+  resClassResults: (classId: string, year: string, scaleId: string) =>
+    get<{ rows: StudentResult[]; publications: PublicationView[] }>(
+      `/api/v1/results/classes/${encodeURIComponent(classId)}/preview?academicYear=${year}&scaleId=${encodeURIComponent(scaleId)}`,
+    ),
+  resPublish: (body: { classId: string; academicYear: string; term: string; scaleId: string }) =>
+    post<PublicationView>("/api/v1/results/publish", body),
+  resMyResults: () => get<MyResults>("/api/v1/results/my-results"),
   async login(username: string, password: string): Promise<void> {
     const response = await fetch("/api/v1/identity/auth/login", {
       method: "POST",
