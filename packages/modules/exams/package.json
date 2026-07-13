@@ -1,0 +1,27 @@
+{
+  "name": "@vidya/module-exams",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Vidya exams module (exm_): the exam timetable on the noticeboard. Series (name/year/term) hold dated slots (class, subject, date, time, room); slot creation warns (never blocks) on room clashes against the weekly timetable; students read their own schedule and download a hall ticket.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@vidya/module-people": "workspace:*",
+    "@vidya/module-timetable": "workspace:*",
+    "@vidya/platform": "workspace:*",
+    "drizzle-orm": "^0.44.2",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "pino": "^9.7.0",
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.0"
+  }
+}
