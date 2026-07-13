@@ -6,6 +6,7 @@ import {
   canProduce,
   collectReport,
   type ReportParams,
+  type ReportSources,
 } from "../report-data";
 import type { ReportFormat, ReportsRepo, RequesterSnapshot } from "../repo/reports-repo";
 import type { RptReportRow } from "../db/schema";
@@ -19,6 +20,8 @@ export interface ReportStore {
 export interface ReportServiceDeps {
   readonly repo: ReportsRepo;
   readonly readModel: AnalyticsReadModel;
+  /** Non-analytics content sources (grade-card, …) — absent kinds fail closed. */
+  readonly sources?: ReportSources;
   readonly store: ReportStore;
   readonly audit: AuditLogger;
   readonly onFinished?: (kind: string, format: string, status: "completed" | "failed") => void;
@@ -53,7 +56,7 @@ export class ReportService {
 
   /** Access decision reused at request time and on download (no rendering). */
   access(principal: Principal, params: ReportParams, academicYear: string) {
-    return canProduce(this.deps.readModel, principal, params, academicYear);
+    return canProduce(this.deps.readModel, principal, params, academicYear, this.deps.sources);
   }
 
   /** Records the request (scope already checked by the handler) and returns the row. */
@@ -108,6 +111,7 @@ export class ReportService {
         params,
         row.academicYear,
         snapshot.displayName,
+        this.deps.sources,
       );
       if (data === null) {
         // Scope changed between request and generation → fail closed.

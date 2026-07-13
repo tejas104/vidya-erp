@@ -24,6 +24,7 @@ import {
 import type { AnalyticsReadModel } from "@vidya/module-analytics";
 import { z } from "zod";
 import { REPORT_JOB_NAME, reportJobPayloadSchema, reportingModuleDefinition } from "./definition";
+import type { ReportSources } from "./report-data";
 import { createReportsRepo } from "./repo/reports-repo";
 import { ReportService } from "./service/report-service";
 import { createReportingHandlers } from "./api/handlers";
@@ -40,13 +41,16 @@ export {
   escapeCsvCell,
   isFormulaInjection,
 } from "./escape-csv";
+export type { ReportSources } from "./report-data";
 
 export interface ReportingModuleDeps {
   readonly db: Db;
   readonly metrics: Metrics;
   readonly audit: AuditLogger;
-  /** #5's scoped read model — the ONLY source of report content. */
+  /** #5's scoped read model — the source of analytics report content. */
   readonly analyticsRead: AnalyticsReadModel;
+  /** Injected non-analytics sources (results grade-card); absent kinds fail closed. */
+  readonly sources?: ReportSources;
   readonly storage: { readonly client: ObjectStorageClient; readonly bucket: string };
   readonly enqueueReport: (payload: z.infer<typeof reportJobPayloadSchema>) => Promise<void>;
 }
@@ -73,6 +77,7 @@ export function createReportingModule(deps: ReportingModuleDeps): RuntimeModule<
   const service = new ReportService({
     repo,
     readModel: deps.analyticsRead,
+    ...(deps.sources !== undefined ? { sources: deps.sources } : {}),
     store: {
       put: async (key, body, contentType) => {
         await ensureReady();

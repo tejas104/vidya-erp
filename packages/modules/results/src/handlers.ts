@@ -1,7 +1,8 @@
 import type { OrgPath, Principal, RouteHandler } from "@vidya/platform";
 import type { PeopleDirectory } from "@vidya/module-people";
 import type { AcademicsReadModel } from "@vidya/module-academics";
-import { bandFor, cgpa, meanPct, sgpa, type Band } from "./gpa";
+import { sgpa, type Band } from "./gpa";
+import { createResultsComputer, type SubjectResultView } from "./compute";
 import {
   AlreadyPublishedError,
   DuplicateScaleError,
@@ -14,15 +15,6 @@ export interface ResultsHandlerDeps {
   readonly repo: ResultsRepo;
   readonly directory: PeopleDirectory;
   readonly marks: AcademicsReadModel;
-}
-
-interface SubjectResultView {
-  subjectId: string;
-  subjectName: string;
-  credits: number;
-  pct: number;
-  grade: string;
-  points: number;
 }
 
 function notFound(message = "not found") {
@@ -40,6 +32,8 @@ function inCollege(principal: Principal, collegeId: string): boolean {
 }
 
 export function createResultsHandlers(deps: ResultsHandlerDeps): Record<string, RouteHandler> {
+  const computer = createResultsComputer(deps);
+
   async function scaleView(row: GradeScaleRow) {
     return {
       id: row.id,
@@ -61,54 +55,6 @@ export function createResultsHandlers(deps: ResultsHandlerDeps): Record<string, 
       publishedAt: row.publishedAt.toISOString(),
       publishedBy: row.publishedBy,
     };
-  }
-
-  /** Distinct student ids enrolled in any of the class's sections for the year. */
-  async function classRoster(classId: string, academicYear: string): Promise<string[]> {
-    const sections = await deps.directory.sectionsOfClass(classId);
-    const students = new Set<string>();
-    for (const section of sections) {
-      for (const enrollment of await deps.directory.sectionRoster(section.sectionId)) {
-        if (enrollment.academicYear === academicYear) students.add(enrollment.studentId);
-      }
-    }
-    return [...students];
-  }
-
-  /** One student's banded subject results: marks of this class/year × credits × scale. */
-  async function subjectResults(
-    studentId: string,
-    classId: string,
-    academicYear: string,
-    creditBySubject: Map<string, number>,
-    subjectNames: Map<string, string>,
-    bands: Band[],
-  ): Promise<SubjectResultView[]> {
-    const marks = await deps.marks.studentMarks(studentId, academicYear);
-    const pctsBySubject = new Map<string, number[]>();
-    for (const mark of marks) {
-      const subjectId = mark.position.subjectId;
-      if (mark.position.classId !== classId || !creditBySubject.has(subjectId)) continue;
-      const list = pctsBySubject.get(subjectId) ?? [];
-      list.push(mark.scorePct);
-      pctsBySubject.set(subjectId, list);
-    }
-    const results: SubjectResultView[] = [];
-    for (const [subjectId, pcts] of pctsBySubject) {
-      const pct = meanPct(pcts);
-      if (pct === null) continue;
-      const band = bandFor(bands, pct);
-      results.push({
-        subjectId,
-        subjectName: subjectNames.get(subjectId) ?? subjectId,
-        credits: creditBySubject.get(subjectId)!,
-        pct,
-        grade: band.grade,
-        points: band.points,
-      });
-    }
-    results.sort((a, b) => a.subjectName.localeCompare(b.subjectName));
-    return results;
   }
 
   /** Shared 404/403/422 gauntlet for preview + publish. */
@@ -263,12 +209,12 @@ export function createResultsHandlers(deps: ResultsHandlerDeps): Record<string, 
     const { scale, creditBySubject } = resolved;
 
     const subjectNames = await deps.directory.namesFor([...creditBySubject.keys()]);
-    const studentIds = await classRoster(params.classId, query.academicYear);
+    const studentIds = await computer.classRoster(params.classId, query.academicYear);
     const briefs = await deps.directory.studentsBrief(studentIds);
     // ponytail: N studentMarks queries — one aggregate query if class sizes ever hurt.
     const computed: { studentId: string; studentName: string; admissionNo: string; subjects: SubjectResultView[]; sgpa: number }[] = [];
     for (const studentId of studentIds) {
-      const subjects = await subjectResults(studentId, params.classId, query.academicYear, creditBySubject, subjectNames, scale.bands);
+      const subjects = await computer.subjectResults(studentId, params.classId, query.academicYear, creditBySubject, subjectNames, scale.bands);
       const value = sgpa(subjects);
       if (value === null) continue; // no marks at all — absent from the ranked preview
       const brief = briefs.get(studentId);
@@ -325,29 +271,8 @@ export function createResultsHandlers(deps: ResultsHandlerDeps): Record<string, 
 
     // The publication gate: only published terms are computed — an unpublished
     // term simply does not exist for the student.
-    const publications = await deps.repo.publicationsForClass(classId);
-    const terms: { term: string; academicYear: string; publishedAt: string; sgpa: number; subjects: SubjectResultView[] }[] = [];
-    const weights: { sgpa: number; credits: number }[] = [];
-    for (const publication of publications) {
-      const scale = await deps.repo.getScale(publication.scaleId);
-      if (scale === null) continue;
-      const credits = await deps.repo.creditsFor(classId, publication.academicYear);
-      if (credits.length === 0) continue;
-      const creditBySubject = new Map(credits.map((row) => [row.subjectId, row.credits]));
-      const subjectNames = await deps.directory.namesFor([...creditBySubject.keys()]);
-      const subjects = await subjectResults(own.studentId, classId, publication.academicYear, creditBySubject, subjectNames, scale.bands);
-      const value = sgpa(subjects);
-      if (value === null) continue;
-      terms.push({
-        term: publication.term,
-        academicYear: publication.academicYear,
-        publishedAt: publication.publishedAt.toISOString(),
-        sgpa: value,
-        subjects,
-      });
-      weights.push({ sgpa: value, credits: subjects.reduce((sum, subject) => sum + subject.credits, 0) });
-    }
-    return { status: 200, body: { terms, cgpa: cgpa(weights) } };
+    const { terms, cgpa } = await computer.publishedTerms(own.studentId, classId);
+    return { status: 200, body: { terms, cgpa } };
   };
 
   return {

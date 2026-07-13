@@ -2,7 +2,7 @@
   "name": "@vidya/module-reporting",
   "version": "0.1.0",
   "private": true,
-  "description": "Vidya reporting & export module (rpt_): scope-filtered PDF/CSV reports built from #4/#5 public interfaces, with CSV formula-injection escaping and scoped download. A report is a disclosure surface — same rules as a live view.",
+  "description": "Vidya reporting & export module (rpt_): scope-filtered PDF/CSV reports built from #4/#5 public interfaces, with CSV formula-injection escaping and scoped download. A report is a disclosure surface â€” same rules as a live view.",
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@vidya/module-analytics": "workspace:*",
+    "@vidya/module-results": "workspace:*",
     "@vidya/module-academics": "workspace:*",
     "@vidya/platform": "workspace:*",
     "drizzle-orm": "^0.44.2",

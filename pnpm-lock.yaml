@@ -474,6 +474,9 @@ importers:
       '@vidya/module-analytics':
         specifier: workspace:*
         version: link:../analytics
+      '@vidya/module-results':
+        specifier: workspace:*
+        version: link:../results
       '@vidya/platform':
         specifier: workspace:*
         version: link:../../platform

@@ -1,4 +1,5 @@
 import type { AnalyticsReadModel } from "@vidya/module-analytics";
+import type { GradeCardSource } from "@vidya/module-results";
 import type { Principal } from "@vidya/platform";
 
 /**
@@ -13,7 +14,8 @@ export type ReportKind =
   | "student-performance"
   | "section-attendance"
   | "marks-summary"
-  | "at-risk";
+  | "at-risk"
+  | "grade-card";
 
 export type ScopeLevel = "section" | "class" | "department" | "college";
 
@@ -21,7 +23,13 @@ export type ReportParams =
   | { readonly kind: "student-performance"; readonly studentId: string }
   | { readonly kind: "section-attendance"; readonly sectionId: string }
   | { readonly kind: "marks-summary"; readonly classId: string }
-  | { readonly kind: "at-risk"; readonly level: ScopeLevel; readonly nodeId: string };
+  | { readonly kind: "at-risk"; readonly level: ScopeLevel; readonly nodeId: string }
+  | { readonly kind: "grade-card"; readonly studentId: string };
+
+/** Non-analytics content sources, injected by composition (absent = kind unavailable). */
+export interface ReportSources {
+  readonly gradeCard?: GradeCardSource;
+}
 
 export interface ReportTable {
   readonly caption: string;
@@ -66,8 +74,14 @@ export async function canProduce(
   principal: Principal,
   params: ReportParams,
   academicYear: string,
+  sources: ReportSources = {},
 ): Promise<Access> {
   switch (params.kind) {
+    case "grade-card": {
+      if (sources.gradeCard === undefined) return "not-found";
+      const result = await sources.gradeCard(principal, params.studentId);
+      return result.access === "ok" ? "ok" : result.access === "forbidden" ? "forbidden" : "not-found";
+    }
     case "student-performance": {
       const perf = await readModel.studentPerformance(principal, params.studentId, academicYear);
       if (perf.state === "not-found") return "not-found";
@@ -101,11 +115,46 @@ export async function collectReport(
   params: ReportParams,
   academicYear: string,
   generatedFor: string,
+  sources: ReportSources = {},
 ): Promise<ReportData | null> {
   const generatedAt = new Date().toISOString();
   const base = { academicYear, generatedFor, generatedAt } as const;
 
   switch (params.kind) {
+    case "grade-card": {
+      if (sources.gradeCard === undefined) return null;
+      const result = await sources.gradeCard(principal, params.studentId);
+      if (result.access !== "ok") return null;
+      const card = result.data;
+      const tables = card.terms.map((term) => ({
+        caption: `${term.term} · ${term.academicYear} — SGPA ${term.sgpa.toFixed(2)}`,
+        columns: ["Subject", "Credits", "Percent", "Grade", "Points"],
+        rows: term.subjects.map((subject) => [
+          subject.subjectName,
+          subject.credits,
+          `${subject.pct}%`,
+          subject.grade,
+          subject.points,
+        ]),
+      }));
+      const rowCount = tables.reduce((sum, table) => sum + table.rows.length, 0);
+      return {
+        ...base,
+        kind: params.kind,
+        title: "Grade card",
+        subtitle: `${card.studentName} · ${card.admissionNo} · ${card.className}`,
+        stats: [
+          { label: "CGPA", value: card.cgpa === null ? "—" : card.cgpa.toFixed(2) },
+          { label: "Published terms", value: String(card.terms.length) },
+        ],
+        tables,
+        notes:
+          card.terms.length === 0
+            ? ["No results are published yet — the grade card fills in as terms are published."]
+            : ["Only published terms appear on this grade card."],
+        rowCount,
+      };
+    }
     case "student-performance": {
       const perf = await readModel.studentPerformance(principal, params.studentId, academicYear);
       if (perf.state !== "ok") return null;
