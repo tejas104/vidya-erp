@@ -168,7 +168,7 @@ Backend core already committed (`65165dc`): schema, money math, repo with transa
 - **Portal — Results tab**: per published term a card — SGPA big mono + grade chips per subject; CGPA headline across terms; "Download grade card (PDF)". Unpublished term: "Term 2 results aren't published yet."
 
 **Tasks:**
-- [ ] **R1 — Contract** + golden-number spec: fixed marks fixture → expected SGPA/CGPA documented in the plan (correctness anchor). Commit.
+- [x] **R1 — Contract** + golden-number spec: fixed marks fixture → expected SGPA/CGPA documented in the plan (correctness anchor). Commit.
 
   **Golden numbers (binding for R3's unit tests).** Scale "10-point": bands
   (minPct→grade/points) 90→A+/10 · 80→A/9 · 70→B+/8 · 60→B/7 · 50→C/6 ·
@@ -187,10 +187,10 @@ Backend core already committed (`65165dc`): schema, money math, repo with transa
   - *Degenerate*: a subject with credits set but zero marks rows is **excluded**
     from SGPA (no invented zeros); a student with no marks at all ⇒ SGPA null,
     omitted from the ranked preview.
-- [ ] **R2 — Frontend**: api block, `/manage/results`, portal Results tab; RTL: band-overlap validation, withheld state, publish confirm. Commit.
-- [ ] **R3 — Backend**: schema/migrations/repo/handlers; **GPA unit tests against the golden numbers**, publication-gate denial test (unpublished → student 404/empty). Commit.
-- [ ] **R4 — Backend: grade-card PDF** — reporting module gains kind `grade-card` (pdfkit, marksheet layout); snapshot-ish test on text content. Commit.
-- [ ] **R5 — Integration**: wiring, seed scale + credits + publish Term 1 for demo class, drive: admin compiles → principal publishes → student downloads. Merge.
+- [x] **R2 — Frontend**: api block, `/manage/results`, portal Results tab; RTL: band-overlap validation, withheld state, publish confirm. Commit.
+- [x] **R3 — Backend**: schema/migrations/repo/handlers; **GPA unit tests against the golden numbers**, publication-gate denial test (unpublished → student 404/empty). Commit.
+- [x] **R4 — Backend: grade-card PDF** — reporting module gains kind `grade-card` (pdfkit, marksheet layout); snapshot-ish test on text content. Commit.
+- [x] **R5 — Integration**: wiring, seed scale + credits + publish Term 1 for demo class, drive: admin compiles → principal publishes → student downloads. Merge.
 
 ---
 
@@ -293,7 +293,7 @@ Backend core already committed (`65165dc`): schema, money math, repo with transa
 
 Sequential by default (one branch in flight, controller = this session):
 
-**M4 Fees ✅ (2026-07-13, live-verified) → M3 Notices ✅ (2026-07-13, live-verified) → M5 Results → M6 Exams → M7 Leave → Class Workspace (5.5) → M12 Hardening → M13 Catalog → P-phase.** M11 Licensing: deferred per the PDF scope ledger (Phase 6 executes only if the owner re-orders it).
+**M4 Fees ✅ (2026-07-13, live-verified) → M3 Notices ✅ (2026-07-13, live-verified) → M5 Results ✅ (2026-07-13, live-verified) → M6 Exams → M7 Leave → Class Workspace (5.5) → M12 Hardening → M13 Catalog → P-phase.** M11 Licensing: deferred per the PDF scope ledger (Phase 6 executes only if the owner re-orders it).
 
 Rationale: M4 is half-built (finish first, momentum + revenue feature); M3 is small and de-risks the shared-card pattern M5/M6 reuse on portal/dashboard; M5 before M6 because hall-ticket/marksheet PDFs share the reporting-kind pattern R4 establishes; M11 late so `feature` tags decorate routes that already exist; M12/M13 close the sellable story.
 
