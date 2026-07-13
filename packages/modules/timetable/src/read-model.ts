@@ -36,6 +36,8 @@ export interface TimetableReadModel {
   periods(collegeId: string): Promise<TimetablePeriod[]>;
   sectionGrid(sectionId: string, academicYear: string): Promise<TimetableEntryView[]>;
   sectionDay(sectionId: string, academicYear: string, dayOfWeek: number): Promise<TimetableEntryView[]>;
+  /** Lessons booked in a room on a weekday — the exams module's clash advisory. */
+  roomDay(collegeId: string, room: string, academicYear: string, dayOfWeek: number): Promise<TimetableEntryView[]>;
 }
 
 export function createTimetableReadModel(
@@ -73,6 +75,9 @@ export function createTimetableReadModel(
     async sectionDay(sectionId, academicYear, dayOfWeek) {
       const rows = await repo.entriesForSection(sectionId, academicYear);
       return enrich(rows.filter((row) => row.dayOfWeek === dayOfWeek));
+    },
+    async roomDay(collegeId, room, academicYear, dayOfWeek) {
+      return enrich(await repo.entriesForRoomDay(collegeId, room, academicYear, dayOfWeek));
     },
   };
 }

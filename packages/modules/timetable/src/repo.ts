@@ -48,6 +48,8 @@ export interface TimetableRepo {
   entriesForSection(sectionId: string, academicYear: string): Promise<TtbEntryRow[]>;
   entriesForTeacher(teacherId: string, academicYear: string): Promise<TtbEntryRow[]>;
   entriesForTeacherDay(teacherId: string, academicYear: string, dayOfWeek: number): Promise<TtbEntryRow[]>;
+  /** Lessons in one room on one weekday (exam clash advisory). */
+  entriesForRoomDay(collegeId: string, room: string, academicYear: string, dayOfWeek: number): Promise<TtbEntryRow[]>;
 }
 
 export function createTimetableRepo(db: Db): TimetableRepo {
@@ -117,6 +119,21 @@ export function createTimetableRepo(db: Db): TimetableRepo {
         .from(ttbEntries)
         .where(and(eq(ttbEntries.teacherId, teacherId), eq(ttbEntries.academicYear, academicYear)))
         .orderBy(asc(ttbEntries.dayOfWeek), asc(ttbEntries.periodNo));
+    },
+
+    async entriesForRoomDay(collegeId, room, academicYear, dayOfWeek) {
+      return db
+        .select()
+        .from(ttbEntries)
+        .where(
+          and(
+            eq(ttbEntries.collegeId, collegeId),
+            eq(ttbEntries.room, room),
+            eq(ttbEntries.academicYear, academicYear),
+            eq(ttbEntries.dayOfWeek, dayOfWeek),
+          ),
+        )
+        .orderBy(asc(ttbEntries.periodNo));
     },
 
     async entriesForTeacherDay(teacherId, academicYear, dayOfWeek) {

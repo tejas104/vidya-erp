@@ -1,5 +1,6 @@
 import type { AnalyticsReadModel } from "@vidya/module-analytics";
 import type { GradeCardSource } from "@vidya/module-results";
+import type { HallTicketSource } from "@vidya/module-exams";
 import type { Principal } from "@vidya/platform";
 
 /**
@@ -15,7 +16,8 @@ export type ReportKind =
   | "section-attendance"
   | "marks-summary"
   | "at-risk"
-  | "grade-card";
+  | "grade-card"
+  | "hall-ticket";
 
 export type ScopeLevel = "section" | "class" | "department" | "college";
 
@@ -24,11 +26,13 @@ export type ReportParams =
   | { readonly kind: "section-attendance"; readonly sectionId: string }
   | { readonly kind: "marks-summary"; readonly classId: string }
   | { readonly kind: "at-risk"; readonly level: ScopeLevel; readonly nodeId: string }
-  | { readonly kind: "grade-card"; readonly studentId: string };
+  | { readonly kind: "grade-card"; readonly studentId: string }
+  | { readonly kind: "hall-ticket"; readonly studentId: string };
 
 /** Non-analytics content sources, injected by composition (absent = kind unavailable). */
 export interface ReportSources {
   readonly gradeCard?: GradeCardSource;
+  readonly hallTicket?: HallTicketSource;
 }
 
 export interface ReportTable {
@@ -80,6 +84,11 @@ export async function canProduce(
     case "grade-card": {
       if (sources.gradeCard === undefined) return "not-found";
       const result = await sources.gradeCard(principal, params.studentId);
+      return result.access === "ok" ? "ok" : result.access === "forbidden" ? "forbidden" : "not-found";
+    }
+    case "hall-ticket": {
+      if (sources.hallTicket === undefined) return "not-found";
+      const result = await sources.hallTicket(principal, params.studentId);
       return result.access === "ok" ? "ok" : result.access === "forbidden" ? "forbidden" : "not-found";
     }
     case "student-performance": {
@@ -153,6 +162,39 @@ export async function collectReport(
             ? ["No results are published yet — the grade card fills in as terms are published."]
             : ["Only published terms appear on this grade card."],
         rowCount,
+      };
+    }
+
+    case "hall-ticket": {
+      if (sources.hallTicket === undefined) return null;
+      const result = await sources.hallTicket(principal, params.studentId);
+      if (result.access !== "ok") return null;
+      const ticket = result.data;
+      const rows = ticket.slots.map((slot) => [
+        slot.onDate,
+        `${slot.starts}–${slot.ends}`,
+        slot.subjectName,
+        slot.seriesName,
+        slot.room === "" ? "—" : slot.room,
+      ]);
+      return {
+        ...base,
+        kind: params.kind,
+        title: "Hall ticket",
+        subtitle: `${ticket.studentName} · ${ticket.admissionNo} · ${ticket.className}`,
+        stats: [{ label: "Papers", value: String(rows.length) }],
+        tables: [
+          {
+            caption: "Exam schedule",
+            columns: ["Date", "Time", "Paper", "Series", "Room"],
+            rows,
+          },
+        ],
+        notes:
+          rows.length === 0
+            ? ["No exams are scheduled yet."]
+            : ["Carry this ticket and your college ID card to every paper."],
+        rowCount: rows.length,
       };
     }
     case "student-performance": {

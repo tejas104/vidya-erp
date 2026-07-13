@@ -514,6 +514,9 @@ importers:
       '@vidya/module-analytics':
         specifier: workspace:*
         version: link:../analytics
+      '@vidya/module-exams':
+        specifier: workspace:*
+        version: link:../exams
       '@vidya/module-results':
         specifier: workspace:*
         version: link:../results

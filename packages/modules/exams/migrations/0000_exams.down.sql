@@ -1,0 +1,2 @@
+DROP TABLE IF EXISTS exm_slots;
+DROP TABLE IF EXISTS exm_series;

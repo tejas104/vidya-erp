@@ -16,11 +16,13 @@ export const reportParamsSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("at-risk"), level: scopeLevelSchema, nodeId: idSchema }),
   // --- results ---
   z.object({ kind: z.literal("grade-card"), studentId: idSchema }),
+  // --- exams ---
+  z.object({ kind: z.literal("hall-ticket"), studentId: idSchema }),
 ]);
 
 const reportViewSchema = z.object({
   id: z.string(),
-  kind: z.enum(["student-performance", "section-attendance", "marks-summary", "at-risk", "grade-card"]),
+  kind: z.enum(["student-performance", "section-attendance", "marks-summary", "at-risk", "grade-card", "hall-ticket"]),
   format: formatSchema,
   academicYear: z.string(),
   status: z.enum(["pending", "running", "completed", "failed"]),
