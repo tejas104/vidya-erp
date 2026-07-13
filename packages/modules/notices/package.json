@@ -1,0 +1,26 @@
+{
+  "name": "@vidya/module-notices",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Vidya notices module (ntc_): the staff-room noticeboard. Admin/principal compose with an audience (college | staff | students | department:<id> | class:<id>) and a publish window; every dashboard and the student portal read a server-filtered visible feed. No read-receipts, no events — the feed is the must-have.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@vidya/module-people": "workspace:*",
+    "@vidya/platform": "workspace:*",
+    "drizzle-orm": "^0.44.2",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "pino": "^9.7.0",
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.0"
+  }
+}

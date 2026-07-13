@@ -25,6 +25,7 @@ import { DataTable, type Column } from "@/ui/DataTable";
 import { EmptyState } from "@/ui/EmptyState";
 import { Skeleton } from "@/ui/Skeleton";
 import { formatPaise } from "@/ui/money";
+import { Noticeboard } from "@/ui/Noticeboard";
 
 export const dynamic = "force-dynamic";
 
@@ -351,6 +352,9 @@ export default function PortalPage() {
           </>
         )}
       </section>
+
+      {/* --- notices --- */}
+      <Noticeboard />
 
       {fees !== null ? (
         <section className="section" aria-label="My fees">

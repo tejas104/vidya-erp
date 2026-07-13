@@ -18,6 +18,7 @@ import { createPeopleModule } from "@vidya/module-people";
 import { createAcademicsModule } from "@vidya/module-academics";
 import { createTimetableModule } from "@vidya/module-timetable";
 import { INVOICE_GENERATE_JOB_NAME, createFeesModule } from "@vidya/module-fees";
+import { createNoticesModule } from "@vidya/module-notices";
 
 /**
  * DEMO DATA SEEDER — a self-contained, non-production pilot dataset.
@@ -195,7 +196,14 @@ function buildStack() {
     },
   });
 
-  for (const module of [identity, people, academics, timetable, fees]) {
+  // --- notices ---
+  const notices = createNoticesModule({
+    db,
+    audit: system.service.audit,
+    peopleDirectory: people.service.directory,
+  });
+
+  for (const module of [identity, people, academics, timetable, fees, notices]) {
     for (const route of module.definition.routes) {
       specs.set(route.id, route);
       handlers[route.id] = defineRoute(route, module.handlers[route.id]!, routeDeps);
@@ -479,6 +487,44 @@ async function main(): Promise<void> {
       console.log("  fees: counter payments and a scholarship in place");
     }
 
+    /** Notices demo data (6c) — idempotent: skips when the board already has entries. */
+    async function seedNoticesBlock(classId: string): Promise<void> {
+      const existing = await expectJson<{ notices: unknown[] }>(
+        await call("notices.list", { cookie: adminCookie, query: { collegeId } }),
+        [200],
+        "notices list",
+      );
+      if (existing.notices.length > 0) {
+        console.log("  notices: board already has entries — skipping");
+        return;
+      }
+      const board: { audience: string; title: string; body: string }[] = [
+        {
+          audience: "college",
+          title: "Odd-semester timetable is live",
+          body: "The 2026-27 odd-semester timetable is published. Check your section's schedule under Timetable; report clashes to the office by Friday.",
+        },
+        {
+          audience: "students",
+          title: "Fee counter hours extended",
+          body: "The fee counter stays open until 5 PM through July for tuition installment 1. Carry your admission number; UPI and card are accepted.",
+        },
+        {
+          audience: `class:${classId}`,
+          title: "Unit Test 1 syllabus posted",
+          body: "Unit Test 1 covers everything taught through the first week of July. Syllabus details are with your subject teachers.",
+        },
+      ];
+      for (const notice of board) {
+        await expectJson(
+          await call("notices.create", { cookie: adminCookie, body: { collegeId, ...notice } }),
+          [201],
+          `notice "${notice.title}"`,
+        );
+      }
+      console.log(`  notices: ${board.length} posted (college / students / class)`);
+    }
+
     // 2) The principal — college-wide, sees every department. A 409 here means
     //    the demo tree already exists: run only the incremental blocks (fees)
     //    against the existing tree instead of failing.
@@ -503,6 +549,7 @@ async function main(): Promise<void> {
         );
         const portal = roster.students.find((s) => s.admissionNo.endsWith("-001")) ?? roster.students[0];
         await seedFeesBlock({ classId: klass.id, sectionId: section.id, portalStudentId: portal?.id ?? null });
+        await seedNoticesBlock(klass.id);
       }
       console.log("\n✓ Fees increment seeded on the existing demo tree.");
       printCredentials(demoCredentials());
@@ -793,6 +840,9 @@ async function main(): Promise<void> {
         scope: "college-wide (fees)",
       });
     }
+
+    // 6c) Notices (M3): three live notices — college-wide, students, one class.
+    if (feesClassId !== null) await seedNoticesBlock(feesClassId);
 
     // 7) Flip any resolvable manual grants (principal/HoD) to verified.
     await call("identity.grants-verify", { cookie: adminCookie });

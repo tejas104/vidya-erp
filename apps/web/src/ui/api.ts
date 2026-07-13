@@ -287,6 +287,20 @@ export interface CwkMaterial {
   createdAt: string;
 }
 
+// --- notices ---
+export interface NoticeView {
+  id: string;
+  collegeId: string;
+  audience: string;
+  audienceLabel: string;
+  title: string;
+  body: string;
+  publishAt: string;
+  expiresAt: string | null;
+  createdBy: string;
+  createdAt: string;
+}
+
 // --- fees ---
 export type PaymentMode = "cash" | "upi" | "card" | "bank" | "gateway";
 export type InvoiceStatus = "pending" | "part" | "paid" | "waived";
@@ -591,6 +605,15 @@ export const api = {
     post<{ ok: true; submittedAt: string }>(`/api/v1/coursework/my/assignments/${encodeURIComponent(assignmentId)}/submission`, body),
   cwkMyMaterials: (year: string) =>
     get<{ materials: CwkMaterial[] }>(`/api/v1/coursework/my/materials?academicYear=${year}`),
+  // --- notices ---
+  ntcCreate: (body: {
+    collegeId: string; audience: string; title: string; body: string;
+    publishAt?: string; expiresAt?: string;
+  }) => post<NoticeView>("/api/v1/notices", body),
+  ntcList: (collegeId: string) =>
+    get<{ notices: NoticeView[] }>(`/api/v1/notices?collegeId=${encodeURIComponent(collegeId)}`),
+  ntcVisible: () => get<{ notices: NoticeView[] }>("/api/v1/notices/visible"),
+  ntcDelete: (noticeId: string) => del<{ ok: true }>(`/api/v1/notices/${encodeURIComponent(noticeId)}`),
   // --- fees ---
   feesCreateHead: (body: { collegeId: string; name: string }) =>
     post<FeeHeadView>("/api/v1/fees/heads", body),

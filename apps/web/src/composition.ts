@@ -37,6 +37,7 @@ import { createPortalModule } from "@vidya/module-portal";
 import { createTimetableModule } from "@vidya/module-timetable";
 import { createCourseworkModule } from "@vidya/module-coursework";
 import { FEES_MODULE_NAME, INVOICE_GENERATE_JOB_NAME, createFeesModule } from "@vidya/module-fees";
+import { createNoticesModule } from "@vidya/module-notices";
 
 /**
  * COMPOSITION ROOT — web process.
@@ -232,6 +233,13 @@ function buildWebRuntime(): WebRuntime {
     },
   });
 
+  // --- notices ---
+  const notices = createNoticesModule({
+    db,
+    audit: system.service.audit,
+    peopleDirectory: people.service.directory,
+  });
+
   const portal = createPortalModule({
     peopleDirectory: people.service.directory,
     academicsRead: academics.service.readModel,
@@ -248,6 +256,7 @@ function buildWebRuntime(): WebRuntime {
     timetable,
     coursework,
     fees,
+    notices,
     portal,
   ];
 

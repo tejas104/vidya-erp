@@ -57,6 +57,7 @@ import { createPortalModule } from "@vidya/module-portal";
 import { createTimetableModule } from "@vidya/module-timetable";
 import { createCourseworkModule } from "@vidya/module-coursework";
 import { FEES_MODULE_NAME, INVOICE_GENERATE_JOB_NAME, createFeesModule } from "@vidya/module-fees";
+import { createNoticesModule } from "@vidya/module-notices";
 import { createMetricsServer } from "./metrics-server";
 
 const RESET_CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
@@ -243,6 +244,13 @@ async function main(): Promise<void> {
     },
   });
 
+  // --- notices --- (no jobs; included for registry ↔ composition parity)
+  const notices = createNoticesModule({
+    db,
+    audit: system.service.audit,
+    peopleDirectory: people.service.directory,
+  });
+
   const portal = createPortalModule({
     peopleDirectory: people.service.directory,
     academicsRead: academics.service.readModel,
@@ -259,6 +267,7 @@ async function main(): Promise<void> {
     timetable,
     coursework,
     fees,
+    notices,
     portal,
   ];
 
