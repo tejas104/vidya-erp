@@ -205,10 +205,10 @@ Backend core already committed (`65165dc`): schema, money math, repo with transa
 - **Portal — Exams card**: next exam highlighted (date, paper, room), full schedule table below, "Download hall ticket". Empty: "No exams scheduled."
 
 **Tasks:**
-- [ ] **E1 — Contract**. Commit.
-- [ ] **E2 — Frontend**: api block, `/manage/exams`, portal card; RTL: clash-warn render, empty state. Commit.
-- [ ] **E3 — Backend**: schema/migration/repo/handlers + clash-warn unit test; hall-ticket PDF kind. Commit.
-- [ ] **E4 — Integration**: wiring, seed one series with 4 slots incl. one deliberate clash-warning, drive admin + student. Merge.
+- [x] **E1 — Contract**. Commit.
+- [x] **E2 — Frontend**: api block, `/manage/exams`, portal card; RTL: clash-warn render, empty state. Commit.
+- [x] **E3 — Backend**: schema/migration/repo/handlers + clash-warn unit test; hall-ticket PDF kind. Commit.
+- [x] **E4 — Integration**: wiring, seed one series (paper per subject, first slot a deliberate clash-warning), live-verified. Merge.
 
 ---
 
@@ -293,7 +293,7 @@ Backend core already committed (`65165dc`): schema, money math, repo with transa
 
 Sequential by default (one branch in flight, controller = this session):
 
-**M4 Fees ✅ (2026-07-13, live-verified) → M3 Notices ✅ (2026-07-13, live-verified) → M5 Results ✅ (2026-07-13, live-verified) → M6 Exams → M7 Leave → Class Workspace (5.5) → M12 Hardening → M13 Catalog → P-phase.** M11 Licensing: deferred per the PDF scope ledger (Phase 6 executes only if the owner re-orders it).
+**M4 Fees ✅ (2026-07-13, live-verified) → M3 Notices ✅ (2026-07-13, live-verified) → M5 Results ✅ (2026-07-13, live-verified) → M6 Exams ✅ (2026-07-14, live-verified) → M7 Leave → Class Workspace (5.5) → M12 Hardening → M13 Catalog → P-phase.** M11 Licensing: deferred per the PDF scope ledger (Phase 6 executes only if the owner re-orders it).
 
 Rationale: M4 is half-built (finish first, momentum + revenue feature); M3 is small and de-risks the shared-card pattern M5/M6 reuse on portal/dashboard; M5 before M6 because hall-ticket/marksheet PDFs share the reporting-kind pattern R4 establishes; M11 late so `feature` tags decorate routes that already exist; M12/M13 close the sellable story.
 
