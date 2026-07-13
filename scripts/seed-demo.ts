@@ -612,7 +612,9 @@ async function main(): Promise<void> {
     /** Exams demo data (E4) — idempotent: series reused by name via the list,
      * slots tolerate 409 (subject already scheduled in the series). Schedules a
      * "Midterm" paper per subject on consecutive weekday mornings so the portal
-     * exam card and hall ticket have data. */
+     * exam card and hall ticket have data. The first paper is deliberately put
+     * in the class's own room (= its timetable room) during period hours, so the
+     * warn-only clash advisory fires and the admin editor shows the warn badge. */
     async function seedExamsBlock(classId: string): Promise<void> {
       const seriesList = await expectJson<{ series: { id: string; name: string }[] }>(
         await call("exams.series-list", { cookie: adminCookie, query: { collegeId, academicYear: YEAR } }),
@@ -633,9 +635,10 @@ async function main(): Promise<void> {
       }
 
       const tree = await expectJson<{
-        departments: { classes: { id: string }[]; subjects: { id: string }[] }[];
+        departments: { classes: { id: string; code: string }[]; subjects: { id: string }[] }[];
       }>(await call("people.college-tree", { cookie: adminCookie, params: { collegeId } }), [200], "tree for exams");
       const department = tree.departments.find((dep) => dep.classes.some((cls) => cls.id === classId));
+      const classCode = department?.classes.find((cls) => cls.id === classId)?.code ?? "";
       const subjects = department?.subjects ?? [];
       if (subjects.length === 0) {
         console.log("  exams: no subjects for the demo class — skipping");
@@ -643,19 +646,30 @@ async function main(): Promise<void> {
       }
 
       let scheduled = 0;
+      let clash: string | undefined;
       for (const [index, subject] of subjects.entries()) {
         // Consecutive weekday mornings from 2026-12-01 (skip weekends).
         const day = new Date(Date.UTC(2026, 11, 1 + index));
         while (day.getUTCDay() === 0 || day.getUTCDay() === 6) day.setUTCDate(day.getUTCDate() + 1);
         const onDate = day.toISOString().slice(0, 10);
+        // First paper: the class's own room (its timetable room) → deliberate clash.
+        const room = index === 0 ? classCode : "Exam Hall";
         const res = await call("exams.slot-create", {
           cookie: adminCookie,
-          body: { seriesId, classId, subjectId: subject.id, onDate, starts: "09:00", ends: "11:00", room: "Exam Hall" },
+          body: { seriesId, classId, subjectId: subject.id, onDate, starts: "09:00", ends: "11:00", room },
         });
-        if (res.status === 201) scheduled++;
-        else if (res.status !== 409) throw new Error(`slot create: ${res.status} — ${await res.text()}`);
+        if (res.status === 201) {
+          scheduled++;
+          const warn = ((await res.json()) as { clash?: string }).clash;
+          if (warn !== undefined) clash = warn;
+        } else if (res.status !== 409) {
+          throw new Error(`slot create: ${res.status} — ${await res.text()}`);
+        }
       }
-      console.log(`  exams: Midterm series, ${scheduled}/${subjects.length} papers scheduled`);
+      console.log(
+        `  exams: Midterm series, ${scheduled}/${subjects.length} papers scheduled` +
+          (clash !== undefined ? ` (clash warned: "${clash}")` : ""),
+      );
     }
 
     // 2) The principal — college-wide, sees every department. A 409 here means
