@@ -169,6 +169,24 @@ Backend core already committed (`65165dc`): schema, money math, repo with transa
 
 **Tasks:**
 - [ ] **R1 — Contract** + golden-number spec: fixed marks fixture → expected SGPA/CGPA documented in the plan (correctness anchor). Commit.
+
+  **Golden numbers (binding for R3's unit tests).** Scale "10-point": bands
+  (minPct→grade/points) 90→A+/10 · 80→A/9 · 70→B+/8 · 60→B/7 · 50→C/6 ·
+  40→D/5 · 0→F/0; a percent lands in the band with the highest minPct ≤ pct
+  (band minimum **inclusive**). Subject percent = arithmetic mean of the
+  subject's assessment `scorePct` values, rounded half-up to 2dp **before**
+  banding. SGPA = Σ(points×credits)/Σ(credits), rounded half-up to 2dp.
+  CGPA = Σ(SGPA_t×credits_t)/Σ(credits_t) over published terms, 2dp.
+  Credits: DS=4, MTH=3, DBMS=3 (Σ=10).
+  - *Alpha*: DS mean 78.5 (from scorePcts [80, 75, 80.5]) → B+/8 · MTH 62 →
+    B/7 · DBMS 91 → A+/10 ⇒ SGPA = (32+21+30)/10 = **8.30**.
+  - *Beta* (boundary + fail): DS 34 → F/0 · MTH exactly 50 → C/6 (inclusive
+    minimum) · DBMS 69.95 → B/7 (not B+) ⇒ SGPA = (0+18+21)/10 = **3.90**.
+  - *CGPA*: Term 1 SGPA 8.30 over 10 credits + Term 2 SGPA 9.10 over 12
+    credits ⇒ (83 + 109.2)/22 = **8.74**.
+  - *Degenerate*: a subject with credits set but zero marks rows is **excluded**
+    from SGPA (no invented zeros); a student with no marks at all ⇒ SGPA null,
+    omitted from the ranked preview.
 - [ ] **R2 — Frontend**: api block, `/manage/results`, portal Results tab; RTL: band-overlap validation, withheld state, publish confirm. Commit.
 - [ ] **R3 — Backend**: schema/migrations/repo/handlers; **GPA unit tests against the golden numbers**, publication-gate denial test (unpublished → student 404/empty). Commit.
 - [ ] **R4 — Backend: grade-card PDF** — reporting module gains kind `grade-card` (pdfkit, marksheet layout); snapshot-ish test on text content. Commit.
