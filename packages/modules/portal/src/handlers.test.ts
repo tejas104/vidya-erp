@@ -66,6 +66,7 @@ function makeDeps(opts: { linked: boolean }) {
       { id: "tte_1", sectionId: "sec_1", subjectId: "sub_ds", subjectName: "Data Structures", teacherId: "tch_1", teacherName: "Anita Desai", room: "204", dayOfWeek: 1, periodNo: 1 },
     ],
     sectionDay: async () => [],
+    roomDay: async () => [],
   };
 
   return { directory, academicsRead, timetableRead };

@@ -39,6 +39,7 @@ import { createCourseworkModule } from "@vidya/module-coursework";
 import { FEES_MODULE_NAME, INVOICE_GENERATE_JOB_NAME, createFeesModule } from "@vidya/module-fees";
 import { createNoticesModule } from "@vidya/module-notices";
 import { createResultsModule } from "@vidya/module-results";
+import { createExamsModule } from "@vidya/module-exams";
 
 /**
  * COMPOSITION ROOT — web process.
@@ -183,12 +184,28 @@ function buildWebRuntime(): WebRuntime {
     },
   });
 
+  // --- timetable --- (before reporting: exams' clash advisory reads it)
+  const timetable = createTimetableModule({
+    db,
+    audit: system.service.audit,
+    scopeChecker: identityCore.scopeChecker,
+    peopleDirectory: people.service.directory,
+  });
+
   // --- results --- (before reporting: it feeds the grade-card source)
   const results = createResultsModule({
     db,
     audit: system.service.audit,
     peopleDirectory: people.service.directory,
     marksReadModel: academics.service.readModel,
+  });
+
+  // --- exams --- (before reporting: it feeds the hall-ticket source)
+  const exams = createExamsModule({
+    db,
+    audit: system.service.audit,
+    peopleDirectory: people.service.directory,
+    timetableRead: timetable.service.readModel,
   });
 
   const reportingQueue = createModuleQueue({
@@ -201,19 +218,11 @@ function buildWebRuntime(): WebRuntime {
     metrics,
     audit: system.service.audit,
     analyticsRead: analytics.service.readModel,
-    sources: { gradeCard: results.service.gradeCard },
+    sources: { gradeCard: results.service.gradeCard, hallTicket: exams.service.hallTicket },
     storage: { client: objectStorage, bucket: config.s3.bucket },
     enqueueReport: async (payload) => {
       await reportingQueue.queue.add(REPORT_JOB_NAME, payload);
     },
-  });
-
-  // --- timetable ---
-  const timetable = createTimetableModule({
-    db,
-    audit: system.service.audit,
-    scopeChecker: identityCore.scopeChecker,
-    peopleDirectory: people.service.directory,
   });
 
   // Portal (W1): no tables, no jobs — self-scoped student views composed
@@ -268,6 +277,7 @@ function buildWebRuntime(): WebRuntime {
     fees,
     notices,
     results,
+    exams,
     portal,
   ];
 

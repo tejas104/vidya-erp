@@ -222,7 +222,7 @@ export default function FeesPage() {
       });
       applyInvoice(invoice);
       setAdjusting(null);
-      toast.show(`${kind[0].toUpperCase()}${kind.slice(1)} recorded.`, "good");
+      toast.show(`${kind.charAt(0).toUpperCase()}${kind.slice(1)} recorded.`, "good");
     } catch (caught) {
       toast.show(caught instanceof ApiError ? caught.message : "Couldn't record the adjustment.", "danger");
     } finally {

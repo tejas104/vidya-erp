@@ -21,7 +21,7 @@ const ONES = [
 const TENS = ["", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"];
 
 function underHundred(n: number): string {
-  if (n < 20) return ONES[n];
+  if (n < 20) return ONES[n] ?? "";
   return `${TENS[Math.trunc(n / 10)]}${n % 10 ? ` ${ONES[n % 10]}` : ""}`;
 }
 

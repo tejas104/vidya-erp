@@ -38,6 +38,9 @@ importers:
       '@vidya/module-coursework':
         specifier: workspace:*
         version: link:packages/modules/coursework
+      '@vidya/module-exams':
+        specifier: workspace:*
+        version: link:packages/modules/exams
       '@vidya/module-fees':
         specifier: workspace:*
         version: link:packages/modules/fees

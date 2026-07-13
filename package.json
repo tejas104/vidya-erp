@@ -50,6 +50,7 @@
     "@vidya/module-fees": "workspace:*",
     "@vidya/module-notices": "workspace:*",
     "@vidya/module-results": "workspace:*",
+    "@vidya/module-exams": "workspace:*",
     "@vidya/module-system": "workspace:*",
     "@vidya/platform": "workspace:*",
     "@vitest/coverage-v8": "^3.2.0",

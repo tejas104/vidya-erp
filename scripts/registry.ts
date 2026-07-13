@@ -13,6 +13,7 @@ import { courseworkModuleDefinition } from "@vidya/module-coursework";
 import { feesModuleDefinition } from "@vidya/module-fees";
 import { noticesModuleDefinition } from "@vidya/module-notices";
 import { resultsModuleDefinition } from "@vidya/module-results";
+import { examsModuleDefinition } from "@vidya/module-exams";
 
 /**
  * Tooling-side module registry. New modules are added here (one line) and in
@@ -32,6 +33,7 @@ export const moduleDefinitions: readonly ModuleDefinition[] = [
   feesModuleDefinition,
   noticesModuleDefinition,
   resultsModuleDefinition,
+  examsModuleDefinition,
 ];
 
 const require = createRequire(import.meta.url);

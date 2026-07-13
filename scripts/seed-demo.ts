@@ -20,6 +20,7 @@ import { createTimetableModule } from "@vidya/module-timetable";
 import { INVOICE_GENERATE_JOB_NAME, createFeesModule } from "@vidya/module-fees";
 import { createNoticesModule } from "@vidya/module-notices";
 import { createResultsModule } from "@vidya/module-results";
+import { createExamsModule } from "@vidya/module-exams";
 
 /**
  * DEMO DATA SEEDER — a self-contained, non-production pilot dataset.
@@ -212,7 +213,15 @@ function buildStack() {
     marksReadModel: academics.service.readModel,
   });
 
-  for (const module of [identity, people, academics, timetable, fees, notices, results]) {
+  // --- exams ---
+  const exams = createExamsModule({
+    db,
+    audit: system.service.audit,
+    peopleDirectory: people.service.directory,
+    timetableRead: timetable.service.readModel,
+  });
+
+  for (const module of [identity, people, academics, timetable, fees, notices, results, exams]) {
     for (const route of module.definition.routes) {
       specs.set(route.id, route);
       handlers[route.id] = defineRoute(route, module.handlers[route.id]!, routeDeps);
@@ -600,6 +609,55 @@ async function main(): Promise<void> {
       console.log(`  results: 10-point scale, credits for ${subjects.length} subjects, Term 1 ${published.status === 201 ? "published" : "already published"}`);
     }
 
+    /** Exams demo data (E4) — idempotent: series reused by name via the list,
+     * slots tolerate 409 (subject already scheduled in the series). Schedules a
+     * "Midterm" paper per subject on consecutive weekday mornings so the portal
+     * exam card and hall ticket have data. */
+    async function seedExamsBlock(classId: string): Promise<void> {
+      const seriesList = await expectJson<{ series: { id: string; name: string }[] }>(
+        await call("exams.series-list", { cookie: adminCookie, query: { collegeId, academicYear: YEAR } }),
+        [200],
+        "series list",
+      );
+      let seriesId = seriesList.series.find((s) => s.name === "Midterm")?.id;
+      if (seriesId === undefined) {
+        const created = await expectJson<{ id: string }>(
+          await call("exams.series-create", {
+            cookie: adminCookie,
+            body: { collegeId, name: "Midterm", academicYear: YEAR, term: "Term 1" },
+          }),
+          [201],
+          "series create",
+        );
+        seriesId = created.id;
+      }
+
+      const tree = await expectJson<{
+        departments: { classes: { id: string }[]; subjects: { id: string }[] }[];
+      }>(await call("people.college-tree", { cookie: adminCookie, params: { collegeId } }), [200], "tree for exams");
+      const department = tree.departments.find((dep) => dep.classes.some((cls) => cls.id === classId));
+      const subjects = department?.subjects ?? [];
+      if (subjects.length === 0) {
+        console.log("  exams: no subjects for the demo class — skipping");
+        return;
+      }
+
+      let scheduled = 0;
+      for (const [index, subject] of subjects.entries()) {
+        // Consecutive weekday mornings from 2026-12-01 (skip weekends).
+        const day = new Date(Date.UTC(2026, 11, 1 + index));
+        while (day.getUTCDay() === 0 || day.getUTCDay() === 6) day.setUTCDate(day.getUTCDate() + 1);
+        const onDate = day.toISOString().slice(0, 10);
+        const res = await call("exams.slot-create", {
+          cookie: adminCookie,
+          body: { seriesId, classId, subjectId: subject.id, onDate, starts: "09:00", ends: "11:00", room: "Exam Hall" },
+        });
+        if (res.status === 201) scheduled++;
+        else if (res.status !== 409) throw new Error(`slot create: ${res.status} — ${await res.text()}`);
+      }
+      console.log(`  exams: Midterm series, ${scheduled}/${subjects.length} papers scheduled`);
+    }
+
     // 2) The principal — college-wide, sees every department. A 409 here means
     //    the demo tree already exists: run only the incremental blocks (fees)
     //    against the existing tree instead of failing.
@@ -626,6 +684,7 @@ async function main(): Promise<void> {
         await seedFeesBlock({ classId: klass.id, sectionId: section.id, portalStudentId: portal?.id ?? null });
         await seedNoticesBlock(klass.id);
         await seedResultsBlock(klass.id);
+        await seedExamsBlock(klass.id);
       }
       console.log("\n✓ Fees increment seeded on the existing demo tree.");
       printCredentials(demoCredentials());
@@ -922,6 +981,9 @@ async function main(): Promise<void> {
 
     // 6d) Results (M5): scale + credits + Term 1 published for the demo class.
     if (feesClassId !== null) await seedResultsBlock(feesClassId);
+
+    // 6e) Exams (M6): Midterm series + papers scheduled for the demo class.
+    if (feesClassId !== null) await seedExamsBlock(feesClassId);
 
     // 7) Flip any resolvable manual grants (principal/HoD) to verified.
     await call("identity.grants-verify", { cookie: adminCookie });

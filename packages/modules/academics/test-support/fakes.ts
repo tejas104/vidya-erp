@@ -142,6 +142,17 @@ export class FakePeopleDirectory implements PeopleDirectory {
     return new Set(studentIds.filter((id) => known.has(id)));
   }
 
+  async studentsBrief(
+    studentIds: readonly string[],
+  ): Promise<Map<string, { fullName: string; admissionNo: string }>> {
+    const known = new Set<string>([ORG.studentA1, ORG.studentA2, ORG.studentB1]);
+    const briefs = new Map<string, { fullName: string; admissionNo: string }>();
+    for (const id of studentIds) {
+      if (known.has(id)) briefs.set(id, { fullName: `Student ${id}`, admissionNo: id });
+    }
+    return briefs;
+  }
+
   async subjectDepartment(subjectId: string): Promise<string | null> {
     return subjectId === ORG.mathId || subjectId === ORG.physicsId ? ORG.departmentId : null;
   }

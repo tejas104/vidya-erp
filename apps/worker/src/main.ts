@@ -59,6 +59,7 @@ import { createCourseworkModule } from "@vidya/module-coursework";
 import { FEES_MODULE_NAME, INVOICE_GENERATE_JOB_NAME, createFeesModule } from "@vidya/module-fees";
 import { createNoticesModule } from "@vidya/module-notices";
 import { createResultsModule } from "@vidya/module-results";
+import { createExamsModule } from "@vidya/module-exams";
 import { createMetricsServer } from "./metrics-server";
 
 const RESET_CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
@@ -194,12 +195,28 @@ async function main(): Promise<void> {
     },
   });
 
+  // --- timetable --- (before reporting: exams' clash advisory reads it)
+  const timetable = createTimetableModule({
+    db,
+    audit: system.service.audit,
+    scopeChecker: identityCore.scopeChecker,
+    peopleDirectory: people.service.directory,
+  });
+
   // --- results --- (before reporting: grade cards render in this process)
   const results = createResultsModule({
     db,
     audit: system.service.audit,
     peopleDirectory: people.service.directory,
     marksReadModel: academics.service.readModel,
+  });
+
+  // --- exams --- (before reporting: it feeds the hall-ticket source)
+  const exams = createExamsModule({
+    db,
+    audit: system.service.audit,
+    peopleDirectory: people.service.directory,
+    timetableRead: timetable.service.readModel,
   });
 
   const reportingQueue = createModuleQueue({
@@ -212,7 +229,7 @@ async function main(): Promise<void> {
     metrics,
     audit: system.service.audit,
     analyticsRead: analytics.service.readModel,
-    sources: { gradeCard: results.service.gradeCard },
+    sources: { gradeCard: results.service.gradeCard, hallTicket: exams.service.hallTicket },
     storage: { client: objectStorage, bucket: config.s3.bucket },
     enqueueReport: async (payload) => {
       await reportingQueue.queue.add(REPORT_JOB_NAME, payload);
@@ -221,14 +238,6 @@ async function main(): Promise<void> {
 
   // Portal (W1): no jobs — included so the module inventory stays uniform
   // across processes (registry ↔ composition parity checks).
-  // --- timetable ---
-  const timetable = createTimetableModule({
-    db,
-    audit: system.service.audit,
-    scopeChecker: identityCore.scopeChecker,
-    peopleDirectory: people.service.directory,
-  });
-
   // --- coursework ---
   const coursework = createCourseworkModule({
     db,
@@ -279,6 +288,7 @@ async function main(): Promise<void> {
     fees,
     notices,
     results,
+    exams,
     portal,
   ];
 
