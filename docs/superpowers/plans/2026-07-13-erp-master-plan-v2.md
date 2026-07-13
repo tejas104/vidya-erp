@@ -8,8 +8,22 @@
 > for those plans. Supersedes `2026-07-11-erp-master-plan.md` where they differ.
 >
 > Sources: `docs/architecture-and-workflows.md` (vision), the 2026-07-11 master
-> plan (module inventory + DoD), and the owner's **VEFS document**
-> (`vidya_school_college_erp.txt`) — reconciled in the section below.
+> plan (module inventory + DoD), the owner's **VEFS document**
+> (`vidya_school_college_erp.txt`), and the **Vidya_ERP.pdf one-month end-state
+> spec** (2026-07-13) — all reconciled below. Where the PDF and this plan
+> differ, the PDF's scope ledger (§7) wins:
+> - **Licensing (M11) moves to the deferred backlog** — "contractual for early
+>   sales; code-enforcement can slip past v1 without blocking a real
+>   deployment." The pipeline `feature` gate ships when licensing does.
+> - The PDF's two attendance DECISION NEEDED items are **already answered by
+>   the shipped code**: per-day+slot marking (slot string per session) with
+>   statuses present/absent/late/excused. Revisit = schema change = deferred.
+> - Class-teacher attendance correction ships as the PDF's option (a): direct
+>   audited correction, no approval chain (chain stays deferred).
+> - The PDF's parallel lanes (A: Fees→Notices→Leave · B: Results→Exams) are
+>   available if speed demands; sequential remains the default.
+> - Every screen carries the PDF §8.4 five states: loading / empty / error /
+>   denied / withheld.
 
 **Goal:** Finish Vidya into a sellable college-ERP core — fees, notices, results, exams, leave, licensing, hardening, reports — each module built UI-first inside "The Register" design system, merged one at a time with gates green.
 
@@ -117,11 +131,11 @@ Backend core already committed (`65165dc`): schema, money math, repo with transa
 
 ### Tasks
 
-- [ ] **F1 — Frontend: api client + Counter tab** — `api.ts` fees block (14 typed methods + `formatPaise`/`formatPaiseInWords`), `apps/web/app/(app)/manage/fees/page.tsx` Counter tab incl. payment modal + counterfoil; RTL: search→ledger render, payment happy path, waived 409 toast, overdue badge. Commit.
-- [ ] **F2 — Frontend: Setup + Collections tabs + portal + nav** — setup/generate/poll UI, collections tiles, portal fees section, `navConfig.ts` + accountant redirect (login → `/manage/fees`); RTL per screen. Commit.
-- [ ] **F3 — Backend: handlers** — `handlers.ts` for all 14 routes over the existing repo; unit tests: happy, denial (student hitting counter routes 403, accountant scope), 409s (duplicate head/structure, waived-invoice payment), 404s. Commit.
-- [ ] **F4 — Backend: invoice-generate worker job** — job processor in fees module registered in `apps/worker/src/main.ts`; idempotency test (re-run creates 0, skips N). Commit.
-- [ ] **F5 — Integration** — `index.ts`, `composition.ts`, `registry.ts`, migrations run, seed `demo-accountant` + heads/structures/invoices/part-payments so every state shows; OpenAPI regen; live drive: accountant collects cash → receipt renders; student sees dues drop; admin generates run. Merge.
+- [x] **F1 — Frontend: api client + Counter tab** — `api.ts` fees block (14 typed methods + `formatPaise`/`formatPaiseInWords`), `apps/web/app/(app)/manage/fees/page.tsx` Counter tab incl. payment modal + counterfoil; RTL: search→ledger render, payment happy path, waived 409 toast, overdue badge. Commit.
+- [x] **F2 — Frontend: Setup + Collections tabs + portal + nav** — setup/generate/poll UI, collections tiles, portal fees section, `navConfig.ts` + accountant redirect (login → `/manage/fees`); RTL per screen. Commit.
+- [x] **F3 — Backend: handlers** — `handlers.ts` for all 14 routes over the existing repo; unit tests: happy, denial (student hitting counter routes 403, accountant scope), 409s (duplicate head/structure, waived-invoice payment), 404s. Commit.
+- [x] **F4 — Backend: invoice-generate worker job** — job processor in fees module registered in `apps/worker/src/main.ts`; idempotency test (re-run creates 0, skips N). Commit.
+- [x] **F5 — Integration** — `index.ts`, `composition.ts`, `registry.ts`, migrations run, seed `demo-accountant` + heads/structures/invoices/part-payments so every state shows; OpenAPI regen; live drive: accountant collects cash → receipt renders; student sees dues drop; admin generates run. Merge.
 
 ---
 
@@ -136,10 +150,10 @@ Backend core already committed (`65165dc`): schema, money math, repo with transa
 - **Noticeboard card** on `/dashboard` and `/portal`: top 5 live notices, "older notices" link expands; empty state "Nothing on the board."
 
 **Tasks:**
-- [ ] **N1 — Contract** (`packages/modules/notices/src/definition.ts`). Commit.
-- [ ] **N2 — Frontend**: api block, `/manage/notices` page, noticeboard card shared component `apps/web/src/ui/Noticeboard.tsx` used by dashboard + portal; RTL: audience chip render, scheduled vs live, compose validation. Commit.
-- [ ] **N3 — Backend**: schema/migration/repo/handlers; unit tests incl. audience filtering per role (student in class X sees class-X + college, not staff). Commit.
-- [ ] **N4 — Integration**: wiring, seed 4 notices covering every audience + one scheduled + one expired, drive as admin/teacher/student. Merge.
+- [x] **N1 — Contract** (`packages/modules/notices/src/definition.ts`). Commit.
+- [x] **N2 — Frontend**: api block, `/manage/notices` page, noticeboard card shared component `apps/web/src/ui/Noticeboard.tsx` used by dashboard + portal; RTL: audience chip render, scheduled vs live, compose validation. Commit.
+- [x] **N3 — Backend**: schema/migration/repo/handlers; unit tests incl. audience filtering per role (student in class X sees class-X + college, not staff). Commit.
+- [x] **N4 — Integration**: wiring, seed 4 notices covering every audience + one scheduled + one expired, drive as admin/teacher/student. Merge.
 
 ---
 
@@ -261,7 +275,7 @@ Backend core already committed (`65165dc`): schema, money math, repo with transa
 
 Sequential by default (one branch in flight, controller = this session):
 
-**M4 Fees → M3 Notices → M5 Results → M6 Exams → M7 Leave → Class Workspace (5.5) → M11 Licensing → M12 Hardening → M13 Catalog → P-phase.**
+**M4 Fees ✅ (2026-07-13, live-verified) → M3 Notices ✅ (2026-07-13, live-verified) → M5 Results → M6 Exams → M7 Leave → Class Workspace (5.5) → M12 Hardening → M13 Catalog → P-phase.** M11 Licensing: deferred per the PDF scope ledger (Phase 6 executes only if the owner re-orders it).
 
 Rationale: M4 is half-built (finish first, momentum + revenue feature); M3 is small and de-risks the shared-card pattern M5/M6 reuse on portal/dashboard; M5 before M6 because hall-ticket/marksheet PDFs share the reporting-kind pattern R4 establishes; M11 late so `feature` tags decorate routes that already exist; M12/M13 close the sellable story.
 
@@ -269,7 +283,7 @@ If parallel lanes are wanted later, the shared-file law (Global Constraint 9) an
 
 ## Deferred backlog (post-v1, same recipe)
 
-M8 Library (fines post into the fees ledger — one money system) · M9 Hostel/Transport (charges post into fees) · M10 Placement (eligibility from M5 GPA read model) · M14 Parents (second identity link, read-only portal) · online payment gateway (portal "Pay now", needs `sys_settings` + provider) · notices read-receipts · attendance-correction approval chain (teacher requests → HOD approves; today same-day edits suffice) · richer attendance statuses (late/medical/on-duty) · student documents/certificates downloads (bonafide, ID card) · everything in the VEFS reject list above (QR/RFID/face, rubrics, question banks, moderation, AI features, …).
+**M11 Licensing** (ed25519 file + `RouteSpec.feature` gate — contractual for early sales per the PDF) · M8 Library (fines post into the fees ledger — one money system) · M9 Hostel/Transport (charges post into fees) · M10 Placement (eligibility from M5 GPA read model) · M14 Parents (second identity link, read-only portal) · online payment gateway (portal "Pay now", needs `sys_settings` + provider) · notices read-receipts · attendance-correction approval chain (teacher requests → HOD approves; direct audited class-teacher correction ships in v1) · richer attendance statuses (late/medical/on-duty beyond the shipped P/A/L/E) · student documents/certificates downloads (bonafide, ID card) · everything in the VEFS reject list above (QR/RFID/face, rubrics, question banks, moderation, AI features, …).
 
 ## Risks
 
