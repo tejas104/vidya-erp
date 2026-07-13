@@ -462,6 +462,22 @@ export interface ExamSlotView {
   room: string;
 }
 
+// --- leave ---
+export interface LeaveRequestView {
+  id: string;
+  collegeId: string;
+  departmentId: string | null;
+  teacherId: string;
+  teacherName: string;
+  fromOn: string;
+  toOn: string;
+  kind: "casual" | "sick" | "duty";
+  reason: string;
+  status: "pending" | "approved" | "rejected";
+  decisionNote: string | null;
+  decidedAt: string | null;
+}
+
 export interface PortalMarks {
   subjects: {
     subjectId: string;
@@ -771,6 +787,13 @@ export const api = {
       `/api/v1/exams/classes/${encodeURIComponent(classId)}/schedule?academicYear=${year}`,
     ),
   exmMySchedule: () => get<{ slots: ExamSlotView[] }>("/api/v1/exams/my-schedule"),
+  // --- leave ---
+  lvsApply: (body: { fromOn: string; toOn: string; kind: "casual" | "sick" | "duty"; reason: string; departmentId?: string }) =>
+    post<LeaveRequestView>("/api/v1/leave/requests", body),
+  lvsMine: () => get<{ requests: LeaveRequestView[] }>("/api/v1/leave/mine"),
+  lvsPending: () => get<{ requests: LeaveRequestView[] }>("/api/v1/leave/pending"),
+  lvsDecide: (requestId: string, body: { status: "approved" | "rejected"; note?: string }) =>
+    post<LeaveRequestView>(`/api/v1/leave/requests/${encodeURIComponent(requestId)}/decide`, body),
   async login(username: string, password: string): Promise<void> {
     const response = await fetch("/api/v1/identity/auth/login", {
       method: "POST",

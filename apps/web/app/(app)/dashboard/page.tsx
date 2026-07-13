@@ -14,6 +14,7 @@ import {
   type Tile,
   type TtToday,
 } from "@/ui/api";
+import { Card } from "@/ui/Card";
 import { PageHeader } from "@/ui/PageHeader";
 import { Noticeboard } from "@/ui/Noticeboard";
 import {
@@ -79,6 +80,7 @@ export default function DashboardPage() {
   const [atRisk, setAtRisk] = useState<AtRiskEntry[]>([]);
   const [focus, setFocus] = useState<Focus | null>(null);
   const [today, setToday] = useState<TtToday | null>(null);
+  const [leaveWaiting, setLeaveWaiting] = useState<number | null>(null);
   const [rollup, setRollup] = useState<NodeRollup | null>(null);
   const [compare, setCompare] = useState<ComparisonReport | null>(null);
   const [distribution, setDistribution] = useState<DistributionResponse | null>(null);
@@ -105,6 +107,12 @@ export default function DashboardPage() {
         if (me.roles.includes("teacher") || me.roles.includes("class_teacher")) {
           api.ttMyToday(year).then((t) => {
             if (alive) setToday(t);
+          }).catch(() => undefined);
+        }
+        // --- leave: approvers get a "waiting" card ---
+        if (me.roles.includes("hod") || me.roles.includes("principal") || me.roles.includes("admin")) {
+          api.lvsPending().then((r) => {
+            if (alive) setLeaveWaiting(r.requests.length);
           }).catch(() => undefined);
         }
         const dash = await api.dashboard(year);
@@ -185,6 +193,18 @@ export default function DashboardPage() {
 
       {/* --- notices --- */}
       <Noticeboard />
+
+      {/* --- leave: waiting-on-you card --- */}
+      {leaveWaiting !== null && leaveWaiting > 0 ? (
+        <section className="section" aria-label="Leave approvals" style={{ marginTop: 0 }}>
+          <Card>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+              <strong>{leaveWaiting} leave request{leaveWaiting === 1 ? "" : "s"} waiting</strong>
+              <a className="btn ghost" href="/manage/leave">Review</a>
+            </div>
+          </Card>
+        </section>
+      ) : null}
 
         {dashboard.tiles.length === 0 ? (
           <div className="state">
