@@ -56,6 +56,9 @@ importers:
       '@vidya/module-reporting':
         specifier: workspace:*
         version: link:packages/modules/reporting
+      '@vidya/module-results':
+        specifier: workspace:*
+        version: link:packages/modules/results
       '@vidya/module-system':
         specifier: workspace:*
         version: link:packages/modules/system
@@ -134,6 +137,9 @@ importers:
       '@vidya/module-reporting':
         specifier: workspace:*
         version: link:../../packages/modules/reporting
+      '@vidya/module-results':
+        specifier: workspace:*
+        version: link:../../packages/modules/results
       '@vidya/module-system':
         specifier: workspace:*
         version: link:../../packages/modules/system
@@ -195,6 +201,9 @@ importers:
       '@vidya/module-reporting':
         specifier: workspace:*
         version: link:../../packages/modules/reporting
+      '@vidya/module-results':
+        specifier: workspace:*
+        version: link:../../packages/modules/results
       '@vidya/module-system':
         specifier: workspace:*
         version: link:../../packages/modules/system

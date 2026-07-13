@@ -21,6 +21,7 @@
     "@vidya/module-coursework": "workspace:*",
     "@vidya/module-fees": "workspace:*",
     "@vidya/module-notices": "workspace:*",
+    "@vidya/module-results": "workspace:*",
     "@vidya/module-system": "workspace:*",
     "@vidya/platform": "workspace:*",
     "next": "^16.0.0",

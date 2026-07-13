@@ -19,6 +19,7 @@ import { createAcademicsModule } from "@vidya/module-academics";
 import { createTimetableModule } from "@vidya/module-timetable";
 import { INVOICE_GENERATE_JOB_NAME, createFeesModule } from "@vidya/module-fees";
 import { createNoticesModule } from "@vidya/module-notices";
+import { createResultsModule } from "@vidya/module-results";
 
 /**
  * DEMO DATA SEEDER — a self-contained, non-production pilot dataset.
@@ -203,7 +204,15 @@ function buildStack() {
     peopleDirectory: people.service.directory,
   });
 
-  for (const module of [identity, people, academics, timetable, fees, notices]) {
+  // --- results ---
+  const results = createResultsModule({
+    db,
+    audit: system.service.audit,
+    peopleDirectory: people.service.directory,
+    marksReadModel: academics.service.readModel,
+  });
+
+  for (const module of [identity, people, academics, timetable, fees, notices, results]) {
     for (const route of module.definition.routes) {
       specs.set(route.id, route);
       handlers[route.id] = defineRoute(route, module.handlers[route.id]!, routeDeps);
@@ -525,6 +534,72 @@ async function main(): Promise<void> {
       console.log(`  notices: ${board.length} posted (college / students / class)`);
     }
 
+    /** Results demo data (6d) — idempotent: scale reused by name, credits are a
+     * full replace, publish tolerates 409. Publishes Term 1 for the demo class
+     * so the portal shows a grade card; other classes stay withheld. */
+    async function seedResultsBlock(classId: string): Promise<void> {
+      const scaleList = await expectJson<{ scales: { id: string; name: string }[] }>(
+        await call("results.scale-list", { cookie: adminCookie, query: { collegeId } }),
+        [200],
+        "scale list",
+      );
+      let scaleId = scaleList.scales.find((scale) => scale.name === "10-point")?.id;
+      if (scaleId === undefined) {
+        const created = await expectJson<{ id: string }>(
+          await call("results.scale-create", {
+            cookie: adminCookie,
+            body: {
+              collegeId,
+              name: "10-point",
+              bands: [
+                { minPct: 90, grade: "A+", points: 10 },
+                { minPct: 80, grade: "A", points: 9 },
+                { minPct: 70, grade: "B+", points: 8 },
+                { minPct: 60, grade: "B", points: 7 },
+                { minPct: 50, grade: "C", points: 6 },
+                { minPct: 40, grade: "D", points: 5 },
+                { minPct: 0, grade: "F", points: 0 },
+              ],
+            },
+          }),
+          [201],
+          "scale create",
+        );
+        scaleId = created.id;
+      }
+
+      // Credits for the demo class's subjects: 4 for the first, 3 for the rest.
+      const tree = await expectJson<{
+        departments: { classes: { id: string }[]; subjects: { id: string; name: string }[] }[];
+      }>(await call("people.college-tree", { cookie: adminCookie, params: { collegeId } }), [200], "tree for credits");
+      const department = tree.departments.find((dep) => dep.classes.some((cls) => cls.id === classId));
+      const subjects = department?.subjects ?? [];
+      if (subjects.length === 0) {
+        console.log("  results: no subjects for the demo class — skipping");
+        return;
+      }
+      await expectJson(
+        await call("results.credits-set", {
+          cookie: adminCookie,
+          body: {
+            classId,
+            academicYear: YEAR,
+            entries: subjects.map((subject, index) => ({ subjectId: subject.id, credits: index === 0 ? 4 : 3 })),
+          },
+        }),
+        [200],
+        "credits set",
+      );
+      const published = await call("results.publish", {
+        cookie: adminCookie,
+        body: { classId, academicYear: YEAR, term: "Term 1", scaleId },
+      });
+      if (published.status !== 201 && published.status !== 409) {
+        throw new Error(`publish Term 1: ${published.status} — ${await published.text()}`);
+      }
+      console.log(`  results: 10-point scale, credits for ${subjects.length} subjects, Term 1 ${published.status === 201 ? "published" : "already published"}`);
+    }
+
     // 2) The principal — college-wide, sees every department. A 409 here means
     //    the demo tree already exists: run only the incremental blocks (fees)
     //    against the existing tree instead of failing.
@@ -550,6 +625,7 @@ async function main(): Promise<void> {
         const portal = roster.students.find((s) => s.admissionNo.endsWith("-001")) ?? roster.students[0];
         await seedFeesBlock({ classId: klass.id, sectionId: section.id, portalStudentId: portal?.id ?? null });
         await seedNoticesBlock(klass.id);
+        await seedResultsBlock(klass.id);
       }
       console.log("\n✓ Fees increment seeded on the existing demo tree.");
       printCredentials(demoCredentials());
@@ -843,6 +919,9 @@ async function main(): Promise<void> {
 
     // 6c) Notices (M3): three live notices — college-wide, students, one class.
     if (feesClassId !== null) await seedNoticesBlock(feesClassId);
+
+    // 6d) Results (M5): scale + credits + Term 1 published for the demo class.
+    if (feesClassId !== null) await seedResultsBlock(feesClassId);
 
     // 7) Flip any resolvable manual grants (principal/HoD) to verified.
     await call("identity.grants-verify", { cookie: adminCookie });

@@ -38,6 +38,7 @@ import { createTimetableModule } from "@vidya/module-timetable";
 import { createCourseworkModule } from "@vidya/module-coursework";
 import { FEES_MODULE_NAME, INVOICE_GENERATE_JOB_NAME, createFeesModule } from "@vidya/module-fees";
 import { createNoticesModule } from "@vidya/module-notices";
+import { createResultsModule } from "@vidya/module-results";
 
 /**
  * COMPOSITION ROOT — web process.
@@ -182,6 +183,14 @@ function buildWebRuntime(): WebRuntime {
     },
   });
 
+  // --- results --- (before reporting: it feeds the grade-card source)
+  const results = createResultsModule({
+    db,
+    audit: system.service.audit,
+    peopleDirectory: people.service.directory,
+    marksReadModel: academics.service.readModel,
+  });
+
   const reportingQueue = createModuleQueue({
     module: REPORTING_MODULE_NAME,
     redisUrl: config.redis.url,
@@ -192,6 +201,7 @@ function buildWebRuntime(): WebRuntime {
     metrics,
     audit: system.service.audit,
     analyticsRead: analytics.service.readModel,
+    sources: { gradeCard: results.service.gradeCard },
     storage: { client: objectStorage, bucket: config.s3.bucket },
     enqueueReport: async (payload) => {
       await reportingQueue.queue.add(REPORT_JOB_NAME, payload);
@@ -257,6 +267,7 @@ function buildWebRuntime(): WebRuntime {
     coursework,
     fees,
     notices,
+    results,
     portal,
   ];
 
