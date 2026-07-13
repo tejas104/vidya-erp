@@ -550,6 +550,13 @@ export class InMemoryPeopleRepo implements PeopleRepo {
   async listAllAssignments(): Promise<PplAssignmentRow[]> {
     return [...this.assignments.values()];
   }
+
+  // ponytail: this fake has no cross-linked classes map to join against (unlike
+  // the real repo), and no existing people-module unit test exercises leave
+  // routing — stub empty until a test needs real department data here.
+  async departmentsForTeacher(_teacherId: string): Promise<string[]> {
+    return [];
+  }
 }
 
 // ---------------------------------------------------------------------------

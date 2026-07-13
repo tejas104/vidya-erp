@@ -2,6 +2,7 @@ import { and, asc, eq, inArray } from "drizzle-orm";
 import type { Db } from "@vidya/platform";
 import { newId } from "../ids";
 import {
+  pplClasses,
   pplEnrollments,
   pplStudents,
   pplTeacherAssignments,
@@ -98,6 +99,8 @@ export interface PeopleRepo {
   assignmentsByClass(classId: string): Promise<PplAssignmentRow[]>;
   assignmentsByTeacher(teacherId: string): Promise<PplAssignmentRow[]>;
   listAllAssignments(): Promise<PplAssignmentRow[]>;
+  /** Distinct department ids across a teacher's assignments (via their classes). */
+  departmentsForTeacher(teacherId: string): Promise<string[]>;
 }
 
 export function createPeopleRepo(db: Db): PeopleRepo {
@@ -382,6 +385,15 @@ export function createPeopleRepo(db: Db): PeopleRepo {
 
     async listAllAssignments() {
       return db.select().from(pplTeacherAssignments).orderBy(asc(pplTeacherAssignments.createdAt));
+    },
+
+    async departmentsForTeacher(teacherId) {
+      const rows = await db
+        .selectDistinct({ departmentId: pplClasses.departmentId })
+        .from(pplTeacherAssignments)
+        .innerJoin(pplClasses, eq(pplTeacherAssignments.classId, pplClasses.id))
+        .where(eq(pplTeacherAssignments.teacherId, teacherId));
+      return rows.map((row) => row.departmentId);
     },
   };
 }

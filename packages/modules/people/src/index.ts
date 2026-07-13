@@ -87,6 +87,8 @@ export interface PeopleDirectory {
   teacherByIdentityUser(
     identityUserId: string,
   ): Promise<{ teacherId: string; collegeId: string; fullName: string } | null>;
+  /** Leave routing: the departments a teacher belongs to (via assignments). */
+  teacherDepartments(teacherId: string): Promise<string[]>;
   /** Which of these student ids exist (batched). */
   studentsExist(studentIds: readonly string[]): Promise<Set<string>>;
   /** Batched student display info for ledger views (fees). Unknown ids absent. */
@@ -210,6 +212,7 @@ export function createPeopleModule(deps: PeopleModuleDeps): RuntimeModule<People
             ? null
             : { teacherId: teacher.id, collegeId: teacher.collegeId, fullName: teacher.fullName };
         },
+        teacherDepartments: (teacherId) => peopleRepo.departmentsForTeacher(teacherId),
         studentsExist: (studentIds) => peopleRepo.findExistingStudentIds(studentIds),
         studentsBrief: async (studentIds) => {
           const briefs = new Map<string, { fullName: string; admissionNo: string }>();

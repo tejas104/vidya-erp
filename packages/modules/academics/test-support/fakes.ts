@@ -142,6 +142,10 @@ export class FakePeopleDirectory implements PeopleDirectory {
     return new Set(studentIds.filter((id) => known.has(id)));
   }
 
+  async teacherDepartments(): Promise<string[]> {
+    return [ORG.departmentId];
+  }
+
   async studentsBrief(
     studentIds: readonly string[],
   ): Promise<Map<string, { fullName: string; admissionNo: string }>> {
