@@ -60,6 +60,7 @@ import { FEES_MODULE_NAME, INVOICE_GENERATE_JOB_NAME, createFeesModule } from "@
 import { createNoticesModule } from "@vidya/module-notices";
 import { createResultsModule } from "@vidya/module-results";
 import { createExamsModule } from "@vidya/module-exams";
+import { createLeaveModule } from "@vidya/module-leave";
 import { createMetricsServer } from "./metrics-server";
 
 const RESET_CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
@@ -219,6 +220,13 @@ async function main(): Promise<void> {
     timetableRead: timetable.service.readModel,
   });
 
+  // --- leave --- (no queue/jobs, like notices)
+  const leave = createLeaveModule({
+    db,
+    audit: system.service.audit,
+    peopleDirectory: people.service.directory,
+  });
+
   const reportingQueue = createModuleQueue({
     module: REPORTING_MODULE_NAME,
     redisUrl: config.redis.url,
@@ -289,6 +297,7 @@ async function main(): Promise<void> {
     notices,
     results,
     exams,
+    leave,
     portal,
   ];
 

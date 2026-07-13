@@ -32,6 +32,8 @@ export const NAV: NavEntry[] = [
   { href: "/manage/results", label: "Results", icon: "marks", group: "Administration", roles: ["admin", "principal"] },
   // --- exams ---
   { href: "/manage/exams", label: "Exams", icon: "attendance", group: "Administration", roles: ["admin"] },
+  // --- leave ---
+  { href: "/manage/leave", label: "Leave", icon: "file", group: "Teaching", roles: ["teacher", "class_teacher", "hod", "principal", "admin"] },
   // --- timetable ---
   { href: "/manage/timetable", label: "Timetable", icon: "attendance", group: "Administration", roles: ["admin"] },
   { href: "/manage/org", label: "Organisation", icon: "org", group: "Administration", roles: ["admin"] },

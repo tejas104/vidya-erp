@@ -40,6 +40,7 @@ import { FEES_MODULE_NAME, INVOICE_GENERATE_JOB_NAME, createFeesModule } from "@
 import { createNoticesModule } from "@vidya/module-notices";
 import { createResultsModule } from "@vidya/module-results";
 import { createExamsModule } from "@vidya/module-exams";
+import { createLeaveModule } from "@vidya/module-leave";
 
 /**
  * COMPOSITION ROOT — web process.
@@ -208,6 +209,13 @@ function buildWebRuntime(): WebRuntime {
     timetableRead: timetable.service.readModel,
   });
 
+  // --- leave --- (no reporting source; approvals only)
+  const leave = createLeaveModule({
+    db,
+    audit: system.service.audit,
+    peopleDirectory: people.service.directory,
+  });
+
   const reportingQueue = createModuleQueue({
     module: REPORTING_MODULE_NAME,
     redisUrl: config.redis.url,
@@ -278,6 +286,7 @@ function buildWebRuntime(): WebRuntime {
     notices,
     results,
     exams,
+    leave,
     portal,
   ];
 

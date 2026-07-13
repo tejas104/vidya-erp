@@ -47,6 +47,9 @@ importers:
       '@vidya/module-identity':
         specifier: workspace:*
         version: link:packages/modules/identity
+      '@vidya/module-leave':
+        specifier: workspace:*
+        version: link:packages/modules/leave
       '@vidya/module-notices':
         specifier: workspace:*
         version: link:packages/modules/notices

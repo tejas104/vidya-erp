@@ -21,6 +21,7 @@ import { INVOICE_GENERATE_JOB_NAME, createFeesModule } from "@vidya/module-fees"
 import { createNoticesModule } from "@vidya/module-notices";
 import { createResultsModule } from "@vidya/module-results";
 import { createExamsModule } from "@vidya/module-exams";
+import { createLeaveModule } from "@vidya/module-leave";
 
 /**
  * DEMO DATA SEEDER — a self-contained, non-production pilot dataset.
@@ -221,7 +222,14 @@ function buildStack() {
     timetableRead: timetable.service.readModel,
   });
 
-  for (const module of [identity, people, academics, timetable, fees, notices, results, exams]) {
+  // --- leave --- (no jobs — approvals only)
+  const leave = createLeaveModule({
+    db,
+    audit: system.service.audit,
+    peopleDirectory: people.service.directory,
+  });
+
+  for (const module of [identity, people, academics, timetable, fees, notices, results, exams, leave]) {
     for (const route of module.definition.routes) {
       specs.set(route.id, route);
       handlers[route.id] = defineRoute(route, module.handlers[route.id]!, routeDeps);
@@ -295,6 +303,8 @@ async function main(): Promise<void> {
     let portalStudentName = "";
     let feesClassId: string | null = null;
     let feesSectionId: string | null = null;
+    let leaveTeacherCookie: string | null = null;
+    let leaveHodCookie: string | null = null;
 
     // 1) The demo college and its dedicated admin (idempotent by code).
     const college = await stack.people.service.bootstrapCollege({ name: COLLEGE.name, code: COLLEGE.code });
@@ -672,6 +682,49 @@ async function main(): Promise<void> {
       );
     }
 
+    /** Leave demo data (L4) — idempotent: skips when the teacher already has
+     * requests. Applies one casual leave as a CSE teacher, leaves it pending, and
+     * applies + approves a second (sick) as the same teacher decided by the HOD, so
+     * the HOD queue shows one waiting and the teacher sees one approved. */
+    async function seedLeaveBlock(teacherCookie: string, hodCookie: string): Promise<void> {
+      const mine = await expectJson<{ requests: { id: string }[] }>(
+        await call("leave.my-requests", { cookie: teacherCookie }),
+        [200],
+        "leave mine",
+      );
+      if (mine.requests.length > 0) {
+        console.log("  leave: requests already present — skipping");
+        return;
+      }
+      // One left pending for the HOD queue.
+      await expectJson(
+        await call("leave.apply", {
+          cookie: teacherCookie,
+          body: { fromOn: "2026-08-10", toOn: "2026-08-11", kind: "casual", reason: "Family function" },
+        }),
+        [201],
+        "leave apply (pending)",
+      );
+      // One applied then approved by the HOD.
+      const toApprove = await expectJson<{ id: string }>(
+        await call("leave.apply", {
+          cookie: teacherCookie,
+          body: { fromOn: "2026-07-20", toOn: "2026-07-20", kind: "sick", reason: "Fever" },
+        }),
+        [201],
+        "leave apply (to approve)",
+      );
+      const decided = await call("leave.decide", {
+        cookie: hodCookie,
+        params: { requestId: toApprove.id },
+        body: { status: "approved" },
+      });
+      if (decided.status !== 200) {
+        throw new Error(`leave decide: ${decided.status} — ${await decided.text()}`);
+      }
+      console.log("  leave: 1 pending + 1 approved for a CSE teacher");
+    }
+
     // 2) The principal — college-wide, sees every department. A 409 here means
     //    the demo tree already exists: run only the incremental blocks (fees)
     //    against the existing tree instead of failing.
@@ -700,6 +753,9 @@ async function main(): Promise<void> {
         await seedResultsBlock(klass.id);
         await seedExamsBlock(klass.id);
       }
+      const incrementalTeacherCookie = await login(stack, "demo-teacher-ds", TEACHER_PASSWORD);
+      const incrementalHodCookie = await login(stack, "demo-hod-cse", STAFF_PASSWORD);
+      await seedLeaveBlock(incrementalTeacherCookie, incrementalHodCookie);
       console.log("\n✓ Fees increment seeded on the existing demo tree.");
       printCredentials(demoCredentials());
       await stack.close();
@@ -751,6 +807,9 @@ async function main(): Promise<void> {
         password: STAFF_PASSWORD,
         scope: `${dept.name} department`,
       });
+      if (dept.code === "CSE") {
+        leaveHodCookie = await login(stack, dept.hod.username, STAFF_PASSWORD);
+      }
 
       for (const klass of dept.classes) {
         const classId = (
@@ -802,6 +861,9 @@ async function main(): Promise<void> {
             { kind: "subject_teacher", subjectId },
           );
           subjectTeacherCookies.set(subject.code, cookie);
+          if (dept.code === "CSE" && subject.code === "DS") {
+            leaveTeacherCookie = cookie;
+          }
           credentials.push({
             role: "teacher",
             username: subject.teacher.username,
@@ -998,6 +1060,11 @@ async function main(): Promise<void> {
 
     // 6e) Exams (M6): Midterm series + papers scheduled for the demo class.
     if (feesClassId !== null) await seedExamsBlock(feesClassId);
+
+    // 6f) Leave (M7): a pending + an approved request for a CSE teacher.
+    if (leaveTeacherCookie !== null && leaveHodCookie !== null) {
+      await seedLeaveBlock(leaveTeacherCookie, leaveHodCookie);
+    }
 
     // 7) Flip any resolvable manual grants (principal/HoD) to verified.
     await call("identity.grants-verify", { cookie: adminCookie });

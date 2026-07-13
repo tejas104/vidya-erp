@@ -223,10 +223,10 @@ Backend core already committed (`65165dc`): schema, money math, repo with transa
 - HOD/principal: same route shows **Approvals** section on top — pending `DataTable` (teacher, dates, kind, reason) with Approve/Reject (reject requires note); dashboard card "3 leave requests waiting."
 
 **Tasks:**
-- [ ] **L1 — Contract**. Commit.
-- [ ] **L2 — Frontend**: api block, `/manage/leave` (role-adaptive sections), dashboard card; RTL: teacher vs HOD render, reject-note required. Commit.
-- [ ] **L3 — Backend**: schema/migration/repo/handlers; denial tests (teacher deciding own request 403, HOD outside dept 403). Commit.
-- [ ] **L4 — Integration**: wiring, seed pending+decided requests, drive teacher-apply → HOD-approve. Merge.
+- [x] **L1 — Contract**. Commit.
+- [x] **L2 — Frontend**: api block, `/manage/leave` (role-adaptive sections), dashboard card; RTL: teacher vs HOD render, reject-note required. Commit.
+- [x] **L3 — Backend**: schema/migration/repo/handlers; denial tests (teacher deciding own request 403, HOD outside dept 403). Commit.
+- [x] **L4 — Integration**: wiring, seed pending+decided requests, drive teacher-apply → HOD-approve. Merge.
 
 ---
 
@@ -293,7 +293,7 @@ Backend core already committed (`65165dc`): schema, money math, repo with transa
 
 Sequential by default (one branch in flight, controller = this session):
 
-**M4 Fees ✅ (2026-07-13, live-verified) → M3 Notices ✅ (2026-07-13, live-verified) → M5 Results ✅ (2026-07-13, live-verified) → M6 Exams ✅ (2026-07-14, live-verified) → M7 Leave → Class Workspace (5.5) → M12 Hardening → M13 Catalog → P-phase.** M11 Licensing: deferred per the PDF scope ledger (Phase 6 executes only if the owner re-orders it).
+**M4 Fees ✅ (2026-07-13, live-verified) → M3 Notices ✅ (2026-07-13, live-verified) → M5 Results ✅ (2026-07-13, live-verified) → M6 Exams ✅ (2026-07-14, live-verified) → M7 Leave ✅ (2026-07-14, live-verified) → Class Workspace (5.5) → M12 Hardening → M13 Catalog → P-phase.** M11 Licensing: deferred per the PDF scope ledger (Phase 6 executes only if the owner re-orders it).
 
 Rationale: M4 is half-built (finish first, momentum + revenue feature); M3 is small and de-risks the shared-card pattern M5/M6 reuse on portal/dashboard; M5 before M6 because hall-ticket/marksheet PDFs share the reporting-kind pattern R4 establishes; M11 late so `feature` tags decorate routes that already exist; M12/M13 close the sellable story.
 
