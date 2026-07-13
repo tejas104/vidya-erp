@@ -333,8 +333,189 @@ async function main(): Promise<void> {
       return id;
     }
 
-    // 2) The principal — college-wide, sees every department.
-    const principalId = await provisionUser("demo-principal", "Dr. Sudha Menon", ["principal"], STAFF_PASSWORD);
+    /** Fees demo data (6b) — idempotent, so it can run as an increment on an
+     * already-seeded database: heads/structures tolerate 409 and payments are
+     * guarded on untouched invoices. */
+    async function seedFeesBlock(target: { classId: string; sectionId: string; portalStudentId: string | null }): Promise<void> {
+      const accCreated = await call("identity.user-create", {
+        cookie: adminCookie,
+        body: { username: "demo-accountant", displayName: "Kiran Rao", collegeId, temporaryPassword: "temporary-pass-123", roles: ["accountant"] },
+      });
+      // null = the user AND grant already exist (fully idempotent re-run).
+      let grantNeededFor: string | null = null;
+      if (accCreated.status === 201) {
+        grantNeededFor = ((await accCreated.json()) as { id: string }).id;
+        const reset = await call("identity.password-reset-init", { cookie: adminCookie, params: { userId: grantNeededFor } });
+        const { token } = await expectJson<{ token: string }>(reset, [200, 201], "reset-init demo-accountant");
+        const confirm = await call("identity.password-reset-confirm", { body: { token, newPassword: ACCOUNTANT_PASSWORD } });
+        if (confirm.status !== 200) throw new Error(`reset-confirm demo-accountant: ${confirm.status}`);
+      } else if (accCreated.status === 409) {
+        // A prior (possibly failed) run created the account — find it so the
+        // grant can still be ensured.
+        const users = await expectJson<{ users: { id: string; username: string; grants: { role: string }[] }[] }>(
+          await call("identity.user-list", { cookie: adminCookie, query: { collegeId, limit: "200" } }),
+          [200],
+          "user list (accountant lookup)",
+        );
+        const existing = users.users.find((user) => user.username === "demo-accountant");
+        if (existing === undefined) throw new Error("demo-accountant exists (409) but is absent from the user list");
+        if (!existing.grants.some((grant) => grant.role === "accountant")) grantNeededFor = existing.id;
+      } else {
+        throw new Error(`user-create demo-accountant: ${accCreated.status}`);
+      }
+      if (grantNeededFor !== null) {
+        await expectJson(
+          await call("identity.grant-add", {
+            cookie: adminCookie,
+            params: { userId: grantNeededFor },
+            body: { role: "accountant", collegeId },
+          }),
+          [201],
+          "accountant grant",
+        );
+      }
+
+      async function ensureHead(name: string): Promise<string> {
+        const created = await call("fees.head-create", { cookie: adminCookie, body: { collegeId, name } });
+        if (created.status === 201) return ((await created.json()) as { id: string }).id;
+        if (created.status !== 409) throw new Error(`fee head ${name}: ${created.status}`);
+        const list = await expectJson<{ heads: { id: string; name: string }[] }>(
+          await call("fees.head-list", { cookie: adminCookie, query: { collegeId } }),
+          [200],
+          "fee head list",
+        );
+        const head = list.heads.find((h) => h.name === name);
+        if (head === undefined) throw new Error(`fee head ${name}: 409 but absent from the list`);
+        return head.id;
+      }
+      const tuitionHeadId = await ensureHead("Tuition");
+      const libraryHeadId = await ensureHead("Library");
+
+      // Tuition installment 1 fell due before the demo anchor → overdue rows exist.
+      await expectJson(
+        await call("fees.structure-create", {
+          cookie: adminCookie,
+          body: { classId: target.classId, headId: tuitionHeadId, academicYear: YEAR, amountPaise: 5_000_000, dueOn: "2026-07-01", installmentNo: 1 },
+        }),
+        [201, 409],
+        "structure tuition-1",
+      );
+      await expectJson(
+        await call("fees.structure-create", {
+          cookie: adminCookie,
+          body: { classId: target.classId, headId: libraryHeadId, academicYear: YEAR, amountPaise: 200_000, dueOn: "2026-09-01", installmentNo: 1 },
+        }),
+        [201, 409],
+        "structure library-1",
+      );
+
+      // Generate invoices — the seed stack runs the worker's processor inline;
+      // the job itself is idempotent (existing student×structure pairs skip).
+      const runRes = await expectJson<{ runId: string }>(
+        await call("fees.invoices-generate", { cookie: adminCookie, body: { classId: target.classId, academicYear: YEAR } }),
+        [202],
+        "invoice generation",
+      );
+      const run = await expectJson<{ status: string; invoicesCreated: number; invoicesSkipped: number; error: string | null }>(
+        await call("fees.generate-get", { cookie: adminCookie, params: { runId: runRes.runId } }),
+        [200],
+        "generation run state",
+      );
+      if (run.status !== "completed") throw new Error(`invoice generation ${run.status}: ${run.error ?? "?"}`);
+      console.log(`  fees: invoices generated — created ${run.invoicesCreated}, skipped ${run.invoicesSkipped}`);
+
+      // Payments at the counter (accountant session) — guarded on untouched
+      // invoices so a re-run never double-pays.
+      const accountantCookie = await login(stack, "demo-accountant", ACCOUNTANT_PASSWORD);
+      const sectionInvoices = await expectJson<{
+        invoices: { id: string; studentId: string; headId: string; status: string; amountPaise: number; paidPaise: number; duesPaise: number }[];
+      }>(
+        await call("fees.section-invoices", {
+          cookie: accountantCookie,
+          params: { sectionId: target.sectionId },
+          query: { academicYear: YEAR },
+        }),
+        [200],
+        "section invoices",
+      );
+      const tuitionOf = (studentId: string) =>
+        sectionInvoices.invoices.find((inv) => inv.studentId === studentId && inv.headId === tuitionHeadId);
+      const byStudent = [...new Set(sectionInvoices.invoices.map((inv) => inv.studentId))];
+      const portalTuition = target.portalStudentId !== null ? tuitionOf(target.portalStudentId) : undefined;
+      if (portalTuition !== undefined && portalTuition.status === "pending" && portalTuition.paidPaise === 0) {
+        await expectJson(
+          await call("fees.payment-record", {
+            cookie: accountantCookie,
+            body: { invoiceId: portalTuition.id, amountPaise: 2_000_000, mode: "upi", ref: "UPI-DEMO-001" },
+          }),
+          [201],
+          "part payment (portal student)",
+        );
+      }
+      const fullPayer = byStudent.find((id) => id !== target.portalStudentId);
+      const fullTuition = fullPayer !== undefined ? tuitionOf(fullPayer) : undefined;
+      if (fullTuition !== undefined && fullTuition.status === "pending" && fullTuition.paidPaise === 0) {
+        await expectJson(
+          await call("fees.payment-record", {
+            cookie: accountantCookie,
+            body: { invoiceId: fullTuition.id, amountPaise: fullTuition.duesPaise, mode: "cash" },
+          }),
+          [201],
+          "full payment",
+        );
+      }
+      const strugglerId = byStudent.find((id) => id !== target.portalStudentId && id !== fullPayer);
+      const strugglerTuition = strugglerId !== undefined ? tuitionOf(strugglerId) : undefined;
+      if (strugglerTuition !== undefined && strugglerTuition.duesPaise === strugglerTuition.amountPaise) {
+        await expectJson(
+          await call("fees.adjustment-add", {
+            cookie: accountantCookie,
+            body: { invoiceId: strugglerTuition.id, kind: "scholarship", amountPaise: 1_000_000, reason: "Merit scholarship 2026" },
+          }),
+          [201],
+          "scholarship adjustment",
+        );
+      }
+      console.log("  fees: counter payments and a scholarship in place");
+    }
+
+    // 2) The principal — college-wide, sees every department. A 409 here means
+    //    the demo tree already exists: run only the incremental blocks (fees)
+    //    against the existing tree instead of failing.
+    const principalCreated = await call("identity.user-create", {
+      cookie: adminCookie,
+      body: { username: "demo-principal", displayName: "Dr. Sudha Menon", collegeId, temporaryPassword: "temporary-pass-123", roles: ["principal"] },
+    });
+    if (principalCreated.status === 409) {
+      console.log("demo tree already seeded — applying the fees increment only");
+      const tree = await expectJson<{ departments: { classes: { id: string; sections: { id: string }[] }[] }[] }>(
+        await call("people.college-tree", { cookie: adminCookie, params: { collegeId } }),
+        [200],
+        "college tree",
+      );
+      const klass = tree.departments[0]?.classes[0];
+      const section = klass?.sections[0];
+      if (klass !== undefined && section !== undefined) {
+        const roster = await expectJson<{ students: { id: string; admissionNo: string }[] }>(
+          await call("people.section-roster", { cookie: adminCookie, params: { sectionId: section.id } }),
+          [200],
+          "roster for fees increment",
+        );
+        const portal = roster.students.find((s) => s.admissionNo.endsWith("-001")) ?? roster.students[0];
+        await seedFeesBlock({ classId: klass.id, sectionId: section.id, portalStudentId: portal?.id ?? null });
+      }
+      console.log("\n✓ Fees increment seeded on the existing demo tree.");
+      printCredentials(demoCredentials());
+      await stack.close();
+      return;
+    }
+    const principalId = ((await expectJson<{ id: string }>(principalCreated, [201], "user-create demo-principal")) ).id;
+    {
+      const reset = await call("identity.password-reset-init", { cookie: adminCookie, params: { userId: principalId } });
+      const { token } = await expectJson<{ token: string }>(reset, [200, 201], "reset-init demo-principal");
+      const confirm = await call("identity.password-reset-confirm", { body: { token, newPassword: STAFF_PASSWORD } });
+      if (confirm.status !== 200) throw new Error(`reset-confirm demo-principal: ${confirm.status}`);
+    }
     const principalGrant = await call("identity.grant-add", {
       cookie: adminCookie,
       params: { userId: principalId },
@@ -602,128 +783,15 @@ async function main(): Promise<void> {
       });
     }
 
-    // 6b) Fees (M4): the accountant sign-in, heads, structures for the first
-    //     class, generated invoices (inline processor), and payments through
-    //     the accountant's own session so receipts carry the right actor.
+    // 6b) Fees (M4): accountant sign-in + heads/structures/invoices/payments.
     if (feesClassId !== null && feesSectionId !== null) {
-      const accountantId = await provisionUser("demo-accountant", "Kiran Rao", ["accountant"], ACCOUNTANT_PASSWORD);
-      await expectJson(
-        await call("identity.grant-add", {
-          cookie: adminCookie,
-          params: { userId: accountantId },
-          body: { role: "accountant", collegeId },
-        }),
-        [201],
-        "accountant grant",
-      );
+      await seedFeesBlock({ classId: feesClassId, sectionId: feesSectionId, portalStudentId });
       credentials.push({
         role: "accountant",
         username: "demo-accountant",
         password: ACCOUNTANT_PASSWORD,
         scope: "college-wide (fees)",
       });
-
-      const tuitionHeadId = (
-        await expectJson<{ id: string }>(
-          await call("fees.head-create", { cookie: adminCookie, body: { collegeId, name: "Tuition" } }),
-          [201],
-          "fee head Tuition",
-        )
-      ).id;
-      const libraryHeadId = (
-        await expectJson<{ id: string }>(
-          await call("fees.head-create", { cookie: adminCookie, body: { collegeId, name: "Library" } }),
-          [201],
-          "fee head Library",
-        )
-      ).id;
-
-      // Tuition installment 1 fell due before the demo anchor → overdue rows exist.
-      await expectJson(
-        await call("fees.structure-create", {
-          cookie: adminCookie,
-          body: { classId: feesClassId, headId: tuitionHeadId, academicYear: YEAR, amountPaise: 5_000_000, dueOn: "2026-07-01", installmentNo: 1 },
-        }),
-        [201],
-        "structure tuition-1",
-      );
-      await expectJson(
-        await call("fees.structure-create", {
-          cookie: adminCookie,
-          body: { classId: feesClassId, headId: libraryHeadId, academicYear: YEAR, amountPaise: 200_000, dueOn: "2026-09-01", installmentNo: 1 },
-        }),
-        [201],
-        "structure library-1",
-      );
-
-      // Generate invoices — the seed stack runs the worker's processor inline.
-      const runRes = await expectJson<{ runId: string }>(
-        await call("fees.invoices-generate", { cookie: adminCookie, body: { classId: feesClassId, academicYear: YEAR } }),
-        [202],
-        "invoice generation",
-      );
-      const run = await expectJson<{ status: string; invoicesCreated: number; error: string | null }>(
-        await call("fees.generate-get", { cookie: adminCookie, params: { runId: runRes.runId } }),
-        [200],
-        "generation run state",
-      );
-      if (run.status !== "completed") throw new Error(`invoice generation ${run.status}: ${run.error ?? "?"}`);
-      console.log(`  fees: ${run.invoicesCreated} invoices generated for the first class`);
-
-      // Payments at the counter (accountant session): the portal student pays
-      // tuition in part (portal shows a live receipt trail); the next student
-      // clears theirs in full; one scholarship shrinks the struggler's dues.
-      const accountantCookie = await login(stack, "demo-accountant", ACCOUNTANT_PASSWORD);
-      const sectionInvoices = await expectJson<{
-        invoices: { id: string; studentId: string; headId: string; amountPaise: number }[];
-      }>(
-        await call("fees.section-invoices", {
-          cookie: accountantCookie,
-          params: { sectionId: feesSectionId },
-          query: { academicYear: YEAR },
-        }),
-        [200],
-        "section invoices",
-      );
-      const tuitionOf = (studentId: string) =>
-        sectionInvoices.invoices.find((inv) => inv.studentId === studentId && inv.headId === tuitionHeadId);
-      const byStudent = [...new Set(sectionInvoices.invoices.map((inv) => inv.studentId))];
-      const portalTuition = portalStudentId !== null ? tuitionOf(portalStudentId) : undefined;
-      if (portalTuition !== undefined) {
-        await expectJson(
-          await call("fees.payment-record", {
-            cookie: accountantCookie,
-            body: { invoiceId: portalTuition.id, amountPaise: 2_000_000, mode: "upi", ref: "UPI-DEMO-001" },
-          }),
-          [201],
-          "part payment (portal student)",
-        );
-      }
-      const fullPayer = byStudent.find((id) => id !== portalStudentId);
-      const fullTuition = fullPayer !== undefined ? tuitionOf(fullPayer) : undefined;
-      if (fullTuition !== undefined) {
-        await expectJson(
-          await call("fees.payment-record", {
-            cookie: accountantCookie,
-            body: { invoiceId: fullTuition.id, amountPaise: fullTuition.amountPaise, mode: "cash" },
-          }),
-          [201],
-          "full payment",
-        );
-      }
-      const strugglerId = byStudent.find((id) => id !== portalStudentId && id !== fullPayer);
-      const strugglerTuition = strugglerId !== undefined ? tuitionOf(strugglerId) : undefined;
-      if (strugglerTuition !== undefined) {
-        await expectJson(
-          await call("fees.adjustment-add", {
-            cookie: accountantCookie,
-            body: { invoiceId: strugglerTuition.id, kind: "scholarship", amountPaise: 1_000_000, reason: "Merit scholarship 2026" },
-          }),
-          [201],
-          "scholarship adjustment",
-        );
-      }
-      console.log("  fees: part + full payments and a scholarship recorded at the counter");
     }
 
     // 7) Flip any resolvable manual grants (principal/HoD) to verified.
