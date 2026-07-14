@@ -3362,7 +3362,12 @@
                       "type": "string",
                       "enum": [
                         "active",
-                        "inactive"
+                        "inactive",
+                        "backlog",
+                        "year_back",
+                        "transferred",
+                        "dropped",
+                        "alumni"
                       ]
                     },
                     "identityUserId": {
@@ -3516,7 +3521,12 @@
                       "type": "string",
                       "enum": [
                         "active",
-                        "inactive"
+                        "inactive",
+                        "backlog",
+                        "year_back",
+                        "transferred",
+                        "dropped",
+                        "alumni"
                       ]
                     },
                     "identityUserId": {
@@ -3619,8 +3629,8 @@
         }
       },
       "patch": {
-        "summary": "Update a student (admin)",
-        "description": "**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "summary": "Update a student — rename or move through the lifecycle (admin)",
+        "description": "Status transitions are audited and the record is never destroyed (TC / marksheet / audit retention). Moving to backlog / year_back / transferred / dropped / alumni is how a student's lifecycle is recorded.\n\n**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
         "tags": [
           "people-students"
         ],
@@ -3656,7 +3666,12 @@
                     "type": "string",
                     "enum": [
                       "active",
-                      "inactive"
+                      "inactive",
+                      "backlog",
+                      "year_back",
+                      "transferred",
+                      "dropped",
+                      "alumni"
                     ]
                   }
                 }
@@ -3688,7 +3703,12 @@
                       "type": "string",
                       "enum": [
                         "active",
-                        "inactive"
+                        "inactive",
+                        "backlog",
+                        "year_back",
+                        "transferred",
+                        "dropped",
+                        "alumni"
                       ]
                     },
                     "identityUserId": {
@@ -3973,7 +3993,12 @@
                           "type": "string",
                           "enum": [
                             "active",
-                            "inactive"
+                            "inactive",
+                            "backlog",
+                            "year_back",
+                            "transferred",
+                            "dropped",
+                            "alumni"
                           ]
                         },
                         "identityUserId": {
@@ -4137,7 +4162,12 @@
                             "type": "string",
                             "enum": [
                               "active",
-                              "inactive"
+                              "inactive",
+                              "backlog",
+                              "year_back",
+                              "transferred",
+                              "dropped",
+                              "alumni"
                             ]
                           },
                           "identityUserId": {
@@ -5498,8 +5528,8 @@
     },
     "/api/v1/academics/attendance/sessions": {
       "post": {
-        "summary": "Record a section's attendance for a session (class teacher)",
-        "description": "Creates the session with the full roster's entries in one call. Attendance is a NON-SUBJECT record: writable by the section's class teacher per the matrix; subject teachers read it but cannot write it. Every entry must belong to the section's live roster.\n\n**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "summary": "Record a session's attendance (subject teacher's period, or a class teacher's whole-section session)",
+        "description": "Creates the session with the full roster's entries in one call. Pass a subjectId to record a subject teacher's own period (a SUBJECT record — only that subject's teacher may write it); omit it for a whole-section session (only the class teacher). Every entry must belong to the section's live roster.\n\n**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
         "tags": [
           "academics-attendance"
         ],
@@ -5515,6 +5545,11 @@
                 "type": "object",
                 "properties": {
                   "sectionId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64
+                  },
+                  "subjectId": {
                     "type": "string",
                     "minLength": 1,
                     "maxLength": 64
@@ -5586,6 +5621,9 @@
                     "sectionId": {
                       "type": "string"
                     },
+                    "subjectId": {
+                      "type": "string"
+                    },
                     "heldOn": {
                       "type": "string"
                     },
@@ -5626,6 +5664,7 @@
                   "required": [
                     "id",
                     "sectionId",
+                    "subjectId",
                     "heldOn",
                     "slot",
                     "academicYear",
@@ -5744,7 +5783,7 @@
     },
     "/api/v1/academics/attendance/sessions/{sessionId}/entries/{studentId}": {
       "patch": {
-        "summary": "Correct one attendance entry (class teacher; audited with before/after)",
+        "summary": "Correct one attendance entry (owning subject teacher or the class teacher; audited with before/after)",
         "description": "**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
         "tags": [
           "academics-attendance"
@@ -5905,6 +5944,9 @@
                     "sectionId": {
                       "type": "string"
                     },
+                    "subjectId": {
+                      "type": "string"
+                    },
                     "heldOn": {
                       "type": "string"
                     },
@@ -5945,6 +5987,7 @@
                   "required": [
                     "id",
                     "sectionId",
+                    "subjectId",
                     "heldOn",
                     "slot",
                     "academicYear",
@@ -6090,6 +6133,9 @@
                           "id": {
                             "type": "string"
                           },
+                          "subjectId": {
+                            "type": "string"
+                          },
                           "heldOn": {
                             "type": "string"
                           },
@@ -6125,6 +6171,7 @@
                         },
                         "required": [
                           "id",
+                          "subjectId",
                           "heldOn",
                           "slot",
                           "academicYear",
@@ -6135,6 +6182,207 @@
                   },
                   "required": [
                     "sessions"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Scope check denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such section",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/academics/sections/{sectionId}/roster-attendance": {
+      "get": {
+        "summary": "Per-student attendance for a section's roster (the teacher flashcard feed)",
+        "description": "One card per student: attendance counts, percentage, and a recent-session strip — computed only over the sessions the caller may read (row-filtered by the ScopeChecker, so a subject teacher sees their own period). Pass subjectId to scope the numbers to one subject.\n\n**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "academics-attendance"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "sectionId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}$"
+            },
+            "required": false,
+            "name": "academicYear",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": false,
+            "name": "subjectId",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A card per student who has any visible attendance",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "cards": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "studentId": {
+                            "type": "string"
+                          },
+                          "counts": {
+                            "type": "object",
+                            "properties": {
+                              "present": {
+                                "type": "number"
+                              },
+                              "absent": {
+                                "type": "number"
+                              },
+                              "late": {
+                                "type": "number"
+                              },
+                              "excused": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "present",
+                              "absent",
+                              "late",
+                              "excused"
+                            ]
+                          },
+                          "attended": {
+                            "type": "number"
+                          },
+                          "total": {
+                            "type": "number"
+                          },
+                          "pct": {
+                            "type": "number",
+                            "nullable": true
+                          },
+                          "recent": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "heldOn": {
+                                  "type": "string"
+                                },
+                                "status": {
+                                  "type": "string",
+                                  "enum": [
+                                    "present",
+                                    "absent",
+                                    "late",
+                                    "excused"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "heldOn",
+                                "status"
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "studentId",
+                          "counts",
+                          "attended",
+                          "total",
+                          "pct",
+                          "recent"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "cards"
                   ]
                 }
               }
@@ -10580,6 +10828,26 @@
                           "kind",
                           "studentId"
                         ]
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "hall-ticket"
+                            ]
+                          },
+                          "studentId": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 64
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "studentId"
+                        ]
                       }
                     ]
                   }
@@ -10724,7 +10992,8 @@
                               "section-attendance",
                               "marks-summary",
                               "at-risk",
-                              "grade-card"
+                              "grade-card",
+                              "hall-ticket"
                             ]
                           },
                           "format": {
@@ -10828,7 +11097,8 @@
                         "section-attendance",
                         "marks-summary",
                         "at-risk",
-                        "grade-card"
+                        "grade-card",
+                        "hall-ticket"
                       ]
                     },
                     "format": {
@@ -18321,6 +18591,1621 @@
           },
           "404": {
             "description": "This sign-in is not linked to a student record",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/exams/series": {
+      "post": {
+        "summary": "Create an exam series (admin) — e.g. \"Midterm\" 2026-27 Term 1",
+        "description": "**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "exams"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "collegeId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64
+                  },
+                  "academicYear": {
+                    "type": "string",
+                    "pattern": "^\\d{4}-\\d{2}$"
+                  },
+                  "term": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 32
+                  }
+                },
+                "required": [
+                  "collegeId",
+                  "name",
+                  "academicYear",
+                  "term"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "collegeId": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "academicYear": {
+                      "type": "string"
+                    },
+                    "term": {
+                      "type": "string"
+                    },
+                    "slotCount": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "collegeId",
+                    "name",
+                    "academicYear",
+                    "term",
+                    "slotCount"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Access denied by the role/scope policy (problem+json)"
+          },
+          "404": {
+            "description": "No such college",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A series with this name already exists for the year",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "summary": "List a college's exam series for a year (admin)",
+        "description": "**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "exams"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "collegeId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}$"
+            },
+            "required": true,
+            "name": "academicYear",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Series",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "series": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "collegeId": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "academicYear": {
+                            "type": "string"
+                          },
+                          "term": {
+                            "type": "string"
+                          },
+                          "slotCount": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "collegeId",
+                          "name",
+                          "academicYear",
+                          "term",
+                          "slotCount"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "series"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Access denied by the role/scope policy (problem+json)"
+          }
+        }
+      }
+    },
+    "/api/v1/exams/series/{seriesId}": {
+      "delete": {
+        "summary": "Delete an exam series and its slots (admin)",
+        "description": "**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "exams"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "seriesId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deleted (slots cascade)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Access denied by the role/scope policy (problem+json)"
+          },
+          "404": {
+            "description": "No such series",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/exams/slots": {
+      "post": {
+        "summary": "Schedule a paper (admin) — clash with the weekly timetable WARNS, never blocks",
+        "description": "The response's optional `clash` string names the busy room (e.g. \"Room 12 busy: BSc-1 Physics\") when the slot's date/time lands on a timetabled lesson in the same room. Exams routinely displace lessons, so this is advisory.\n\n**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "exams"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "seriesId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64
+                  },
+                  "classId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64
+                  },
+                  "subjectId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64
+                  },
+                  "onDate": {
+                    "type": "string",
+                    "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                  },
+                  "starts": {
+                    "type": "string",
+                    "pattern": "^\\d{2}:\\d{2}$"
+                  },
+                  "ends": {
+                    "type": "string",
+                    "pattern": "^\\d{2}:\\d{2}$"
+                  },
+                  "room": {
+                    "type": "string",
+                    "maxLength": 64,
+                    "default": ""
+                  }
+                },
+                "required": [
+                  "seriesId",
+                  "classId",
+                  "subjectId",
+                  "onDate",
+                  "starts",
+                  "ends"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Scheduled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "seriesId": {
+                      "type": "string"
+                    },
+                    "seriesName": {
+                      "type": "string"
+                    },
+                    "classId": {
+                      "type": "string"
+                    },
+                    "subjectId": {
+                      "type": "string"
+                    },
+                    "subjectName": {
+                      "type": "string"
+                    },
+                    "onDate": {
+                      "type": "string"
+                    },
+                    "starts": {
+                      "type": "string"
+                    },
+                    "ends": {
+                      "type": "string"
+                    },
+                    "room": {
+                      "type": "string"
+                    },
+                    "clash": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "seriesId",
+                    "seriesName",
+                    "classId",
+                    "subjectId",
+                    "subjectName",
+                    "onDate",
+                    "starts",
+                    "ends",
+                    "room"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Access denied by the role/scope policy (problem+json)"
+          },
+          "404": {
+            "description": "No such series/class/subject",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "This subject already has a slot in this series for the class",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The paper would end before it starts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/exams/slots/{slotId}": {
+      "delete": {
+        "summary": "Take a paper off the schedule (admin)",
+        "description": "**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "exams"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "slotId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Access denied by the role/scope policy (problem+json)"
+          },
+          "404": {
+            "description": "No such slot",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/exams/classes/{classId}/schedule": {
+      "get": {
+        "summary": "A class's exam schedule (staff whose scope covers the class)",
+        "description": "**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "exams"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "classId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}$"
+            },
+            "required": true,
+            "name": "academicYear",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Slots, soonest first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "slots": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "seriesId": {
+                            "type": "string"
+                          },
+                          "seriesName": {
+                            "type": "string"
+                          },
+                          "classId": {
+                            "type": "string"
+                          },
+                          "subjectId": {
+                            "type": "string"
+                          },
+                          "subjectName": {
+                            "type": "string"
+                          },
+                          "onDate": {
+                            "type": "string"
+                          },
+                          "starts": {
+                            "type": "string"
+                          },
+                          "ends": {
+                            "type": "string"
+                          },
+                          "room": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "seriesId",
+                          "seriesName",
+                          "classId",
+                          "subjectId",
+                          "subjectName",
+                          "onDate",
+                          "starts",
+                          "ends",
+                          "room"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "slots"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Class outside the caller's scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such class",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/exams/my-schedule": {
+      "get": {
+        "summary": "The signed-in student's exam schedule (self via the identity link)",
+        "description": "**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "exams"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The student's slots, soonest first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "slots": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "seriesId": {
+                            "type": "string"
+                          },
+                          "seriesName": {
+                            "type": "string"
+                          },
+                          "classId": {
+                            "type": "string"
+                          },
+                          "subjectId": {
+                            "type": "string"
+                          },
+                          "subjectName": {
+                            "type": "string"
+                          },
+                          "onDate": {
+                            "type": "string"
+                          },
+                          "starts": {
+                            "type": "string"
+                          },
+                          "ends": {
+                            "type": "string"
+                          },
+                          "room": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "seriesId",
+                          "seriesName",
+                          "classId",
+                          "subjectId",
+                          "subjectName",
+                          "onDate",
+                          "starts",
+                          "ends",
+                          "room"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "slots"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Access denied by the role/scope policy (problem+json)"
+          },
+          "404": {
+            "description": "This sign-in is not linked to a student record",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/leave/requests": {
+      "post": {
+        "summary": "Apply for leave (staff self) — routes to the HOD or principal",
+        "description": "**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "leave"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "fromOn": {
+                    "type": "string",
+                    "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                  },
+                  "toOn": {
+                    "type": "string",
+                    "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                  },
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "casual",
+                      "sick",
+                      "duty"
+                    ]
+                  },
+                  "reason": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 500
+                  },
+                  "departmentId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64
+                  }
+                },
+                "required": [
+                  "fromOn",
+                  "toOn",
+                  "kind",
+                  "reason"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Applied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "collegeId": {
+                      "type": "string"
+                    },
+                    "departmentId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "teacherId": {
+                      "type": "string"
+                    },
+                    "teacherName": {
+                      "type": "string"
+                    },
+                    "fromOn": {
+                      "type": "string"
+                    },
+                    "toOn": {
+                      "type": "string"
+                    },
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "casual",
+                        "sick",
+                        "duty"
+                      ]
+                    },
+                    "reason": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "pending",
+                        "approved",
+                        "rejected"
+                      ]
+                    },
+                    "decisionNote": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "decidedAt": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "collegeId",
+                    "departmentId",
+                    "teacherId",
+                    "teacherName",
+                    "fromOn",
+                    "toOn",
+                    "kind",
+                    "reason",
+                    "status",
+                    "decisionNote",
+                    "decidedAt"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Access denied by the role/scope policy (problem+json)"
+          },
+          "404": {
+            "description": "This sign-in is not linked to a staff record",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid range or a departmentId not belonging to the teacher",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/leave/mine": {
+      "get": {
+        "summary": "The signed-in staff member's own leave requests, newest first",
+        "description": "**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "leave"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Own requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "requests": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "collegeId": {
+                            "type": "string"
+                          },
+                          "departmentId": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "teacherId": {
+                            "type": "string"
+                          },
+                          "teacherName": {
+                            "type": "string"
+                          },
+                          "fromOn": {
+                            "type": "string"
+                          },
+                          "toOn": {
+                            "type": "string"
+                          },
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "casual",
+                              "sick",
+                              "duty"
+                            ]
+                          },
+                          "reason": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "pending",
+                              "approved",
+                              "rejected"
+                            ]
+                          },
+                          "decisionNote": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "decidedAt": {
+                            "type": "string",
+                            "nullable": true
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "collegeId",
+                          "departmentId",
+                          "teacherId",
+                          "teacherName",
+                          "fromOn",
+                          "toOn",
+                          "kind",
+                          "reason",
+                          "status",
+                          "decisionNote",
+                          "decidedAt"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "requests"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Access denied by the role/scope policy (problem+json)"
+          },
+          "404": {
+            "description": "Not linked to a staff record",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/leave/pending": {
+      "get": {
+        "summary": "Pending requests the caller can decide (HOD: their dept · principal: college)",
+        "description": "**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "leave"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Pending requests, newest first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "requests": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "collegeId": {
+                            "type": "string"
+                          },
+                          "departmentId": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "teacherId": {
+                            "type": "string"
+                          },
+                          "teacherName": {
+                            "type": "string"
+                          },
+                          "fromOn": {
+                            "type": "string"
+                          },
+                          "toOn": {
+                            "type": "string"
+                          },
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "casual",
+                              "sick",
+                              "duty"
+                            ]
+                          },
+                          "reason": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "pending",
+                              "approved",
+                              "rejected"
+                            ]
+                          },
+                          "decisionNote": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "decidedAt": {
+                            "type": "string",
+                            "nullable": true
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "collegeId",
+                          "departmentId",
+                          "teacherId",
+                          "teacherName",
+                          "fromOn",
+                          "toOn",
+                          "kind",
+                          "reason",
+                          "status",
+                          "decisionNote",
+                          "decidedAt"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "requests"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Access denied by the role/scope policy (problem+json)"
+          }
+        }
+      }
+    },
+    "/api/v1/leave/requests/{requestId}/decide": {
+      "post": {
+        "summary": "Approve or reject a pending request (HOD/principal) — reject needs a note",
+        "description": "**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "leave"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "requestId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "approved",
+                      "rejected"
+                    ]
+                  },
+                  "note": {
+                    "type": "string",
+                    "maxLength": 500
+                  }
+                },
+                "required": [
+                  "status"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Decided",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "collegeId": {
+                      "type": "string"
+                    },
+                    "departmentId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "teacherId": {
+                      "type": "string"
+                    },
+                    "teacherName": {
+                      "type": "string"
+                    },
+                    "fromOn": {
+                      "type": "string"
+                    },
+                    "toOn": {
+                      "type": "string"
+                    },
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "casual",
+                        "sick",
+                        "duty"
+                      ]
+                    },
+                    "reason": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "pending",
+                        "approved",
+                        "rejected"
+                      ]
+                    },
+                    "decisionNote": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "decidedAt": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "collegeId",
+                    "departmentId",
+                    "teacherId",
+                    "teacherName",
+                    "fromOn",
+                    "toOn",
+                    "kind",
+                    "reason",
+                    "status",
+                    "decisionNote",
+                    "decidedAt"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Not the applicant's approver, or deciding own request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Already decided",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Reject without a note",
             "content": {
               "application/json": {
                 "schema": {

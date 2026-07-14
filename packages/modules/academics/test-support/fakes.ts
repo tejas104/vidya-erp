@@ -211,7 +211,8 @@ export class InMemoryAttendanceRepo implements AttendanceRepo {
       if (
         session.sectionId === input.sectionId &&
         session.heldOn === input.heldOn &&
-        session.slot === input.slot
+        session.slot === input.slot &&
+        session.subjectId === input.subjectId
       ) {
         throw new DuplicateSessionError();
       }
@@ -219,6 +220,7 @@ export class InMemoryAttendanceRepo implements AttendanceRepo {
     const session: AcdSessionRow = {
       id: `ses_${randomUUID()}`,
       sectionId: input.sectionId,
+      subjectId: input.subjectId,
       heldOn: input.heldOn,
       slot: input.slot,
       academicYear: input.academicYear,

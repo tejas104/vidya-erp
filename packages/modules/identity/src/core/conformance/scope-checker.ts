@@ -13,13 +13,16 @@ import type {
  * the HUMAN-OWNED scope-check function). This file IS the approved
  * permission matrix (ADR-0010) in executable form:
  *
- *   teacher        read: non-subject records (attendance, conduct, ...) in
- *                  their attached class/section, plus their OWN subject's
- *                  records; other subjects' marks are private to their
+ *   teacher        read: non-subject records (whole-section attendance,
+ *                  conduct, ...) in their attached class/section, plus their
+ *                  OWN subject's records (marks + their own attendance
+ *                  period); other subjects' records are private to their
  *                  teachers (human-directed revision, 2026-07-04)
- *                  write: their own class + subject only (create/update/delete)
+ *                  write: their own class + subject only (create/update/delete),
+ *                  which now includes marking their own attendance period
  *   class_teacher  read: their class(es), all sections/subjects
- *                  write: their class's non-subject records; never subject marks
+ *                  write: their class's non-subject records AND attendance of
+ *                  any subject (period correction authority); never subject marks
  *   hod            read: their entire department
  *                  write: department-level approvals ("approve") only
  *   principal      read: college-wide · write: none (pure viewer)
@@ -72,6 +75,13 @@ const attendance = (org: OrgPath): ResourceRef => ({
   org,
 });
 
+// A subject teacher's own attendance period — a SUBJECT record scoped to
+// its subject (subject-teacher attendance revision, 2026-07-14).
+const subjectAttendance = (
+  subjectId: string,
+  org: OrgPath = { collegeId: COL, departmentId: DEP, classId: CLS, sectionId: SEC },
+): ResourceRef => ({ module: "academics", resourceType: "attendance-record", org, subjectId });
+
 // --- The callers -----------------------------------------------------------
 
 const teacherClassLevel = caller("t-1", ["teacher"], [
@@ -117,7 +127,13 @@ const MATRIX: readonly Case[] = [
   { name: "teacher updates marks for own class+subject", caller: teacherClassLevel, action: "update", resource: inClass(), expect: true },
   { name: "teacher deletes marks for own class+subject", caller: teacherClassLevel, action: "delete", resource: inClass(), expect: true },
   { name: "teacher cannot write another teacher's subject", caller: teacherClassLevel, action: "update", resource: inClass({ subjectId: OTHER_SUB }), expect: false },
-  { name: "teacher cannot write non-subject records", caller: teacherClassLevel, action: "update", resource: attendance({ collegeId: COL, departmentId: DEP, classId: CLS }), expect: false },
+  { name: "teacher cannot write whole-section (non-subject) attendance", caller: teacherClassLevel, action: "update", resource: attendance({ collegeId: COL, departmentId: DEP, classId: CLS }), expect: false },
+  // --- subject-teacher attendance: a teacher owns their own period --------
+  { name: "subject teacher marks their OWN subject's attendance period", caller: teacherClassLevel, action: "create", resource: subjectAttendance(SUB), expect: true },
+  { name: "subject teacher corrects their own subject's attendance", caller: teacherClassLevel, action: "update", resource: subjectAttendance(SUB), expect: true },
+  { name: "subject teacher cannot mark another subject's attendance", caller: teacherClassLevel, action: "create", resource: subjectAttendance(OTHER_SUB), expect: false },
+  { name: "subject teacher reads their own subject's attendance", caller: teacherClassLevel, action: "read", resource: subjectAttendance(SUB), expect: true },
+  { name: "subject teacher cannot read another subject's attendance (privacy line)", caller: teacherClassLevel, action: "read", resource: subjectAttendance(OTHER_SUB), expect: false },
   { name: "teacher cannot write own subject in another class", caller: teacherClassLevel, action: "update", resource: inClass({ org: { collegeId: COL, departmentId: DEP, classId: OTHER_CLS } }), expect: false },
   { name: "teacher cannot approve (department-level act)", caller: teacherClassLevel, action: "approve", resource: inClass(), expect: false },
   { name: "teacher cannot export", caller: teacherClassLevel, action: "export", resource: inClass(), expect: false },
@@ -131,6 +147,8 @@ const MATRIX: readonly Case[] = [
   { name: "class_teacher reads any section of their class", caller: classTeacher, action: "read", resource: attendance({ collegeId: COL, departmentId: DEP, classId: CLS, sectionId: OTHER_SEC }), expect: true },
   { name: "class_teacher cannot read another class", caller: classTeacher, action: "read", resource: inClass({ org: { collegeId: COL, departmentId: DEP, classId: OTHER_CLS } }), expect: false },
   { name: "class_teacher writes non-subject records of their class", caller: classTeacher, action: "update", resource: attendance({ collegeId: COL, departmentId: DEP, classId: CLS }), expect: true },
+  { name: "class_teacher corrects ANY subject's attendance in their class (correction authority)", caller: classTeacher, action: "update", resource: subjectAttendance(OTHER_SUB), expect: true },
+  { name: "class_teacher can record a subject's attendance too", caller: classTeacher, action: "create", resource: subjectAttendance(SUB), expect: true },
   { name: "class_teacher creates non-subject records (e.g. promotion) of their class", caller: classTeacher, action: "create", resource: { module: "academics", resourceType: "promotion", org: { collegeId: COL, departmentId: DEP, classId: CLS } }, expect: true },
   { name: "class_teacher cannot write subject marks", caller: classTeacher, action: "update", resource: inClass(), expect: false },
   { name: "class_teacher cannot write outside their class", caller: classTeacher, action: "update", resource: attendance({ collegeId: COL, departmentId: DEP, classId: OTHER_CLS }), expect: false },

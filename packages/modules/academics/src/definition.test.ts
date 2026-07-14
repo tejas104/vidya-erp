@@ -34,14 +34,16 @@ describe("academics module definition (contract conformance)", () => {
     }
   });
 
-  it("role-gates writes per the matrix: attendance→class_teacher, marks→teacher", () => {
+  it("role-gates writes per the matrix: attendance→subject teacher or class teacher, marks→teacher", () => {
     for (const route of academicsModuleDefinition.routes) {
       if (!STATE_CHANGING_METHODS.has(route.method) || route.auth.public) {
         continue;
       }
       const roles = route.auth.requirement.rolesAnyOf ?? [];
       if (route.id.startsWith("academics.attendance-")) {
-        expect(roles, route.id).toEqual(["class_teacher"]);
+        // Coarse gate only — the ScopeChecker enforces that a subject teacher
+        // may write ONLY their own subject's period (scope-traces.test.ts).
+        expect(roles, route.id).toEqual(["teacher", "class_teacher"]);
       } else {
         expect(roles, route.id).toEqual(["teacher"]);
       }

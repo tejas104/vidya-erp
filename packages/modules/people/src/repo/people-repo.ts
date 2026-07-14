@@ -15,6 +15,15 @@ import {
 
 export type AssignmentKind = "subject_teacher" | "class_teacher";
 export type PersonStatus = "active" | "inactive";
+/** Students move through a full lifecycle; the record is never destroyed. */
+export type StudentStatus =
+  | "active"
+  | "inactive"
+  | "backlog"
+  | "year_back"
+  | "transferred"
+  | "dropped"
+  | "alumni";
 
 export class DuplicatePersonError extends Error {
   constructor(kind: "student" | "teacher", number: string) {
@@ -50,7 +59,7 @@ export interface PeopleRepo {
   findStudentByIdentityUser(identityUserId: string): Promise<PplStudentRow | null>;
   updateStudent(
     id: string,
-    patch: { fullName?: string; status?: PersonStatus; identityUserId?: string | null },
+    patch: { fullName?: string; status?: StudentStatus; identityUserId?: string | null },
   ): Promise<PplStudentRow | null>;
 
   /** Batched existence lookups for the bulk importer. */

@@ -12,7 +12,7 @@ import { PeopleService, UnknownReferenceError } from "../service/people-service"
 import type { AssignmentsService } from "../service/assignments-service";
 import type { ImportService } from "../service/import-service";
 import { DuplicateCodeError, UnitInUseError, type OrgUnitType } from "../repo/org-repo";
-import { DuplicateAssignmentError, DuplicatePersonError } from "../repo/people-repo";
+import { DuplicateAssignmentError, DuplicatePersonError, type StudentStatus } from "../repo/people-repo";
 import type {
   PplEnrollmentRow,
   PplImportRow,
@@ -389,7 +389,7 @@ export function createPeopleHandlers(deps: PeopleHandlerDeps): Record<string, Ro
   const studentUpdate: RouteHandler = async (ctx) => {
     const principal = ctx.principal as Principal;
     const params = ctx.request.params as { studentId: string };
-    const body = ctx.request.body as { fullName?: string; status?: "active" | "inactive" };
+    const body = ctx.request.body as { fullName?: string; status?: StudentStatus };
     const student = await deps.people.getStudent(params.studentId);
     if (student === null) {
       return notFound();

@@ -921,6 +921,18 @@ async function main(): Promise<void> {
         }
         console.log(`    class: ${klass.name} — ${studentIds.length} students, ${klass.subjects.length} subjects`);
 
+        // 3b) The struggler (student 0) is moved to backlog (ATKT) — the
+        //     lifecycle status, audited, record never destroyed. Their F marks
+        //     also surface them on the derived backlog-status report.
+        if (studentIds[0] !== undefined) {
+          const marked = await call("people.student-update", {
+            cookie: adminCookie,
+            params: { studentId: studentIds[0] },
+            body: { status: "backlog" },
+          });
+          if (marked.status !== 200) throw new Error(`mark backlog ${klass.code}: ${marked.status}`);
+        }
+
         // 4) Attendance (class teacher) over a run of school days. Student 0 is
         //    the designated struggler so the at-risk surface has something real.
         const days = attendanceDays();
@@ -936,6 +948,42 @@ async function main(): Promise<void> {
           if (recorded.status !== 201) throw new Error(`attendance ${klass.code} ${days[d]}: ${recorded.status}`);
         }
         console.log(`    attendance: ${days.length} days recorded by ${klass.classTeacher.username}`);
+
+        // 4b) Subject-teacher attendance (the subject-teacher revision): the
+        //     first subject's teacher marks their OWN period, driven through
+        //     the same scope-checked route. If a subject teacher could NOT
+        //     write their period, THIS seed step fails loudly — so a green
+        //     seed is itself the live proof of the new authority. Same
+        //     per-student status as the day session keeps analytics
+        //     percentages identical (present/total ratio is preserved).
+        const firstSubject = klass.subjects[0];
+        if (firstSubject !== undefined) {
+          const subjTeacherCookie = subjectTeacherCookies.get(firstSubject.code)!;
+          const subjId = subjectIds.get(firstSubject.code)!;
+          for (let d = 0; d < days.length; d++) {
+            const entries: Slot[] = studentIds.map((studentId, s) => ({
+              studentId,
+              status: attendanceStatus(s, d),
+            }));
+            const recorded = await call("academics.attendance-record", {
+              cookie: subjTeacherCookie,
+              body: {
+                sectionId: rosterSectionId,
+                subjectId: subjId,
+                heldOn: days[d]!,
+                slot: firstSubject.code,
+                academicYear: YEAR,
+                entries,
+              },
+            });
+            if (recorded.status !== 201) {
+              throw new Error(`subject attendance ${klass.code}/${firstSubject.code} ${days[d]}: ${recorded.status}`);
+            }
+          }
+          console.log(
+            `    subject attendance: ${days.length} ${firstSubject.name} periods recorded by ${firstSubject.teacher.username}`,
+          );
+        }
 
         // 5) Marks — each subject teacher creates assessments and enters scores.
         for (const subject of klass.subjects) {

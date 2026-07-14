@@ -60,6 +60,21 @@ const attendanceInSectionB = attendanceRef({
   classId: ORG.classId,
   sectionId: ORG.sectionB,
 });
+// A subject teacher's own attendance period (a subject record).
+const mathAttendanceSectionA = attendanceRef({
+  collegeId: ORG.collegeId,
+  departmentId: ORG.departmentId,
+  classId: ORG.classId,
+  sectionId: ORG.sectionA,
+  subjectId: ORG.mathId,
+});
+const physicsAttendanceSectionA = attendanceRef({
+  collegeId: ORG.collegeId,
+  departmentId: ORG.departmentId,
+  classId: ORG.classId,
+  sectionId: ORG.sectionA,
+  subjectId: ORG.physicsId,
+});
 const mathMarks = marksRef({
   collegeId: ORG.collegeId,
   departmentId: ORG.departmentId,
@@ -103,14 +118,25 @@ describe("worked scope traces against the REAL matrix (assignment #4 list)", () 
     expect(checker.check(mathTeacher, "update", mathMarks).granted).toBe(true);
   });
 
-  it("TRACE 4c — teacher cannot write attendance (non-subject record): DENIED", () => {
+  it("TRACE 4c — teacher cannot write whole-section (non-subject) attendance: DENIED", () => {
     expect(checker.check(mathTeacher, "create", attendanceInSectionA).granted).toBe(false);
     expect(checker.check(mathTeacher, "update", attendanceInSectionA).granted).toBe(false);
   });
 
-  it("TRACE 5 — class_teacher writes attendance: GRANTED; writes marks: DENIED", () => {
+  it("TRACE 4d — subject teacher marks their OWN subject's attendance period: GRANTED; another subject's: DENIED", () => {
+    expect(checker.check(mathTeacher, "create", mathAttendanceSectionA).granted).toBe(true);
+    expect(checker.check(mathTeacher, "update", mathAttendanceSectionA).granted).toBe(true);
+    // ...but not physics, and cannot even read another subject's period.
+    expect(checker.check(mathTeacher, "create", physicsAttendanceSectionA).granted).toBe(false);
+    expect(checker.check(mathTeacher, "read", physicsAttendanceSectionA).granted).toBe(false);
+  });
+
+  it("TRACE 5 — class_teacher writes/corrects attendance (any subject): GRANTED; writes marks: DENIED", () => {
     expect(checker.check(classTeacher, "create", attendanceInSectionA).granted).toBe(true);
     expect(checker.check(classTeacher, "update", attendanceInSectionA).granted).toBe(true);
+    // Correction authority reaches every subject's period in their section.
+    expect(checker.check(classTeacher, "update", mathAttendanceSectionA).granted).toBe(true);
+    expect(checker.check(classTeacher, "update", physicsAttendanceSectionA).granted).toBe(true);
     expect(checker.check(classTeacher, "create", mathMarks).granted).toBe(false);
     expect(checker.check(classTeacher, "update", mathMarks).granted).toBe(false);
     // ... though they read every subject's marks in their class.

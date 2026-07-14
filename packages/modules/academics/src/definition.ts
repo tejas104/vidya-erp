@@ -25,6 +25,8 @@ export const attendanceEntryInputSchema = z.object({
 export const sessionViewSchema = z.object({
   id: z.string(),
   sectionId: z.string(),
+  /** "" for a whole-section session; a subject id for a subject teacher's period. */
+  subjectId: z.string(),
   heldOn: z.string(),
   slot: z.string(),
   academicYear: z.string(),
@@ -64,11 +66,17 @@ const invalidEntriesSchema = z.object({
   invalid: z.array(z.object({ studentId: z.string(), reason: z.string() })),
 });
 
-const CLASS_TEACHER_ONLY = {
-  public: false as const,
-  requirement: { rolesAnyOf: ["class_teacher" as const] },
-};
 const TEACHER_ONLY = { public: false as const, requirement: { rolesAnyOf: ["teacher" as const] } };
+/**
+ * Attendance is now written by a subject teacher (their own period) OR the
+ * class teacher (whole-section session / corrections). This is only the
+ * coarse role gate; the ScopeChecker enforces per-record authority (a
+ * subject teacher may write ONLY their subject's period).
+ */
+const TEACHER_OR_CLASS_TEACHER = {
+  public: false as const,
+  requirement: { rolesAnyOf: ["teacher" as const, "class_teacher" as const] },
+};
 const ANY_AUTHENTICATED = { public: false as const, requirement: {} };
 
 // ---------------------------------------------------------------------------
@@ -83,14 +91,15 @@ const routes: RouteSpec[] = [
     module: MODULE_NAME,
     method: "POST",
     path: "/api/v1/academics/attendance/sessions",
-    summary: "Record a section's attendance for a session (class teacher)",
+    summary: "Record a session's attendance (subject teacher's period, or a class teacher's whole-section session)",
     description:
-      "Creates the session with the full roster's entries in one call. Attendance is a NON-SUBJECT record: writable by the section's class teacher per the matrix; subject teachers read it but cannot write it. Every entry must belong to the section's live roster.",
+      "Creates the session with the full roster's entries in one call. Pass a subjectId to record a subject teacher's own period (a SUBJECT record — only that subject's teacher may write it); omit it for a whole-section session (only the class teacher). Every entry must belong to the section's live roster.",
     tags: ["academics-attendance"],
-    auth: CLASS_TEACHER_ONLY,
+    auth: TEACHER_OR_CLASS_TEACHER,
     request: {
       body: z.object({
         sectionId: idSchema,
+        subjectId: idSchema.optional(),
         heldOn: dateSchema,
         slot: slotSchema.default("day"),
         academicYear: academicYearSchema,
@@ -110,9 +119,9 @@ const routes: RouteSpec[] = [
     module: MODULE_NAME,
     method: "PATCH",
     path: "/api/v1/academics/attendance/sessions/{sessionId}/entries/{studentId}",
-    summary: "Correct one attendance entry (class teacher; audited with before/after)",
+    summary: "Correct one attendance entry (owning subject teacher or the class teacher; audited with before/after)",
     tags: ["academics-attendance"],
-    auth: CLASS_TEACHER_ONLY,
+    auth: TEACHER_OR_CLASS_TEACHER,
     request: {
       params: z.object({ sessionId: idSchema, studentId: idSchema }),
       body: z.object({ status: attendanceStatusSchema }),
@@ -161,6 +170,7 @@ const routes: RouteSpec[] = [
           sessions: z.array(
             z.object({
               id: z.string(),
+              subjectId: z.string(),
               heldOn: z.string(),
               slot: z.string(),
               academicYear: z.string(),
@@ -170,6 +180,48 @@ const routes: RouteSpec[] = [
                 late: z.number(),
                 excused: z.number(),
               }),
+            }),
+          ),
+        }),
+      },
+      403: { description: "Scope check denied", schema: problemSchema },
+      404: { description: "No such section", schema: problemSchema },
+    },
+  },
+  {
+    id: "academics.section-roster-attendance",
+    module: MODULE_NAME,
+    method: "GET",
+    path: "/api/v1/academics/sections/{sectionId}/roster-attendance",
+    summary: "Per-student attendance for a section's roster (the teacher flashcard feed)",
+    description:
+      "One card per student: attendance counts, percentage, and a recent-session strip — computed only over the sessions the caller may read (row-filtered by the ScopeChecker, so a subject teacher sees their own period). Pass subjectId to scope the numbers to one subject.",
+    tags: ["academics-attendance"],
+    auth: ANY_AUTHENTICATED,
+    request: {
+      params: z.object({ sectionId: idSchema }),
+      query: z.object({
+        academicYear: academicYearSchema.optional(),
+        subjectId: idSchema.optional(),
+      }),
+    },
+    responses: {
+      200: {
+        description: "A card per student who has any visible attendance",
+        schema: z.object({
+          cards: z.array(
+            z.object({
+              studentId: z.string(),
+              counts: z.object({
+                present: z.number(),
+                absent: z.number(),
+                late: z.number(),
+                excused: z.number(),
+              }),
+              attended: z.number(),
+              total: z.number(),
+              pct: z.number().nullable(),
+              recent: z.array(z.object({ heldOn: z.string(), status: attendanceStatusSchema })),
             }),
           ),
         }),

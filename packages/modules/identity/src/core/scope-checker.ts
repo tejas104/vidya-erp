@@ -32,8 +32,8 @@ function covers(grantOrg: OrgPath, resourceOrg: OrgPath): boolean {
 
 /**
  * Convention (ADR-0010): a record carrying subjectId is a "subject record"
- * (marks); records without it are non-subject records (attendance,
- * conduct, promotion).
+ * (marks, and a subject teacher's own attendance period); records without
+ * it are non-subject records (whole-section attendance, conduct, promotion).
  */
 function grantAllows(grant: ScopeGrant, action: AccessAction, resource: ResourceRef): boolean {
   if (!covers(grant.org, resource.org)) {
@@ -63,15 +63,17 @@ function grantAllows(grant: ScopeGrant, action: AccessAction, resource: Resource
           return false;
       }
     case "class_teacher":
-      // Reads their class, all sections/subjects; writes only the class's
-      // non-subject records — never subject marks.
+      // Reads their class, all sections/subjects; writes the class's
+      // non-subject records AND attendance of any subject (their correction
+      // authority over every period in the section) — but never subject
+      // marks/assessments.
       switch (action) {
         case "read":
           return true;
         case "create":
         case "update":
         case "delete":
-          return resource.subjectId === undefined;
+          return resource.subjectId === undefined || resource.resourceType === "attendance-record";
         default:
           return false;
       }

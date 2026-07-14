@@ -1,23 +1,16 @@
 import type { Metadata } from "next";
-import { Bricolage_Grotesque, Atkinson_Hyperlegible, IBM_Plex_Mono } from "next/font/google";
+import { IBM_Plex_Mono, Inter } from "next/font/google";
 import "./globals.css";
 
 /*
  * Fonts are fetched at BUILD time and self-hosted from the app's own origin —
- * zero runtime CDN, which the on-prem deployment requires. The three faces
- * carry the personality: a sturdy characterful display, a body face designed
- * for low-vision legibility (the accessibility floor made visible), and a
- * mono for every figure.
+ * zero runtime CDN, which the on-prem deployment requires (ADR-0009; the
+ * reference's Google-Fonts @import would be CSP-blocked). Inter is the
+ * interface face; IBM Plex Mono carries every figure.
  */
-const bricolage = Bricolage_Grotesque({
+const inter = Inter({
   subsets: ["latin"],
-  variable: "--font-bricolage",
-  display: "swap",
-});
-const atkinson = Atkinson_Hyperlegible({
-  weight: ["400", "700"],
-  subsets: ["latin"],
-  variable: "--font-atkinson",
+  variable: "--font-inter",
   display: "swap",
 });
 const plexMono = IBM_Plex_Mono({
@@ -37,7 +30,7 @@ const themeScript = `(function(){try{var t=localStorage.getItem("vidya-theme");i
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${bricolage.variable} ${atkinson.variable} ${plexMono.variable}`}>
+    <html lang="en" className={`${inter.variable} ${plexMono.variable}`}>
       <head>
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />

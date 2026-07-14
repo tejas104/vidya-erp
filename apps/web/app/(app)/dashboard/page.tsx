@@ -110,7 +110,7 @@ export default function DashboardPage() {
           }).catch(() => undefined);
         }
         // --- leave: approvers get a "waiting" card ---
-        if (me.roles.includes("hod") || me.roles.includes("principal") || me.roles.includes("admin")) {
+        if (me.roles.includes("hod") || me.roles.includes("admin")) {
           api.lvsPending().then((r) => {
             if (alive) setLeaveWaiting(r.requests.length);
           }).catch(() => undefined);
@@ -238,8 +238,11 @@ export default function DashboardPage() {
                               {entry.room !== "" ? ` · ${entry.room}` : ""}
                             </span>
                           </span>
-                          {session.roles.includes("class_teacher") ? (
-                            <a className="btn ghost" href={`/manage/attendance?sectionId=${encodeURIComponent(entry.sectionId)}`}>
+                          {session.roles.includes("teacher") || session.roles.includes("class_teacher") ? (
+                            <a
+                              className="btn ghost"
+                              href={`/manage/attendance?sectionId=${encodeURIComponent(entry.sectionId)}&subjectId=${encodeURIComponent(entry.subjectId)}&slot=${encodeURIComponent(`p${entry.periodNo}`)}`}
+                            >
                               Open · mark attendance
                             </a>
                           ) : null}

@@ -1,19 +1,31 @@
 "use client";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { api, ApiError, currentAcademicYear, type OrgTree, type StudentView } from "@/ui/api";
+import { api, ApiError, currentAcademicYear, type OrgTree, type StudentView, type StudentStatus } from "@/ui/api";
 import { useToast } from "@/ui/Toast";
 import { PageHeader } from "@/ui/PageHeader";
 import { Button } from "@/ui/Button";
 import { Field } from "@/ui/Field";
 import { Modal } from "@/ui/Modal";
 import { DataTable, type Column } from "@/ui/DataTable";
-import { Badge } from "@/ui/Badge";
 import { EmptyState } from "@/ui/EmptyState";
 import { Skeleton } from "@/ui/Skeleton";
 
 export const dynamic = "force-dynamic";
 
 type SectionOpt = { sectionId: string; label: string };
+
+/** The student lifecycle (ADR-0013 retention): the record is never deleted, only moved. */
+const STATUS_OPTIONS: { value: StudentStatus; label: string }[] = [
+  { value: "active", label: "Active" },
+  { value: "backlog", label: "Backlog (ATKT)" },
+  { value: "year_back", label: "Year back (detained)" },
+  { value: "transferred", label: "Transferred (TC)" },
+  { value: "dropped", label: "Dropped" },
+  { value: "alumni", label: "Alumni" },
+];
+const STATUS_LABEL: Record<string, string> = Object.fromEntries(
+  STATUS_OPTIONS.map((o) => [o.value, o.label]),
+);
 
 /** Flattens the org tree into "Class · Section" options (no student-list endpoint — browse per section). */
 function sectionOptions(tree: OrgTree): SectionOpt[] {
@@ -132,11 +144,11 @@ export default function StudentsPage() {
     }
   }
 
-  async function toggleStatus(student: StudentView) {
-    const next = student.status === "active" ? "inactive" : "active";
+  async function setStatus(student: StudentView, next: StudentStatus) {
+    if (next === student.status) return;
     try {
       await api.updateStudent(student.id, { status: next });
-      toast.show(`${student.fullName} is now ${next}.`, "good");
+      toast.show(`${student.fullName} → ${STATUS_LABEL[next] ?? next}.`, "good");
       await loadRoster();
     } catch (caught) {
       toast.show(caught instanceof ApiError ? caught.message : "Couldn't update.", "danger");
@@ -161,7 +173,22 @@ export default function StudentsPage() {
     {
       key: "status",
       header: "Status",
-      render: (row) => <Badge tone={row.status === "active" ? "good" : "warn"}>{row.status}</Badge>,
+      render: (row) => (
+        <select
+          aria-label={`Status for ${row.fullName}`}
+          value={row.status}
+          onChange={(event) => void setStatus(row, event.target.value as StudentStatus)}
+          style={{ font: "inherit", padding: "4px 8px", borderRadius: 6, border: "1px solid var(--rule-strong)", background: "var(--paper-raised)", color: "var(--ink)" }}
+        >
+          {STATUS_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>{opt.label}</option>
+          ))}
+          {/* keep a legacy value selectable if a record still carries it */}
+          {STATUS_OPTIONS.every((opt) => opt.value !== row.status) ? (
+            <option value={row.status}>{row.status}</option>
+          ) : null}
+        </select>
+      ),
     },
     {
       key: "actions",
@@ -173,9 +200,6 @@ export default function StudentsPage() {
             {row.identityUserId === null ? "Link sign-in" : "Sign-in ✓"}
           </Button>
           <Button variant="ghost" onClick={() => { setTransferTo(""); setTransfer(row); }}>Transfer</Button>
-          <Button variant="ghost" onClick={() => void toggleStatus(row)}>
-            {row.status === "active" ? "Deactivate" : "Reactivate"}
-          </Button>
         </span>
       ),
     },

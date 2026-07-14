@@ -26,6 +26,8 @@ function pgErrorCode(error: unknown): string | undefined {
 
 export interface NewSession {
   readonly sectionId: string;
+  /** "" ⇒ whole-section session; a value ⇒ a subject teacher's period. */
+  readonly subjectId: string;
   readonly heldOn: string;
   readonly slot: string;
   readonly academicYear: string;
@@ -79,6 +81,7 @@ export function createAttendanceRepo(db: Db): AttendanceRepo {
           await tx.insert(acdAttendanceSessions).values({
             id: sessionId,
             sectionId: input.sectionId,
+            subjectId: input.subjectId,
             heldOn: input.heldOn,
             slot: input.slot,
             academicYear: input.academicYear,

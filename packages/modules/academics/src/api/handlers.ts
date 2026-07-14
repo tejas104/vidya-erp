@@ -89,6 +89,7 @@ function sessionView(session: AcdSessionRow, entries: AcdEntryRow[]) {
   return {
     id: session.id,
     sectionId: session.sectionId,
+    subjectId: session.subjectId,
     heldOn: session.heldOn,
     slot: session.slot,
     academicYear: session.academicYear,
@@ -134,6 +135,7 @@ export function createAcademicsHandlers(deps: AcademicsHandlerDeps): Record<stri
     const principal = ctx.principal as Principal;
     const body = ctx.request.body as {
       sectionId: string;
+      subjectId?: string;
       heldOn: string;
       slot: string;
       academicYear: string;
@@ -144,13 +146,22 @@ export function createAcademicsHandlers(deps: AcademicsHandlerDeps): Record<stri
       return notFound();
     }
     // One ref covers the whole batch: every entry lives at the session's path.
-    const scope = checkScope(deps.scopeChecker, ctx, principal, "create", attendanceRef(position));
+    // With a subjectId the ref is a subject record — only that subject's
+    // teacher (or the class teacher) passes the check.
+    const scope = checkScope(
+      deps.scopeChecker,
+      ctx,
+      principal,
+      "create",
+      attendanceRef({ ...position, subjectId: body.subjectId }),
+    );
     if (!scope.ok) {
       return scope.result;
     }
     try {
       const { session, entries } = await deps.attendance.recordSession({
         ...body,
+        subjectId: body.subjectId ?? "",
         takenBy: principal.id,
       });
       return {
@@ -160,6 +171,7 @@ export function createAcademicsHandlers(deps: AcademicsHandlerDeps): Record<stri
           resourceId: session.id,
           details: {
             sectionId: session.sectionId,
+            subjectId: session.subjectId,
             heldOn: session.heldOn,
             slot: session.slot,
             counts: countEntries(entries),
@@ -234,6 +246,7 @@ export function createAcademicsHandlers(deps: AcademicsHandlerDeps): Record<stri
       body: {
         sessions: sessions.map(({ session, entries }) => ({
           id: session.id,
+          subjectId: session.subjectId,
           heldOn: session.heldOn,
           slot: session.slot,
           academicYear: session.academicYear,
@@ -273,6 +286,60 @@ export function createAcademicsHandlers(deps: AcademicsHandlerDeps): Record<stri
         counts,
       },
     };
+  };
+
+  const sectionRosterAttendance: RouteHandler = async (ctx) => {
+    const principal = ctx.principal as Principal;
+    const params = ctx.request.params as { sectionId: string };
+    const query = ctx.request.query as { academicYear?: string; subjectId?: string };
+    const position = await deps.attendance.sectionPosition(params.sectionId);
+    if (position === null) {
+      return notFound();
+    }
+    // Pull the section's sessions, then keep only the ones this caller may
+    // read (a subject teacher sees their own period; the class teacher sees
+    // all) — the same per-record filter the rest of this module uses.
+    const sessions = await deps.attendance.listSessions(params.sectionId, { limit: 200 });
+    const visible = sessions
+      .filter(({ session }) => deps.scopeChecker.check(principal, "read", attendanceRef(session)).granted)
+      .filter(({ session }) => query.academicYear === undefined || session.academicYear === query.academicYear)
+      .filter(({ session }) => query.subjectId === undefined || session.subjectId === query.subjectId)
+      // Oldest first so each student's recent strip reads left-to-right in time.
+      .sort((a, b) => a.session.heldOn.localeCompare(b.session.heldOn));
+
+    const byStudent = new Map<
+      string,
+      { counts: Record<AttendanceStatus, number>; recent: { heldOn: string; status: AttendanceStatus }[] }
+    >();
+    for (const { session, entries } of visible) {
+      for (const entry of entries) {
+        const status = entry.status as AttendanceStatus;
+        let card = byStudent.get(entry.studentId);
+        if (card === undefined) {
+          card = { counts: { present: 0, absent: 0, late: 0, excused: 0 }, recent: [] };
+          byStudent.set(entry.studentId, card);
+        }
+        card.counts[status] += 1;
+        card.recent.push({ heldOn: session.heldOn, status });
+      }
+    }
+
+    const cards = [...byStudent.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([studentId, { counts, recent }]) => {
+        const total = counts.present + counts.absent + counts.late + counts.excused;
+        // present/late/excused all count as attended (excused ≈ on-duty/medical).
+        const attended = counts.present + counts.late + counts.excused;
+        return {
+          studentId,
+          counts,
+          attended,
+          total,
+          pct: total === 0 ? null : Math.round((attended / total) * 100),
+          recent: recent.slice(-14),
+        };
+      });
+    return { status: 200, body: { cards } };
   };
 
   const assessmentCreate: RouteHandler = async (ctx) => {
@@ -557,6 +624,7 @@ export function createAcademicsHandlers(deps: AcademicsHandlerDeps): Record<stri
     "academics.attendance-correct": attendanceCorrect,
     "academics.attendance-session-get": attendanceSessionGet,
     "academics.section-attendance": sectionAttendance,
+    "academics.section-roster-attendance": sectionRosterAttendance,
     "academics.student-attendance": studentAttendance,
     "academics.assessment-create": assessmentCreate,
     "academics.assessment-delete": assessmentDelete,

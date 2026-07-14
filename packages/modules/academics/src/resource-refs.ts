@@ -7,11 +7,11 @@ import type { ResourceRef } from "@vidya/platform";
  * The distinction these builders encode is load-bearing for the whole
  * permission matrix (ADR-0010):
  *
- *  - ATTENDANCE records are NON-SUBJECT records: their ResourceRef carries
- *    no subjectId, ever. The attendance builder's input type has no
- *    subject field, so a subject cannot even be passed by mistake.
- *    Consequence: teachers READ attendance across their attached class;
- *    only class_teachers WRITE it.
+ *  - ATTENDANCE records are subject-aware since the subject-teacher
+ *    revision: a whole-section session (subjectId "" / absent) is a
+ *    NON-SUBJECT record only the class teacher writes; a subject teacher's
+ *    own period carries that subject's id and becomes a SUBJECT record —
+ *    writable by that subject's teacher, correctable by the class teacher.
  *
  *  - MARKS records are SUBJECT records: their ResourceRef always carries
  *    the owning assessment's subjectId — taken from the stored assessment
@@ -29,6 +29,8 @@ export interface AttendancePosition {
   readonly departmentId: string;
   readonly classId: string;
   readonly sectionId: string;
+  /** "" or absent ⇒ whole-section session; a value ⇒ a subject teacher's period. */
+  readonly subjectId?: string;
 }
 
 /** The stored org position of an assessment (class-level) + its subject. */
@@ -40,6 +42,10 @@ export interface AssessmentPosition {
 }
 
 export function attendanceRef(position: AttendancePosition): ResourceRef {
+  // An empty subjectId means "whole-section session" — a non-subject record;
+  // it must NOT reach the checker as a subject record, so normalise "" away.
+  const subjectId =
+    position.subjectId !== undefined && position.subjectId !== "" ? position.subjectId : undefined;
   return {
     module: "academics",
     resourceType: "attendance-record",
@@ -49,7 +55,7 @@ export function attendanceRef(position: AttendancePosition): ResourceRef {
       classId: position.classId,
       sectionId: position.sectionId,
     },
-    // NO subjectId — this is what makes attendance a non-subject record.
+    ...(subjectId !== undefined ? { subjectId } : {}),
   };
 }
 

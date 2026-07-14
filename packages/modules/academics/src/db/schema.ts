@@ -25,6 +25,14 @@ export const acdAttendanceSessions = pgTable(
   {
     id: text("id").primaryKey(),
     sectionId: text("section_id").notNull(),
+    /**
+     * "" ⇒ a whole-section session written by the class teacher (a
+     * NON-subject record). A non-empty subject id ⇒ a subject teacher's own
+     * period (a SUBJECT record): only that subject's teacher may write it,
+     * and the class teacher may correct it (ADR-0010, subject-teacher
+     * attendance revision).
+     */
+    subjectId: text("subject_id").notNull().default(""),
     heldOn: date("held_on", { mode: "string" }).notNull(),
     /** Supports multiple sessions per day ("day", "morning", "period-3"…). */
     slot: text("slot").notNull().default("day"),
@@ -36,7 +44,12 @@ export const acdAttendanceSessions = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
-    uniqueIndex("acd_sessions_unique_idx").on(table.sectionId, table.heldOn, table.slot),
+    uniqueIndex("acd_sessions_unique_idx").on(
+      table.sectionId,
+      table.heldOn,
+      table.slot,
+      table.subjectId,
+    ),
     index("acd_sessions_section_idx").on(table.sectionId, table.heldOn),
     index("acd_sessions_date_idx").on(table.heldOn),
   ],

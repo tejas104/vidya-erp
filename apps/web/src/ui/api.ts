@@ -152,16 +152,22 @@ export interface DistributionResponse {
 
 export type AttendanceStatus = "present" | "absent" | "late" | "excused";
 export interface RecordAttendanceBody {
-  sectionId: string; heldOn: string; slot: string; academicYear: string;
+  sectionId: string; subjectId?: string; heldOn: string; slot: string; academicYear: string;
   entries: { studentId: string; status: AttendanceStatus }[];
 }
 export interface SessionView {
-  id: string; sectionId: string; heldOn: string; slot: string; academicYear: string; takenBy: string;
+  id: string; sectionId: string; subjectId: string; heldOn: string; slot: string; academicYear: string; takenBy: string;
   entries: { studentId: string; status: AttendanceStatus }[];
 }
 export interface SessionSummary {
-  id: string; heldOn: string; slot: string; academicYear: string;
+  id: string; subjectId: string; heldOn: string; slot: string; academicYear: string;
   counts: { present: number; absent: number; late: number; excused: number };
+}
+export interface RosterCard {
+  studentId: string;
+  counts: { present: number; absent: number; late: number; excused: number };
+  attended: number; total: number; pct: number | null;
+  recent: { heldOn: string; status: AttendanceStatus }[];
 }
 export type AssessmentKind = "exam" | "quiz" | "assignment";
 export interface AssessmentView {
@@ -171,6 +177,10 @@ export interface AssessmentView {
 export interface CreateAssessmentBody {
   classId: string; subjectId: string; kind: AssessmentKind; name: string;
   academicYear: string; maxScore: number; heldOn?: string;
+}
+export interface StudentMarksRow {
+  mark: { id: string; assessmentId: string; studentId: string; score: number; recordedBy: string; updatedAt: string };
+  assessment: AssessmentView;
 }
 
 export interface CollegeView { id: string; name: string; code: string }
@@ -185,9 +195,11 @@ export interface OrgTree {
     subjects: SubjectView[];
   })[];
 }
+export type StudentStatus =
+  | "active" | "inactive" | "backlog" | "year_back" | "transferred" | "dropped" | "alumni";
 export interface StudentView {
   id: string; collegeId: string; admissionNo: string; fullName: string;
-  status: "active" | "inactive";
+  status: StudentStatus;
   identityUserId: string | null;
   enrollment: { sectionId: string; academicYear: string } | null;
 }
@@ -564,6 +576,14 @@ export const api = {
     if (opts.limit) q.set("limit", String(opts.limit));
     return get<{ sessions: SessionSummary[] }>(`/api/v1/academics/sections/${encodeURIComponent(sectionId)}/attendance?${q}`);
   },
+  rosterAttendance: (sectionId: string, opts: { academicYear?: string; subjectId?: string } = {}) => {
+    const q = new URLSearchParams();
+    if (opts.academicYear) q.set("academicYear", opts.academicYear);
+    if (opts.subjectId) q.set("subjectId", opts.subjectId);
+    return get<{ cards: RosterCard[] }>(
+      `/api/v1/academics/sections/${encodeURIComponent(sectionId)}/roster-attendance?${q}`,
+    );
+  },
   getSession: (sessionId: string) =>
     get<SessionView>(`/api/v1/academics/attendance/sessions/${encodeURIComponent(sessionId)}`),
   correctAttendance: (sessionId: string, studentId: string, status: AttendanceStatus) =>
@@ -584,6 +604,10 @@ export const api = {
     get<{ marks: { id: string; assessmentId: string; studentId: string; score: number }[] }>(
       `/api/v1/academics/assessments/${encodeURIComponent(assessmentId)}/marks`,
     ),
+  studentMarks: (studentId: string, year: string) =>
+    get<{ marks: StudentMarksRow[] }>(
+      `/api/v1/academics/students/${encodeURIComponent(studentId)}/marks?academicYear=${year}`,
+    ),
   // people — org
   colleges: () => get<{ colleges: CollegeView[] }>("/api/v1/people/colleges"),
   collegeTree: (collegeId: string) => get<OrgTree>(`/api/v1/people/colleges/${encodeURIComponent(collegeId)}/tree`),
@@ -601,7 +625,7 @@ export const api = {
   // people — students
   createStudent: (body: { collegeId: string; admissionNo: string; fullName: string }) =>
     post<StudentView>("/api/v1/people/students", body),
-  updateStudent: (studentId: string, body: { fullName?: string; status?: "active" | "inactive" }) =>
+  updateStudent: (studentId: string, body: { fullName?: string; status?: StudentStatus }) =>
     patch<StudentView>(`/api/v1/people/students/${encodeURIComponent(studentId)}`, body),
   enrollStudent: (studentId: string, body: { sectionId: string; academicYear: string }) =>
     post<{ enrollmentId: string; previousEnrollmentId: string | null }>(

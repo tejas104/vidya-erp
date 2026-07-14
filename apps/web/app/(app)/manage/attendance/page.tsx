@@ -16,6 +16,10 @@ export default function AttendancePage() {
   const [sections, setSections] = useState<SectionOpt[]>([]);
   const [sectionId, setSectionId] = useState("");
   const [heldOn, setHeldOn] = useState(today);
+  // A subject teacher marks their own period (subjectId + slot arrive from
+  // the Today card); a class teacher marking a whole-section day leaves both empty.
+  const [subjectId, setSubjectId] = useState("");
+  const [slot, setSlot] = useState("day");
   const [roster, setRoster] = useState<Student[]>([]);
   const [marks, setMarks] = useState<Record<string, AttendanceStatus>>({});
   const save = useMutation(api.recordAttendance);
@@ -39,6 +43,10 @@ export default function AttendancePage() {
       if (wanted !== null && opts.some((o) => o.sectionId === wanted)) setSectionId(wanted);
       else if (opts[0]) setSectionId(opts[0].sectionId);
       if (wantedDate !== null && /^\d{4}-\d{2}-\d{2}$/.test(wantedDate)) setHeldOn(wantedDate);
+      const wantedSubject = params.get("subjectId");
+      const wantedSlot = params.get("slot");
+      if (wantedSubject !== null) setSubjectId(wantedSubject);
+      if (wantedSlot !== null && wantedSlot.trim() !== "") setSlot(wantedSlot);
     }).catch(() => setSections([]));
   }, [year]);
 
@@ -53,7 +61,8 @@ export default function AttendancePage() {
 
   async function submit() {
     const saved = await save.run({
-      sectionId, heldOn, slot: "day", academicYear: year,
+      sectionId, heldOn, slot, academicYear: year,
+      ...(subjectId !== "" ? { subjectId } : {}),
       entries: roster.map((s) => ({ studentId: s.id, status: marks[s.id] ?? "present" })),
     });
     if (saved) toast.show("Attendance saved — recompute analytics to see it on the dashboard.", "good");
@@ -64,11 +73,15 @@ export default function AttendancePage() {
       <PageHeader
         eyebrow="Attendance"
         title="Record attendance"
-        lede="Mark the roster for a section and date. You can only record for a class you teach."
+        lede={
+          subjectId !== ""
+            ? `Marking your subject's period (${slot}). Only that subject's teacher — or the class teacher — can save it.`
+            : "Mark the roster for a section and date. Subject teachers mark their own period; the class teacher can mark or correct any."
+        }
       />
 
       {sections.length === 0 ? (
-        <div className="state"><strong>No sections you can record for.</strong> Attendance is recorded by a class teacher.</div>
+        <div className="state"><strong>No sections you can record for.</strong> Open a period from your Today card to mark its attendance.</div>
       ) : (
         <>
           <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 20 }}>

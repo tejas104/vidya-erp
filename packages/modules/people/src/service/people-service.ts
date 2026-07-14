@@ -1,6 +1,6 @@
 import type { OrgPath } from "@vidya/platform";
 import type { OrgRepo } from "../repo/org-repo";
-import type { PeopleRepo, PersonStatus } from "../repo/people-repo";
+import type { PeopleRepo, PersonStatus, StudentStatus } from "../repo/people-repo";
 import type { PplEnrollmentRow, PplStudentRow, PplTeacherRow } from "../db/schema";
 
 export class UnknownReferenceError extends Error {
@@ -41,7 +41,7 @@ export class PeopleService {
 
   updateStudent(
     id: string,
-    patch: { fullName?: string; status?: PersonStatus },
+    patch: { fullName?: string; status?: StudentStatus },
   ): Promise<PplStudentRow | null> {
     return this.deps.repo.updateStudent(id, patch);
   }

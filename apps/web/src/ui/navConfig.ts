@@ -20,7 +20,8 @@ const ALL: Role[] = ["admin", "principal", "hod", "class_teacher", "teacher"];
 export const NAV: NavEntry[] = [
   { href: "/dashboard", label: "Dashboard", icon: "dashboard", group: "Overview", roles: ALL },
   { href: "/portal", label: "My register", icon: "students", group: "My studies", roles: ["student"] },
-  { href: "/manage/attendance", label: "Attendance", icon: "attendance", group: "Teaching", roles: ["class_teacher", "admin"] },
+  { href: "/manage/classes", label: "My Classes", icon: "students", group: "Teaching", roles: ["teacher", "class_teacher", "admin"] },
+  { href: "/manage/attendance", label: "Attendance", icon: "attendance", group: "Teaching", roles: ["teacher", "class_teacher", "admin"] },
   { href: "/manage/marks", label: "Marks", icon: "marks", group: "Teaching", roles: ["teacher", "admin"] },
   // --- coursework ---
   { href: "/manage/coursework", label: "Coursework", icon: "file", group: "Teaching", roles: ["teacher", "class_teacher", "admin"] },
@@ -30,10 +31,11 @@ export const NAV: NavEntry[] = [
   { href: "/manage/notices", label: "Notices", icon: "file", group: "Administration", roles: ["admin", "principal"] },
   // --- results ---
   { href: "/manage/results", label: "Results", icon: "marks", group: "Administration", roles: ["admin", "principal"] },
+  { href: "/manage/backlogs", label: "Backlogs", icon: "marks", group: "Administration", roles: ["admin", "principal"] },
   // --- exams ---
   { href: "/manage/exams", label: "Exams", icon: "attendance", group: "Administration", roles: ["admin"] },
   // --- leave ---
-  { href: "/manage/leave", label: "Leave", icon: "file", group: "Teaching", roles: ["teacher", "class_teacher", "hod", "principal", "admin"] },
+  { href: "/manage/leave", label: "Leave", icon: "file", group: "Teaching", roles: ["teacher", "class_teacher", "hod", "admin"] },
   // --- timetable ---
   { href: "/manage/timetable", label: "Timetable", icon: "attendance", group: "Administration", roles: ["admin"] },
   { href: "/manage/org", label: "Organisation", icon: "org", group: "Administration", roles: ["admin"] },

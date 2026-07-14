@@ -68,6 +68,8 @@ export class AttendanceService {
    */
   async recordSession(input: {
     sectionId: string;
+    /** "" ⇒ whole-section session; a value ⇒ this subject teacher's period. */
+    subjectId?: string;
     heldOn: string;
     slot: string;
     academicYear: string;
@@ -98,6 +100,7 @@ export class AttendanceService {
     }
     const newSession: NewSession = {
       sectionId: input.sectionId,
+      subjectId: input.subjectId ?? "",
       heldOn: input.heldOn,
       slot: input.slot,
       academicYear: input.academicYear,

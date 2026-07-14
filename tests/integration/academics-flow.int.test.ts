@@ -139,40 +139,68 @@ afterAll(async () => {
   await stack.close();
 });
 
-describe("attendance through the live matrix", () => {
-  it("class_teacher records; subject teacher is DENIED the write but GRANTED the read", async () => {
-    const deniedWrite = await stack.call("academics.attendance-record", {
+describe("attendance through the live matrix (subject-teacher revision)", () => {
+  it("subject teacher records THEIR OWN period; another subject's is DENIED", async () => {
+    // The core correction: a subject teacher marks their own subject's period.
+    const ownPeriod = await stack.call("academics.attendance-record", {
       cookie: mathCookie,
       body: {
         sectionId: ids.sectionId,
+        subjectId: ids.mathId,
         heldOn: "2026-07-06",
-        slot: "day",
+        slot: "p1",
         academicYear: "2026-27",
         entries: [{ studentId: ids.studentId, status: "present" }],
       },
     });
-    expect(deniedWrite.status).toBe(403);
+    expect(ownPeriod.status).toBe(201);
 
+    // ...but not a subject that isn't theirs — the scope wall holds.
+    const otherSubject = await stack.call("academics.attendance-record", {
+      cookie: mathCookie,
+      body: {
+        sectionId: ids.sectionId,
+        subjectId: ids.physicsId,
+        heldOn: "2026-07-06",
+        slot: "p2",
+        academicYear: "2026-27",
+        entries: [{ studentId: ids.studentId, status: "present" }],
+      },
+    });
+    expect(otherSubject.status).toBe(403);
+  });
+
+  it("class_teacher records a whole-section session AND corrects a subject teacher's period", async () => {
+    // A whole-section (non-subject) session — still the class teacher's.
     const recorded = await stack.call("academics.attendance-record", {
       cookie: classTeacherCookie,
       body: {
         sectionId: ids.sectionId,
-        heldOn: "2026-07-06",
+        heldOn: "2026-07-07",
         slot: "day",
         academicYear: "2026-27",
         entries: [{ studentId: ids.studentId, status: "absent" }],
       },
     });
     expect(recorded.status).toBe(201);
-    const sessionId = ((await recorded.json()) as { id: string }).id;
 
-    const teacherRead = await stack.call("academics.attendance-session-get", {
+    // The math teacher's own period, which the class teacher will correct.
+    const mathPeriod = await stack.call("academics.attendance-record", {
       cookie: mathCookie,
-      params: { sessionId },
+      body: {
+        sectionId: ids.sectionId,
+        subjectId: ids.mathId,
+        heldOn: "2026-07-07",
+        slot: "p1",
+        academicYear: "2026-27",
+        entries: [{ studentId: ids.studentId, status: "absent" }],
+      },
     });
-    expect(teacherRead.status).toBe(200);
+    expect(mathPeriod.status).toBe(201);
+    const sessionId = ((await mathPeriod.json()) as { id: string }).id;
 
-    // Correction (class_teacher) with a durable before/after audit.
+    // Correction authority: the class teacher fixes the subject teacher's
+    // period (a subject record), with a durable before/after audit.
     const corrected = await stack.call("academics.attendance-correct", {
       cookie: classTeacherCookie,
       params: { sessionId, studentId: ids.studentId },
@@ -183,12 +211,30 @@ describe("attendance through the live matrix", () => {
     const correction = audit.find((row) => row.action === "academics.attendance-corrected");
     expect(correction?.details).toMatchObject({ before: "absent", after: "late" });
 
-    const summary = await stack.call("academics.student-attendance", {
-      cookie: classTeacherCookie,
-      params: { studentId: ids.studentId },
-      query: { academicYear: "2026-27" },
+    // The physics teacher can neither read nor correct the math period.
+    const physicsRead = await stack.call("academics.attendance-session-get", {
+      cookie: physicsCookie,
+      params: { sessionId },
     });
-    expect(((await summary.json()) as { counts: { late: number } }).counts.late).toBe(1);
+    expect(physicsRead.status).toBe(403);
+  });
+
+  it("roster-attendance feeds the flashcards: per-student cards scoped to the caller's subject", async () => {
+    const res = await stack.call("academics.section-roster-attendance", {
+      cookie: mathCookie,
+      params: { sectionId: ids.sectionId },
+      query: { academicYear: "2026-27", subjectId: ids.mathId },
+    });
+    expect(res.status).toBe(200);
+    const { cards } = (await res.json()) as {
+      cards: { studentId: string; pct: number | null; total: number; recent: unknown[] }[];
+    };
+    const card = cards.find((c) => c.studentId === ids.studentId);
+    expect(card).toBeDefined();
+    // The math teacher marked this student's period(s) — so the card has real figures.
+    expect(card!.total).toBeGreaterThan(0);
+    expect(card!.pct).not.toBeNull();
+    expect(card!.recent.length).toBeGreaterThan(0);
   });
 });
 

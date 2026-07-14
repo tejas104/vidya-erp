@@ -43,12 +43,29 @@ const treeSchema = z.object({
   ),
 });
 
+/**
+ * A student is a lifecycle, not a row — the record is never destroyed, only
+ * moved through these states (ADR-0013 retention; SPPU ATKT ordinances):
+ *   active · backlog (ATKT) · year_back (detained) · transferred (TC) ·
+ *   dropped · alumni. "inactive" is kept for records seeded before the
+ *   lifecycle existed.
+ */
+export const studentStatusSchema = z.enum([
+  "active",
+  "inactive",
+  "backlog",
+  "year_back",
+  "transferred",
+  "dropped",
+  "alumni",
+]);
+
 export const studentViewSchema = z.object({
   id: z.string(),
   collegeId: z.string(),
   admissionNo: z.string(),
   fullName: z.string(),
-  status: z.enum(["active", "inactive"]),
+  status: studentStatusSchema,
   identityUserId: z.string().nullable(),
   enrollment: z
     .object({
@@ -269,13 +286,15 @@ const routes: RouteSpec[] = [
     module: MODULE_NAME,
     method: "PATCH",
     path: "/api/v1/people/students/{studentId}",
-    summary: "Update a student (admin)",
+    summary: "Update a student — rename or move through the lifecycle (admin)",
+    description:
+      "Status transitions are audited and the record is never destroyed (TC / marksheet / audit retention). Moving to backlog / year_back / transferred / dropped / alumni is how a student's lifecycle is recorded.",
     tags: ["people-students"],
     auth: ADMIN_ONLY,
     request: {
       params: z.object({ studentId: idSchema }),
       body: z
-        .object({ fullName: nameSchema.optional(), status: z.enum(["active", "inactive"]).optional() })
+        .object({ fullName: nameSchema.optional(), status: studentStatusSchema.optional() })
         .refine((patch) => patch.fullName !== undefined || patch.status !== undefined, {
           message: "at least one field required",
         }),

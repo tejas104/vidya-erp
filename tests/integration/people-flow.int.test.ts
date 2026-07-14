@@ -370,4 +370,36 @@ describe("students & enrollment through the pipeline", () => {
     const actions = (await stack.system.service.readRecentAuditEvents(20)).map((row) => row.action);
     expect(actions).toContain("people.student-enrolled");
   });
+
+  it("moves a student through the lifecycle (backlog) — audited, record survives, still on the roster", async () => {
+    const created = await stack.call("people.student-create", {
+      cookie: adminCookie,
+      body: { collegeId, admissionNo: `ATKT-${runId}`, fullName: "Rohan Deshpande" },
+    });
+    expect(created.status).toBe(201);
+    const studentId = ((await created.json()) as { id: string }).id;
+    await stack.call("people.student-enroll", {
+      cookie: adminCookie,
+      params: { studentId },
+      body: { sectionId: ids.sectionId, academicYear: "2026-27" },
+    });
+
+    const marked = await stack.call("people.student-update", {
+      cookie: adminCookie,
+      params: { studentId },
+      body: { status: "backlog" },
+    });
+    expect(marked.status).toBe(200);
+    expect(((await marked.json()) as { status: string }).status).toBe("backlog");
+
+    // The record survives (never deleted) and a backlog student stays enrolled.
+    const roster = (await (await stack.call("people.section-roster", {
+      cookie: adminCookie,
+      params: { sectionId: ids.sectionId },
+    })).json()) as { students: { id: string }[] };
+    expect(roster.students.map((s) => s.id)).toContain(studentId);
+
+    const actions = (await stack.system.service.readRecentAuditEvents(20)).map((row) => row.action);
+    expect(actions).toContain("people.student-updated");
+  });
 });
