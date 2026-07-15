@@ -15,6 +15,14 @@ Before you begin, ensure you have the following installed on your machine:
 
 ## 🚀 Setup Steps
 
+### 0. Get the Code (Clone)
+Once you've been added as a collaborator on GitHub, clone the repository and enter it:
+```bash
+git clone https://github.com/<owner>/<repo>.git
+cd <repo>
+```
+*(Replace `<owner>/<repo>` with the actual repository path the owner shares with you.)*
+
 ### 1. Install Dependencies
 At the root of the project, run:
 ```bash
