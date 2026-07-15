@@ -402,4 +402,49 @@ describe("students & enrollment through the pipeline", () => {
     const actions = (await stack.system.service.readRecentAuditEvents(20)).map((row) => row.action);
     expect(actions).toContain("people.student-updated");
   });
+
+  it("class teacher (2.4): adds/edits students in their section; DENIED for another (403 fail-closed)", async () => {
+    // Provision a class teacher for ids.classId.
+    const teacherId = ((await (await stack.call("people.teacher-create", {
+      cookie: adminCookie,
+      body: { collegeId, staffNo: `CT-${runId}`, fullName: "Class Teacher" },
+    })).json()) as { id: string }).id;
+    const uid = ((await (await stack.call("identity.user-create", {
+      cookie: adminCookie,
+      body: { username: `ct-${runId}`, displayName: "Class Teacher", collegeId, temporaryPassword: "temporary-pass-123", roles: [] },
+    })).json()) as { id: string }).id;
+    const { token } = (await (await stack.call("identity.password-reset-init", { cookie: adminCookie, params: { userId: uid } })).json()) as { token: string };
+    await stack.call("identity.password-reset-confirm", { body: { token, newPassword: TEACHER_PASSWORD } });
+    await stack.call("people.teacher-link-identity", { cookie: adminCookie, params: { teacherId }, body: { identityUserId: uid } });
+    const asg = await stack.call("people.assignment-create", {
+      cookie: adminCookie,
+      params: { teacherId },
+      body: { classId: ids.classId, kind: "class_teacher", academicYear: "2026-27" },
+    });
+    expect(asg.status).toBe(201);
+    const ctCookie = await stack.login(`ct-${runId}`, TEACHER_PASSWORD);
+
+    // Add a student INTO their own section → 201.
+    const added = await stack.call("people.student-create", {
+      cookie: ctCookie,
+      body: { collegeId, admissionNo: `CTADD-${runId}`, fullName: "Added ByCt", sectionId: ids.sectionId, academicYear: "2026-27" },
+    });
+    expect(added.status).toBe(201);
+    const addedId = ((await added.json()) as { id: string }).id;
+
+    // Edit / change status of that student → 200.
+    const edited = await stack.call("people.student-update", {
+      cookie: ctCookie,
+      params: { studentId: addedId },
+      body: { status: "backlog", phone: "+91 9000000000" },
+    });
+    expect(edited.status).toBe(200);
+
+    // Add into ANOTHER class's section → 403 (fail closed).
+    const denied = await stack.call("people.student-create", {
+      cookie: ctCookie,
+      body: { collegeId, admissionNo: `CTDENY-${runId}`, fullName: "Nope", sectionId: ids.otherSectionId, academicYear: "2026-27" },
+    });
+    expect(denied.status).toBe(403);
+  });
 });

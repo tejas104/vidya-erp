@@ -3297,8 +3297,8 @@
     },
     "/api/v1/people/students": {
       "post": {
-        "summary": "Create a student (admin)",
-        "description": "**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "summary": "Create a student (admin college-wide; class teacher into their own section)",
+        "description": "Admin creates a college-anchored student. A class teacher passes sectionId to add a student straight into THEIR section (create + enroll, scope-checked against that section — 403 for any other). Records are never hard-deleted.\n\n**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
         "tags": [
           "people-students"
         ],
@@ -3327,6 +3327,15 @@
                     "type": "string",
                     "minLength": 1,
                     "maxLength": 128
+                  },
+                  "sectionId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64
+                  },
+                  "academicYear": {
+                    "type": "string",
+                    "pattern": "^\\d{4}-\\d{2}$"
                   }
                 },
                 "required": [
@@ -3669,8 +3678,8 @@
         }
       },
       "patch": {
-        "summary": "Update a student — rename or move through the lifecycle (admin)",
-        "description": "Status transitions are audited and the record is never destroyed (TC / marksheet / audit retention). Moving to backlog / year_back / transferred / dropped / alumni is how a student's lifecycle is recorded.\n\n**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "summary": "Update a student — rename, edit contact, or move the lifecycle (admin; class teacher for their own section)",
+        "description": "The class teacher is a scoped sub-admin: they may edit and change the status of students in THEIR section only (the ScopeChecker enforces the section — 403 for any other). Status transitions are audited and the record is never destroyed (TC / marksheet / audit retention).\n\n**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
         "tags": [
           "people-students"
         ],
