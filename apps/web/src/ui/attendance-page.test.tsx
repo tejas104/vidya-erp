@@ -5,7 +5,7 @@ import { api } from "./api";
 
 vi.mock("./api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./api")>();
-  return { ...actual, api: { ...actual.api, dashboard: vi.fn(), sectionRoster: vi.fn(), recordAttendance: vi.fn(), sessionAttendance: vi.fn() } };
+  return { ...actual, api: { ...actual.api, dashboard: vi.fn(), sectionRoster: vi.fn(), recordAttendance: vi.fn(), sessionAttendance: vi.fn(), rosterAttendance: vi.fn() } };
 });
 
 beforeEach(() => {
@@ -15,8 +15,9 @@ beforeEach(() => {
     names: { cls_1: "FY CS", sec_a: "A" },
     tiles: [{ type: "class", classId: "cls_1", attendance: { state: "no-data" }, marks: { state: "no-data" }, atRisk: 0, strip: [{ sectionId: "sec_a", name: "A", days: [] }] }],
   });
-  (api.sectionRoster as ReturnType<typeof vi.fn>).mockResolvedValue({ students: [{ id: "stu_1", fullName: "Aarav Sharma", admissionNo: "FYCS-001" }] });
+  (api.sectionRoster as ReturnType<typeof vi.fn>).mockResolvedValue({ students: [{ id: "stu_1", fullName: "Aarav Sharma", admissionNo: "FYCS-001", status: "active" }] });
   (api.sessionAttendance as ReturnType<typeof vi.fn>).mockResolvedValue({ sessions: [] });
+  (api.rosterAttendance as ReturnType<typeof vi.fn>).mockResolvedValue({ cards: [] });
   (api.recordAttendance as ReturnType<typeof vi.fn>).mockResolvedValue({ id: "ses_1", sectionId: "sec_a", heldOn: "2026-06-01", slot: "day", academicYear: "2026-27", takenBy: "u", entries: [] });
 });
 

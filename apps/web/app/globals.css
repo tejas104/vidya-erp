@@ -1325,6 +1325,33 @@ a {
   .att-save .btn { flex: 0 0 auto; }
 }
 
+/* attendance as flashcards: tap the header for the student, segment to mark */
+.att-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+.att-card { display: grid; gap: 12px; cursor: default; }
+.att-card::before { background: var(--rule); }
+.att-card[data-status="present"]::before { background: var(--good); }
+.att-card[data-status="absent"]::before { background: var(--bad); }
+.att-card[data-status="late"]::before { background: var(--warn); }
+.att-card[data-status="excused"]::before { background: var(--ink-3); }
+.att-card-head {
+  display: flex;
+  gap: 11px;
+  align-items: center;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.att-card-head:focus-visible { outline: 2px solid var(--brand); outline-offset: 3px; border-radius: 8px; }
+.att-card-mini { margin-left: auto; text-align: right; flex-shrink: 0; }
+.att-card .att-seg { display: flex; gap: 6px; }
+.att-card .att-seg button { flex: 1; }
+.att-card-info { font-size: 10px; color: var(--ink-3); font-family: var(--font-mono); }
+
 /* --- the shell --- */
 .shell { display: flex; min-height: 100dvh; }
 .shell-side {
