@@ -946,7 +946,19 @@ async function main(): Promise<void> {
           });
         }
 
-        // Class teacher (class-wide, records attendance, reads every subject).
+        // Class teacher: class-wide oversight AND teaches a foundation subject
+        // to their own class (a class teacher always teaches a subject).
+        const ctSubjectId = (
+          await expectJson<{ id: string }>(
+            await call("people.subject-create", {
+              cookie: adminCookie,
+              body: { departmentId, name: "Communication Skills", code: `COMM-${klass.code}` },
+            }),
+            [201],
+            `ct subject ${klass.code}`,
+          )
+        ).id;
+        subjectIds.set("COMM", ctSubjectId);
         const classTeacherCookie = await provisionTeacher(
           stack,
           adminCookie,
@@ -955,12 +967,14 @@ async function main(): Promise<void> {
           klass.classTeacher.displayName,
           classId,
           { kind: "class_teacher" },
+          ctSubjectId,
         );
+        subjectTeacherCookies.set("COMM", classTeacherCookie);
         credentials.push({
           role: "class_teacher",
           username: klass.classTeacher.username,
           password: TEACHER_PASSWORD,
-          scope: `${klass.name} (all subjects)`,
+          scope: `${klass.name} — class teacher + teaches Communication Skills`,
         });
 
         // Students → enrol in the roster section.
@@ -1209,6 +1223,8 @@ async function provisionTeacher(
   displayName: string,
   classId: string,
   assignment: { kind: "subject_teacher" | "class_teacher"; subjectId?: string },
+  /** A class teacher ALSO teaches a subject — pass it to add a second assignment. */
+  extraSubjectId?: string,
 ): Promise<string> {
   const created = await stack.call("identity.user-create", {
     cookie: adminCookie,
@@ -1248,6 +1264,15 @@ async function provisionTeacher(
     },
   });
   await expectJson(assignmentRes, [201], `assignment ${username}`);
+  if (extraSubjectId !== undefined) {
+    // A class teacher also teaches a subject to their class — a second assignment.
+    const extra = await stack.call("people.assignment-create", {
+      cookie: adminCookie,
+      params: { teacherId },
+      body: { classId, subjectId: extraSubjectId, kind: "subject_teacher", academicYear: YEAR },
+    });
+    await expectJson(extra, [201], `extra assignment ${username}`);
+  }
   return login(stack, username, TEACHER_PASSWORD);
 }
 
@@ -1273,7 +1298,7 @@ function attendanceDays(): string[] {
 /** Student 0 misses ~40% of days (low-attendance flag); others attend reliably. */
 function attendanceStatus(studentIndex: number, dayIndex: number): Slot["status"] {
   if (studentIndex === 0) return dayIndex % 5 < 2 ? "absent" : "present";
-  if (studentIndex === 1 && dayIndex % 7 === 3) return "late";
+  if (studentIndex === 1 && dayIndex % 7 === 3) return "excused";
   return dayIndex % 11 === 6 ? "absent" : "present";
 }
 

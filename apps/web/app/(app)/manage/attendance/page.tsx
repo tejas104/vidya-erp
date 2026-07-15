@@ -7,7 +7,7 @@ import { PageHeader } from "@/ui/PageHeader";
 import { StudentDrawer, type DrawerStudent } from "@/ui/StudentDrawer";
 
 export const dynamic = "force-dynamic";
-const STATUSES: AttendanceStatus[] = ["present", "absent", "late", "excused"];
+const STATUSES: AttendanceStatus[] = ["present", "absent", "excused"];
 const AVATARS = [
   "linear-gradient(140deg,#6B7BFF,#4A5BD8)",
   "linear-gradient(140deg,#F59E0B,#D97706)",
@@ -145,7 +145,7 @@ export default function AttendancePage() {
                 <div className="att-counts">
                   <span><b>{presentN}</b> present</span>
                   <span className="a"><b>{absentN}</b> absent</span>
-                  {otherN > 0 ? <span><b>{otherN}</b> late/excused</span> : null}
+                  {otherN > 0 ? <span><b>{otherN}</b> excused</span> : null}
                 </div>
                 <button
                   type="button"
