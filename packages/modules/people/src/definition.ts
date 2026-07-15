@@ -267,11 +267,20 @@ const routes: RouteSpec[] = [
     module: MODULE_NAME,
     method: "POST",
     path: "/api/v1/people/students",
-    summary: "Create a student (admin)",
+    summary: "Create a student (admin college-wide; class teacher into their own section)",
+    description:
+      "Admin creates a college-anchored student. A class teacher passes sectionId to add a student straight into THEIR section (create + enroll, scope-checked against that section — 403 for any other). Records are never hard-deleted.",
     tags: ["people-students"],
-    auth: ADMIN_ONLY,
+    auth: ADMIN_OR_CLASS_TEACHER,
     request: {
-      body: z.object({ collegeId: idSchema, admissionNo: codeSchema, fullName: nameSchema }),
+      body: z.object({
+        collegeId: idSchema,
+        admissionNo: codeSchema,
+        fullName: nameSchema,
+        /** When present, the student is enrolled here on creation (class-teacher add). */
+        sectionId: idSchema.optional(),
+        academicYear: academicYearSchema.optional(),
+      }),
     },
     audit: { action: "people.student-created", resourceType: "student" },
     responses: {
@@ -300,11 +309,11 @@ const routes: RouteSpec[] = [
     module: MODULE_NAME,
     method: "PATCH",
     path: "/api/v1/people/students/{studentId}",
-    summary: "Update a student — rename or move through the lifecycle (admin)",
+    summary: "Update a student — rename, edit contact, or move the lifecycle (admin; class teacher for their own section)",
     description:
-      "Status transitions are audited and the record is never destroyed (TC / marksheet / audit retention). Moving to backlog / year_back / transferred / dropped / alumni is how a student's lifecycle is recorded.",
+      "The class teacher is a scoped sub-admin: they may edit and change the status of students in THEIR section only (the ScopeChecker enforces the section — 403 for any other). Status transitions are audited and the record is never destroyed (TC / marksheet / audit retention).",
     tags: ["people-students"],
-    auth: ADMIN_ONLY,
+    auth: ADMIN_OR_CLASS_TEACHER,
     request: {
       params: z.object({ studentId: idSchema }),
       body: z

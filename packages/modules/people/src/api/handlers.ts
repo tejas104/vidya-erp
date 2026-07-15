@@ -346,24 +346,56 @@ export function createPeopleHandlers(deps: PeopleHandlerDeps): Record<string, Ro
 
   const studentCreate: RouteHandler = async (ctx) => {
     const principal = ctx.principal as Principal;
-    const body = ctx.request.body as { collegeId: string; admissionNo: string; fullName: string };
+    const body = ctx.request.body as {
+      collegeId: string;
+      admissionNo: string;
+      fullName: string;
+      sectionId?: string;
+      academicYear?: string;
+    };
     if ((await deps.org.getCollege(body.collegeId)) === null) {
       return notFound();
+    }
+    // A bare create is college-anchored (admin). With a sectionId the create is
+    // scoped to THAT section — a class teacher may add a student into their own
+    // section (create + enroll), and is denied (403) for any other section.
+    let sectionPath = null;
+    if (body.sectionId !== undefined) {
+      sectionPath = await deps.org.pathForSection(body.sectionId);
+      if (sectionPath === null || sectionPath.collegeId !== body.collegeId) {
+        return notFound();
+      }
     }
     const scope = checkScope(deps.scopeChecker, ctx, principal, "create", {
       module: "people",
       resourceType: "student",
-      org: { collegeId: body.collegeId },
+      org: sectionPath ?? { collegeId: body.collegeId },
     });
     if (!scope.ok) {
       return scope.result;
     }
     try {
-      const created = await deps.people.createStudent(body);
+      const created = await deps.people.createStudent({
+        collegeId: body.collegeId,
+        admissionNo: body.admissionNo,
+        fullName: body.fullName,
+      });
+      let enrollment = null;
+      if (body.sectionId !== undefined && body.academicYear !== undefined) {
+        const result = await deps.people.enroll({
+          studentId: created.id,
+          sectionId: body.sectionId,
+          academicYear: body.academicYear,
+        });
+        enrollment = result?.enrollment ?? null;
+      }
       return {
         status: 201,
-        body: studentView(created, null),
-        audit: { resourceId: created.id, details: { admissionNo: created.admissionNo, collegeId: created.collegeId } },
+        body: studentView(created, enrollment),
+        audit: {
+          resourceId: created.id,
+          details: { admissionNo: created.admissionNo, collegeId: created.collegeId, sectionId: body.sectionId ?? null },
+        },
       };
     } catch (error) {
       return mapKnownErrors(error) ?? Promise.reject(error);

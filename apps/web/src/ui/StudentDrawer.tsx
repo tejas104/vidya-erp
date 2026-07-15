@@ -35,16 +35,26 @@ function classesToReach75(attended: number, total: number): number {
  * this section" grant is authored server-side (see the page).
  * There is deliberately NO delete action; status change only.
  */
+const LIFECYCLE: { value: string; label: string }[] = [
+  { value: "active", label: "Active" },
+  { value: "backlog", label: "Backlog (ATKT)" },
+  { value: "year_back", label: "Year back" },
+  { value: "transferred", label: "Transferred (TC)" },
+  { value: "dropped", label: "Dropped" },
+  { value: "alumni", label: "Alumni" },
+];
+
 export function StudentDrawer({
   student,
   canManage,
   onClose,
-  onChangeStatus,
+  onSetStatus,
 }: {
   student: DrawerStudent | null;
   canManage: boolean;
   onClose: () => void;
-  onChangeStatus?: (student: DrawerStudent) => void;
+  /** Class teacher / admin changes the student's lifecycle status (2.4). */
+  onSetStatus?: (status: string) => void;
 }) {
   const open = student !== null;
   useEffect(() => {
@@ -134,17 +144,24 @@ export function StudentDrawer({
               </div>
             ) : null}
 
-            <div className="cw-dr-actions">
-              <button className="btn" disabled title="contact fields not wired yet">
-                Edit contact
-              </button>
-              <button className="btn" onClick={() => onChangeStatus?.(student)}>
-                Change status
-              </button>
-              <button className="btn" disabled title="documents not wired yet">
-                Documents
-              </button>
-            </div>
+            {canManage ? (
+              <div className="cw-dr-actions" style={{ alignItems: "flex-end" }}>
+                <label className="field" style={{ margin: 0, flex: 1, minWidth: 160 }}>
+                  <span style={{ fontSize: 12 }}>Change status (audited, never deleted)</span>
+                  <select value={student.status} onChange={(e) => onSetStatus?.(e.target.value)}>
+                    {LIFECYCLE.map((o) => (
+                      <option key={o.value} value={o.value}>{o.label}</option>
+                    ))}
+                    {LIFECYCLE.every((o) => o.value !== student.status) ? (
+                      <option value={student.status}>{student.status}</option>
+                    ) : null}
+                  </select>
+                </label>
+                <button className="btn" disabled title="documents upload is the next slice">
+                  Documents
+                </button>
+              </div>
+            ) : null}
             <p className="cw-note">
               {canManage
                 ? "You see this because you are the class teacher of this section. Subject teachers see only their own subject's attendance and marks. Every edit is audited — records are never deleted, only status changes."

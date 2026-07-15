@@ -2,8 +2,10 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   api,
+  ApiError,
   currentAcademicYear,
   type RosterCard,
+  type StudentStatus,
   type StudentView,
   type TtToday,
 } from "@/ui/api";
@@ -13,6 +15,9 @@ import { TodayTimeline } from "@/ui/TodayTimeline";
 import { StudentDrawer, type DrawerStudent } from "@/ui/StudentDrawer";
 import { Skeleton } from "@/ui/Skeleton";
 import { EmptyState } from "@/ui/EmptyState";
+import { Modal } from "@/ui/Modal";
+import { Field } from "@/ui/Field";
+import { Button } from "@/ui/Button";
 import { useToast } from "@/ui/Toast";
 
 export const dynamic = "force-dynamic";
@@ -63,6 +68,12 @@ export default function ClassWorkspacePage() {
   const [filter, setFilter] = useState<Filter>("all");
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState<DrawerStudent | null>(null);
+  const [reloadTick, setReloadTick] = useState(0);
+  const [collegeId, setCollegeId] = useState("");
+  const [adding, setAdding] = useState(false);
+  const [newAdm, setNewAdm] = useState("");
+  const [newName, setNewName] = useState("");
+  const [saving, setSaving] = useState(false);
 
   // SCOPE STUB — real rule is "holds a class_teacher grant on THIS section",
   // enforced server-side. Author that check; this role flag is a placeholder.
@@ -94,6 +105,7 @@ export default function ClassWorkspacePage() {
         }
         setOpts(list);
         api.ttMyToday(year).then((t) => alive && setToday(t)).catch(() => undefined);
+        api.colleges().then((c) => alive && setCollegeId(c.colleges[0]?.id ?? "")).catch(() => undefined);
       } catch {
         if (alive) setError("Couldn't load your classes.");
       }
@@ -123,7 +135,44 @@ export default function ClassWorkspacePage() {
     return () => {
       alive = false;
     };
-  }, [opt, year]);
+  }, [opt, year, reloadTick]);
+
+  async function setStudentStatus(status: string) {
+    if (!open) return;
+    try {
+      await api.updateStudent(open.studentId, { status: status as StudentStatus });
+      toast.show(`${open.name} → ${status}.`, "good");
+      setOpen((cur) => (cur && cur.studentId === open.studentId ? { ...cur, status } : cur));
+      setReloadTick((n) => n + 1); // refresh cards/flags
+    } catch (caught) {
+      toast.show(caught instanceof ApiError ? caught.message : "Couldn't change status.", "danger");
+    }
+  }
+
+  async function addStudent() {
+    if (!opt || collegeId === "" || newAdm.trim() === "" || newName.trim() === "") return;
+    setSaving(true);
+    try {
+      // sectionId scopes the create to this section — a class teacher may add
+      // into their own; the server 403s for any other (2.4).
+      await api.createStudent({
+        collegeId,
+        admissionNo: newAdm.trim(),
+        fullName: newName.trim(),
+        sectionId: opt.sectionId,
+        academicYear: year,
+      });
+      toast.show(`${newName.trim()} added to ${opt.className} · ${opt.sectionName}.`, "good");
+      setAdding(false);
+      setNewAdm("");
+      setNewName("");
+      setReloadTick((n) => n + 1);
+    } catch (caught) {
+      toast.show(caught instanceof ApiError ? caught.message : "Couldn't add the student.", "danger");
+    } finally {
+      setSaving(false);
+    }
+  }
 
   // --- rings (class-level, derived from the roster) ---
   const withPct = (cards ?? []).filter((c) => c.att?.pct != null);
@@ -287,6 +336,11 @@ export default function ClassWorkspacePage() {
               {chip("short", "Short", shortN)}
               {chip("backlog", "Backlog", backlogN)}
               {chip("yb", "Year-back", (cards ?? []).filter((c) => c.student.status === "year_back").length)}
+              {canManage ? (
+                <button type="button" className="btn" style={{ marginLeft: "auto" }} onClick={() => setAdding(true)}>
+                  + Add student
+                </button>
+              ) : null}
             </div>
 
             {cards === null ? (
@@ -329,10 +383,34 @@ export default function ClassWorkspacePage() {
         student={open}
         canManage={canManage}
         onClose={() => setOpen(null)}
-        onChangeStatus={() =>
-          toast.show("Status changes live on the Students desk (admin); class-teacher scope is step 2.4.", "info")
-        }
+        onSetStatus={(status) => void setStudentStatus(status)}
       />
+
+      <Modal
+        open={adding}
+        onClose={() => setAdding(false)}
+        title={`Add student — ${opt?.className ?? ""} · ${opt?.sectionName ?? ""}`}
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setAdding(false)}>Cancel</Button>
+            <Button onClick={() => void addStudent()} loading={saving} disabled={newAdm.trim() === "" || newName.trim() === ""}>
+              Add student
+            </Button>
+          </>
+        }
+      >
+        <div style={{ display: "grid", gap: "var(--space-3)" }}>
+          <p style={{ margin: 0, fontSize: 13, color: "var(--ink-2)" }}>
+            Added straight into your section and enrolled for {year}. The record is audited and never deleted.
+          </p>
+          <Field label="Admission no." htmlFor="add-adm">
+            <input id="add-adm" value={newAdm} onChange={(e) => setNewAdm(e.target.value)} placeholder="e.g. FYCS-015" />
+          </Field>
+          <Field label="Full name" htmlFor="add-name">
+            <input id="add-name" value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Student name" />
+          </Field>
+        </div>
+      </Modal>
     </>
   );
 }

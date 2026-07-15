@@ -34,14 +34,23 @@ describe("people module definition (contract conformance)", () => {
     }
   });
 
-  it("gates writes on the admin role (enrollment additionally on class_teacher)", () => {
+  it("gates writes on admin; the class teacher is a scoped sub-admin over student add/edit/enroll (2.4)", () => {
+    // The ScopeChecker enforces the section for these; the role gate only
+    // mirrors who could ever pass (scope-traces cover the section boundary).
+    const CLASS_TEACHER_WRITABLE = new Set([
+      "people.student-create",
+      "people.student-update",
+      "people.student-enroll",
+    ]);
     for (const route of peopleModuleDefinition.routes) {
       if (!STATE_CHANGING_METHODS.has(route.method) || route.auth.public) {
         continue;
       }
       const roles = route.auth.requirement.rolesAnyOf ?? [];
       expect(roles, route.id).toContain("admin");
-      if (route.id !== "people.student-enroll") {
+      if (CLASS_TEACHER_WRITABLE.has(route.id)) {
+        expect(roles, route.id).toEqual(["admin", "class_teacher"]);
+      } else {
         expect(roles, route.id).toEqual(["admin"]);
       }
     }

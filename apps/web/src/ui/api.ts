@@ -632,7 +632,7 @@ export const api = {
   deleteOrgUnit: (unitType: OrgUnitType, unitId: string) =>
     del<{ ok: true }>(`/api/v1/people/org/${unitType}/${encodeURIComponent(unitId)}`),
   // people — students
-  createStudent: (body: { collegeId: string; admissionNo: string; fullName: string }) =>
+  createStudent: (body: { collegeId: string; admissionNo: string; fullName: string; sectionId?: string; academicYear?: string }) =>
     post<StudentView>("/api/v1/people/students", body),
   updateStudent: (
     studentId: string,
