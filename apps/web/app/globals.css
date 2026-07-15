@@ -1333,13 +1333,26 @@ a {
 }
 
 /* attendance as flashcards: tap the header for the student, segment to mark */
-.att-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
-.att-card { display: grid; gap: 12px; cursor: default; }
-.att-card::before { background: var(--rule); }
-.att-card[data-status="present"]::before { background: var(--good); }
-.att-card[data-status="absent"]::before { background: var(--bad); }
-.att-card[data-status="late"]::before { background: var(--warn); }
-.att-card[data-status="excused"]::before { background: var(--ink-3); }
+/* sleek, minimalist attendance card: flat surface, a whisper of status tint,
+ * and a modern segmented "track" control (raised active pill). */
+.att-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(248px, 1fr)); gap: 10px; }
+.att-card {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--rule);
+  border-radius: 16px;
+  background: var(--surface);
+  transition: background 0.16s ease, border-color 0.16s ease;
+}
+.att-card[data-status="absent"] {
+  background: color-mix(in srgb, var(--bad-soft) 70%, var(--surface));
+  border-color: color-mix(in srgb, var(--bad) 22%, var(--rule));
+}
+.att-card[data-status="excused"] {
+  background: color-mix(in srgb, var(--warn-soft) 55%, var(--surface));
+  border-color: color-mix(in srgb, var(--warn) 18%, var(--rule));
+}
 .att-card-head {
   display: flex;
   gap: 11px;
@@ -1353,11 +1366,41 @@ a {
   text-align: left;
   cursor: pointer;
 }
-.att-card-head:focus-visible { outline: 2px solid var(--brand); outline-offset: 3px; border-radius: 8px; }
+.att-card-head:focus-visible { outline: 2px solid var(--brand); outline-offset: 3px; border-radius: 10px; }
 .att-card-mini { margin-left: auto; text-align: right; flex-shrink: 0; }
-.att-card .att-seg { display: flex; gap: 6px; }
-.att-card .att-seg button { flex: 1; }
-.att-card-info { font-size: 10px; color: var(--ink-3); font-family: var(--font-mono); }
+.att-card .att-seg {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 3px;
+  padding: 3px;
+  background: var(--paper-sunken);
+  border-radius: 13px;
+}
+.att-card .att-seg button {
+  width: auto;
+  height: 44px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ink-3);
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 13px;
+  transition: background 0.14s, color 0.14s, box-shadow 0.14s;
+}
+.att-card .att-seg button[data-on] { background: var(--surface); box-shadow: var(--shadow); }
+.att-card .att-seg button[data-on="present"] { color: var(--good); }
+.att-card .att-seg button[data-on="absent"] { color: var(--bad); }
+.att-card .att-seg button[data-on="excused"] { color: var(--warn); }
+
+/* Print only the fee receipt counterfoil — everything else drops away. */
+@media print {
+  body * { visibility: hidden !important; }
+  .receipt-print, .receipt-print * { visibility: visible !important; }
+  .receipt-print { position: absolute; inset: 0; margin: 24px; box-shadow: none !important; }
+  .ui-scrim { background: none !important; backdrop-filter: none !important; }
+}
 
 /* --- the shell --- */
 .shell { display: flex; min-height: 100dvh; }

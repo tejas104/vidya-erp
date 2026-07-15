@@ -161,7 +161,7 @@ export default function AttendancePage() {
                   const cur = marks[s.id] ?? "present";
                   const pct = att.get(s.id)?.pct ?? null;
                   return (
-                    <div key={s.id} className="card cw-card att-card" data-status={cur}>
+                    <div key={s.id} className="att-card" data-status={cur}>
                       <button type="button" className="att-card-head" onClick={() => openInfo(s, idx)} aria-label={`${s.fullName} — view record`}>
                         <span className="cw-photo" style={{ background: AVATARS[idx % AVATARS.length] }} aria-hidden="true">
                           {initials(s.fullName)}
@@ -187,8 +187,9 @@ export default function AttendancePage() {
                             aria-label={st}
                             title={st}
                             onClick={() => setMarks((m) => ({ ...m, [s.id]: st }))}
+                            style={{ textTransform: "capitalize" }}
                           >
-                            {st[0]!.toUpperCase()}
+                            {st}
                           </button>
                         ))}
                       </div>
