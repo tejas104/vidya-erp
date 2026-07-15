@@ -59,7 +59,7 @@ describe("class workspace — flashcards", () => {
     render(<ClassWorkspacePage />);
     expect(await screen.findByText("Aarav Sharma")).toBeInTheDocument();
     expect(screen.getByText("Sanika Kulkarni")).toBeInTheDocument();
-    expect(screen.getByText("90%")).toBeInTheDocument();
+    expect(screen.getByText("90")).toBeInTheDocument(); // attendance ring reads the number
     expect(api.rosterAttendance).toHaveBeenCalledWith("sec_a", { academicYear: "2026-27", subjectId: "sub_ds" });
   });
 

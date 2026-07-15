@@ -1191,6 +1191,13 @@ a {
 .cw-mini-k { font-size: 9.5px; color: var(--ink-3); font-family: var(--font-mono); letter-spacing: 0.05em; margin-top: 2px; }
 .cw-bar { height: 4px; border-radius: 3px; background: var(--line-2); overflow: hidden; margin-bottom: 10px; }
 .cw-bar i { display: block; height: 100%; border-radius: 3px; }
+/* redesigned card: a mini attendance ring replaces the flat bar */
+.cw-ring-mini { position: relative; width: 42px; height: 42px; flex-shrink: 0; margin-left: auto; }
+.cw-ring-mini svg { transform: rotate(-90deg); display: block; }
+.cw-ring-mini span { position: absolute; inset: 0; display: grid; place-items: center; font-family: var(--font-mono); font-size: 11px; font-weight: 600; letter-spacing: -0.03em; }
+.cw-card-idwrap { min-width: 0; }
+.cw-card--v2 .cw-card-top { margin-bottom: 10px; }
+.cw-card--v2::before { width: 4px; border-radius: 4px 0 0 4px; }
 .cw-flags { display: flex; gap: 4px; flex-wrap: wrap; min-height: 20px; }
 .cw-badge { font-size: 10.5px; padding: 2px 7px; border-radius: 6px; font-weight: 600; letter-spacing: -0.01em; }
 .cw-badge.short { color: var(--bad); background: var(--bad-soft); }
