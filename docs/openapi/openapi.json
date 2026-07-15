@@ -16500,7 +16500,7 @@
     },
     "/api/v1/fees/collections/summary": {
       "get": {
-        "summary": "Collection totals by mode over a date range (accountant/admin)",
+        "summary": "Collection totals by mode over a date range (accountant/admin/principal)",
         "description": "**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
         "tags": [
           "fees"
@@ -16608,7 +16608,7 @@
     },
     "/api/v1/fees/defaulters": {
       "get": {
-        "summary": "Students with outstanding dues (accountant/admin)",
+        "summary": "Students with outstanding dues (accountant/admin/principal)",
         "description": "**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
         "tags": [
           "fees"

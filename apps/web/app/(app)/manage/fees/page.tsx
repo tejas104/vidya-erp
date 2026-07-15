@@ -93,6 +93,8 @@ export default function FeesPage() {
   const [confirmWaive, setConfirmWaive] = useState(false);
   // tabs (Setup is admin-only; the server enforces regardless)
   const [isAdmin, setIsAdmin] = useState(false);
+  // accountant/admin manage; the principal is a read-only fee viewer.
+  const [canManage, setCanManage] = useState(false);
   const [tab, setTab] = useState("counter");
   // setup tab
   const [classes, setClasses] = useState<ClassOption[]>([]);
@@ -113,7 +115,12 @@ export default function FeesPage() {
   const [summary, setSummary] = useState<FeeCollectionSummary | null>(null);
 
   useEffect(() => {
-    api.session().then((me) => setIsAdmin(me.roles.includes("admin"))).catch(() => undefined);
+    api.session().then((me) => {
+      setIsAdmin(me.roles.includes("admin"));
+      const manage = me.roles.includes("admin") || me.roles.includes("accountant");
+      setCanManage(manage);
+      if (!manage) setTab("collections"); // principal lands on the read-only overview
+    }).catch(() => undefined);
     api.colleges()
       .then(async ({ colleges }) => {
         const college = colleges[0];
@@ -327,16 +334,19 @@ export default function FeesPage() {
     { key: "status", header: "Status", render: (row) => <StatusBadge invoice={row} today={today} /> },
     {
       key: "actions", header: "", align: "right",
-      render: (row) => (
-        <span style={{ display: "inline-flex", gap: 8 }}>
-          {row.status !== "waived" && row.status !== "paid" ? (
-            <Button variant="ghost" onClick={() => openPayment(row)}>Take payment</Button>
-          ) : null}
-          {row.status !== "waived" ? (
-            <Button variant="ghost" onClick={() => openAdjustment(row)}>Adjust</Button>
-          ) : null}
-        </span>
-      ),
+      render: (row) =>
+        canManage ? (
+          <span style={{ display: "inline-flex", gap: 8 }}>
+            {row.status !== "waived" && row.status !== "paid" ? (
+              <Button variant="ghost" onClick={() => openPayment(row)}>Take payment</Button>
+            ) : null}
+            {row.status !== "waived" ? (
+              <Button variant="ghost" onClick={() => openAdjustment(row)}>Adjust</Button>
+            ) : null}
+          </span>
+        ) : (
+          <span className="stat-sub">view only</span>
+        ),
     },
   ];
 
@@ -519,7 +529,10 @@ export default function FeesPage() {
         title={receipt ? "Payment recorded" : `Take payment — ${paying?.studentName ?? ""}`}
         footer={
           receipt ? (
-            <Button onClick={() => setPaying(null)}>Done</Button>
+            <>
+              <Button variant="ghost" onClick={() => window.print()}>Print receipt</Button>
+              <Button onClick={() => setPaying(null)}>Done</Button>
+            </>
           ) : (
             <>
               <Button variant="ghost" onClick={() => setPaying(null)}>Cancel</Button>
@@ -531,7 +544,9 @@ export default function FeesPage() {
         }
       >
         {receipt && paying ? (
-          <Counterfoil payment={receipt} invoice={paying} />
+          <div className="receipt-print">
+            <Counterfoil payment={receipt} invoice={paying} />
+          </div>
         ) : (
           <div style={{ display: "grid", gap: "var(--space-3)" }}>
             <p style={{ margin: 0, fontSize: 13.5, color: "var(--ink-2)" }}>

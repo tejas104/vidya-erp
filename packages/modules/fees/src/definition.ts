@@ -25,6 +25,11 @@ const ADMIN_OR_ACCOUNTANT = {
   public: false as const,
   requirement: { rolesAnyOf: ["admin" as const, "accountant" as const] },
 };
+/** Read-only fee oversight: the principal is a college-wide viewer. */
+const FEES_READERS = {
+  public: false as const,
+  requirement: { rolesAnyOf: ["admin" as const, "accountant" as const, "principal" as const] },
+};
 const STUDENT_ONLY = { public: false as const, requirement: { rolesAnyOf: ["student" as const] } };
 const ANY_AUTHENTICATED = { public: false as const, requirement: {} };
 
@@ -325,9 +330,9 @@ const routes: RouteSpec[] = [
     module: MODULE_NAME,
     method: "GET",
     path: "/api/v1/fees/collections/summary",
-    summary: "Collection totals by mode over a date range (accountant/admin)",
+    summary: "Collection totals by mode over a date range (accountant/admin/principal)",
     tags: ["fees"],
-    auth: ADMIN_OR_ACCOUNTANT,
+    auth: FEES_READERS,
     request: {
       query: z.object({ collegeId: idSchema, from: dateSchema, to: dateSchema }),
     },
@@ -348,9 +353,9 @@ const routes: RouteSpec[] = [
     module: MODULE_NAME,
     method: "GET",
     path: "/api/v1/fees/defaulters",
-    summary: "Students with outstanding dues (accountant/admin)",
+    summary: "Students with outstanding dues (accountant/admin/principal)",
     tags: ["fees"],
-    auth: ADMIN_OR_ACCOUNTANT,
+    auth: FEES_READERS,
     request: { query: z.object({ collegeId: idSchema, academicYear: academicYearSchema }) },
     responses: {
       200: { description: "Outstanding invoices", schema: z.object({ defaulters: z.array(feeInvoiceViewSchema) }) },
