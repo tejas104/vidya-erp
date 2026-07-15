@@ -1,12 +1,18 @@
-import type {
-  AccessAction,
-  Principal,
-  ResourceRef,
-  RouteContext,
-  RouteHandler,
-  RouteResult,
-  ScopeChecker,
+import { randomUUID } from "node:crypto";
+import {
+  type AccessAction,
+  type ObjectStorageClient,
+  type Principal,
+  type ResourceRef,
+  type RouteContext,
+  type RouteHandler,
+  type RouteResult,
+  type ScopeChecker,
+  ensureBucket,
+  getObjectBytes,
+  putObjectBytes,
 } from "@vidya/platform";
+import { DOCUMENT_MAX_BYTES } from "../definition";
 import type { OrgService } from "../service/org-service";
 import { PeopleService, UnknownReferenceError } from "../service/people-service";
 import type { AssignmentsService } from "../service/assignments-service";
@@ -16,6 +22,7 @@ import { DuplicateAssignmentError, DuplicatePersonError, type StudentStatus } fr
 import type {
   PplEnrollmentRow,
   PplImportRow,
+  PplStudentDocumentRow,
   PplStudentRow,
   PplTeacherRow,
 } from "../db/schema";
@@ -28,6 +35,7 @@ export interface PeopleHandlerDeps {
   readonly assignments: AssignmentsService;
   readonly imports: ImportService;
   readonly scopeChecker: ScopeChecker;
+  readonly storage: { readonly client: ObjectStorageClient; readonly bucket: string };
   readonly enqueueImport: (payload: z.infer<typeof importJobPayloadSchema>) => Promise<void>;
 }
 
@@ -893,6 +901,135 @@ export function createPeopleHandlers(deps: PeopleHandlerDeps): Record<string, Ro
     return { status: 200, body: importView(row) };
   };
 
+  // --- student documents (2.5) ---
+  function documentView(row: PplStudentDocumentRow) {
+    return {
+      id: row.id,
+      studentId: row.studentId,
+      kind: row.kind,
+      filename: row.filename,
+      contentType: row.contentType,
+      sizeBytes: row.sizeBytes,
+      uploadedBy: row.uploadedBy,
+      createdAt: row.createdAt.toISOString(),
+    };
+  }
+
+  const documentUpload: RouteHandler = async (ctx) => {
+    const principal = ctx.principal as Principal;
+    const params = ctx.request.params as { studentId: string };
+    const body = ctx.request.body as { kind: string; filename: string; contentType: string; dataBase64: string };
+    const student = await deps.people.getStudent(params.studentId);
+    if (student === null) return notFound();
+    const position = await deps.people.studentOrgPosition(student);
+    if (position.sectionId === undefined || position.departmentId === undefined || position.classId === undefined) {
+      return { status: 422, body: { message: "enrol the student in a section before uploading documents" } };
+    }
+    const scope = checkScope(deps.scopeChecker, ctx, principal, "create", {
+      module: "people",
+      resourceType: "student-document",
+      org: position,
+    });
+    if (!scope.ok) return scope.result;
+    const bytes = Buffer.from(body.dataBase64, "base64");
+    if (bytes.length > DOCUMENT_MAX_BYTES) {
+      return { status: 413, body: { message: "file exceeds the 5 MB limit" } };
+    }
+    const key = `students/${position.collegeId}/${params.studentId}/${randomUUID()}`;
+    await ensureBucket(deps.storage.client, deps.storage.bucket);
+    await putObjectBytes(deps.storage.client, deps.storage.bucket, key, bytes, body.contentType);
+    const row = await deps.people.createDocument({
+      studentId: params.studentId,
+      collegeId: position.collegeId,
+      departmentId: position.departmentId,
+      classId: position.classId,
+      sectionId: position.sectionId,
+      kind: body.kind,
+      filename: body.filename,
+      contentType: body.contentType,
+      sizeBytes: bytes.length,
+      objectKey: key,
+      uploadedBy: principal.id,
+    });
+    return {
+      status: 201,
+      body: documentView(row),
+      audit: { resourceId: row.id, details: { kind: row.kind, filename: row.filename, sizeBytes: row.sizeBytes } },
+    };
+  };
+
+  const documentList: RouteHandler = async (ctx) => {
+    const principal = ctx.principal as Principal;
+    const params = ctx.request.params as { studentId: string };
+    const student = await deps.people.getStudent(params.studentId);
+    if (student === null) return notFound();
+    const position = await deps.people.studentOrgPosition(student);
+    const scope = checkScope(deps.scopeChecker, ctx, principal, "read", {
+      module: "people",
+      resourceType: "student-document",
+      org: position,
+    });
+    if (!scope.ok) return scope.result;
+    const rows = await deps.people.listDocuments(params.studentId);
+    return { status: 200, body: { documents: rows.map(documentView) } };
+  };
+
+  async function documentScopePosition(documentId: string) {
+    const doc = await deps.people.getDocument(documentId);
+    if (doc === null) return null;
+    return {
+      doc,
+      org: {
+        collegeId: doc.collegeId,
+        departmentId: doc.departmentId,
+        classId: doc.classId,
+        sectionId: doc.sectionId,
+      } as ResourceRef["org"],
+    };
+  }
+
+  const documentDownload: RouteHandler = async (ctx) => {
+    const principal = ctx.principal as Principal;
+    const params = ctx.request.params as { documentId: string };
+    const found = await documentScopePosition(params.documentId);
+    if (found === null) return notFound();
+    const scope = checkScope(deps.scopeChecker, ctx, principal, "read", {
+      module: "people",
+      resourceType: "student-document",
+      org: found.org,
+    });
+    if (!scope.ok) return scope.result;
+    const bytes = await getObjectBytes(deps.storage.client, deps.storage.bucket, found.doc.objectKey);
+    return {
+      status: 200,
+      body: bytes,
+      contentType: found.doc.contentType,
+      headers: {
+        "content-disposition": `inline; filename="${found.doc.filename.replace(/[^\w. -]/g, "_")}"`,
+        "cache-control": "no-store",
+      },
+    };
+  };
+
+  const documentDelete: RouteHandler = async (ctx) => {
+    const principal = ctx.principal as Principal;
+    const params = ctx.request.params as { documentId: string };
+    const found = await documentScopePosition(params.documentId);
+    if (found === null) return notFound();
+    const scope = checkScope(deps.scopeChecker, ctx, principal, "delete", {
+      module: "people",
+      resourceType: "student-document",
+      org: found.org,
+    });
+    if (!scope.ok) return scope.result;
+    await deps.people.deleteDocument(params.documentId);
+    return {
+      status: 200,
+      body: { ok: true as const },
+      audit: { resourceId: params.documentId, details: { kind: found.doc.kind, studentId: found.doc.studentId } },
+    };
+  };
+
   return {
     "people.college-list": collegeList,
     "people.college-tree": collegeTree,
@@ -907,6 +1044,10 @@ export function createPeopleHandlers(deps: PeopleHandlerDeps): Record<string, Ro
     "people.student-update": studentUpdate,
     "people.student-link-identity": studentLinkIdentity,
     "people.student-enroll": studentEnroll,
+    "people.document-upload": documentUpload,
+    "people.document-list": documentList,
+    "people.document-download": documentDownload,
+    "people.document-delete": documentDelete,
     "people.section-roster": sectionRoster,
     "people.teacher-create": teacherCreate,
     "people.teacher-get": teacherGet,

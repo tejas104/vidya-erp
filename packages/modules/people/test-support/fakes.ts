@@ -23,6 +23,7 @@ import {
   DuplicateAssignmentError,
   DuplicatePersonError,
   type AssignmentKind,
+  type NewDocument,
   type PeopleRepo,
 } from "../src/repo/people-repo";
 import type { ImportsRepo, RowError } from "../src/repo/imports-repo";
@@ -34,6 +35,7 @@ import type {
   PplEnrollmentRow,
   PplImportRow,
   PplSectionRow,
+  PplStudentDocumentRow,
   PplStudentRow,
   PplSubjectRow,
   PplTeacherRow,
@@ -332,6 +334,22 @@ export class InMemoryPeopleRepo implements PeopleRepo {
       }
     }
     return [...sections];
+  }
+
+  readonly documents = new Map<string, PplStudentDocumentRow>();
+  async createDocument(input: NewDocument): Promise<PplStudentDocumentRow> {
+    const row: PplStudentDocumentRow = { id: `doc_${randomUUID()}`, ...input, createdAt: new Date() };
+    this.documents.set(row.id, row);
+    return row;
+  }
+  async listDocuments(studentId: string): Promise<PplStudentDocumentRow[]> {
+    return [...this.documents.values()].filter((d) => d.studentId === studentId);
+  }
+  async getDocument(id: string): Promise<PplStudentDocumentRow | null> {
+    return this.documents.get(id) ?? null;
+  }
+  async deleteDocument(id: string): Promise<boolean> {
+    return this.documents.delete(id);
   }
 
   async findExistingStaffNos(collegeId: string, staffNos: readonly string[]): Promise<Set<string>> {

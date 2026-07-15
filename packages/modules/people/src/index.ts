@@ -171,6 +171,7 @@ export function createPeopleModule(deps: PeopleModuleDeps): RuntimeModule<People
       assignments,
       imports,
       scopeChecker: deps.scopeChecker,
+      storage: deps.storage,
       enqueueImport: deps.enqueueImport,
     }),
     jobProcessors: {

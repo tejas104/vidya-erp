@@ -54,6 +54,7 @@ async function makeHarness() {
       audit,
     }),
     scopeChecker,
+    storage: { client: {} as PeopleHandlerDeps["storage"]["client"], bucket: "test-bucket" },
     enqueueImport: async (payload) => {
       enqueued.push(payload);
     },

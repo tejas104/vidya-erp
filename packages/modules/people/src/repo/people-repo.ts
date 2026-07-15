@@ -4,14 +4,30 @@ import { newId } from "../ids";
 import {
   pplClasses,
   pplEnrollments,
+  pplStudentDocuments,
   pplStudents,
   pplTeacherAssignments,
   pplTeachers,
   type PplAssignmentRow,
   type PplEnrollmentRow,
+  type PplStudentDocumentRow,
   type PplStudentRow,
   type PplTeacherRow,
 } from "../db/schema";
+
+export interface NewDocument {
+  readonly studentId: string;
+  readonly collegeId: string;
+  readonly departmentId: string;
+  readonly classId: string;
+  readonly sectionId: string;
+  readonly kind: string;
+  readonly filename: string;
+  readonly contentType: string;
+  readonly sizeBytes: number;
+  readonly objectKey: string;
+  readonly uploadedBy: string;
+}
 
 export type AssignmentKind = "subject_teacher" | "class_teacher";
 export type PersonStatus = "active" | "inactive";
@@ -77,6 +93,10 @@ export interface PeopleRepo {
   findExistingStudentIds(studentIds: readonly string[]): Promise<Set<string>>;
   /** Sections holding at least one live enrollment (attendance gap scan, #4). */
   sectionsWithLiveEnrollment(): Promise<string[]>;
+  createDocument(input: NewDocument): Promise<PplStudentDocumentRow>;
+  listDocuments(studentId: string): Promise<PplStudentDocumentRow[]>;
+  getDocument(id: string): Promise<PplStudentDocumentRow | null>;
+  deleteDocument(id: string): Promise<boolean>;
 
   createTeacher(input: {
     collegeId: string;
@@ -235,6 +255,29 @@ export function createPeopleRepo(db: Db): PeopleRepo {
         .from(pplEnrollments)
         .where(eq(pplEnrollments.status, "enrolled"));
       return rows.map((row) => row.sectionId);
+    },
+
+    async createDocument(input) {
+      const rows = await db
+        .insert(pplStudentDocuments)
+        .values({ id: newId("doc"), ...input })
+        .returning();
+      return rows[0]!;
+    },
+    async listDocuments(studentId) {
+      return db
+        .select()
+        .from(pplStudentDocuments)
+        .where(eq(pplStudentDocuments.studentId, studentId))
+        .orderBy(asc(pplStudentDocuments.createdAt));
+    },
+    async getDocument(id) {
+      const rows = await db.select().from(pplStudentDocuments).where(eq(pplStudentDocuments.id, id)).limit(1);
+      return rows[0] ?? null;
+    },
+    async deleteDocument(id) {
+      const rows = await db.delete(pplStudentDocuments).where(eq(pplStudentDocuments.id, id)).returning();
+      return rows.length > 0;
     },
 
     async createTeacher(input) {

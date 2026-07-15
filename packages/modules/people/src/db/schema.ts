@@ -83,6 +83,30 @@ export const pplStudents = pgTable("ppl_students", {
   uniqueIndex("ppl_students_admission_idx").on(table.collegeId, table.admissionNo),
 ]);
 
+/** Student documents (2.5): photo, ID proof, marksheets, TC — stored in object
+ * storage, viewable by admin and the section's class teacher. Org is
+ * denormalized for scope; a "photo" doubles as the student's avatar. */
+export const pplStudentDocuments = pgTable(
+  "ppl_student_documents",
+  {
+    id: text("id").primaryKey(),
+    studentId: text("student_id").notNull(),
+    collegeId: text("college_id").notNull(),
+    departmentId: text("department_id").notNull(),
+    classId: text("class_id").notNull(),
+    sectionId: text("section_id").notNull(),
+    kind: text("kind").notNull(),
+    filename: text("filename").notNull(),
+    contentType: text("content_type").notNull(),
+    sizeBytes: integer("size_bytes").notNull(),
+    objectKey: text("object_key").notNull(),
+    uploadedBy: text("uploaded_by").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("ppl_docs_student_idx").on(table.studentId)],
+);
+export type PplStudentDocumentRow = typeof pplStudentDocuments.$inferSelect;
+
 export const pplTeachers = pgTable("ppl_teachers", {
   id: text("id").primaryKey(),
   collegeId: text("college_id").notNull().references(() => pplColleges.id, { onDelete: "restrict" }),

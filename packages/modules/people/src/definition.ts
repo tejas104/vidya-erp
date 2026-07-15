@@ -70,6 +70,25 @@ export const studentProfilePatchSchema = z.object({
   dob: dobSchema.nullable().optional(),
 });
 
+/** Student documents (2.5). */
+export const documentKindSchema = z.enum(["photo", "id_proof", "marksheet", "tc", "other"]);
+/** Allowed uploads: images + PDF only (standard format). */
+export const DOCUMENT_CONTENT_TYPES = ["image/jpeg", "image/png", "image/webp", "application/pdf"] as const;
+export const documentContentTypeSchema = z.enum(DOCUMENT_CONTENT_TYPES);
+/** ~7M base64 chars ≈ 5 MB decoded; the handler enforces the exact byte cap. */
+export const documentBase64Schema = z.string().min(1).max(7_000_000);
+export const DOCUMENT_MAX_BYTES = 5 * 1024 * 1024;
+export const documentViewSchema = z.object({
+  id: z.string(),
+  studentId: z.string(),
+  kind: documentKindSchema,
+  filename: z.string(),
+  contentType: z.string(),
+  sizeBytes: z.number(),
+  uploadedBy: z.string(),
+  createdAt: z.string(),
+});
+
 export const studentViewSchema = z.object({
   id: z.string(),
   collegeId: z.string(),
@@ -390,6 +409,79 @@ const routes: RouteSpec[] = [
       200: { description: "Enrolled students", schema: z.object({ students: z.array(studentViewSchema) }) },
       403: { description: "Scope check denied", schema: problemSchema },
       404: { description: "No such section", schema: problemSchema },
+    },
+  },
+  {
+    id: "people.document-upload",
+    module: MODULE_NAME,
+    method: "POST",
+    path: "/api/v1/people/students/{studentId}/documents",
+    summary: "Upload a student document — photo / ID / marksheet / TC (admin; class teacher for their section)",
+    description:
+      "Images (JPEG/PNG/WebP) or PDF only, up to 5 MB. Scope-checked at the student's section — a class teacher may upload for their own section (403 otherwise). A 'photo' doubles as the student's avatar.",
+    tags: ["people-students"],
+    auth: ADMIN_OR_CLASS_TEACHER,
+    request: {
+      params: z.object({ studentId: idSchema }),
+      body: z.object({
+        kind: documentKindSchema,
+        filename: z.string().trim().min(1).max(200),
+        contentType: documentContentTypeSchema,
+        dataBase64: documentBase64Schema,
+      }),
+    },
+    audit: { action: "people.document-uploaded", resourceType: "student-document" },
+    responses: {
+      201: { description: "Uploaded", schema: documentViewSchema },
+      403: { description: "Scope check denied", schema: problemSchema },
+      404: { description: "No such student", schema: problemSchema },
+      413: { description: "File exceeds the 5 MB limit", schema: problemSchema },
+    },
+  },
+  {
+    id: "people.document-list",
+    module: MODULE_NAME,
+    method: "GET",
+    path: "/api/v1/people/students/{studentId}/documents",
+    summary: "A student's documents (admin + that section's class teacher)",
+    tags: ["people-students"],
+    auth: ANY_AUTHENTICATED,
+    request: { params: z.object({ studentId: idSchema }) },
+    responses: {
+      200: { description: "Documents", schema: z.object({ documents: z.array(documentViewSchema) }) },
+      403: { description: "Scope check denied", schema: problemSchema },
+      404: { description: "No such student", schema: problemSchema },
+    },
+  },
+  {
+    id: "people.document-download",
+    module: MODULE_NAME,
+    method: "GET",
+    path: "/api/v1/people/documents/{documentId}/download",
+    summary: "Download/view a student document (scope-checked on every fetch)",
+    tags: ["people-students"],
+    auth: ANY_AUTHENTICATED,
+    request: { params: z.object({ documentId: idSchema }) },
+    responses: {
+      200: { description: "The file bytes" },
+      403: { description: "Scope check denied", schema: problemSchema },
+      404: { description: "No such document", schema: problemSchema },
+    },
+  },
+  {
+    id: "people.document-delete",
+    module: MODULE_NAME,
+    method: "DELETE",
+    path: "/api/v1/people/documents/{documentId}",
+    summary: "Remove a student document (admin; class teacher for their section)",
+    tags: ["people-students"],
+    auth: ADMIN_OR_CLASS_TEACHER,
+    request: { params: z.object({ documentId: idSchema }) },
+    audit: { action: "people.document-deleted", resourceType: "student-document" },
+    responses: {
+      200: { description: "Deleted", schema: z.object({ ok: z.literal(true) }) },
+      403: { description: "Scope check denied", schema: problemSchema },
+      404: { description: "No such document", schema: problemSchema },
     },
   },
   {

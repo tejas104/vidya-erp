@@ -1,6 +1,17 @@
 "use client";
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
+import { api, type DocumentKind, type StudentDocument } from "@/ui/api";
 import type { StudentFlags } from "@/ui/StudentCard";
+
+const DOC_KINDS: { value: DocumentKind; label: string }[] = [
+  { value: "photo", label: "Photo" },
+  { value: "id_proof", label: "ID proof" },
+  { value: "marksheet", label: "Marksheet" },
+  { value: "tc", label: "Transfer certificate" },
+  { value: "other", label: "Other" },
+];
+const ACCEPT = "image/jpeg,image/png,image/webp,application/pdf";
+const MAX_BYTES = 5 * 1024 * 1024;
 
 export interface DrawerStudent {
   studentId: string;
@@ -57,6 +68,13 @@ export function StudentDrawer({
   onSetStatus?: (status: string) => void;
 }) {
   const open = student !== null;
+  const [docs, setDocs] = useState<StudentDocument[] | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [docErr, setDocErr] = useState<string | null>(null);
+  const [kind, setKind] = useState<DocumentKind>("photo");
+  const fileRef = useRef<HTMLInputElement>(null);
+  const studentId = student?.studentId;
+
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -66,6 +84,47 @@ export function StudentDrawer({
     return () => document.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
+  useEffect(() => {
+    if (studentId === undefined || !canManage) { setDocs(null); return; }
+    let alive = true;
+    setDocErr(null);
+    api.docList(studentId).then((r) => alive && setDocs(r.documents)).catch(() => alive && setDocs([]));
+    return () => { alive = false; };
+  }, [studentId, canManage]);
+
+  async function upload(file: File) {
+    if (studentId === undefined) return;
+    if (file.size > MAX_BYTES) { setDocErr("File exceeds the 5 MB limit."); return; }
+    setUploading(true);
+    setDocErr(null);
+    try {
+      const dataBase64 = await new Promise<string>((res, rej) => {
+        const fr = new FileReader();
+        fr.onload = () => res((fr.result as string).split(",")[1] ?? "");
+        fr.onerror = () => rej(new Error("read failed"));
+        fr.readAsDataURL(file);
+      });
+      await api.docUpload(studentId, { kind, filename: file.name, contentType: file.type, dataBase64 });
+      setDocs((await api.docList(studentId)).documents);
+    } catch {
+      setDocErr("Upload failed — images (JPEG/PNG/WebP) or PDF only, up to 5 MB.");
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  }
+
+  async function removeDoc(id: string) {
+    if (studentId === undefined) return;
+    try {
+      await api.docDelete(id);
+      setDocs((await api.docList(studentId)).documents);
+    } catch {
+      setDocErr("Couldn't delete that document.");
+    }
+  }
+
+  const photo = docs?.find((d) => d.kind === "photo") ?? null;
   const short = student !== null && student.pct !== null && student.pct < 75;
 
   return (
@@ -83,8 +142,12 @@ export function StudentDrawer({
               <button className="cw-dr-close" onClick={onClose} aria-label="Close">
                 ×
               </button>
-              <div className="cw-dr-photo" style={{ background: student.gradient }}>
-                {student.initials}
+              <div className="cw-dr-photo" style={{ background: student.gradient, overflow: "hidden", padding: 0 }}>
+                {photo ? (
+                  <img src={api.docDownloadUrl(photo.id)} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                ) : (
+                  student.initials
+                )}
               </div>
               <div style={{ fontFamily: "var(--font-mono)", fontSize: 10.5, opacity: 0.75, letterSpacing: "0.06em" }}>
                 {student.rollNo} · {student.section}
@@ -135,12 +198,49 @@ export function StudentDrawer({
                   <dd>{student.dob ?? "—"}</dd>
                   <dt>Fees</dt>
                   <dd style={{ color: "var(--ink-3)" }}>not wired</dd>
-                  <dt>Documents</dt>
-                  <dd style={{ color: "var(--ink-3)" }}>not wired</dd>
                 </dl>
                 <div style={{ marginTop: 11 }}>
                   <span className="cw-lock">🔒 admission no · name · DOB — admin only</span>
                 </div>
+              </div>
+            ) : null}
+
+            {canManage ? (
+              <div className="cw-dr-sec">
+                <h4>Documents</h4>
+                {docs === null ? (
+                  <div className="strip-empty">Loading…</div>
+                ) : docs.length === 0 ? (
+                  <div className="strip-empty">No documents yet.</div>
+                ) : (
+                  <div style={{ display: "grid", gap: 6, marginBottom: 10 }}>
+                    {docs.map((d) => (
+                      <div key={d.id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5 }}>
+                        <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          <span className="cw-badge" style={{ marginRight: 6, background: "var(--line-2)", color: "var(--ink-2)" }}>{d.kind}</span>
+                          {d.filename}
+                        </span>
+                        <a className="linklike" href={api.docDownloadUrl(d.id)} target="_blank" rel="noreferrer">view</a>
+                        <button className="linklike" style={{ color: "var(--bad)", background: "none", border: 0, cursor: "pointer" }} onClick={() => void removeDoc(d.id)}>remove</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                  <select value={kind} onChange={(e) => setKind(e.target.value as DocumentKind)} style={{ font: "inherit", padding: "6px 8px", borderRadius: 8, border: "1px solid var(--rule-strong)", background: "var(--paper-raised)", color: "var(--ink)" }}>
+                    {DOC_KINDS.map((k) => <option key={k.value} value={k.value}>{k.label}</option>)}
+                  </select>
+                  <input
+                    ref={fileRef}
+                    type="file"
+                    accept={ACCEPT}
+                    disabled={uploading}
+                    onChange={(e) => { const f = e.target.files?.[0]; if (f) void upload(f); }}
+                    style={{ fontSize: 12.5, flex: 1, minWidth: 0 }}
+                  />
+                </div>
+                <p className="field-hint" style={{ marginTop: 6 }}>Images or PDF, up to 5 MB. A “photo” becomes the student’s avatar.</p>
+                {docErr ? <p className="formerror" style={{ margin: "4px 0 0" }}>{docErr}</p> : null}
               </div>
             ) : null}
 
@@ -157,9 +257,6 @@ export function StudentDrawer({
                     ) : null}
                   </select>
                 </label>
-                <button className="btn" disabled title="documents upload is the next slice">
-                  Documents
-                </button>
               </div>
             ) : null}
             <p className="cw-note">

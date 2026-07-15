@@ -41,6 +41,8 @@ describe("people module definition (contract conformance)", () => {
       "people.student-create",
       "people.student-update",
       "people.student-enroll",
+      "people.document-upload",
+      "people.document-delete",
     ]);
     for (const route of peopleModuleDefinition.routes) {
       if (!STATE_CHANGING_METHODS.has(route.method) || route.auth.public) {

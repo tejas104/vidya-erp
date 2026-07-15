@@ -195,6 +195,17 @@ export interface OrgTree {
     subjects: SubjectView[];
   })[];
 }
+export type DocumentKind = "photo" | "id_proof" | "marksheet" | "tc" | "other";
+export interface StudentDocument {
+  id: string;
+  studentId: string;
+  kind: DocumentKind;
+  filename: string;
+  contentType: string;
+  sizeBytes: number;
+  uploadedBy: string;
+  createdAt: string;
+}
 export type StudentStatus =
   | "active" | "inactive" | "backlog" | "year_back" | "transferred" | "dropped" | "alumni";
 export interface StudentProfile {
@@ -632,6 +643,13 @@ export const api = {
   deleteOrgUnit: (unitType: OrgUnitType, unitId: string) =>
     del<{ ok: true }>(`/api/v1/people/org/${unitType}/${encodeURIComponent(unitId)}`),
   // people — students
+  // student documents (2.5)
+  docList: (studentId: string) =>
+    get<{ documents: StudentDocument[] }>(`/api/v1/people/students/${encodeURIComponent(studentId)}/documents`),
+  docUpload: (studentId: string, body: { kind: DocumentKind; filename: string; contentType: string; dataBase64: string }) =>
+    post<StudentDocument>(`/api/v1/people/students/${encodeURIComponent(studentId)}/documents`, body),
+  docDownloadUrl: (documentId: string) => `/api/v1/people/documents/${encodeURIComponent(documentId)}/download`,
+  docDelete: (documentId: string) => del<{ ok: true }>(`/api/v1/people/documents/${encodeURIComponent(documentId)}`),
   createStudent: (body: { collegeId: string; admissionNo: string; fullName: string; sectionId?: string; academicYear?: string }) =>
     post<StudentView>("/api/v1/people/students", body),
   updateStudent: (

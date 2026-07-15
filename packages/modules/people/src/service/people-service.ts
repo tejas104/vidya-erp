@@ -58,6 +58,20 @@ export class PeopleService {
     return this.deps.repo.updateStudent(id, { identityUserId });
   }
 
+  // --- student documents (2.5) ---
+  createDocument(input: Parameters<PeopleRepo["createDocument"]>[0]) {
+    return this.deps.repo.createDocument(input);
+  }
+  listDocuments(studentId: string) {
+    return this.deps.repo.listDocuments(studentId);
+  }
+  getDocument(id: string) {
+    return this.deps.repo.getDocument(id);
+  }
+  deleteDocument(id: string) {
+    return this.deps.repo.deleteDocument(id);
+  }
+
   getStudentByIdentityUser(identityUserId: string): Promise<PplStudentRow | null> {
     return this.deps.repo.findStudentByIdentityUser(identityUserId);
   }
