@@ -26,10 +26,23 @@ describe("attendance entry", () => {
     // roster appears
     expect(await screen.findByText("Aarav Sharma")).toBeInTheDocument();
     // submit
-    fireEvent.click(screen.getByRole("button", { name: /save attendance/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^save ·/i }));
     await waitFor(() => expect(api.recordAttendance).toHaveBeenCalledTimes(1));
     const body = (api.recordAttendance as ReturnType<typeof vi.fn>).mock.calls[0]![0];
     expect(body.sectionId).toBe("sec_a");
+    expect(body.entries).toEqual([{ studentId: "stu_1", status: "present" }]);
+  });
+
+  it("touch fast path: mark an absentee, then 'All present' resets before save", async () => {
+    render(<AttendancePage />);
+    await screen.findByText("Aarav Sharma");
+    // one tap on the 'absent' target for the row
+    fireEvent.click(screen.getByRole("button", { name: "absent" }));
+    // the fast path: reset everyone to present in one tap
+    fireEvent.click(screen.getByRole("button", { name: /all present/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^save ·/i }));
+    await waitFor(() => expect(api.recordAttendance).toHaveBeenCalledTimes(1));
+    const body = (api.recordAttendance as ReturnType<typeof vi.fn>).mock.calls[0]![0];
     expect(body.entries).toEqual([{ studentId: "stu_1", status: "present" }]);
   });
 });

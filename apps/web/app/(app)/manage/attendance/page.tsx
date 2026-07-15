@@ -68,6 +68,11 @@ export default function AttendancePage() {
     if (saved) toast.show("Attendance saved — recompute analytics to see it on the dashboard.", "good");
   }
 
+  const tally = (st: AttendanceStatus) => roster.filter((s) => (marks[s.id] ?? "present") === st).length;
+  const presentN = tally("present");
+  const absentN = tally("absent");
+  const otherN = roster.length - presentN - absentN;
+
   return (
     <>
       <PageHeader
@@ -97,29 +102,64 @@ export default function AttendancePage() {
             </label>
           </div>
 
-          <div className="card">
-            {roster.length === 0 ? <div className="strip-empty">No students enrolled in this section.</div> : roster.map((s) => (
-              <div key={s.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 0", borderTop: "1px solid var(--rule)" }}>
-                <span><strong>{s.fullName}</strong> <span className="num" style={{ opacity: 0.6 }}>{s.admissionNo}</span></span>
-                <span style={{ display: "flex", gap: 6 }}>
-                  {STATUSES.map((st) => (
-                    <button key={st} type="button"
-                      className={`chip${marks[s.id] === st ? " serious" : ""}`}
-                      style={{ cursor: "pointer", textTransform: "capitalize" }}
-                      aria-pressed={marks[s.id] === st}
-                      onClick={() => setMarks((m) => ({ ...m, [s.id]: st }))}>{st}</button>
-                  ))}
-                </span>
+          {roster.length === 0 ? (
+            <div className="strip-empty">No students enrolled in this section.</div>
+          ) : (
+            <>
+              <div className="att-head">
+                <div className="att-counts">
+                  <span><b>{presentN}</b> present</span>
+                  <span className="a"><b>{absentN}</b> absent</span>
+                  {otherN > 0 ? <span><b>{otherN}</b> late/excused</span> : null}
+                </div>
+                <button
+                  type="button"
+                  className="att-allpresent"
+                  onClick={() => setMarks(Object.fromEntries(roster.map((s) => [s.id, "present" as AttendanceStatus])))}
+                >
+                  All present
+                </button>
               </div>
-            ))}
-          </div>
 
-          <div style={{ display: "flex", gap: 12, alignItems: "center", marginTop: 20 }}>
-            <button className="btn" type="button" disabled={save.phase.name === "saving" || roster.length === 0} onClick={submit}>
-              {save.phase.name === "saving" ? "Saving…" : "Save attendance"}
-            </button>
-            {save.phase.name === "error" ? <span className="formerror" role="alert" style={{ margin: 0 }}>{save.phase.message}</span> : null}
-          </div>
+              <div className="att-list">
+                {roster.map((s) => {
+                  const cur = marks[s.id] ?? "present";
+                  return (
+                    <div key={s.id} className="att-row">
+                      <div className="att-id">
+                        <div className="att-name">{s.fullName}</div>
+                        <div className="att-roll">{s.admissionNo}</div>
+                      </div>
+                      <div className="att-seg" role="group" aria-label={`Attendance for ${s.fullName}`}>
+                        {STATUSES.map((st) => (
+                          <button
+                            key={st}
+                            type="button"
+                            data-on={cur === st ? st : undefined}
+                            aria-pressed={cur === st}
+                            aria-label={st}
+                            title={st}
+                            onClick={() => setMarks((m) => ({ ...m, [s.id]: st }))}
+                          >
+                            {st[0]!.toUpperCase()}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="att-save">
+                <button className="btn" type="button" disabled={save.phase.name === "saving"} onClick={submit}>
+                  {save.phase.name === "saving" ? "Saving…" : `Save · ${presentN}/${roster.length} present`}
+                </button>
+                {save.phase.name === "error" ? (
+                  <span className="formerror" role="alert" style={{ margin: 0 }}>{save.phase.message}</span>
+                ) : null}
+              </div>
+            </>
+          )}
         </>
       )}
     </>
