@@ -161,6 +161,10 @@ export default function ClassWorkspacePage() {
       lastMark: null,
       backlogs: c.student.status === "backlog" ? 1 : 0,
       flags: f,
+      phone: c.student.phone,
+      guardianName: c.student.guardianName,
+      guardianPhone: c.student.guardianPhone,
+      dob: c.student.dob,
     };
     setOpen(base);
     // last mark on demand (subject-scoped by the caller's grant)

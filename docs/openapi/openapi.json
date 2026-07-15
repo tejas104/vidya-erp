@@ -3374,6 +3374,22 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "phone": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "guardianName": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "guardianPhone": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "dob": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "enrollment": {
                       "type": "object",
                       "nullable": true,
@@ -3398,6 +3414,10 @@
                     "fullName",
                     "status",
                     "identityUserId",
+                    "phone",
+                    "guardianName",
+                    "guardianPhone",
+                    "dob",
                     "enrollment"
                   ]
                 }
@@ -3533,6 +3553,22 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "phone": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "guardianName": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "guardianPhone": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "dob": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "enrollment": {
                       "type": "object",
                       "nullable": true,
@@ -3557,6 +3593,10 @@
                     "fullName",
                     "status",
                     "identityUserId",
+                    "phone",
+                    "guardianName",
+                    "guardianPhone",
+                    "dob",
                     "enrollment"
                   ]
                 }
@@ -3673,6 +3713,29 @@
                       "dropped",
                       "alumni"
                     ]
+                  },
+                  "phone": {
+                    "type": "string",
+                    "nullable": true,
+                    "minLength": 3,
+                    "maxLength": 20
+                  },
+                  "guardianName": {
+                    "type": "string",
+                    "nullable": true,
+                    "minLength": 1,
+                    "maxLength": 120
+                  },
+                  "guardianPhone": {
+                    "type": "string",
+                    "nullable": true,
+                    "minLength": 3,
+                    "maxLength": 20
+                  },
+                  "dob": {
+                    "type": "string",
+                    "nullable": true,
+                    "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
                   }
                 }
               }
@@ -3715,6 +3778,22 @@
                       "type": "string",
                       "nullable": true
                     },
+                    "phone": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "guardianName": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "guardianPhone": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "dob": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "enrollment": {
                       "type": "object",
                       "nullable": true,
@@ -3739,6 +3818,10 @@
                     "fullName",
                     "status",
                     "identityUserId",
+                    "phone",
+                    "guardianName",
+                    "guardianPhone",
+                    "dob",
                     "enrollment"
                   ]
                 }
@@ -4005,6 +4088,22 @@
                           "type": "string",
                           "nullable": true
                         },
+                        "phone": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "guardianName": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "guardianPhone": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "dob": {
+                          "type": "string",
+                          "nullable": true
+                        },
                         "enrollment": {
                           "type": "object",
                           "nullable": true,
@@ -4029,6 +4128,10 @@
                         "fullName",
                         "status",
                         "identityUserId",
+                        "phone",
+                        "guardianName",
+                        "guardianPhone",
+                        "dob",
                         "enrollment"
                       ]
                     }
@@ -4174,6 +4277,22 @@
                             "type": "string",
                             "nullable": true
                           },
+                          "phone": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "guardianName": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "guardianPhone": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "dob": {
+                            "type": "string",
+                            "nullable": true
+                          },
                           "enrollment": {
                             "type": "object",
                             "nullable": true,
@@ -4198,6 +4317,10 @@
                           "fullName",
                           "status",
                           "identityUserId",
+                          "phone",
+                          "guardianName",
+                          "guardianPhone",
+                          "dob",
                           "enrollment"
                         ]
                       }

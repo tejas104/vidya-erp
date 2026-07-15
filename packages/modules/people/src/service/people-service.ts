@@ -41,7 +41,14 @@ export class PeopleService {
 
   updateStudent(
     id: string,
-    patch: { fullName?: string; status?: StudentStatus },
+    patch: {
+      fullName?: string;
+      status?: StudentStatus;
+      phone?: string | null;
+      guardianName?: string | null;
+      guardianPhone?: string | null;
+      dob?: string | null;
+    },
   ): Promise<PplStudentRow | null> {
     return this.deps.repo.updateStudent(id, patch);
   }

@@ -1,5 +1,6 @@
 import {
   boolean,
+  date,
   index,
   integer,
   jsonb,
@@ -67,6 +68,12 @@ export const pplStudents = pgTable("ppl_students", {
   admissionNo: text("admission_no").notNull(),
   fullName: text("full_name").notNull(),
   status: text("status").notNull().default("active"),
+  /** Profile depth (2.5): personal + guardian contact, viewable by admin and
+   * the section's class teacher. Photos/documents come via object storage. */
+  phone: text("phone"),
+  guardianName: text("guardian_name"),
+  guardianPhone: text("guardian_phone"),
+  dob: date("dob", { mode: "string" }),
   sourceImportId: text("source_import_id"),
   /** Opaque identity user id (W1 student-portal link) — no cross-module FK. */
   identityUserId: text("identity_user_id"),

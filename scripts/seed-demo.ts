@@ -998,6 +998,21 @@ async function main(): Promise<void> {
           });
           if (enroll.status !== 200) throw new Error(`enroll ${fullName}: ${enroll.status}`);
           studentIds.push(studentId);
+
+          // 2.5 profile depth — personal + guardian contact (demo data).
+          const surname = fullName.split(" ").slice(-1)[0] ?? fullName;
+          const dobYear = 2008 - (klass.code.startsWith("SY") ? 1 : klass.code.startsWith("TY") ? 2 : 0);
+          const profile = await call("people.student-update", {
+            cookie: adminCookie,
+            params: { studentId },
+            body: {
+              phone: `+91 ${9876500000 + i}`,
+              guardianName: `${i % 2 === 0 ? "Mr." : "Mrs."} ${surname}`,
+              guardianPhone: `+91 ${9822000000 + i}`,
+              dob: `${dobYear}-${String((i % 12) + 1).padStart(2, "0")}-${String((i % 27) + 1).padStart(2, "0")}`,
+            },
+          });
+          if (profile.status !== 200) throw new Error(`profile ${fullName}: ${profile.status}`);
           if (portalStudentId === null) {
             portalStudentId = studentId; // the first seeded student gets the demo portal sign-in
             portalStudentName = fullName;

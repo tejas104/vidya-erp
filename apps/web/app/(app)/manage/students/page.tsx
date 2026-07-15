@@ -55,6 +55,11 @@ export default function StudentsPage() {
   const [saving, setSaving] = useState(false);
   const [linking, setLinking] = useState<StudentView | null>(null);
   const [linkUserId, setLinkUserId] = useState("");
+  const [editing, setEditing] = useState<StudentView | null>(null);
+  const [ePhone, setEPhone] = useState("");
+  const [eGuardian, setEGuardian] = useState("");
+  const [eGuardianPhone, setEGuardianPhone] = useState("");
+  const [eDob, setEDob] = useState("");
   const [users, setUsers] = useState<{ id: string; username: string; displayName: string }[]>([]);
 
   useEffect(() => {
@@ -144,6 +149,34 @@ export default function StudentsPage() {
     }
   }
 
+  function openEdit(row: StudentView) {
+    setEditing(row);
+    setEPhone(row.phone ?? "");
+    setEGuardian(row.guardianName ?? "");
+    setEGuardianPhone(row.guardianPhone ?? "");
+    setEDob(row.dob ?? "");
+  }
+
+  async function submitEdit() {
+    if (!editing) return;
+    setSaving(true);
+    try {
+      await api.updateStudent(editing.id, {
+        phone: ePhone.trim() || null,
+        guardianName: eGuardian.trim() || null,
+        guardianPhone: eGuardianPhone.trim() || null,
+        dob: eDob.trim() || null,
+      });
+      toast.show(`${editing.fullName}'s profile updated.`, "good");
+      setEditing(null);
+      await loadRoster();
+    } catch (caught) {
+      toast.show(caught instanceof ApiError ? caught.message : "Couldn't update.", "danger");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function setStatus(student: StudentView, next: StudentStatus) {
     if (next === student.status) return;
     try {
@@ -196,6 +229,7 @@ export default function StudentsPage() {
       align: "right",
       render: (row) => (
         <span style={{ display: "inline-flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+          <Button variant="ghost" onClick={() => openEdit(row)}>Edit</Button>
           <Button variant="ghost" onClick={() => { setLinkUserId(""); setLinking(row); }}>
             {row.identityUserId === null ? "Link sign-in" : "Sign-in ✓"}
           </Button>
@@ -314,6 +348,33 @@ export default function StudentsPage() {
             ))}
           </select>
         </Field>
+      </Modal>
+
+      <Modal
+        open={editing !== null}
+        onClose={() => setEditing(null)}
+        title={`Edit profile — ${editing?.fullName ?? ""}`}
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setEditing(null)}>Cancel</Button>
+            <Button onClick={() => void submitEdit()} loading={saving}>Save profile</Button>
+          </>
+        }
+      >
+        <div style={{ display: "grid", gap: "var(--space-3)" }}>
+          <Field label="Student phone" htmlFor="e-phone">
+            <input id="e-phone" inputMode="tel" value={ePhone} onChange={(e) => setEPhone(e.target.value)} placeholder="+91 …" />
+          </Field>
+          <Field label="Date of birth" htmlFor="e-dob">
+            <input id="e-dob" type="date" value={eDob} onChange={(e) => setEDob(e.target.value)} />
+          </Field>
+          <Field label="Guardian name" htmlFor="e-guardian">
+            <input id="e-guardian" value={eGuardian} onChange={(e) => setEGuardian(e.target.value)} placeholder="Parent / guardian" />
+          </Field>
+          <Field label="Guardian phone" htmlFor="e-gphone">
+            <input id="e-gphone" inputMode="tel" value={eGuardianPhone} onChange={(e) => setEGuardianPhone(e.target.value)} placeholder="+91 …" />
+          </Field>
+        </div>
       </Modal>
     </>
   );

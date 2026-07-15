@@ -63,6 +63,10 @@ function studentView(student: PplStudentRow, enrollment: PplEnrollmentRow | null
     fullName: student.fullName,
     status: student.status,
     identityUserId: student.identityUserId,
+    phone: student.phone,
+    guardianName: student.guardianName,
+    guardianPhone: student.guardianPhone,
+    dob: student.dob,
     enrollment:
       enrollment === null
         ? null
@@ -389,7 +393,14 @@ export function createPeopleHandlers(deps: PeopleHandlerDeps): Record<string, Ro
   const studentUpdate: RouteHandler = async (ctx) => {
     const principal = ctx.principal as Principal;
     const params = ctx.request.params as { studentId: string };
-    const body = ctx.request.body as { fullName?: string; status?: StudentStatus };
+    const body = ctx.request.body as {
+      fullName?: string;
+      status?: StudentStatus;
+      phone?: string | null;
+      guardianName?: string | null;
+      guardianPhone?: string | null;
+      dob?: string | null;
+    };
     const student = await deps.people.getStudent(params.studentId);
     if (student === null) {
       return notFound();

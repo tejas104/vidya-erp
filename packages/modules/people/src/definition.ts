@@ -60,6 +60,16 @@ export const studentStatusSchema = z.enum([
   "alumni",
 ]);
 
+/** Profile depth (2.5): optional personal + guardian contact. */
+export const phoneSchema = z.string().trim().min(3).max(20);
+export const dobSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "ISO date YYYY-MM-DD");
+export const studentProfilePatchSchema = z.object({
+  phone: phoneSchema.nullable().optional(),
+  guardianName: z.string().trim().min(1).max(120).nullable().optional(),
+  guardianPhone: phoneSchema.nullable().optional(),
+  dob: dobSchema.nullable().optional(),
+});
+
 export const studentViewSchema = z.object({
   id: z.string(),
   collegeId: z.string(),
@@ -67,6 +77,10 @@ export const studentViewSchema = z.object({
   fullName: z.string(),
   status: studentStatusSchema,
   identityUserId: z.string().nullable(),
+  phone: z.string().nullable(),
+  guardianName: z.string().nullable(),
+  guardianPhone: z.string().nullable(),
+  dob: z.string().nullable(),
   enrollment: z
     .object({
       sectionId: z.string(),
@@ -295,7 +309,8 @@ const routes: RouteSpec[] = [
       params: z.object({ studentId: idSchema }),
       body: z
         .object({ fullName: nameSchema.optional(), status: studentStatusSchema.optional() })
-        .refine((patch) => patch.fullName !== undefined || patch.status !== undefined, {
+        .merge(studentProfilePatchSchema)
+        .refine((patch) => Object.values(patch).some((v) => v !== undefined), {
           message: "at least one field required",
         }),
     },

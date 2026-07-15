@@ -59,7 +59,15 @@ export interface PeopleRepo {
   findStudentByIdentityUser(identityUserId: string): Promise<PplStudentRow | null>;
   updateStudent(
     id: string,
-    patch: { fullName?: string; status?: StudentStatus; identityUserId?: string | null },
+    patch: {
+      fullName?: string;
+      status?: StudentStatus;
+      identityUserId?: string | null;
+      phone?: string | null;
+      guardianName?: string | null;
+      guardianPhone?: string | null;
+      dob?: string | null;
+    },
   ): Promise<PplStudentRow | null>;
 
   /** Batched existence lookups for the bulk importer. */
@@ -165,6 +173,10 @@ export function createPeopleRepo(db: Db): PeopleRepo {
           ...(patch.fullName !== undefined ? { fullName: patch.fullName } : {}),
           ...(patch.status !== undefined ? { status: patch.status } : {}),
           ...(patch.identityUserId !== undefined ? { identityUserId: patch.identityUserId } : {}),
+          ...(patch.phone !== undefined ? { phone: patch.phone } : {}),
+          ...(patch.guardianName !== undefined ? { guardianName: patch.guardianName } : {}),
+          ...(patch.guardianPhone !== undefined ? { guardianPhone: patch.guardianPhone } : {}),
+          ...(patch.dob !== undefined ? { dob: patch.dob } : {}),
           updatedAt: new Date(),
         })
         .where(eq(pplStudents.id, id))

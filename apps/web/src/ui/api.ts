@@ -197,7 +197,13 @@ export interface OrgTree {
 }
 export type StudentStatus =
   | "active" | "inactive" | "backlog" | "year_back" | "transferred" | "dropped" | "alumni";
-export interface StudentView {
+export interface StudentProfile {
+  phone: string | null;
+  guardianName: string | null;
+  guardianPhone: string | null;
+  dob: string | null;
+}
+export interface StudentView extends StudentProfile {
   id: string; collegeId: string; admissionNo: string; fullName: string;
   status: StudentStatus;
   identityUserId: string | null;
@@ -628,7 +634,10 @@ export const api = {
   // people — students
   createStudent: (body: { collegeId: string; admissionNo: string; fullName: string }) =>
     post<StudentView>("/api/v1/people/students", body),
-  updateStudent: (studentId: string, body: { fullName?: string; status?: StudentStatus }) =>
+  updateStudent: (
+    studentId: string,
+    body: { fullName?: string; status?: StudentStatus; phone?: string | null; guardianName?: string | null; guardianPhone?: string | null; dob?: string | null },
+  ) =>
     patch<StudentView>(`/api/v1/people/students/${encodeURIComponent(studentId)}`, body),
   enrollStudent: (studentId: string, body: { sectionId: string; academicYear: string }) =>
     post<{ enrollmentId: string; previousEnrollmentId: string | null }>(

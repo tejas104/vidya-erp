@@ -21,7 +21,10 @@ const initials = (n: string) => {
   return ((p[0]?.[0] ?? "") + (p.length > 1 ? p[p.length - 1]![0] : "")).toUpperCase() || "·";
 };
 type SectionOpt = { sectionId: string; name: string; className: string };
-type Student = { id: string; fullName: string; admissionNo: string; status: string };
+type Student = {
+  id: string; fullName: string; admissionNo: string; status: string;
+  phone: string | null; guardianName: string | null; guardianPhone: string | null; dob: string | null;
+};
 
 export default function AttendancePage() {
   const year = useMemo(() => currentAcademicYear(), []);
@@ -100,6 +103,10 @@ export default function AttendancePage() {
       lastMark: null,
       backlogs: s.status === "backlog" ? 1 : 0,
       flags: { short: (a?.pct ?? 100) < 75, backlog: s.status === "backlog", yb: s.status === "year_back" },
+      phone: s.phone,
+      guardianName: s.guardianName,
+      guardianPhone: s.guardianPhone,
+      dob: s.dob,
     });
   }
 

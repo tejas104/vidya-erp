@@ -16,6 +16,10 @@ export interface DrawerStudent {
   lastMark: string | null;
   backlogs: number;
   flags: StudentFlags;
+  phone: string | null;
+  guardianName: string | null;
+  guardianPhone: string | null;
+  dob: string | null;
 }
 
 /** classes needed at ≥75% to clear the short-attendance line. */
@@ -111,7 +115,14 @@ export function StudentDrawer({
                 <h4>Class-teacher view</h4>
                 <dl className="cw-dl">
                   <dt>Guardian</dt>
-                  <dd style={{ color: "var(--ink-3)" }}>not wired</dd>
+                  <dd>
+                    {student.guardianName ?? "—"}
+                    {student.guardianPhone ? ` · ${student.guardianPhone}` : ""}
+                  </dd>
+                  <dt>Phone</dt>
+                  <dd>{student.phone ?? "—"}</dd>
+                  <dt>Date of birth</dt>
+                  <dd>{student.dob ?? "—"}</dd>
                   <dt>Fees</dt>
                   <dd style={{ color: "var(--ink-3)" }}>not wired</dd>
                   <dt>Documents</dt>
