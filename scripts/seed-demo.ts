@@ -61,7 +61,8 @@ interface Credential {
   scope: string;
 }
 
-/** The demo tree, as data. The seed walks it to build everything. */
+/** The demo tree, as data. The seed walks it to build everything: one section
+ *  per class (no empty sections), unique staff usernames throughout. */
 const DEPARTMENTS = [
   {
     code: "CSE",
@@ -71,7 +72,7 @@ const DEPARTMENTS = [
       {
         code: "FYCS",
         name: "FY BSc Computer Science",
-        sections: ["A", "B"],
+        sections: ["A"],
         rosterSection: "A", // where students enrol and records are kept
         classTeacher: { username: "demo-ct-fycs", displayName: "Sunil Kulkarni" },
         subjects: [
@@ -84,6 +85,38 @@ const DEPARTMENTS = [
           "Rohan Gupta", "Saanvi Reddy", "Ishaan Khan", "Ananya Bose",
           "Vivaan Joshi", "Aditi Rao", "Arnav Mehta", "Kavya Nair",
           "Reyansh Shah", "Myra Kapoor",
+        ],
+      },
+      {
+        code: "SYCS",
+        name: "SY BSc Computer Science",
+        sections: ["A"],
+        rosterSection: "A",
+        classTeacher: { username: "demo-ct-sycs", displayName: "Deepa Kulkarni" },
+        subjects: [
+          { code: "OOP", name: "Object-Oriented Programming", teacher: { username: "demo-teacher-sycs-oop", displayName: "Rajesh Mhatre" } },
+          { code: "OS", name: "Operating Systems", teacher: { username: "demo-teacher-sycs-os", displayName: "Sunita Kale" } },
+        ],
+        students: [
+          "Aryan Deshmukh", "Isha Kulkarni", "Sai Pawar", "Tanvi Joshi",
+          "Harsh Patil", "Sneha Bhosale", "Aditya Shinde", "Riya Gaikwad",
+          "Karan Jadhav", "Pooja More", "Nikhil Chavan", "Sanika Sawant",
+        ],
+      },
+      {
+        code: "TYCS",
+        name: "TY BSc Computer Science",
+        sections: ["A"],
+        rosterSection: "A",
+        classTeacher: { username: "demo-ct-tycs", displayName: "Prakash Gokhale" },
+        subjects: [
+          { code: "AI", name: "Artificial Intelligence", teacher: { username: "demo-teacher-tycs-ai", displayName: "Manish Kulkarni" } },
+          { code: "CN", name: "Computer Networks", teacher: { username: "demo-teacher-tycs-cn", displayName: "Vaishali Rane" } },
+        ],
+        students: [
+          "Omkar Salunkhe", "Shruti Mane", "Tejas Nikam", "Prachi Wagh",
+          "Rahul Kadam", "Manasi Bhagat", "Yogesh Thorat", "Divya Pandit",
+          "Sameer Dhumal", "Gauri Lokhande",
         ],
       },
     ],
@@ -101,8 +134,43 @@ const DEPARTMENTS = [
         classTeacher: { username: "demo-ct-fyec", displayName: "Latha Krishnan" },
         subjects: [
           { code: "ELEC", name: "Basic Electronics", teacher: { username: "demo-teacher-elec", displayName: "Deepak Joshi" } },
+          { code: "SIG", name: "Signals & Systems", teacher: { username: "demo-teacher-fyec-sig", displayName: "Anil Kamble" } },
         ],
         students: ["Tara Mehta", "Yash Chauhan", "Nisha Pillai", "Arjun Nair", "Zara Sheikh", "Dev Malhotra", "Ira Sinha", "Neel Verma", "Riya Das", "Om Bhat"],
+      },
+      {
+        code: "SYEC",
+        name: "SY BSc Electronics",
+        sections: ["A"],
+        rosterSection: "A",
+        classTeacher: { username: "demo-ct-syec", displayName: "Meena Iyer" },
+        subjects: [
+          { code: "DIG", name: "Digital Circuits", teacher: { username: "demo-teacher-syec-dig", displayName: "Suresh Naik" } },
+        ],
+        students: ["Aditi Menon", "Rohit Bhandari", "Sana Shaikh", "Varun Rao", "Anjali Kulkarni", "Farhan Ali", "Pooja Deshpande", "Kiran Patil"],
+      },
+    ],
+  },
+  {
+    code: "COM",
+    name: "Commerce",
+    hod: { username: "demo-hod-com", displayName: "Dr. Sulbha Deshpande" },
+    classes: [
+      {
+        code: "FYBCOM",
+        name: "FY BCom",
+        sections: ["A"],
+        rosterSection: "A",
+        classTeacher: { username: "demo-ct-fybcom", displayName: "Nandini Rao" },
+        subjects: [
+          { code: "ACC", name: "Financial Accounting", teacher: { username: "demo-teacher-fybcom-acc", displayName: "Girish Kulkarni" } },
+          { code: "ECO", name: "Business Economics", teacher: { username: "demo-teacher-fybcom-eco", displayName: "Sneha Kulkarni" } },
+        ],
+        students: [
+          "Ritika Agarwal", "Mohit Jain", "Sakshi Gupta", "Aman Verma",
+          "Neha Chopra", "Rahul Bansal", "Priyanka Singh", "Karan Malhotra",
+          "Ayesha Khan", "Siddharth Rao", "Tanya Mehta", "Vikas Sharma",
+        ],
       },
     ],
   },
