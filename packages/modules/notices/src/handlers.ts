@@ -59,6 +59,8 @@ export function createNoticesHandlers(deps: NoticesHandlerDeps): Record<string, 
       collegeId: row.collegeId,
       audience: row.audience,
       audienceLabel: await audienceLabel(row.audience),
+      kind: row.kind as "notice" | "holiday" | "exam" | "event",
+      eventDate: row.eventDate,
       title: row.title,
       body: row.body,
       publishAt: row.publishAt.toISOString(),
@@ -72,6 +74,7 @@ export function createNoticesHandlers(deps: NoticesHandlerDeps): Record<string, 
     const principal = ctx.principal as Principal;
     const body = ctx.request.body as {
       collegeId: string; audience: string; title: string; body: string;
+      kind?: "notice" | "holiday" | "exam" | "event"; eventDate?: string;
       publishAt?: string; expiresAt?: string;
     };
     if (!(await deps.directory.collegeExists(body.collegeId))) return notFound("no such college");
@@ -88,6 +91,8 @@ export function createNoticesHandlers(deps: NoticesHandlerDeps): Record<string, 
     const row = await deps.repo.create({
       collegeId: body.collegeId,
       audience: body.audience,
+      kind: body.kind ?? "notice",
+      eventDate: body.eventDate ?? null,
       title: body.title,
       body: body.body,
       publishAt,

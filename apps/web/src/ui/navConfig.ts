@@ -19,6 +19,7 @@ const ALL: Role[] = ["admin", "principal", "hod", "class_teacher", "teacher"];
  */
 export const NAV: NavEntry[] = [
   { href: "/dashboard", label: "Dashboard", icon: "dashboard", group: "Overview", roles: ALL },
+  { href: "/manage/calendar", label: "Calendar", icon: "attendance", group: "Overview", roles: ALL },
   { href: "/portal", label: "My register", icon: "students", group: "My studies", roles: ["student"] },
   { href: "/manage/classes", label: "My Classes", icon: "students", group: "Teaching", roles: ["teacher", "class_teacher", "admin"] },
   { href: "/manage/attendance", label: "Attendance", icon: "attendance", group: "Teaching", roles: ["teacher", "class_teacher", "admin"] },

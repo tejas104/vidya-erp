@@ -16785,6 +16785,19 @@
                     "minLength": 1,
                     "maxLength": 4000
                   },
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "notice",
+                      "holiday",
+                      "exam",
+                      "event"
+                    ]
+                  },
+                  "eventDate": {
+                    "type": "string",
+                    "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                  },
                   "publishAt": {
                     "type": "string",
                     "format": "date-time"
@@ -16824,6 +16837,19 @@
                     "audienceLabel": {
                       "type": "string"
                     },
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "notice",
+                        "holiday",
+                        "exam",
+                        "event"
+                      ]
+                    },
+                    "eventDate": {
+                      "type": "string",
+                      "nullable": true
+                    },
                     "title": {
                       "type": "string"
                     },
@@ -16849,6 +16875,8 @@
                     "collegeId",
                     "audience",
                     "audienceLabel",
+                    "kind",
+                    "eventDate",
                     "title",
                     "body",
                     "publishAt",
@@ -16976,6 +17004,19 @@
                           "audienceLabel": {
                             "type": "string"
                           },
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "notice",
+                              "holiday",
+                              "exam",
+                              "event"
+                            ]
+                          },
+                          "eventDate": {
+                            "type": "string",
+                            "nullable": true
+                          },
                           "title": {
                             "type": "string"
                           },
@@ -17001,6 +17042,8 @@
                           "collegeId",
                           "audience",
                           "audienceLabel",
+                          "kind",
+                          "eventDate",
                           "title",
                           "body",
                           "publishAt",
@@ -17064,6 +17107,19 @@
                           "audienceLabel": {
                             "type": "string"
                           },
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "notice",
+                              "holiday",
+                              "exam",
+                              "event"
+                            ]
+                          },
+                          "eventDate": {
+                            "type": "string",
+                            "nullable": true
+                          },
                           "title": {
                             "type": "string"
                           },
@@ -17089,6 +17145,8 @@
                           "collegeId",
                           "audience",
                           "audienceLabel",
+                          "kind",
+                          "eventDate",
                           "title",
                           "body",
                           "publishAt",

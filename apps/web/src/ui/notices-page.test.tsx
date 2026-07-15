@@ -30,6 +30,7 @@ const tree = {
 function makeNotice(over: Partial<NoticeView>): NoticeView {
   return {
     id: "ntc_1", collegeId: "col_1", audience: "college", audienceLabel: "College-wide",
+    kind: "notice", eventDate: null,
     title: "Sports day", body: "Ground closed after 2pm.", publishAt: "2026-07-10T00:00:00.000Z",
     expiresAt: null, createdBy: "u_adm", createdAt: "2026-07-10T00:00:00.000Z", ...over,
   };

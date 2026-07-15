@@ -23,12 +23,19 @@ const ADMIN_OR_PRINCIPAL = {
 };
 const ANY_AUTHENTICATED = { public: false as const, requirement: {} };
 
+/** notice | holiday | exam | event — colours a calendar entry. */
+export const noticeKindSchema = z.enum(["notice", "holiday", "exam", "event"]);
+export const eventDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "ISO date YYYY-MM-DD");
+
 export const noticeViewSchema = z.object({
   id: z.string(),
   collegeId: z.string(),
   audience: z.string(),
   /** The audience as a human word — "College-wide", "Staff", a department or class name. */
   audienceLabel: z.string(),
+  kind: noticeKindSchema,
+  /** Set when the row is also a calendar entry. */
+  eventDate: z.string().nullable(),
   title: z.string(),
   body: z.string(),
   publishAt: z.string(),
@@ -52,6 +59,10 @@ const routes: RouteSpec[] = [
         audience: audienceSchema,
         title: z.string().trim().min(1).max(160),
         body: z.string().trim().min(1).max(4000),
+        /** notice (default) / holiday / exam / event. */
+        kind: noticeKindSchema.optional(),
+        /** ISO date; set to place this on the academic calendar. */
+        eventDate: eventDateSchema.optional(),
         /** ISO datetime; omitted = live immediately. */
         publishAt: z.string().datetime().optional(),
         /** ISO datetime; omitted = never expires. */

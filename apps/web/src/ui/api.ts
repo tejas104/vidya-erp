@@ -302,11 +302,14 @@ export interface CwkMaterial {
 }
 
 // --- notices ---
+export type NoticeKind = "notice" | "holiday" | "exam" | "event";
 export interface NoticeView {
   id: string;
   collegeId: string;
   audience: string;
   audienceLabel: string;
+  kind: NoticeKind;
+  eventDate: string | null;
   title: string;
   body: string;
   publishAt: string;
@@ -729,6 +732,7 @@ export const api = {
   // --- notices ---
   ntcCreate: (body: {
     collegeId: string; audience: string; title: string; body: string;
+    kind?: NoticeKind; eventDate?: string;
     publishAt?: string; expiresAt?: string;
   }) => post<NoticeView>("/api/v1/notices", body),
   ntcList: (collegeId: string) =>

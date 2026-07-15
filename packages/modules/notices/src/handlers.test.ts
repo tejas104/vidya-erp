@@ -25,7 +25,7 @@ function ctx(p: Principal, input: { params?: unknown; query?: unknown; body?: un
 
 function notice(id: string, audience: string): NoticeRow {
   return {
-    id, collegeId: "col_1", audience, title: `t-${audience}`, body: "b",
+    id, collegeId: "col_1", audience, kind: "notice", eventDate: null, title: `t-${audience}`, body: "b",
     publishAt: new Date("2026-07-10T00:00:00Z"), expiresAt: null, createdBy: "u_adm", createdAt: NOW,
   };
 }

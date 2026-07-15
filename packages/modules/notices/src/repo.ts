@@ -6,6 +6,8 @@ import { ntcNotices, type NoticeRow } from "./db/schema";
 export interface NewNotice {
   readonly collegeId: string;
   readonly audience: string;
+  readonly kind: string;
+  readonly eventDate: string | null;
   readonly title: string;
   readonly body: string;
   readonly publishAt: Date;
@@ -32,6 +34,8 @@ export function createNoticesRepo(db: Db): NoticesRepo {
           id: `ntc_${randomUUID()}`,
           collegeId: input.collegeId,
           audience: input.audience,
+          kind: input.kind,
+          eventDate: input.eventDate,
           title: input.title,
           body: input.body,
           publishAt: input.publishAt,

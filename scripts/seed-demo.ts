@@ -594,7 +594,7 @@ async function main(): Promise<void> {
         console.log("  notices: board already has entries — skipping");
         return;
       }
-      const board: { audience: string; title: string; body: string }[] = [
+      const board: { audience: string; title: string; body: string; kind?: string; eventDate?: string }[] = [
         {
           audience: "college",
           title: "Odd-semester timetable is live",
@@ -610,6 +610,12 @@ async function main(): Promise<void> {
           title: "Unit Test 1 syllabus posted",
           body: "Unit Test 1 covers everything taught through the first week of July. Syllabus details are with your subject teachers.",
         },
+        // --- academic calendar: dated entries (holiday / exam / event) ---
+        { audience: "college", kind: "exam", eventDate: "2026-07-22", title: "Unit Test 1 begins", body: "Unit Test 1 for all FY/SY classes. Timetable on the noticeboard; report to your rooms 10 minutes early." },
+        { audience: "college", kind: "holiday", eventDate: "2026-08-15", title: "Independence Day", body: "The college remains closed. Flag hoisting at 8:00 AM in the main quadrangle." },
+        { audience: "college", kind: "event", eventDate: "2026-08-28", title: "Annual Sports Day", body: "Track and field events at the college ground. Register with your class teacher by 24 August." },
+        { audience: "college", kind: "holiday", eventDate: "2026-09-14", title: "Ganesh Chaturthi", body: "College closed for the festival." },
+        { audience: "college", kind: "exam", eventDate: "2026-10-06", title: "Term 1 examinations", body: "End-of-term examinations begin. Hall tickets are available under Exams." },
       ];
       for (const notice of board) {
         await expectJson(
