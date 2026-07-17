@@ -10,6 +10,8 @@ import {
   type Dashboard,
   type DistributionResponse,
   type NodeRollup,
+  type NoticeKind,
+  type NoticeView,
   type Session,
   type Tile,
   type TtToday,
@@ -73,6 +75,48 @@ function riskSegments(entries: AtRiskEntry[]): { label: string; value: number; t
   ];
 }
 
+// --- teacher dashboard (next-class command card) ---
+const KIND_TONE: Record<NoticeKind, string> = {
+  holiday: "var(--good)",
+  exam: "var(--bad)",
+  event: "var(--brand)",
+  notice: "var(--ink-3)",
+};
+const KIND_SOFT: Record<NoticeKind, string> = {
+  holiday: "var(--good-soft)",
+  exam: "var(--bad-soft)",
+  event: "var(--brand-soft)",
+  notice: "var(--surface-2)",
+};
+
+function hhmmToMin(hhmm: string): number {
+  const [h, m] = hhmm.split(":");
+  return Number(h) * 60 + Number(m ?? 0);
+}
+
+type TtEntry = TtToday["entries"][number];
+interface DaySlot { entry: TtEntry; starts: string | null; startMin: number | null; endMin: number | null; }
+
+/** Splits today's periods into the one to feature (ongoing, else next up) and the rest. */
+function splitDay(today: TtToday | null, now: Date): { featured: DaySlot | null; rest: DaySlot[]; nowMin: number } {
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  if (today === null || today.dayOfWeek === 0 || today.entries.length === 0) return { featured: null, rest: [], nowMin };
+  const slots: DaySlot[] = today.entries
+    .map((entry) => {
+      const p = today.periods.find((pp) => pp.periodNo === entry.periodNo);
+      return { entry, starts: p ? p.starts : null, startMin: p ? hhmmToMin(p.starts) : null, endMin: p ? hhmmToMin(p.ends) : null };
+    })
+    .sort((a, b) => a.entry.periodNo - b.entry.periodNo);
+  const ongoing = slots.find((s) => s.startMin !== null && s.endMin !== null && s.startMin <= nowMin && nowMin < s.endMin) ?? null;
+  const upcoming = slots.filter((s) => s.startMin !== null && s.startMin > nowMin).sort((a, b) => a.startMin! - b.startMin!)[0] ?? null;
+  const featured = ongoing ?? upcoming ?? null;
+  return { featured, rest: slots.filter((s) => s !== featured), nowMin };
+}
+
+function markHref(e: TtEntry): string {
+  return `/manage/attendance?sectionId=${encodeURIComponent(e.sectionId)}&subjectId=${encodeURIComponent(e.subjectId)}&slot=${encodeURIComponent(`p${e.periodNo}`)}`;
+}
+
 export default function DashboardPage() {
   const year = useMemo(() => currentAcademicYear(), []);
   const [session, setSession] = useState<Session | null>(null);
@@ -80,6 +124,7 @@ export default function DashboardPage() {
   const [atRisk, setAtRisk] = useState<AtRiskEntry[]>([]);
   const [focus, setFocus] = useState<Focus | null>(null);
   const [today, setToday] = useState<TtToday | null>(null);
+  const [notices, setNotices] = useState<NoticeView[] | null>(null);
   const [leaveWaiting, setLeaveWaiting] = useState<number | null>(null);
   const [rollup, setRollup] = useState<NodeRollup | null>(null);
   const [compare, setCompare] = useState<ComparisonReport | null>(null);
@@ -103,10 +148,13 @@ export default function DashboardPage() {
           return;
         }
         setSession(me);
-        // --- timetable: the teaching roles get a Today card ---
+        // --- timetable: the teaching roles get a Today card + compact notices ---
         if (me.roles.includes("teacher") || me.roles.includes("class_teacher")) {
           api.ttMyToday(year).then((t) => {
             if (alive) setToday(t);
+          }).catch(() => undefined);
+          api.ntcVisible().then((r) => {
+            if (alive) setNotices(r.notices);
           }).catch(() => undefined);
         }
         // --- leave: approvers get a "waiting" card ---
@@ -182,6 +230,163 @@ export default function DashboardPage() {
   const kpiMarks = focusTile && "marks" in focusTile ? focusTile.marks : null;
   const cohort =
     kpiAttendance && kpiAttendance.state === "ok" ? kpiAttendance.value.distinctStudents : null;
+
+  // Teaching-only staff get the focused "a teacher's day" dashboard; oversight
+  // roles (hod/principal/admin) keep the analytics dashboard below.
+  const teachingOnly =
+    session.roles.length > 0 &&
+    session.roles.some((r) => r === "teacher" || r === "class_teacher") &&
+    !session.roles.some((r) => r === "admin" || r === "principal" || r === "hod");
+
+  if (teachingOnly) {
+    const day = splitDay(today, new Date());
+    const featured = day.featured;
+    const inMin = featured && featured.startMin !== null ? featured.startMin - day.nowMin : null;
+    return (
+      <>
+        <PageHeader
+          eyebrow={session.roles.join(" · ")}
+          title={`Good day, ${session.displayName.split(" ")[0]}.`}
+          lede="Your day — the class in front of you first. Every figure is drawn only from records you may read."
+        />
+
+        {featured ? (
+          <section className="td-cmd td-depth" aria-label="Next class">
+            <div className="td-cmd-time">
+              <div className="td-cmd-clock">{featured.starts ?? "—"}</div>
+              {featured.entry.room !== "" ? <div className="td-cmd-room">Room {featured.entry.room}</div> : null}
+            </div>
+            <div className="td-cmd-main">
+              <span className="td-cmd-eyebrow">
+                <span className="td-pulse" aria-hidden="true" /> {inMin !== null && inMin > 0 ? `Next class · in ${inMin} min` : "In session now"}
+              </span>
+              <h2>{featured.entry.subjectName}</h2>
+              <p className="td-cmd-where">{featured.entry.className} · Sec {featured.entry.sectionName}</p>
+            </div>
+            <div className="td-cmd-actions">
+              <a className="btn" href={markHref(featured.entry)}>Mark attendance</a>
+            </div>
+          </section>
+        ) : (
+          <section className="td-cmd td-depth" aria-label="Today">
+            <div className="td-cmd-main">
+              <span className="td-cmd-eyebrow">Today</span>
+              <h2>{today === null || today.entries.length === 0 ? "No classes scheduled today" : "No more classes today"}</h2>
+              <p className="td-cmd-where">Check who needs attention below.</p>
+            </div>
+          </section>
+        )}
+
+        <div className="td-cols td-depth">
+          <div className="td-col">
+            <section className="td-panel">
+              <div className="td-head">
+                <h2>Rest of today</h2>
+                {today !== null ? <span className="count">{today.entries.length} period{today.entries.length === 1 ? "" : "s"}</span> : null}
+              </div>
+              <div className="td-body">
+                {day.rest.length === 0 ? (
+                  <p className="strip-empty">Nothing else on the timetable today.</p>
+                ) : (
+                  day.rest.map((s) => {
+                    const ended = s.endMin !== null && s.endMin <= day.nowMin;
+                    return (
+                      <div key={s.entry.id} className={`td-rest${ended ? " ended" : ""}`}>
+                        <div className="t"><div className="p">P{s.entry.periodNo}</div><div className="h">{s.starts ?? "—"}</div></div>
+                        <div>
+                          <div className="subj">{s.entry.subjectName}</div>
+                          <div className="where">{s.entry.className} · Sec {s.entry.sectionName}{s.entry.room !== "" ? ` · ${s.entry.room}` : ""}</div>
+                        </div>
+                        <a className="btn ghost" href={markHref(s.entry)}>Mark</a>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </section>
+
+            <section className="td-panel">
+              <div className="td-head">
+                <h2>Needs attention</h2>
+                <span className="count">{atRisk.length} flagged</span>
+              </div>
+              <div className="td-body tight">
+                {atRisk.length === 0 ? (
+                  <p className="strip-empty" style={{ padding: "6px 4px 10px" }}>No one is flagged — attendance and marks are above the thresholds.</p>
+                ) : (
+                  atRisk.map((entry) => (
+                    <div className="risk-row" key={entry.studentId}>
+                      <div>
+                        <a className="risk-name" href={`/students/${encodeURIComponent(entry.studentId)}`}>{entry.name}</a>
+                        <div className="risk-reasons" style={{ marginTop: 6 }}>
+                          {entry.reasons.includes("low-attendance") ? <span className="chip serious">low attendance</span> : null}
+                          {entry.reasons.includes("low-marks") ? <span className="chip serious">low marks</span> : null}
+                        </div>
+                      </div>
+                      <div className="risk-figs">
+                        {entry.attendancePct !== null ? (<span><span className="k">attend</span>{entry.attendancePct}%</span>) : null}
+                        {entry.overallPct !== null ? (<span><span className="k">overall</span>{entry.overallPct}%</span>) : null}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </section>
+          </div>
+
+          <div className="td-col">
+            <div className="td-strip">
+              <div className="td-stat good">
+                <div className="v">{kpiAttendance && kpiAttendance.state === "ok" ? `${kpiAttendance.value.pct}%` : "—"}</div>
+                <div className="l">Attendance</div>
+              </div>
+              <div className="td-stat">
+                <div className="v">{cohort === null ? "—" : cohort}</div>
+                <div className="l">Students</div>
+              </div>
+              <div className="td-stat risk">
+                <div className="v">{atRisk.length}</div>
+                <div className="l">At risk</div>
+              </div>
+            </div>
+
+            {atRisk.length > 0 ? (
+              <section className="td-panel">
+                <div className="td-head"><h2>Risk composition</h2></div>
+                <div className="td-body" style={{ paddingLeft: 18, paddingRight: 18, paddingBottom: 18 }}>
+                  <RiskDonut label="At-risk composition" total={atRisk.length} segments={riskSegments(atRisk)} />
+                </div>
+              </section>
+            ) : null}
+
+            <section className="td-panel">
+              <div className="td-head">
+                <h2>Notices</h2>
+                {notices !== null ? <span className="count">{notices.length}</span> : null}
+              </div>
+              <div className="td-body">
+                {notices === null ? (
+                  <p className="strip-empty">Loading…</p>
+                ) : notices.length === 0 ? (
+                  <p className="strip-empty">Nothing on the board.</p>
+                ) : (
+                  notices.slice(0, 5).map((n) => (
+                    <div key={n.id} className="td-notice">
+                      <span className="dot" style={{ borderColor: KIND_TONE[n.kind], background: KIND_SOFT[n.kind] }} aria-hidden="true" />
+                      <div>
+                        <div className="t">{n.title}</div>
+                        <div className="m">{n.kind} · {n.audienceLabel} · <span className="num" style={{ textTransform: "none" }}>{n.publishAt.slice(0, 10)}</span></div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </section>
+          </div>
+        </div>
+      </>
+    );
+  }
 
   return (
     <>

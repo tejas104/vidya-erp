@@ -18,6 +18,10 @@ const session: Session = {
   grants: [],
 };
 
+// An oversight caller (principal) gets the analytics dashboard; a teaching-only
+// caller gets the focused "my day" view. Same scoped data, different surface.
+const oversightSession: Session = { ...session, displayName: "Dr. Sudha Menon", roles: ["principal"] };
+
 // A teacher who can see exactly ONE subject-class. Its marks slot is withheld
 // because the cohort is under the minimum (K=5). No department/college tiles
 // are returned — the server never sends what's out of scope.
@@ -40,7 +44,7 @@ const dashboard: Dashboard = {
 beforeEach(() => {
   vi.clearAllMocks();
   Object.defineProperty(window, "location", { value: { href: "" }, writable: true });
-  (api.session as ReturnType<typeof vi.fn>).mockResolvedValue(session);
+  (api.session as ReturnType<typeof vi.fn>).mockResolvedValue(oversightSession);
   (api.dashboard as ReturnType<typeof vi.fn>).mockResolvedValue(dashboard);
   (api.atRisk as ReturnType<typeof vi.fn>).mockResolvedValue({
     students: [
@@ -109,6 +113,19 @@ describe("dashboard (permission mirror)", () => {
     render(<DashboardPage />);
     const link = await screen.findByRole("link", { name: "Ravi Kumar" });
     expect(link).toHaveAttribute("href", "/students/stu-1");
+  });
+
+  it("a teaching-only caller gets the focused 'my day' view, not the analytics suite", async () => {
+    (api.session as ReturnType<typeof vi.fn>).mockResolvedValue(session);
+    render(<DashboardPage />);
+    // The at-risk student still surfaces under Needs attention…
+    const link = await screen.findByRole("link", { name: "Ravi Kumar" });
+    expect(link).toHaveAttribute("href", "/students/stu-1");
+    // …the scoped attendance figure shows in the stat strip…
+    expect(screen.getAllByText("88%").length).toBeGreaterThanOrEqual(1);
+    // …and the oversight analytics do NOT appear on a teacher's dashboard.
+    expect(screen.queryByText(/Comparison —/)).not.toBeInTheDocument();
+    expect(screen.queryByText("Marks by subject")).not.toBeInTheDocument();
   });
 
   it("redirects to /login when the session is unauthenticated (401)", async () => {
