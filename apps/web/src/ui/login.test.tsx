@@ -34,6 +34,19 @@ describe("login page", () => {
     expect(await screen.findByText(/username and password don't match/i)).toBeInTheDocument();
   });
 
+  it("the role toggle tailors the copy and demo prefill", () => {
+    render(<LoginPage />);
+    // defaults to student
+    expect(screen.getByText("Student portal")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Use demo student login" }));
+    expect(screen.getByLabelText("Username")).toHaveValue("demo-student");
+
+    fireEvent.click(screen.getByRole("tab", { name: "Staff" }));
+    expect(screen.getByText("Staff sign-in")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Use demo staff login" }));
+    expect(screen.getByLabelText("Username")).toHaveValue("demo-admin");
+  });
+
   it("explains a reset-required account (403)", async () => {
     const { ApiError } = await import("./api");
     (api.login as ReturnType<typeof vi.fn>).mockRejectedValue(new ApiError(403, "reset"));
