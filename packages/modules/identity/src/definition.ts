@@ -419,6 +419,23 @@ const routes: RouteSpec[] = [
       404: { description: "No such user", schema: problemSchema },
     },
   },
+  {
+    id: "identity.password-set",
+    module: MODULE_NAME,
+    method: "POST",
+    path: "/api/v1/identity/users/{userId}/password",
+    summary: "Set a user's password directly (admin)",
+    description:
+      "Admin-supplied replacement password: the account is set active and every session is invalidated, so the user signs in with the new value. Unlike the one-time-token flow (ADR-0011), the admin handles the plaintext value — an owner-ratified deviation for on-prem operator convenience. The password is never returned in the body echo, logged, or audited.",
+    tags: ["identity"],
+    auth: ADMIN_ONLY,
+    request: { params: userIdParams, body: z.object({ newPassword: passwordSchema }) },
+    audit: { action: "identity.password-set-by-admin", resourceType: "user" },
+    responses: {
+      200: { description: "Password set; the user's sessions were invalidated", schema: z.object({ ok: z.literal(true) }) },
+      404: { description: "No such user", schema: problemSchema },
+    },
+  },
 ];
 
 // ---------------------------------------------------------------------------

@@ -265,3 +265,25 @@ describe("AuthService reset flow", () => {
     expect(result.outcome).toBe("invalid-token");
   });
 });
+
+describe("AuthService.adminSetPassword", () => {
+  it("sets a new password, keeps the account active, and invalidates sessions", async () => {
+    const { service, repo, sessions } = makeService();
+    const user = seedActiveUser(repo);
+    const login = await service.login("asha", "right-password", "1.2.3.4");
+    expect(login.outcome).toBe("success");
+
+    expect(await service.adminSetPassword(user.id, "admin-chosen-temp-99")).toBe(true);
+
+    const record = await repo.findById(user.id);
+    expect(record?.status).toBe("active");
+    // pre-existing session is gone; the user signs in with the new value
+    if (login.outcome === "success") expect(await sessions.resolve(login.token)).toBeNull();
+    expect((await service.login("asha", "admin-chosen-temp-99", "5.5.5.5")).outcome).toBe("success");
+  });
+
+  it("returns false for an unknown user", async () => {
+    const { service } = makeService();
+    expect(await service.adminSetPassword("nope", "admin-chosen-temp-99")).toBe(false);
+  });
+});

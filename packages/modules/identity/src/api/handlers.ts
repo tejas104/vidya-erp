@@ -462,6 +462,35 @@ export function createIdentityHandlers(deps: IdentityHandlerDeps): Record<string
     };
   };
 
+  const passwordSet: RouteHandler = async (ctx) => {
+    const principal = ctx.principal as Principal;
+    const params = ctx.request.params as { userId: string };
+    const body = ctx.request.body as { newPassword: string };
+    const existing = await deps.users.getUserRecord(params.userId);
+    if (existing === null) {
+      return notFound();
+    }
+    const scope = checkScope(deps.scopeChecker, ctx, principal, "update", {
+      module: "identity",
+      resourceType: "user",
+      org: { collegeId: existing.collegeId },
+    });
+    if (!scope.ok) {
+      return scope.result;
+    }
+    const ok = await deps.auth.adminSetPassword(params.userId, body.newPassword);
+    if (!ok) {
+      return notFound();
+    }
+    return {
+      status: 200,
+      body: { ok: true as const },
+      headers: { "cache-control": "no-store" },
+      // The new password itself is deliberately absent from the audit detail.
+      audit: { resourceId: params.userId },
+    };
+  };
+
   return {
     "identity.login": login,
     "identity.logout": logout,
@@ -477,5 +506,6 @@ export function createIdentityHandlers(deps: IdentityHandlerDeps): Record<string
     "identity.grant-remove": grantRemove,
     "identity.grants-verify": grantsVerify,
     "identity.password-reset-init": passwordResetInit,
+    "identity.password-set": passwordSet,
   };
 }

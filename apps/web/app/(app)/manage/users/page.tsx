@@ -47,6 +47,9 @@ export default function UsersPage() {
   // reset-token modal
   const [resetFor, setResetFor] = useState<UserView | null>(null);
   const [issued, setIssued] = useState<{ user: string; token: string; expiresAt: string } | null>(null);
+  // set-password modal (admin supplies a new value directly)
+  const [passwordFor, setPasswordFor] = useState<UserView | null>(null);
+  const [newPass, setNewPass] = useState("");
 
   const load = useCallback(async () => {
     try {
@@ -176,6 +179,21 @@ export default function UsersPage() {
     }
   }
 
+  async function setPassword() {
+    if (!passwordFor || newPass.length < 12) return;
+    setSaving(true);
+    try {
+      await api.setUserPassword(passwordFor.id, newPass);
+      toast.show(`Password set for ${passwordFor.username} — they can sign in with it now.`, "good");
+      setPasswordFor(null);
+      setNewPass("");
+    } catch (caught) {
+      toast.show(caught instanceof ApiError ? caught.message : "Couldn't set the password.", "danger");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function toggleStatus(user: UserView) {
     const next = user.status === "disabled" ? "active" : "disabled";
     try {
@@ -242,7 +260,8 @@ export default function UsersPage() {
         <span style={{ display: "inline-flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
           <Button variant="ghost" onClick={() => { setRoleDraft(row.roles); setRolesFor(row); }}>Roles</Button>
           <Button variant="ghost" onClick={() => { setGrantRole("hod"); setGrantDept(""); setGrantClass(""); setGrantSubject(""); setGrantsFor(row); }}>Grants</Button>
-          <Button variant="ghost" onClick={() => setResetFor(row)}>Reset password</Button>
+          <Button variant="ghost" onClick={() => setResetFor(row)}>Reset (token)</Button>
+          <Button variant="ghost" onClick={() => { setNewPass(""); setPasswordFor(row); }}>Set password</Button>
           <Button variant="ghost" onClick={() => void toggleStatus(row)}>{row.status === "disabled" ? "Enable" : "Disable"}</Button>
         </span>
       ),
@@ -438,6 +457,27 @@ export default function UsersPage() {
           {issued?.token}
         </p>
         <p className="field-hint">Expires {issued ? new Date(issued.expiresAt).toLocaleString() : ""}.</p>
+      </Modal>
+
+      {/* SET PASSWORD (admin supplies the value directly) */}
+      <Modal
+        open={passwordFor !== null}
+        onClose={() => setPasswordFor(null)}
+        title={`Set password — ${passwordFor?.username ?? ""}`}
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setPasswordFor(null)}>Cancel</Button>
+            <Button onClick={() => void setPassword()} loading={saving} disabled={newPass.length < 12}>Set password</Button>
+          </>
+        }
+      >
+        <Field
+          label="New temporary password"
+          htmlFor="usr-newpass"
+          hint="At least 12 characters. The user signs in with this straight away and can change it from their profile. It is never stored in plain text or logged — you won't see it again."
+        >
+          <input id="usr-newpass" value={newPass} autoComplete="new-password" onChange={(event) => setNewPass(event.target.value)} />
+        </Field>
       </Modal>
     </>
   );

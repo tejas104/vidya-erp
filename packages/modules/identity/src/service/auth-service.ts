@@ -167,6 +167,25 @@ export class AuthService {
   }
 
   /**
+   * Admin sets a user's password directly (owner-ratified ADR-0011 deviation):
+   * unlike initiateReset, the admin supplies the value. The account is set
+   * ACTIVE so the user can sign in with it right away — the login flow blocks
+   * must_reset accounts, so a change-on-next-login cannot be forced without
+   * changing that choreography (deferred, human-owned). Every session of the
+   * user is invalidated. The password is never returned, logged or audited.
+   */
+  async adminSetPassword(userId: string, newPassword: string): Promise<boolean> {
+    const user = await this.deps.repo.findById(userId);
+    if (user === null) {
+      return false;
+    }
+    const passwordHash = await this.deps.hasher.hash(newPassword);
+    await this.deps.repo.updatePasswordHash(userId, passwordHash, "active");
+    await this.deps.sessions.invalidateAllForUser(userId);
+    return true;
+  }
+
+  /**
    * Admin-initiated reset (ADR-0011): mints a one-time token, stores only
    * its SHA-256, returns the plaintext ONCE for out-of-band delivery.
    */

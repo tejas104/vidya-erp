@@ -53,6 +53,21 @@ sets the account active and kills all sessions. Self-service email reset
 arrives with the notifications module via a documented delivery contract.
 An hourly worker job purges stale tokens.
 
+### Admin-set password (owner-ratified deviation, 2026-07-17)
+
+`POST /users/{id}/password` (admin) lets an operator set a user's password
+**directly**, as a convenience for on-prem operators (school offices reset
+passwords at a counter). This deviates from the token-only stance above: the
+admin now handles the plaintext temporary value. Accepted by the owner with
+these guardrails — the value is never returned in a body echo, logged, or
+audited (only the fact of the change is audited); the account is set
+**active** (not `must_reset`) so the user can sign in immediately, and every
+session of the user is invalidated. Force-change-on-next-sign-in is NOT
+provided here: the login flow blocks `must_reset` accounts, so forcing a
+change would require a login-choreography change — deferred, and out of scope
+for this deviation. The token flow above remains available and preferred where
+the admin should never see the value.
+
 ## User enumeration resistance
 
 Unknown-user, wrong-password and disabled-account all return the same 401

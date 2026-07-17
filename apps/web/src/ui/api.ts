@@ -696,6 +696,8 @@ export const api = {
     post<{ verified: number; unresolved: { grantId: string; reason: string }[] }>("/api/v1/identity/grants/verify", {}),
   passwordResetInit: (userId: string) =>
     post<{ token: string; expiresAt: string }>(`/api/v1/identity/users/${encodeURIComponent(userId)}/password-reset`, {}),
+  setUserPassword: (userId: string, newPassword: string) =>
+    post<{ ok: true }>(`/api/v1/identity/users/${encodeURIComponent(userId)}/password`, { newPassword }),
   // people — imports
   createImport: (body: { kind: "students" | "teachers"; collegeId: string; academicYear?: string; dryRun: boolean; csv: string }) =>
     post<{ importId: string }>("/api/v1/people/imports", body),
