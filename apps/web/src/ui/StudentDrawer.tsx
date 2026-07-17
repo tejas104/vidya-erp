@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { api, type DocumentKind, type StudentDocument } from "@/ui/api";
+import { formatPaise } from "@/ui/money";
 import type { StudentFlags } from "@/ui/StudentCard";
 
 const DOC_KINDS: { value: DocumentKind; label: string }[] = [
@@ -69,6 +70,8 @@ export function StudentDrawer({
 }) {
   const open = student !== null;
   const [docs, setDocs] = useState<StudentDocument[] | null>(null);
+  /** outstanding dues in paise; null = loading; "na" = couldn't read (out of scope). */
+  const [feesDue, setFeesDue] = useState<number | null | "na">(null);
   const [uploading, setUploading] = useState(false);
   const [docErr, setDocErr] = useState<string | null>(null);
   const [kind, setKind] = useState<DocumentKind>("photo");
@@ -89,6 +92,16 @@ export function StudentDrawer({
     let alive = true;
     setDocErr(null);
     api.docList(studentId).then((r) => alive && setDocs(r.documents)).catch(() => alive && setDocs([]));
+    return () => { alive = false; };
+  }, [studentId, canManage]);
+
+  useEffect(() => {
+    if (studentId === undefined || !canManage) { setFeesDue(null); return; }
+    let alive = true;
+    setFeesDue(null);
+    api.feesStudentInvoices(studentId)
+      .then((r) => alive && setFeesDue(r.invoices.reduce((sum, inv) => sum + inv.duesPaise, 0)))
+      .catch(() => alive && setFeesDue("na"));
     return () => { alive = false; };
   }, [studentId, canManage]);
 
@@ -197,7 +210,9 @@ export function StudentDrawer({
                   <dt>Date of birth</dt>
                   <dd>{student.dob ?? "—"}</dd>
                   <dt>Fees</dt>
-                  <dd style={{ color: "var(--ink-3)" }}>not wired</dd>
+                  <dd style={{ color: feesDue === null || feesDue === "na" ? "var(--ink-3)" : feesDue > 0 ? "var(--bad)" : "var(--good)" }}>
+                    {feesDue === null ? "…" : feesDue === "na" ? "—" : feesDue > 0 ? `${formatPaise(feesDue)} due` : "cleared"}
+                  </dd>
                 </dl>
                 <div style={{ marginTop: 11 }}>
                   <span className="cw-lock">🔒 admission no · name · DOB — admin only</span>

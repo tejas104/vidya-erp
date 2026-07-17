@@ -13,6 +13,7 @@ vi.mock("./api", async (importOriginal) => {
       dashboard: vi.fn(),
       sectionRoster: vi.fn(),
       rosterAttendance: vi.fn(),
+      feesSectionInvoices: vi.fn(),
       ttMyToday: vi.fn(),
     },
   };
@@ -51,6 +52,7 @@ beforeEach(() => {
       { studentId: "stu_2", counts: { present: 5, absent: 5, late: 0, excused: 0 }, attended: 5, total: 10, pct: 50, recent: [] },
     ],
   });
+  (api.feesSectionInvoices as ReturnType<typeof vi.fn>).mockResolvedValue({ invoices: [] });
   (api.ttMyToday as ReturnType<typeof vi.fn>).mockResolvedValue({ dayOfWeek: 2, periods: [], entries: [] });
 });
 
@@ -69,5 +71,14 @@ describe("class workspace — flashcards", () => {
     // Sanika at 50% earns a 'short' badge; Aarav at 90% shows 'clear'.
     expect(screen.getByText("short", { exact: true })).toBeInTheDocument();
     expect(screen.getByText("clear")).toBeInTheDocument();
+  });
+
+  it("wires per-student fees: a student with dues surfaces the Fees-due filter", async () => {
+    (api.feesSectionInvoices as ReturnType<typeof vi.fn>).mockResolvedValue({
+      invoices: [{ studentId: "stu_2", duesPaise: 50_000 }],
+    });
+    render(<ClassWorkspacePage />);
+    await screen.findByText("Sanika Kulkarni");
+    expect(await screen.findByText("Fees due")).toBeInTheDocument();
   });
 });

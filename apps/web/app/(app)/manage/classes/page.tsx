@@ -4,6 +4,7 @@ import {
   api,
   ApiError,
   currentAcademicYear,
+  type FeeInvoiceView,
   type RosterCard,
   type StudentStatus,
   type StudentView,
@@ -46,13 +47,13 @@ type ClassOpt = {
 type Card = { student: StudentView; att: RosterCard | null; idx: number };
 type Filter = "all" | "short" | "backlog" | "fees" | "yb";
 
-function flagsFor(c: Card): StudentFlags {
+function flagsFor(c: Card, duesPaise: number): StudentFlags {
   const pct = c.att?.pct ?? null;
   return {
     short: pct !== null && pct < SHORT,
     backlog: c.student.status === "backlog",
     yb: c.student.status === "year_back",
-    fees: false, // fees-per-student for the workspace is not wired yet
+    fees: duesPaise > 0,
   };
 }
 
@@ -63,6 +64,7 @@ export default function ClassWorkspacePage() {
   const [opts, setOpts] = useState<ClassOpt[]>([]);
   const [pick, setPick] = useState(0);
   const [cards, setCards] = useState<Card[] | null>(null);
+  const [feesDues, setFeesDues] = useState<Map<string, number> | null>(null);
   const [today, setToday] = useState<TtToday | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<Filter>("all");
@@ -121,15 +123,22 @@ export default function ClassWorkspacePage() {
     if (!opt) return;
     let alive = true;
     setCards(null);
+    setFeesDues(null);
     setError(null);
+    // Fees are a best-effort overlay: a 403 (out of fee-read scope) must not
+    // fail the roster, so it resolves to an empty invoice set.
     Promise.all([
       api.sectionRoster(opt.sectionId),
       api.rosterAttendance(opt.sectionId, { academicYear: year, subjectId: opt.subjectId }),
+      api.feesSectionInvoices(opt.sectionId, year).catch(() => ({ invoices: [] as FeeInvoiceView[] })),
     ])
-      .then(([roster, att]) => {
+      .then(([roster, att, fees]) => {
         if (!alive) return;
         const byId = new Map(att.cards.map((c) => [c.studentId, c]));
         setCards(roster.students.map((student, idx) => ({ student, att: byId.get(student.id) ?? null, idx })));
+        const dues = new Map<string, number>();
+        for (const inv of fees.invoices) dues.set(inv.studentId, (dues.get(inv.studentId) ?? 0) + inv.duesPaise);
+        setFeesDues(dues);
       })
       .catch(() => alive && setError("Couldn't load this roster."));
     return () => {
@@ -179,10 +188,11 @@ export default function ClassWorkspacePage() {
   const avgAtt = withPct.length ? Math.round(withPct.reduce((s, c) => s + (c.att!.pct ?? 0), 0) / withPct.length) : 0;
   const shortN = (cards ?? []).filter((c) => (c.att?.pct ?? 100) < SHORT).length;
   const backlogN = (cards ?? []).filter((c) => c.student.status === "backlog").length;
+  const feesN = feesDues ? (cards ?? []).filter((c) => (feesDues.get(c.student.id) ?? 0) > 0).length : 0;
   const total = cards?.length ?? 0;
 
   const visible = (cards ?? []).filter((c) => {
-    const f = flagsFor(c);
+    const f = flagsFor(c, feesDues?.get(c.student.id) ?? 0);
     const passFilter =
       filter === "all" ||
       (filter === "short" && f.short) ||
@@ -195,7 +205,7 @@ export default function ClassWorkspacePage() {
   });
 
   async function openCard(c: Card) {
-    const f = flagsFor(c);
+    const f = flagsFor(c, feesDues?.get(c.student.id) ?? 0);
     const base: DrawerStudent = {
       studentId: c.student.id,
       initials: initials(c.student.fullName),
@@ -315,12 +325,12 @@ export default function ClassWorkspacePage() {
                 tone="warn"
               />
               <RingStat
-                pct={0}
-                display="—"
+                pct={total && feesDues ? (feesN / total) * 100 : 0}
+                display={feesDues ? `${feesN}` : "—"}
                 label="Fees pending"
-                value="—"
-                sub="not wired"
-                tone="brand"
+                value={feesDues ? `${feesN} / ${total}` : "—"}
+                sub={feesDues ? "with outstanding dues" : "no fee data"}
+                tone={feesN > 0 ? "warn" : "good"}
               />
             </div>
 
@@ -336,6 +346,7 @@ export default function ClassWorkspacePage() {
               {chip("short", "Short", shortN)}
               {chip("backlog", "Backlog", backlogN)}
               {chip("yb", "Year-back", (cards ?? []).filter((c) => c.student.status === "year_back").length)}
+              {feesDues && feesN > 0 ? chip("fees", "Fees due", feesN) : null}
               {canManage ? (
                 <button type="button" className="btn" style={{ marginLeft: "auto" }} onClick={() => setAdding(true)}>
                   + Add student
@@ -359,7 +370,7 @@ export default function ClassWorkspacePage() {
                     rollNo={c.student.admissionNo}
                     name={c.student.fullName}
                     pct={c.att?.pct ?? null}
-                    flags={flagsFor(c)}
+                    flags={flagsFor(c, feesDues?.get(c.student.id) ?? 0)}
                     onOpen={() => void openCard(c)}
                   />
                 ))}
