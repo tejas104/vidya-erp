@@ -21,13 +21,17 @@ export const NAV: NavEntry[] = [
   { href: "/dashboard", label: "Dashboard", icon: "dashboard", group: "Overview", roles: ALL },
   { href: "/manage/calendar", label: "Calendar", icon: "attendance", group: "Overview", roles: ALL },
   { href: "/portal", label: "My register", icon: "students", group: "My studies", roles: ["student"] },
-  { href: "/manage/classes", label: "My Classes", icon: "students", group: "Teaching", roles: ["teacher", "class_teacher", "admin"] },
-  { href: "/manage/attendance", label: "Attendance", icon: "attendance", group: "Teaching", roles: ["teacher", "class_teacher", "admin"] },
-  { href: "/manage/marks", label: "Marks", icon: "marks", group: "Teaching", roles: ["teacher", "admin"] },
+  // Teaching tools are teacher-owned. Admin is a non-teaching supervisor:
+  // it oversees via Reports & Results but cannot change marks/attendance.
+  { href: "/manage/classes", label: "My Classes", icon: "students", group: "Teaching", roles: ["teacher", "class_teacher"] },
+  { href: "/manage/attendance", label: "Attendance", icon: "attendance", group: "Teaching", roles: ["teacher", "class_teacher"] },
+  { href: "/manage/marks", label: "Marks", icon: "marks", group: "Teaching", roles: ["teacher"] },
   // --- coursework ---
-  { href: "/manage/coursework", label: "Coursework", icon: "file", group: "Teaching", roles: ["teacher", "class_teacher", "admin"] },
+  { href: "/manage/coursework", label: "Coursework", icon: "file", group: "Teaching", roles: ["teacher", "class_teacher"] },
   // --- fees ---
   { href: "/manage/fees", label: "Fees", icon: "rupee", group: "Fees", roles: ["accountant", "admin", "principal"] },
+  // accountant reconciles against student records + documents (read-only)
+  { href: "/manage/directory", label: "Student directory", icon: "students", group: "Fees", roles: ["accountant"] },
   // --- notices ---
   { href: "/manage/notices", label: "Notices", icon: "file", group: "Administration", roles: ["admin", "principal"] },
   // --- results ---
@@ -36,7 +40,7 @@ export const NAV: NavEntry[] = [
   // --- exams ---
   { href: "/manage/exams", label: "Exams", icon: "attendance", group: "Administration", roles: ["admin"] },
   // --- leave ---
-  { href: "/manage/leave", label: "Leave", icon: "file", group: "Teaching", roles: ["teacher", "class_teacher", "hod", "admin"] },
+  { href: "/manage/leave", label: "Leave", icon: "file", group: "Teaching", roles: ["teacher", "class_teacher", "hod"] },
   // --- timetable ---
   { href: "/manage/timetable", label: "Timetable", icon: "attendance", group: "Administration", roles: ["admin"] },
   { href: "/manage/org", label: "Organisation", icon: "org", group: "Administration", roles: ["admin"] },
