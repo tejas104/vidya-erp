@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { api } from "./api";
 import { Icon } from "./Icon";
 import { Menu } from "./Menu";
+import { NotificationBell } from "./NotificationBell";
 
 export function Topbar({ displayName, year, onMenu }: { displayName: string; year?: string; onMenu: () => void }) {
   const [theme, setTheme] = useState<"light" | "dark" | null>(null);
@@ -35,6 +36,7 @@ export function Topbar({ displayName, year, onMenu }: { displayName: string; yea
       </button>
       <div className="shell-top-spacer" />
       {year !== undefined ? <span className="shell-top-year num">AY {year}</span> : null}
+      <NotificationBell />
       <Menu
         label={displayName}
         items={[
