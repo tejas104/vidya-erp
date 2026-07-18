@@ -24,6 +24,7 @@ import { createPeopleModule } from "@vidya/module-people";
 import { createAcademicsModule } from "@vidya/module-academics";
 import { createAnalyticsModule } from "@vidya/module-analytics";
 import { createReportingModule } from "@vidya/module-reporting";
+import { createSyllabusModule } from "@vidya/module-syllabus";
 
 export const ADMIN_USERNAME = "int-admin";
 export const ADMIN_PASSWORD = "integration-admin-pass-1";
@@ -143,6 +144,13 @@ export function buildStack() {
     },
   });
 
+  const syllabus = createSyllabusModule({
+    db,
+    audit: system.service.audit,
+    scopeChecker: core.scopeChecker,
+    peopleDirectory: people.service.directory,
+  });
+
   const routeDeps: RouteDependencies = {
     logger,
     authenticator: identity.service.authenticator,
@@ -152,7 +160,7 @@ export function buildStack() {
   };
   const specs = new Map<string, RouteSpec>();
   const handlers: Record<string, BoundRouteHandler> = {};
-  for (const module of [identity, people, academics, analytics, reporting]) {
+  for (const module of [identity, people, academics, analytics, reporting, syllabus]) {
     for (const route of module.definition.routes) {
       specs.set(route.id, route);
       handlers[route.id] = defineRoute(route, module.handlers[route.id]!, routeDeps);
@@ -238,6 +246,7 @@ export function buildStack() {
     academics,
     analytics,
     reporting,
+    syllabus,
     core,
     enqueuedImports,
     enqueuedRollups,

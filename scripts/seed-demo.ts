@@ -22,6 +22,7 @@ import { createNoticesModule } from "@vidya/module-notices";
 import { createResultsModule } from "@vidya/module-results";
 import { createExamsModule } from "@vidya/module-exams";
 import { createLeaveModule } from "@vidya/module-leave";
+import { createSyllabusModule } from "@vidya/module-syllabus";
 
 /**
  * DEMO DATA SEEDER — a self-contained, non-production pilot dataset.
@@ -53,6 +54,45 @@ const STUDENT_PASSWORD = "demo-student-pass-2026!";
 const ACCOUNTANT_PASSWORD = "demo-accountant-pass-2026!";
 
 type Slot = { studentId: string; status: "present" | "absent" | "late" | "excused" };
+
+/** Per-subject demo syllabi (units → topics), keyed by subject code. The seed
+ *  authors these for each class's first subject and marks Unit 1 taught, so the
+ *  portal shows a real, partial (derived) coverage. Generic fallback below. */
+const SYLLABI: Record<string, { title: string; topics: string[] }[]> = {
+  DS: [
+    { title: "Unit 1 — Foundations", topics: ["Arrays & complexity", "Linked lists", "Stacks & queues"] },
+    { title: "Unit 2 — Trees & Graphs", topics: ["Binary trees & BSTs", "Heaps", "Graph traversal (BFS/DFS)"] },
+  ],
+  OOP: [
+    { title: "Unit 1 — Objects & Classes", topics: ["Classes & objects", "Constructors & destructors", "Encapsulation"] },
+    { title: "Unit 2 — Inheritance & Polymorphism", topics: ["Inheritance", "Virtual functions", "Operator overloading"] },
+  ],
+  AI: [
+    { title: "Unit 1 — Search", topics: ["Problem solving as search", "Uninformed search", "Heuristic search (A*)"] },
+    { title: "Unit 2 — Knowledge & Learning", topics: ["Propositional logic", "Bayesian reasoning", "Intro to machine learning"] },
+  ],
+  ELEC: [
+    { title: "Unit 1 — Semiconductors", topics: ["PN junction diode", "Rectifiers", "Zener regulation"] },
+    { title: "Unit 2 — Transistors", topics: ["BJT fundamentals", "Biasing", "Small-signal amplifiers"] },
+  ],
+  DIG: [
+    { title: "Unit 1 — Combinational Logic", topics: ["Number systems", "Boolean algebra", "Multiplexers & decoders"] },
+    { title: "Unit 2 — Sequential Logic", topics: ["Flip-flops", "Counters", "Registers"] },
+  ],
+  ACC: [
+    { title: "Unit 1 — Fundamentals", topics: ["Accounting concepts", "Journal & ledger", "Trial balance"] },
+    { title: "Unit 2 — Final Accounts", topics: ["Trading account", "Profit & loss account", "Balance sheet"] },
+  ],
+};
+
+function syllabusFor(code: string, name: string): { title: string; topics: string[] }[] {
+  return (
+    SYLLABI[code] ?? [
+      { title: `Unit 1 — Introduction to ${name}`, topics: ["Core concepts", "Key principles", "Foundational methods"] },
+      { title: "Unit 2 — Applications", topics: ["Applied techniques", "Case studies", "Assessment preparation"] },
+    ]
+  );
+}
 
 interface Credential {
   role: string;
@@ -297,7 +337,15 @@ function buildStack() {
     peopleDirectory: people.service.directory,
   });
 
-  for (const module of [identity, people, academics, timetable, fees, notices, results, exams, leave]) {
+  // --- syllabus --- (units + topics + coverage; no jobs, no storage)
+  const syllabus = createSyllabusModule({
+    db,
+    audit: system.service.audit,
+    scopeChecker: core.scopeChecker,
+    peopleDirectory: people.service.directory,
+  });
+
+  for (const module of [identity, people, academics, timetable, fees, notices, results, exams, leave, syllabus]) {
     for (const route of module.definition.routes) {
       specs.set(route.id, route);
       handlers[route.id] = defineRoute(route, module.handlers[route.id]!, routeDeps);
@@ -1129,6 +1177,56 @@ async function main(): Promise<void> {
           }
         }
         console.log(`    marks: entered for every subject by its own teacher`);
+
+        // 5c) Syllabus: the first subject's teacher authors units + topics and
+        //     marks Unit 1 taught — through the same scope-checked routes, so a
+        //     green seed proves the subject-teacher authoring authority. Coverage
+        //     is derived, giving the portal a partial % (Unit 1 taught, Unit 2 not).
+        const sylSubject = klass.subjects[0];
+        if (sylSubject !== undefined) {
+          const sylTeacherCookie = subjectTeacherCookies.get(sylSubject.code)!;
+          const sylSubjectId = subjectIds.get(sylSubject.code)!;
+          const units = syllabusFor(sylSubject.code, sylSubject.name);
+          const taughtDates = ["2026-07-01", "2026-07-04", "2026-07-08", "2026-07-11"];
+          for (let u = 0; u < units.length; u++) {
+            const unit = units[u]!;
+            const unitId = (
+              await expectJson<{ id: string }>(
+                await call("syllabus.unit-create", {
+                  cookie: sylTeacherCookie,
+                  body: { classId, subjectId: sylSubjectId, academicYear: YEAR, title: unit.title, position: u },
+                }),
+                [201],
+                `syllabus unit ${klass.code}/${sylSubject.code} ${unit.title}`,
+              )
+            ).id;
+            for (let t = 0; t < unit.topics.length; t++) {
+              const topicId = (
+                await expectJson<{ id: string }>(
+                  await call("syllabus.topic-create", {
+                    cookie: sylTeacherCookie,
+                    params: { unitId },
+                    body: { title: unit.topics[t]!, position: t },
+                  }),
+                  [201],
+                  `syllabus topic ${unit.topics[t]}`,
+                )
+              ).id;
+              if (u === 0) {
+                await expectJson(
+                  await call("syllabus.topic-coverage", {
+                    cookie: sylTeacherCookie,
+                    params: { topicId },
+                    body: { taughtOn: taughtDates[t % taughtDates.length] },
+                  }),
+                  [200],
+                  `syllabus coverage ${unit.topics[t]}`,
+                );
+              }
+            }
+          }
+          console.log(`    syllabus: ${units.length} units for ${sylSubject.name} by ${sylSubject.teacher.username}`);
+        }
 
         // 5b) Timetable: P1–P3 Mon–Fri for the roster section, subjects
         //     rotating, each taught by its own subject teacher (room = the
