@@ -520,6 +520,37 @@ export interface PortalMarks {
   overallPct: number | null;
 }
 
+// --- syllabus ---
+export interface TopicView {
+  id: string;
+  title: string;
+  position: number;
+  taughtOn: string | null;
+}
+export interface UnitView {
+  id: string;
+  classId: string;
+  subjectId: string;
+  subjectName: string;
+  title: string;
+  position: number;
+  academicYear: string;
+  topics: TopicView[];
+  coveragePct: number;
+}
+export interface SyllabusView {
+  units: UnitView[];
+}
+export interface SubjectSyllabus {
+  subjectId: string;
+  subjectName: string;
+  coveragePct: number;
+  units: UnitView[];
+}
+export interface MySyllabus {
+  subjects: SubjectSyllabus[];
+}
+
 export class ApiError extends Error {
   constructor(
     readonly status: number,
@@ -851,6 +882,23 @@ export const api = {
   lvsPending: () => get<{ requests: LeaveRequestView[] }>("/api/v1/leave/pending"),
   lvsDecide: (requestId: string, body: { status: "approved" | "rejected"; note?: string }) =>
     post<LeaveRequestView>(`/api/v1/leave/requests/${encodeURIComponent(requestId)}/decide`, body),
+  // --- syllabus ---
+  syllabusForClass: (classId: string, academicYear: string) =>
+    get<SyllabusView>(`/api/v1/syllabus/classes/${encodeURIComponent(classId)}/syllabus?academicYear=${encodeURIComponent(academicYear)}`),
+  createUnit: (body: { classId: string; subjectId: string; academicYear: string; title: string; position?: number }) =>
+    post<UnitView>("/api/v1/syllabus/units", body),
+  updateUnit: (unitId: string, body: { title?: string; position?: number }) =>
+    patch<UnitView>(`/api/v1/syllabus/units/${encodeURIComponent(unitId)}`, body),
+  deleteUnit: (unitId: string) => del<{ ok: true }>(`/api/v1/syllabus/units/${encodeURIComponent(unitId)}`),
+  addTopic: (unitId: string, body: { title: string; position?: number }) =>
+    post<TopicView>(`/api/v1/syllabus/units/${encodeURIComponent(unitId)}/topics`, body),
+  updateTopic: (topicId: string, body: { title?: string; position?: number }) =>
+    patch<TopicView>(`/api/v1/syllabus/topics/${encodeURIComponent(topicId)}`, body),
+  deleteTopic: (topicId: string) => del<{ ok: true }>(`/api/v1/syllabus/topics/${encodeURIComponent(topicId)}`),
+  setTopicCoverage: (topicId: string, taughtOn: string | null) =>
+    put<TopicView>(`/api/v1/syllabus/topics/${encodeURIComponent(topicId)}/coverage`, { taughtOn }),
+  mySyllabus: (academicYear: string) =>
+    get<MySyllabus>(`/api/v1/syllabus/my?academicYear=${encodeURIComponent(academicYear)}`),
   async login(username: string, password: string): Promise<void> {
     const response = await fetch("/api/v1/identity/auth/login", {
       method: "POST",
