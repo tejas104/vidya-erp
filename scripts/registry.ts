@@ -10,6 +10,7 @@ import { reportingModuleDefinition } from "@vidya/module-reporting";
 import { portalModuleDefinition } from "@vidya/module-portal";
 import { timetableModuleDefinition } from "@vidya/module-timetable";
 import { courseworkModuleDefinition } from "@vidya/module-coursework";
+import { syllabusModuleDefinition } from "@vidya/module-syllabus";
 import { feesModuleDefinition } from "@vidya/module-fees";
 import { noticesModuleDefinition } from "@vidya/module-notices";
 import { resultsModuleDefinition } from "@vidya/module-results";
@@ -31,6 +32,7 @@ export const moduleDefinitions: readonly ModuleDefinition[] = [
   portalModuleDefinition,
   timetableModuleDefinition,
   courseworkModuleDefinition,
+  syllabusModuleDefinition,
   feesModuleDefinition,
   noticesModuleDefinition,
   resultsModuleDefinition,

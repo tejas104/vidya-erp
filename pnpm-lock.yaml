@@ -65,6 +65,9 @@ importers:
       '@vidya/module-results':
         specifier: workspace:*
         version: link:packages/modules/results
+      '@vidya/module-syllabus':
+        specifier: workspace:*
+        version: link:packages/modules/syllabus
       '@vidya/module-system':
         specifier: workspace:*
         version: link:packages/modules/system
@@ -146,6 +149,9 @@ importers:
       '@vidya/module-results':
         specifier: workspace:*
         version: link:../../packages/modules/results
+      '@vidya/module-syllabus':
+        specifier: workspace:*
+        version: link:../../packages/modules/syllabus
       '@vidya/module-system':
         specifier: workspace:*
         version: link:../../packages/modules/system
@@ -210,6 +216,9 @@ importers:
       '@vidya/module-results':
         specifier: workspace:*
         version: link:../../packages/modules/results
+      '@vidya/module-syllabus':
+        specifier: workspace:*
+        version: link:../../packages/modules/syllabus
       '@vidya/module-system':
         specifier: workspace:*
         version: link:../../packages/modules/system

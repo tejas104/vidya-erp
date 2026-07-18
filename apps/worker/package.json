@@ -18,6 +18,7 @@
     "@vidya/module-portal": "workspace:*",
     "@vidya/module-timetable": "workspace:*",
     "@vidya/module-coursework": "workspace:*",
+    "@vidya/module-syllabus": "workspace:*",
     "@vidya/module-fees": "workspace:*",
     "@vidya/module-notices": "workspace:*",
     "@vidya/module-results": "workspace:*",

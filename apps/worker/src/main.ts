@@ -56,6 +56,7 @@ import {
 import { createPortalModule } from "@vidya/module-portal";
 import { createTimetableModule } from "@vidya/module-timetable";
 import { createCourseworkModule } from "@vidya/module-coursework";
+import { createSyllabusModule } from "@vidya/module-syllabus";
 import { FEES_MODULE_NAME, INVOICE_GENERATE_JOB_NAME, createFeesModule } from "@vidya/module-fees";
 import { createNoticesModule } from "@vidya/module-notices";
 import { createResultsModule } from "@vidya/module-results";
@@ -255,6 +256,14 @@ async function main(): Promise<void> {
     storage: { client: objectStorage, bucket: config.s3.bucket },
   });
 
+  // --- syllabus --- (no jobs; included for registry <-> composition parity)
+  const syllabus = createSyllabusModule({
+    db,
+    audit: system.service.audit,
+    scopeChecker: identityCore.scopeChecker,
+    peopleDirectory: people.service.directory,
+  });
+
   // --- fees ---
   const feesQueue = createModuleQueue({
     module: FEES_MODULE_NAME,
@@ -293,6 +302,7 @@ async function main(): Promise<void> {
     reporting,
     timetable,
     coursework,
+    syllabus,
     fees,
     notices,
     results,

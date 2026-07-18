@@ -36,6 +36,7 @@ import {
 import { createPortalModule } from "@vidya/module-portal";
 import { createTimetableModule } from "@vidya/module-timetable";
 import { createCourseworkModule } from "@vidya/module-coursework";
+import { createSyllabusModule } from "@vidya/module-syllabus";
 import { FEES_MODULE_NAME, INVOICE_GENERATE_JOB_NAME, createFeesModule } from "@vidya/module-fees";
 import { createNoticesModule } from "@vidya/module-notices";
 import { createResultsModule } from "@vidya/module-results";
@@ -244,6 +245,14 @@ function buildWebRuntime(): WebRuntime {
     storage: { client: objectStorage, bucket: config.s3.bucket },
   });
 
+  // --- syllabus ---
+  const syllabus = createSyllabusModule({
+    db,
+    audit: system.service.audit,
+    scopeChecker: identityCore.scopeChecker,
+    peopleDirectory: people.service.directory,
+  });
+
   // --- fees ---
   const feesQueue = createModuleQueue({
     module: FEES_MODULE_NAME,
@@ -282,6 +291,7 @@ function buildWebRuntime(): WebRuntime {
     reporting,
     timetable,
     coursework,
+    syllabus,
     fees,
     notices,
     results,
