@@ -4,6 +4,7 @@ import {
   api,
   ApiError,
   currentAcademicYear,
+  type AssignmentView,
   type FeeInvoiceView,
   type RosterCard,
   type StudentStatus,
@@ -41,6 +42,7 @@ type ClassOpt = {
   sectionId: string;
   sectionName: string;
   className: string;
+  classId: string;
   subjectId?: string;
   subjectName?: string;
 };
@@ -65,6 +67,7 @@ export default function ClassWorkspacePage() {
   const [pick, setPick] = useState(0);
   const [cards, setCards] = useState<Card[] | null>(null);
   const [feesDues, setFeesDues] = useState<Map<string, number> | null>(null);
+  const [teachers, setTeachers] = useState<AssignmentView[] | null>(null);
   const [today, setToday] = useState<TtToday | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<Filter>("all");
@@ -100,6 +103,7 @@ export default function ClassWorkspacePage() {
               sectionId: s.sectionId,
               sectionName: s.name,
               className,
+              classId: tile.classId,
               subjectId,
               subjectName: subjectId ? dash.names[subjectId] : undefined,
             });
@@ -124,21 +128,24 @@ export default function ClassWorkspacePage() {
     let alive = true;
     setCards(null);
     setFeesDues(null);
+    setTeachers(null);
     setError(null);
-    // Fees are a best-effort overlay: a 403 (out of fee-read scope) must not
-    // fail the roster, so it resolves to an empty invoice set.
+    // Fees and subject-teachers are best-effort overlays: a 403 (out of
+    // scope) must not fail the roster, so they resolve to empty sets.
     Promise.all([
       api.sectionRoster(opt.sectionId),
       api.rosterAttendance(opt.sectionId, { academicYear: year, subjectId: opt.subjectId }),
       api.feesSectionInvoices(opt.sectionId, year).catch(() => ({ invoices: [] as FeeInvoiceView[] })),
+      api.classTeacherAssignments(opt.classId).catch(() => ({ assignments: [] as AssignmentView[] })),
     ])
-      .then(([roster, att, fees]) => {
+      .then(([roster, att, fees, assignments]) => {
         if (!alive) return;
         const byId = new Map(att.cards.map((c) => [c.studentId, c]));
         setCards(roster.students.map((student, idx) => ({ student, att: byId.get(student.id) ?? null, idx })));
         const dues = new Map<string, number>();
         for (const inv of fees.invoices) dues.set(inv.studentId, (dues.get(inv.studentId) ?? 0) + inv.duesPaise);
         setFeesDues(dues);
+        setTeachers(assignments.assignments);
       })
       .catch(() => alive && setError("Couldn't load this roster."));
     return () => {
@@ -379,6 +386,33 @@ export default function ClassWorkspacePage() {
           </div>
 
           <aside className="cw-aside">
+            <div className="cw-panel">
+              <div className="cw-panel-h">
+                <h2>Subject teachers</h2>
+                <span className="hint">{teachers ? `${teachers.length}` : ""}</span>
+              </div>
+              {teachers === null ? (
+                <Skeleton lines={3} />
+              ) : teachers.length === 0 ? (
+                <p className="strip-empty" style={{ padding: "10px 16px" }}>No teachers assigned yet.</p>
+              ) : (
+                <div className="cw-tl">
+                  {teachers.map((a) => (
+                    <div className="cw-tl-row" key={a.id}>
+                      <div className="cw-tl-body">
+                        <div className="cw-slot">
+                          <div className="cw-slot-t">
+                            {a.kind === "class_teacher" ? "Class teacher" : a.subjectName ?? "Unknown subject"}
+                          </div>
+                          <div className="cw-slot-s">{a.teacherName ?? "Unknown teacher"}</div>
+                          {a.kind === "class_teacher" ? <span className="tag">CT</span> : null}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
             <div className="cw-panel">
               <div className="cw-panel-h">
                 <h2>Today</h2>

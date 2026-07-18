@@ -227,6 +227,7 @@ export interface TeacherView {
 export interface AssignmentView {
   id: string; teacherId: string; classId: string; subjectId: string | null;
   kind: "subject_teacher" | "class_teacher"; academicYear: string;
+  teacherName: string | null; subjectName: string | null;
 }
 export interface GrantView {
   id: string; role: Role; collegeId: string;

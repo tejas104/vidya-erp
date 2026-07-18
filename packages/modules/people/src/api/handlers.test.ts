@@ -483,11 +483,36 @@ describe("teacher & assignment handlers", () => {
       ).status,
     ).toBe(404);
 
+    // A second teacher as class_teacher (no subject) — covers the null-subject case.
+    const secondTeacherCreated = await harness.handlers["people.teacher-create"]!(
+      ctx({ body: { collegeId: harness.org.college.id, staffNo: "T2", fullName: "Devika" } }),
+    );
+    expect(secondTeacherCreated.status).toBe(201);
+    const secondTeacherId = (secondTeacherCreated.body as { id: string }).id;
+    const classTeacherCreated = await harness.handlers["people.assignment-create"]!(
+      ctx({
+        params: { teacherId: secondTeacherId },
+        body: { classId: harness.org.classRow.id, kind: "class_teacher", academicYear: "2026-27" },
+      }),
+    );
+    expect(classTeacherCreated.status).toBe(201);
+    expect((classTeacherCreated.body as { teacherName: string | null }).teacherName).toBe("Devika");
+    expect((classTeacherCreated.body as { subjectName: string | null }).subjectName).toBeNull();
+
     const listing = await harness.handlers["people.class-assignments"]!(
       ctx({ params: { classId: harness.org.classRow.id } }),
     );
     expect(listing.status).toBe(200);
-    expect((listing.body as { assignments: unknown[] }).assignments).toHaveLength(1);
+    const assignmentsList = (listing.body as {
+      assignments: { teacherId: string; kind: string; teacherName: string | null; subjectName: string | null }[];
+    }).assignments;
+    expect(assignmentsList).toHaveLength(2);
+    const subjectTeacherRow = assignmentsList.find((a) => a.kind === "subject_teacher")!;
+    expect(subjectTeacherRow.teacherName).toBe("Asha");
+    expect(subjectTeacherRow.subjectName).toBe("Mathematics");
+    const classTeacherRow = assignmentsList.find((a) => a.kind === "class_teacher")!;
+    expect(classTeacherRow.teacherName).toBe("Devika");
+    expect(classTeacherRow.subjectName).toBeNull();
     expect(
       (
         await harness.handlers["people.class-assignments"]!(

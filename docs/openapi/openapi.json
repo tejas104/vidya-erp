@@ -5751,6 +5751,14 @@
                     },
                     "academicYear": {
                       "type": "string"
+                    },
+                    "teacherName": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "subjectName": {
+                      "type": "string",
+                      "nullable": true
                     }
                   },
                   "required": [
@@ -5759,7 +5767,9 @@
                     "classId",
                     "subjectId",
                     "kind",
-                    "academicYear"
+                    "academicYear",
+                    "teacherName",
+                    "subjectName"
                   ]
                 }
               }
@@ -5978,6 +5988,14 @@
                           },
                           "academicYear": {
                             "type": "string"
+                          },
+                          "teacherName": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "subjectName": {
+                            "type": "string",
+                            "nullable": true
                           }
                         },
                         "required": [
@@ -5986,7 +6004,9 @@
                           "classId",
                           "subjectId",
                           "kind",
-                          "academicYear"
+                          "academicYear",
+                          "teacherName",
+                          "subjectName"
                         ]
                       }
                     }

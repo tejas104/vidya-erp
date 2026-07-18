@@ -124,6 +124,9 @@ export const assignmentViewSchema = z.object({
   subjectId: z.string().nullable(),
   kind: z.enum(["subject_teacher", "class_teacher"]),
   academicYear: z.string(),
+  /** Enriched display names (additive) — null when the referenced row is gone. */
+  teacherName: z.string().nullable(),
+  subjectName: z.string().nullable(),
 });
 
 export const importViewSchema = z.object({

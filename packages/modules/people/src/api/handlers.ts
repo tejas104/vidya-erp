@@ -753,6 +753,7 @@ export function createPeopleHandlers(deps: PeopleHandlerDeps): Record<string, Ro
       if (created === null) {
         return notFound();
       }
+      const subject = created.subjectId === null ? null : await deps.org.getSubject(created.subjectId);
       return {
         status: 201,
         body: {
@@ -762,6 +763,8 @@ export function createPeopleHandlers(deps: PeopleHandlerDeps): Record<string, Ro
           subjectId: created.subjectId,
           kind: created.kind,
           academicYear: created.academicYear,
+          teacherName: teacher.fullName,
+          subjectName: subject?.name ?? null,
         },
         audit: {
           resourceId: created.id,
@@ -829,6 +832,19 @@ export function createPeopleHandlers(deps: PeopleHandlerDeps): Record<string, Ro
       return scope.result;
     }
     const assignments = await deps.assignments.assignmentsByClass(params.classId);
+    // Batch-resolve names, one lookup per distinct id (a class has few teachers/subjects).
+    const teacherNames = new Map<string, string | null>();
+    const subjectNames = new Map<string, string | null>();
+    for (const assignment of assignments) {
+      if (!teacherNames.has(assignment.teacherId)) {
+        const teacher = await deps.people.getTeacher(assignment.teacherId);
+        teacherNames.set(assignment.teacherId, teacher?.fullName ?? null);
+      }
+      if (assignment.subjectId !== null && !subjectNames.has(assignment.subjectId)) {
+        const subject = await deps.org.getSubject(assignment.subjectId);
+        subjectNames.set(assignment.subjectId, subject?.name ?? null);
+      }
+    }
     return {
       status: 200,
       body: {
@@ -839,6 +855,8 @@ export function createPeopleHandlers(deps: PeopleHandlerDeps): Record<string, Ro
           subjectId: assignment.subjectId,
           kind: assignment.kind,
           academicYear: assignment.academicYear,
+          teacherName: teacherNames.get(assignment.teacherId) ?? null,
+          subjectName: assignment.subjectId === null ? null : (subjectNames.get(assignment.subjectId) ?? null),
         })),
       },
     };
