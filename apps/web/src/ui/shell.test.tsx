@@ -27,12 +27,15 @@ describe("Sidebar (role-gated)", () => {
     expect(screen.getByRole("link", { name: /attendance/i })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /marks/i })).not.toBeInTheDocument();
   });
-  it("a principal sees Dashboard and the read-only Syllabus link, but no teacher-only Teaching links", () => {
+  it("a principal sees Dashboard but no Teaching group", () => {
     render(<Sidebar roles={["principal"]} open={false} onClose={() => {}} />);
     expect(screen.getByRole("link", { name: /dashboard/i })).toBeInTheDocument();
+    expect(screen.queryByText("Teaching")).not.toBeInTheDocument();
+  });
+  it("a principal sees the read-only Syllabus link under Administration", () => {
+    render(<Sidebar roles={["principal"]} open={false} onClose={() => {}} />);
+    expect(screen.getByText("Administration")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /syllabus/i })).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: /attendance/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: /marks/i })).not.toBeInTheDocument();
   });
   it("marks the current route as active", () => {
     render(<Sidebar roles={["principal"]} open={false} onClose={() => {}} />);

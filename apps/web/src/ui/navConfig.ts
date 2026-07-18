@@ -28,8 +28,9 @@ export const NAV: NavEntry[] = [
   { href: "/manage/marks", label: "Marks", icon: "marks", group: "Teaching", roles: ["teacher"] },
   // --- coursework ---
   { href: "/manage/coursework", label: "Coursework", icon: "file", group: "Teaching", roles: ["teacher", "class_teacher"] },
-  // --- syllabus ---
-  { href: "/manage/syllabus", label: "Syllabus", icon: "file", group: "Teaching", roles: ["teacher", "class_teacher", "hod", "principal", "admin"] },
+  // --- syllabus --- teachers author under Teaching; principal/admin oversee (read-only) under Administration
+  { href: "/manage/syllabus", label: "Syllabus", icon: "file", group: "Teaching", roles: ["teacher", "class_teacher", "hod"] },
+  { href: "/manage/syllabus", label: "Syllabus", icon: "file", group: "Administration", roles: ["principal", "admin"] },
   // --- fees ---
   { href: "/manage/fees", label: "Fees", icon: "rupee", group: "Fees", roles: ["accountant", "admin", "principal"] },
   // accountant reconciles against student records + documents (read-only)
