@@ -108,6 +108,8 @@ export interface AcademicsModuleDeps {
     resourceId: string,
     limit: number,
   ) => Promise<AuditHistoryEntry[]>;
+  /** System module's action-filtered audit read-back — powers the section-corrections queue. */
+  readonly readAuditByAction: (action: string, limit: number) => Promise<AuditHistoryEntry[]>;
 }
 
 /** The academics public service: the read model consumed by analytics (#5). */
@@ -139,7 +141,9 @@ export function createAcademicsModule(
       attendance,
       marks,
       scopeChecker: deps.scopeChecker,
+      peopleDirectory: deps.peopleDirectory,
       readAudit: deps.readAudit,
+      readAuditByAction: deps.readAuditByAction,
     }),
     jobProcessors: {
       [GAP_SCAN_JOB_NAME]: createGapScanProcessor(attendance),

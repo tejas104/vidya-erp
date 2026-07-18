@@ -20,6 +20,7 @@ import {
 } from "@vidya/platform";
 import { createSystemHandlers } from "./api/handlers";
 import {
+  readAuditEventsByAction,
   readAuditEventsForResource,
   readRecentAuditEvents,
   SystemAuditLogger,
@@ -56,6 +57,8 @@ export interface SystemService {
     resourceId: string,
     limit: number,
   ): Promise<AuditLogRecord[]>;
+  /** Recent events for one action college-wide, newest first (e.g. a corrections queue). */
+  readAuditEventsByAction(action: string, limit: number): Promise<AuditLogRecord[]>;
 }
 
 export interface SystemModuleDeps {
@@ -86,6 +89,8 @@ export function createSystemModule(deps: SystemModuleDeps): RuntimeModule<System
       readRecentAuditEvents: (limit: number) => readRecentAuditEvents(deps.db, limit),
       readAuditEventsForResource: (resourceType: string, resourceId: string, limit: number) =>
         readAuditEventsForResource(deps.db, resourceType, resourceId, limit),
+      readAuditEventsByAction: (action: string, limit: number) =>
+        readAuditEventsByAction(deps.db, action, limit),
     },
   };
   assertModuleWiring(module);

@@ -116,6 +116,13 @@ export function buildStack() {
           details: row.details,
         }),
       ),
+    readAuditByAction: async (action, limit) =>
+      (await system.service.readAuditEventsByAction(action, limit)).map((row) => ({
+        action: row.action,
+        actorId: row.actorId,
+        occurredAt: row.occurredAt,
+        details: row.details,
+      })),
   });
 
   const enqueuedRollups: { source: string }[] = [];

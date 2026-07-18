@@ -7,6 +7,7 @@ import type {
   RouteResult,
   ScopeChecker,
 } from "@vidya/platform";
+import type { PeopleDirectory } from "@vidya/module-people";
 import {
   AttendanceService,
   InvalidEntriesError,
@@ -35,11 +36,14 @@ export interface AcademicsHandlerDeps {
   readonly attendance: AttendanceService;
   readonly marks: MarksService;
   readonly scopeChecker: ScopeChecker;
+  readonly peopleDirectory: PeopleDirectory;
   readonly readAudit: (
     resourceType: string,
     resourceId: string,
     limit: number,
   ) => Promise<AuditHistoryEntry[]>;
+  /** System module's action-filtered audit read-back — powers the section-corrections queue. */
+  readonly readAuditByAction: (action: string, limit: number) => Promise<AuditHistoryEntry[]>;
 }
 
 function denied(ctx: RouteContext, reason: string): RouteResult {
@@ -619,6 +623,87 @@ export function createAcademicsHandlers(deps: AcademicsHandlerDeps): Record<stri
     return { status: 200, body: { history } };
   };
 
+  const sectionCorrections: RouteHandler = async (ctx) => {
+    const principal = ctx.principal as Principal;
+    const params = ctx.request.params as { sectionId: string };
+    const query = ctx.request.query as { limit: number };
+    const position = await deps.attendance.sectionPosition(params.sectionId);
+    if (position === null) {
+      return notFound();
+    }
+    const scope = checkScope(deps.scopeChecker, ctx, principal, "read", attendanceRef(position));
+    if (!scope.ok) {
+      return scope.result;
+    }
+    const events = await deps.readAuditByAction("academics.attendance-corrected", query.limit);
+
+    // Corrections are logged college-wide; keep only this section's — cache
+    // each distinct session's sectionId so a burst of corrections on the
+    // same session costs one lookup, not one per row.
+    const sectionOfSession = new Map<string, string | null>();
+    const relevant: { event: (typeof events)[number]; details: { sessionId: string; studentId: string; before: AttendanceStatus; after: AttendanceStatus } }[] = [];
+    for (const event of events) {
+      const details = event.details as Partial<{
+        sessionId: string;
+        studentId: string;
+        before: AttendanceStatus;
+        after: AttendanceStatus;
+      }> | null;
+      if (
+        details?.sessionId === undefined ||
+        details.studentId === undefined ||
+        details.before === undefined ||
+        details.after === undefined
+      ) {
+        continue;
+      }
+      let sectionId = sectionOfSession.get(details.sessionId);
+      if (sectionId === undefined) {
+        const session = await deps.attendance.getSession(details.sessionId);
+        sectionId = session?.sectionId ?? null;
+        sectionOfSession.set(details.sessionId, sectionId);
+      }
+      if (sectionId === params.sectionId) {
+        relevant.push({
+          event,
+          details: details as { sessionId: string; studentId: string; before: AttendanceStatus; after: AttendanceStatus },
+        });
+      }
+    }
+
+    const studentNames = await deps.peopleDirectory.namesFor(relevant.map((r) => r.details.studentId));
+
+    // Actor names are a best-effort extra: the audit actorId is the
+    // identity-user id, resolved to a teacher only if that teacher link
+    // exists — cheap because distinct actors in a recent queue are few.
+    const actorIds = [...new Set(relevant.map((r) => r.event.actorId).filter((id): id is string => id !== null))];
+    const actorNames = new Map<string, string>();
+    await Promise.all(
+      actorIds.map(async (actorId) => {
+        const teacher = await deps.peopleDirectory.teacherByIdentityUser(actorId);
+        if (teacher !== null) {
+          actorNames.set(actorId, teacher.fullName);
+        }
+      }),
+    );
+
+    const corrections = relevant
+      .sort((a, b) => b.event.occurredAt.getTime() - a.event.occurredAt.getTime())
+      .map(({ event, details }) => {
+        const byName = event.actorId !== null ? actorNames.get(event.actorId) : undefined;
+        return {
+          sessionId: details.sessionId,
+          studentId: details.studentId,
+          studentName: studentNames.get(details.studentId) ?? details.studentId,
+          before: details.before,
+          after: details.after,
+          at: event.occurredAt.toISOString(),
+          ...(byName !== undefined ? { byName } : {}),
+        };
+      });
+    return { status: 200, body: { corrections } };
+  };
+
   return {
     "academics.attendance-record": attendanceRecord,
     "academics.attendance-correct": attendanceCorrect,
@@ -635,5 +720,6 @@ export function createAcademicsHandlers(deps: AcademicsHandlerDeps): Record<stri
     "academics.assessment-marks": assessmentMarks,
     "academics.student-marks": studentMarks,
     "academics.mark-history": markHistory,
+    "academics.section-corrections": sectionCorrections,
   };
 }

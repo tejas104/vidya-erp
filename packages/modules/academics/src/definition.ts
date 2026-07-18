@@ -464,6 +464,41 @@ const routes: RouteSpec[] = [
       404: { description: "No such mark", schema: problemSchema },
     },
   },
+  {
+    id: "academics.section-corrections",
+    module: MODULE_NAME,
+    method: "GET",
+    path: "/api/v1/academics/sections/{sectionId}/corrections",
+    summary: "A section's recent attendance corrections (audit-log-derived queue)",
+    description:
+      "Reads the college-wide recent academics.attendance-corrected audit events and keeps only this section's, newest first — the workspace's corrections review queue.",
+    tags: ["academics-attendance"],
+    auth: ANY_AUTHENTICATED,
+    request: {
+      params: z.object({ sectionId: idSchema }),
+      query: z.object({ limit: z.coerce.number().int().min(1).max(200).default(50) }),
+    },
+    responses: {
+      200: {
+        description: "Corrections, newest first",
+        schema: z.object({
+          corrections: z.array(
+            z.object({
+              sessionId: z.string(),
+              studentId: z.string(),
+              studentName: z.string(),
+              before: attendanceStatusSchema,
+              after: attendanceStatusSchema,
+              at: z.string(),
+              byName: z.string().optional(),
+            }),
+          ),
+        }),
+      },
+      403: { description: "Scope check denied", schema: problemSchema },
+      404: { description: "No such section", schema: problemSchema },
+    },
+  },
 ];
 
 // ---------------------------------------------------------------------------

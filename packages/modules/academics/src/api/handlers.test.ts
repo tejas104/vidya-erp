@@ -31,7 +31,10 @@ class StubScopeChecker implements ScopeChecker {
   }
 }
 
-function makeHarness(historyRows: Partial<Record<string, AuditHistoryEntry[]>> = {}) {
+function makeHarness(
+  historyRows: Partial<Record<string, AuditHistoryEntry[]>> = {},
+  actionEvents: Partial<Record<string, AuditHistoryEntry[]>> = {},
+) {
   const attendanceRepo = new InMemoryAttendanceRepo();
   const marksRepo = new InMemoryMarksRepo();
   const scopeChecker = new StubScopeChecker();
@@ -43,9 +46,11 @@ function makeHarness(historyRows: Partial<Record<string, AuditHistoryEntry[]>> =
     attendance,
     marks,
     scopeChecker,
+    peopleDirectory: directory,
     readAudit: async (resourceType) => historyRows[resourceType] ?? [],
+    readAuditByAction: async (action) => actionEvents[action] ?? [],
   });
-  return { handlers, attendanceRepo, marksRepo, scopeChecker, attendance, marks };
+  return { handlers, attendanceRepo, marksRepo, scopeChecker, attendance, marks, directory };
 }
 
 const teacher: Principal = {
@@ -208,6 +213,99 @@ describe("attendance handlers", () => {
       (
         await harness.handlers["academics.student-attendance"]!(
           ctx({ params: { studentId: "stu_ghost" }, query: {} }),
+        )
+      ).status,
+    ).toBe(404);
+  });
+
+  it("section-corrections keeps only this section's events, resolves names, newest first; 403/404 hold", async () => {
+    const actionEvents: Partial<Record<string, AuditHistoryEntry[]>> = {};
+    const harness = makeHarness({}, actionEvents);
+    const inA = await harness.handlers["academics.attendance-record"]!(ctx({ body: sessionBody }));
+    const sessionA = (inA.body as { id: string }).id;
+    const inB = await harness.handlers["academics.attendance-record"]!(
+      ctx({
+        body: {
+          ...sessionBody,
+          sectionId: ORG.sectionB,
+          entries: [{ studentId: ORG.studentB1, status: "present" }],
+        },
+      }),
+    );
+    const sessionB = (inB.body as { id: string }).id;
+
+    // College-wide feed: one correction in section A (older), one in B (newer),
+    // and one dangling (unknown session) that must be dropped, not crash.
+    actionEvents["academics.attendance-corrected"] = [
+      {
+        action: "academics.attendance-corrected",
+        actorId: "t-math",
+        occurredAt: new Date("2026-07-06T09:00:00Z"),
+        details: { sessionId: sessionA, studentId: ORG.studentA1, before: "absent", after: "late" },
+      },
+      {
+        action: "academics.attendance-corrected",
+        actorId: null,
+        occurredAt: new Date("2026-07-06T10:00:00Z"),
+        details: { sessionId: sessionB, studentId: ORG.studentB1, before: "present", after: "absent" },
+      },
+      {
+        action: "academics.attendance-corrected",
+        actorId: "t-math",
+        occurredAt: new Date("2026-07-06T11:00:00Z"),
+        details: { sessionId: "ses_ghost", studentId: ORG.studentA1, before: "present", after: "late" },
+      },
+    ];
+
+    const served = await harness.handlers["academics.section-corrections"]!(
+      ctx({ params: { sectionId: ORG.sectionA }, query: { limit: 50 } }),
+    );
+    expect(served.status).toBe(200);
+    const body = served.body as {
+      corrections: {
+        sessionId: string;
+        studentId: string;
+        studentName: string;
+        before: string;
+        after: string;
+        byName?: string;
+      }[];
+    };
+    // FakePeopleDirectory.teacherByIdentityUser always returns null, so the
+    // actor name is genuinely unresolvable here — byName is correctly omitted.
+    expect(body.corrections).toEqual([
+      {
+        sessionId: sessionA,
+        studentId: ORG.studentA1,
+        studentName: "Meera Nair",
+        before: "absent",
+        after: "late",
+        at: "2026-07-06T09:00:00.000Z",
+      },
+    ]);
+
+    // Once the actor's identity id resolves to a teacher, byName appears.
+    harness.directory.teacherByIdentityUser = async (identityUserId) =>
+      identityUserId === "t-math"
+        ? { teacherId: "tch_math", collegeId: ORG.collegeId, fullName: "Math Teacher" }
+        : null;
+    const withActor = await harness.handlers["academics.section-corrections"]!(
+      ctx({ params: { sectionId: ORG.sectionA }, query: { limit: 50 } }),
+    );
+    expect((withActor.body as typeof body).corrections[0]?.byName).toBe("Math Teacher");
+
+    harness.scopeChecker.decide = () => false;
+    expect(
+      (
+        await harness.handlers["academics.section-corrections"]!(
+          ctx({ params: { sectionId: ORG.sectionA }, query: { limit: 50 } }),
+        )
+      ).status,
+    ).toBe(403);
+    expect(
+      (
+        await harness.handlers["academics.section-corrections"]!(
+          ctx({ params: { sectionId: "sec_ghost" }, query: { limit: 50 } }),
         )
       ).status,
     ).toBe(404);

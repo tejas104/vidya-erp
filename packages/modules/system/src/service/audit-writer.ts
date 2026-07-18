@@ -38,6 +38,27 @@ export async function readRecentAuditEvents(db: Db, limit: number): Promise<Audi
 }
 
 /**
+ * Recent events for one action, newest first — e.g. every attendance
+ * correction college-wide, for a section-scoped corrections queue to
+ * filter down from (Vidya #4's recent-corrections read rides on this).
+ */
+export async function readAuditEventsByAction(
+  db: Db,
+  action: string,
+  limit: number,
+): Promise<AuditLogRecord[]> {
+  if (!Number.isInteger(limit) || limit < 1 || limit > 1000) {
+    throw new RangeError("limit must be an integer between 1 and 1000");
+  }
+  return db
+    .select()
+    .from(sysAuditLog)
+    .where(eq(sysAuditLog.action, action))
+    .orderBy(desc(sysAuditLog.occurredAt))
+    .limit(limit);
+}
+
+/**
  * The change history of one resource, newest first — e.g. every grade
  * change of a mark (Vidya #4's differential history rides on this).
  */

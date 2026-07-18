@@ -163,6 +163,15 @@ export interface SessionSummary {
   id: string; subjectId: string; heldOn: string; slot: string; academicYear: string;
   counts: { present: number; absent: number; late: number; excused: number };
 }
+export interface SectionCorrection {
+  sessionId: string;
+  studentId: string;
+  studentName: string;
+  before: AttendanceStatus;
+  after: AttendanceStatus;
+  at: string;
+  byName?: string;
+}
 export interface RosterCard {
   studentId: string;
   counts: { present: number; absent: number; late: number; excused: number };
@@ -643,6 +652,13 @@ export const api = {
       `/api/v1/academics/attendance/sessions/${encodeURIComponent(sessionId)}/entries/${encodeURIComponent(studentId)}`,
       { status },
     ),
+  sectionCorrections: (sectionId: string, opts: { limit?: number } = {}) => {
+    const q = new URLSearchParams();
+    if (opts.limit) q.set("limit", String(opts.limit));
+    return get<{ corrections: SectionCorrection[] }>(
+      `/api/v1/academics/sections/${encodeURIComponent(sectionId)}/corrections?${q}`,
+    );
+  },
   // academics — marks
   classAssessments: (classId: string, year: string) =>
     get<{ assessments: AssessmentView[] }>(`/api/v1/academics/classes/${encodeURIComponent(classId)}/assessments?academicYear=${year}`),

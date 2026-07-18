@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { AuditEvent, Db } from "@vidya/platform";
-import { SystemAuditLogger, readRecentAuditEvents } from "./audit-writer";
+import { SystemAuditLogger, readAuditEventsByAction, readRecentAuditEvents } from "./audit-writer";
 
 const event: AuditEvent = {
   module: "system",
@@ -60,6 +60,34 @@ describe("readRecentAuditEvents", () => {
     const db = { select: vi.fn(() => ({ from })) } as unknown as Db;
     const result = await readRecentAuditEvents(db, 2);
     expect(result).toBe(rows);
+    expect(limit).toHaveBeenCalledWith(2);
+  });
+});
+
+describe("readAuditEventsByAction", () => {
+  it("validates the limit bounds", async () => {
+    const db = {} as Db;
+    await expect(readAuditEventsByAction(db, "academics.attendance-corrected", 0)).rejects.toThrow(
+      RangeError,
+    );
+    await expect(readAuditEventsByAction(db, "academics.attendance-corrected", 1001)).rejects.toThrow(
+      RangeError,
+    );
+    await expect(readAuditEventsByAction(db, "academics.attendance-corrected", 2.5)).rejects.toThrow(
+      RangeError,
+    );
+  });
+
+  it("queries newest-first, filtered by action, with the requested limit", async () => {
+    const rows = [{ id: 2 }, { id: 1 }];
+    const limit = vi.fn(async () => rows);
+    const orderBy = vi.fn(() => ({ limit }));
+    const where = vi.fn(() => ({ orderBy }));
+    const from = vi.fn(() => ({ where }));
+    const db = { select: vi.fn(() => ({ from })) } as unknown as Db;
+    const result = await readAuditEventsByAction(db, "academics.attendance-corrected", 2);
+    expect(result).toBe(rows);
+    expect(where).toHaveBeenCalledTimes(1);
     expect(limit).toHaveBeenCalledWith(2);
   });
 });

@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   api,
   ApiError,
@@ -7,6 +7,7 @@ import {
   type AssignmentView,
   type FeeInvoiceView,
   type RosterCard,
+  type SectionCorrection,
   type StudentStatus,
   type StudentView,
   type TtToday,
@@ -38,6 +39,16 @@ const initials = (name: string): string => {
   return ((p[0]?.[0] ?? "") + (p.length > 1 ? p[p.length - 1]![0] : "")).toUpperCase() || "·";
 };
 
+/** "just now" / "3h ago" / "2d ago" / a date past a week (mirrors NotificationBell). */
+function ago(iso: string): string {
+  const secs = (Date.now() - new Date(iso).getTime()) / 1000;
+  if (secs < 60) return "just now";
+  if (secs < 3600) return `${Math.floor(secs / 60)}m ago`;
+  if (secs < 86400) return `${Math.floor(secs / 3600)}h ago`;
+  if (secs < 604800) return `${Math.floor(secs / 86400)}d ago`;
+  return new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short" });
+}
+
 type ClassOpt = {
   sectionId: string;
   sectionName: string;
@@ -68,6 +79,8 @@ export default function ClassWorkspacePage() {
   const [cards, setCards] = useState<Card[] | null>(null);
   const [feesDues, setFeesDues] = useState<Map<string, number> | null>(null);
   const [teachers, setTeachers] = useState<AssignmentView[] | null>(null);
+  const [corrections, setCorrections] = useState<SectionCorrection[] | null>(null);
+  const correctionsRef = useRef<HTMLDivElement>(null);
   const [today, setToday] = useState<TtToday | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<Filter>("all");
@@ -129,16 +142,18 @@ export default function ClassWorkspacePage() {
     setCards(null);
     setFeesDues(null);
     setTeachers(null);
+    setCorrections(null);
     setError(null);
-    // Fees and subject-teachers are best-effort overlays: a 403 (out of
-    // scope) must not fail the roster, so they resolve to empty sets.
+    // Fees, subject-teachers, and corrections are best-effort overlays: a
+    // 403 (out of scope) must not fail the roster, so they resolve to empty sets.
     Promise.all([
       api.sectionRoster(opt.sectionId),
       api.rosterAttendance(opt.sectionId, { academicYear: year, subjectId: opt.subjectId }),
       api.feesSectionInvoices(opt.sectionId, year).catch(() => ({ invoices: [] as FeeInvoiceView[] })),
       api.classTeacherAssignments(opt.classId).catch(() => ({ assignments: [] as AssignmentView[] })),
+      api.sectionCorrections(opt.sectionId).catch(() => ({ corrections: [] as SectionCorrection[] })),
     ])
-      .then(([roster, att, fees, assignments]) => {
+      .then(([roster, att, fees, assignments, corr]) => {
         if (!alive) return;
         const byId = new Map(att.cards.map((c) => [c.studentId, c]));
         setCards(roster.students.map((student, idx) => ({ student, att: byId.get(student.id) ?? null, idx })));
@@ -146,6 +161,7 @@ export default function ClassWorkspacePage() {
         for (const inv of fees.invoices) dues.set(inv.studentId, (dues.get(inv.studentId) ?? 0) + inv.duesPaise);
         setFeesDues(dues);
         setTeachers(assignments.assignments);
+        setCorrections(corr.corrections);
       })
       .catch(() => alive && setError("Couldn't load this roster."));
     return () => {
@@ -300,7 +316,11 @@ export default function ClassWorkspacePage() {
                 >
                   Mark attendance
                 </a>
-                <button className="cw-hbtn ghost" disabled title="corrections queue not wired yet">
+                <button
+                  type="button"
+                  className="cw-hbtn ghost"
+                  onClick={() => correctionsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
+                >
                   Review corrections
                 </button>
               </div>
@@ -406,6 +426,33 @@ export default function ClassWorkspacePage() {
                           </div>
                           <div className="cw-slot-s">{a.teacherName ?? "Unknown teacher"}</div>
                           {a.kind === "class_teacher" ? <span className="tag">CT</span> : null}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="cw-panel" ref={correctionsRef}>
+              <div className="cw-panel-h">
+                <h2>Recent corrections</h2>
+                <span className="hint">{corrections ? `${corrections.length}` : ""}</span>
+              </div>
+              {corrections === null ? (
+                <Skeleton lines={3} />
+              ) : corrections.length === 0 ? (
+                <p className="strip-empty" style={{ padding: "10px 16px" }}>No corrections recorded.</p>
+              ) : (
+                <div className="cw-tl">
+                  {corrections.map((c) => (
+                    <div className="cw-tl-row" key={`${c.sessionId}/${c.studentId}/${c.at}`}>
+                      <div className="cw-tl-body">
+                        <div className="cw-slot">
+                          <div className="cw-slot-t">{c.studentName}</div>
+                          <div className="cw-slot-s">
+                            {c.before} → {c.after} · {ago(c.at)}
+                            {c.byName ? ` · ${c.byName}` : ""}
+                          </div>
                         </div>
                       </div>
                     </div>
