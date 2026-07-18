@@ -635,6 +635,11 @@ export function createAcademicsHandlers(deps: AcademicsHandlerDeps): Record<stri
     if (!scope.ok) {
       return scope.result;
     }
+    // ponytail: the recency budget (query.limit) is spent college-wide
+    // BEFORE the section filter below, not per-section — a very busy
+    // college could push a quiet section's older corrections out of this
+    // page. Upgrade path if that bites: a resourceType/section-scoped audit
+    // index queryable directly by section instead of by action alone.
     const events = await deps.readAuditByAction("academics.attendance-corrected", query.limit);
 
     // Corrections are logged college-wide; keep only this section's — cache
