@@ -636,7 +636,7 @@ export function createAcademicsHandlers(deps: AcademicsHandlerDeps): Record<stri
       return scope.result;
     }
     // ponytail: the recency budget (query.limit) is spent platform-wide
-    // BEFORE the section filter below — sys_audit_log has no college column,
+    // BEFORE the section filter below — the audit log has no college column,
     // so every college's corrections share one budget (in the on-prem
     // single-college deployment this equals college-wide; it only bites a
     // multi-tenant install where another college's burst could push a quiet
