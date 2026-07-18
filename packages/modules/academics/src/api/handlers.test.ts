@@ -310,6 +310,55 @@ describe("attendance handlers", () => {
       ).status,
     ).toBe(404);
   });
+
+  it("section-corrections row-filters per session subject scope (same section, other subject stays hidden)", async () => {
+    const actionEvents: Partial<Record<string, AuditHistoryEntry[]>> = {};
+    const harness = makeHarness({}, actionEvents);
+    // Two sessions in the SAME section, on different subjects.
+    const inMath = await harness.handlers["academics.attendance-record"]!(
+      ctx({ body: { ...sessionBody, subjectId: ORG.mathId } }),
+    );
+    const sessionMath = (inMath.body as { id: string }).id;
+    const inPhysics = await harness.handlers["academics.attendance-record"]!(
+      ctx({
+        body: {
+          ...sessionBody,
+          heldOn: "2026-07-07",
+          subjectId: ORG.physicsId,
+        },
+      }),
+    );
+    const sessionPhysics = (inPhysics.body as { id: string }).id;
+
+    actionEvents["academics.attendance-corrected"] = [
+      {
+        action: "academics.attendance-corrected",
+        actorId: "t-math",
+        occurredAt: new Date("2026-07-06T09:00:00Z"),
+        details: { sessionId: sessionMath, studentId: ORG.studentA1, before: "absent", after: "late" },
+      },
+      {
+        action: "academics.attendance-corrected",
+        actorId: "t-phys",
+        occurredAt: new Date("2026-07-07T09:00:00Z"),
+        details: { sessionId: sessionPhysics, studentId: ORG.studentA1, before: "present", after: "absent" },
+      },
+    ];
+
+    // A physics-only teacher: granted at the section-level outer gate
+    // (subjectId undefined, e.g. via a broader grant) but only at the
+    // per-session tier for physics — mirrors a subject teacher's real grant.
+    harness.scopeChecker.decide = (resource) =>
+      resource.subjectId === undefined || resource.subjectId === ORG.physicsId;
+
+    const served = await harness.handlers["academics.section-corrections"]!(
+      ctx({ params: { sectionId: ORG.sectionA }, query: { limit: 50 } }),
+    );
+    expect(served.status).toBe(200);
+    const body = served.body as { corrections: { sessionId: string }[] };
+    expect(body.corrections).toHaveLength(1);
+    expect(body.corrections[0]?.sessionId).toBe(sessionPhysics);
+  });
 });
 
 describe("marks handlers", () => {

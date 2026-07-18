@@ -646,10 +646,14 @@ export function createAcademicsHandlers(deps: AcademicsHandlerDeps): Record<stri
     const events = await deps.readAuditByAction("academics.attendance-corrected", query.limit);
 
     // Corrections are logged platform-wide (no per-college audit partition);
-    // keep only this section's — cache
-    // each distinct session's sectionId so a burst of corrections on the
-    // same session costs one lookup, not one per row.
-    const sectionOfSession = new Map<string, string | null>();
+    // keep only this section's, AND only sessions this caller may read at
+    // the per-session subject tier — the outer scope check above is
+    // section-level only (sectionPosition has no subjectId), so without this
+    // a same-section teacher of a different subject could see another
+    // subject's correction history. Mirrors sectionRosterAttendance's
+    // per-record filter. Cache each distinct session so a burst of
+    // corrections on the same session costs one lookup, not one per row.
+    const sessionOfId = new Map<string, Awaited<ReturnType<typeof deps.attendance.getSession>>>();
     const relevant: { event: (typeof events)[number]; details: { sessionId: string; studentId: string; before: AttendanceStatus; after: AttendanceStatus } }[] = [];
     for (const event of events) {
       const details = event.details as Partial<{
@@ -666,13 +670,16 @@ export function createAcademicsHandlers(deps: AcademicsHandlerDeps): Record<stri
       ) {
         continue;
       }
-      let sectionId = sectionOfSession.get(details.sessionId);
-      if (sectionId === undefined) {
-        const session = await deps.attendance.getSession(details.sessionId);
-        sectionId = session?.sectionId ?? null;
-        sectionOfSession.set(details.sessionId, sectionId);
+      let session = sessionOfId.get(details.sessionId);
+      if (session === undefined) {
+        session = await deps.attendance.getSession(details.sessionId);
+        sessionOfId.set(details.sessionId, session);
       }
-      if (sectionId === params.sectionId) {
+      if (
+        session !== null &&
+        session.sectionId === params.sectionId &&
+        deps.scopeChecker.check(principal, "read", attendanceRef(session)).granted
+      ) {
         relevant.push({
           event,
           details: details as { sessionId: string; studentId: string; before: AttendanceStatus; after: AttendanceStatus },

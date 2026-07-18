@@ -30,11 +30,15 @@ const ids = {
   studentId: "",
   otherDepartmentId: "",
   otherClassId: "",
+  subjectAId: "",
+  subjectBId: "",
 };
 
 const PASSWORD = "corrections-pass-123";
 let classTeacherCookie = "";
 let outsiderCookie = "";
+let subjectATeacherCookie = "";
+let subjectBTeacherCookie = "";
 
 async function provisionTeacher(
   username: string,
@@ -129,12 +133,35 @@ beforeAll(async () => {
   });
   const otherPhysicsId = ((await otherPhysics.json()) as { id: string }).id;
 
+  // Two subjects WITHIN this section's own class — used to prove a
+  // same-section, different-subject teacher can't see the other subject's
+  // correction history (the outer section gate is coarse; the row filter
+  // must do the real work).
+  const subjectA = await stack.call("people.subject-create", {
+    cookie: adminCookie,
+    body: { departmentId: ids.departmentId, name: "Chemistry", code: `CHE-${runId}` },
+  });
+  ids.subjectAId = ((await subjectA.json()) as { id: string }).id;
+  const subjectB = await stack.call("people.subject-create", {
+    cookie: adminCookie,
+    body: { departmentId: ids.departmentId, name: "Biology", code: `BIO-${runId}` },
+  });
+  ids.subjectBId = ((await subjectB.json()) as { id: string }).id;
+
   classTeacherCookie = await provisionTeacher(`ct-${runId}`, `TCC-${runId}`, ids.classId, {
     kind: "class_teacher",
   });
   outsiderCookie = await provisionTeacher(`phys-${runId}`, `TCP-${runId}`, ids.otherClassId, {
     kind: "subject_teacher",
     subjectId: otherPhysicsId,
+  });
+  subjectATeacherCookie = await provisionTeacher(`chem-${runId}`, `TCA-${runId}`, ids.classId, {
+    kind: "subject_teacher",
+    subjectId: ids.subjectAId,
+  });
+  subjectBTeacherCookie = await provisionTeacher(`bio-${runId}`, `TCB-${runId}`, ids.classId, {
+    kind: "subject_teacher",
+    subjectId: ids.subjectBId,
   });
 });
 
@@ -196,5 +223,42 @@ describe("section-corrections queue (audit-log-derived)", () => {
       query: { limit: "50" },
     });
     expect(missing.status).toBe(404);
+  });
+
+  it("row-filters per session subject: a same-section, different-subject teacher can't see another subject's correction", async () => {
+    // Subject A's own period, corrected — this is the record that must stay hidden from subject B.
+    const subjectASession = await stack.call("academics.attendance-record", {
+      cookie: subjectATeacherCookie,
+      body: {
+        sectionId: ids.sectionId,
+        subjectId: ids.subjectAId,
+        heldOn: "2026-07-09",
+        slot: "p1",
+        academicYear: "2026-27",
+        entries: [{ studentId: ids.studentId, status: "absent" }],
+      },
+    });
+    expect(subjectASession.status).toBe(201);
+    const sessionId = ((await subjectASession.json()) as { id: string }).id;
+
+    const corrected = await stack.call("academics.attendance-correct", {
+      cookie: subjectATeacherCookie,
+      params: { sessionId, studentId: ids.studentId },
+      body: { status: "present" },
+    });
+    expect(corrected.status).toBe(200);
+
+    // Subject B teacher: same section, different subject — passes the
+    // coarse outer (non-subject) section gate, since the real matrix grants
+    // "read" on non-subject records to any teacher grant covering the org
+    // path, but must NOT see subject A's correction once row-filtered.
+    const queue = await stack.call("academics.section-corrections", {
+      cookie: subjectBTeacherCookie,
+      params: { sectionId: ids.sectionId },
+      query: { limit: "50" },
+    });
+    expect(queue.status).toBe(200);
+    const body = (await queue.json()) as { corrections: { sessionId: string }[] };
+    expect(body.corrections.some((c) => c.sessionId === sessionId)).toBe(false);
   });
 });
