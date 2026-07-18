@@ -9,6 +9,7 @@ import {
   type ExamSlotView,
   type FeeMyInvoice,
   type MyResults,
+  type MySyllabus,
   type PortalAttendance,
   type PortalMarks,
   type PortalMe,
@@ -22,6 +23,7 @@ import { Modal } from "@/ui/Modal";
 import { PageHeader } from "@/ui/PageHeader";
 import { Card } from "@/ui/Card";
 import { Badge } from "@/ui/Badge";
+import { RingStat } from "@/ui/RingStat";
 import { StatTile, Sparkline, SubjectBars, TrendLine } from "@/ui/charts";
 import { DataTable, type Column } from "@/ui/DataTable";
 import { EmptyState } from "@/ui/EmptyState";
@@ -51,6 +53,8 @@ type Load =
       results: MyResults | null;
       /** null = exams module not answering — the section stays hidden. */
       exams: ExamSlotView[] | null;
+      /** null = syllabus module not answering — the section stays hidden. */
+      syllabus: MySyllabus | null;
     };
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -103,6 +107,7 @@ export default function PortalPage() {
         const fees = await api.feesMyFees().then((r) => r.invoices).catch(() => null);
         const results = await api.resMyResults().catch(() => null);
         const exams = await api.exmMySchedule().then((r) => r.slots).catch(() => null);
+        const syllabus = await api.mySyllabus(year).catch(() => null);
         if (alive)
           setLoad({
             state: "ok",
@@ -116,6 +121,7 @@ export default function PortalPage() {
             fees,
             results,
             exams,
+            syllabus,
           });
       } catch (caught) {
         if (!alive) return;
@@ -139,7 +145,7 @@ export default function PortalPage() {
   }
   if (load.state === "error") return <EmptyState title="Couldn't load your register." message="Try again shortly." />;
 
-  const { me, attendance, marks, timetable, today, assignments, materials, fees, results, exams } = load;
+  const { me, attendance, marks, timetable, today, assignments, materials, fees, results, exams, syllabus } = load;
   const todayIso = new Date().toISOString().slice(0, 10);
   const totalDues = fees === null ? 0 : fees.reduce((sum, invoice) => sum + invoice.duesPaise, 0);
   const gridCell = (day: number, periodNo: number) =>
@@ -457,6 +463,63 @@ export default function PortalPage() {
               </div>
             </>
           )}
+        </section>
+      ) : null}
+
+      {/* --- syllabus coverage --- */}
+      {syllabus !== null && syllabus.subjects.length > 0 ? (
+        <section className="section" aria-label="Course coverage">
+          <div className="section-head"><h2>Course coverage</h2></div>
+          <div className="grid">
+            {syllabus.subjects.map((subject) => {
+              const tone = subject.coveragePct >= 100 ? "good" : subject.coveragePct > 0 ? "warn" : "bad";
+              const units = subject.units.slice().sort((a, b) => a.position - b.position);
+              return (
+                <Card key={subject.subjectId} title={subject.subjectName}>
+                  <RingStat
+                    pct={subject.coveragePct}
+                    display={`${Math.round(subject.coveragePct)}%`}
+                    label="Coverage"
+                    value={`${units.length} unit${units.length === 1 ? "" : "s"}`}
+                    tone={tone}
+                  />
+                  <div style={{ marginTop: "var(--space-3)", display: "grid", gap: 6 }}>
+                    {units.map((unit) => (
+                      <details key={unit.id}>
+                        <summary style={{ cursor: "pointer", fontSize: 14 }}>
+                          <strong>{unit.title}</strong>{" "}
+                          <span style={{ opacity: 0.65, fontSize: 12.5 }}>{Math.round(unit.coveragePct)}%</span>
+                        </summary>
+                        <div style={{ marginTop: 6, display: "grid", gap: 4, paddingLeft: "var(--space-3)" }}>
+                          {unit.topics
+                            .slice()
+                            .sort((a, b) => a.position - b.position)
+                            .map((topic) => (
+                              <div key={topic.id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
+                                <span
+                                  aria-hidden="true"
+                                  style={{
+                                    width: 8,
+                                    height: 8,
+                                    borderRadius: "50%",
+                                    background: topic.taughtOn !== null ? "var(--good)" : "var(--line-2)",
+                                    flexShrink: 0,
+                                  }}
+                                />
+                                <span>{topic.title}</span>
+                                {topic.taughtOn !== null ? (
+                                  <span className="num" style={{ opacity: 0.6, fontSize: 12 }}>{topic.taughtOn}</span>
+                                ) : null}
+                              </div>
+                            ))}
+                        </div>
+                      </details>
+                    ))}
+                  </div>
+                </Card>
+              );
+            })}
+          </div>
         </section>
       ) : null}
 

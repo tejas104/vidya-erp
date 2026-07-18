@@ -7,7 +7,7 @@ vi.mock("./api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./api")>();
   return {
     ...actual,
-    api: { ...actual.api, portalMe: vi.fn(), portalAttendance: vi.fn(), portalMarks: vi.fn(), portalTimetable: vi.fn(), portalToday: vi.fn(), cwkMyAssignments: vi.fn(), cwkMyMaterials: vi.fn(), feesMyFees: vi.fn(), resMyResults: vi.fn(), exmMySchedule: vi.fn() },
+    api: { ...actual.api, portalMe: vi.fn(), portalAttendance: vi.fn(), portalMarks: vi.fn(), portalTimetable: vi.fn(), portalToday: vi.fn(), cwkMyAssignments: vi.fn(), cwkMyMaterials: vi.fn(), feesMyFees: vi.fn(), resMyResults: vi.fn(), exmMySchedule: vi.fn(), mySyllabus: vi.fn() },
   };
 });
 
@@ -67,6 +67,23 @@ beforeEach(() => {
     ],
     overallPct: 72,
   });
+  (api.mySyllabus as ReturnType<typeof vi.fn>).mockResolvedValue({
+    subjects: [
+      {
+        subjectId: "sub_1", subjectName: "Data Structures", coveragePct: 50,
+        units: [
+          {
+            id: "unit_1", classId: "cls_1", subjectId: "sub_1", subjectName: "Data Structures",
+            title: "Trees", position: 0, academicYear: "2026-27", coveragePct: 50,
+            topics: [
+              { id: "top_1", title: "Binary trees", position: 0, taughtOn: "2026-07-01" },
+              { id: "top_2", title: "AVL trees", position: 1, taughtOn: null },
+            ],
+          },
+        ],
+      },
+    ],
+  });
 });
 
 describe("/portal (student self-view)", () => {
@@ -118,6 +135,20 @@ describe("/portal (student self-view)", () => {
     render(<PortalPage />);
     expect(await screen.findByText("No exams scheduled.")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /download hall ticket/i })).not.toBeInTheDocument();
+  });
+  it("shows course coverage with a unit's taught/pending topics", async () => {
+    render(<PortalPage />);
+    expect(await screen.findByText("Course coverage")).toBeInTheDocument();
+    expect(screen.getAllByText("50%").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText("Trees")).toBeInTheDocument();
+    expect(screen.getByText("Binary trees")).toBeInTheDocument();
+    expect(screen.getAllByText("2026-07-01").length).toBeGreaterThanOrEqual(1);
+  });
+  it("hides course coverage when the syllabus module doesn't answer", async () => {
+    (api.mySyllabus as ReturnType<typeof vi.fn>).mockRejectedValue(new Error("not deployed"));
+    render(<PortalPage />);
+    await screen.findByText(/Hello, Aarav\./);
+    expect(screen.queryByText("Course coverage")).not.toBeInTheDocument();
   });
   it("shows the unlinked state on 404", async () => {
     const { ApiError } = await import("./api");
