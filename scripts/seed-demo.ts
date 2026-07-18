@@ -112,7 +112,7 @@ const DEPARTMENTS = [
       {
         code: "FYCS",
         name: "FY BSc Computer Science",
-        sections: ["A"],
+        sections: ["A", "B", "C"],
         rosterSection: "A", // where students enrol and records are kept
         classTeacher: { username: "demo-ct-fycs", displayName: "Sunil Kulkarni" },
         subjects: [
@@ -126,11 +126,13 @@ const DEPARTMENTS = [
           "Vivaan Joshi", "Aditi Rao", "Arnav Mehta", "Kavya Nair",
           "Reyansh Shah", "Myra Kapoor",
         ],
+        sectionB: ["Devansh Iyer", "Kritika Menon", "Yash Kulkarni"],
+        sectionC: ["Naina Bhatt", "Aryan Kapoor"],
       },
       {
         code: "SYCS",
         name: "SY BSc Computer Science",
-        sections: ["A"],
+        sections: ["A", "B", "C"],
         rosterSection: "A",
         classTeacher: { username: "demo-ct-sycs", displayName: "Deepa Kulkarni" },
         subjects: [
@@ -142,11 +144,13 @@ const DEPARTMENTS = [
           "Harsh Patil", "Sneha Bhosale", "Aditya Shinde", "Riya Gaikwad",
           "Karan Jadhav", "Pooja More", "Nikhil Chavan", "Sanika Sawant",
         ],
+        sectionB: ["Rutuja Deshmukh", "Abhishek Naik", "Simran Kaur"],
+        sectionC: ["Prathamesh Jadhav", "Komal Shinde"],
       },
       {
         code: "TYCS",
         name: "TY BSc Computer Science",
-        sections: ["A"],
+        sections: ["A", "B", "C"],
         rosterSection: "A",
         classTeacher: { username: "demo-ct-tycs", displayName: "Prakash Gokhale" },
         subjects: [
@@ -158,6 +162,8 @@ const DEPARTMENTS = [
           "Rahul Kadam", "Manasi Bhagat", "Yogesh Thorat", "Divya Pandit",
           "Sameer Dhumal", "Gauri Lokhande",
         ],
+        sectionB: ["Vedant Kulkarni", "Anushka Patil", "Rushikesh More"],
+        sectionC: ["Sayali Gaikwad", "Nilesh Sawant"],
       },
     ],
   },
@@ -169,7 +175,7 @@ const DEPARTMENTS = [
       {
         code: "FYEC",
         name: "FY BSc Electronics",
-        sections: ["A"],
+        sections: ["A", "B", "C"],
         rosterSection: "A",
         classTeacher: { username: "demo-ct-fyec", displayName: "Latha Krishnan" },
         subjects: [
@@ -177,17 +183,21 @@ const DEPARTMENTS = [
           { code: "SIG", name: "Signals & Systems", teacher: { username: "demo-teacher-fyec-sig", displayName: "Anil Kamble" } },
         ],
         students: ["Tara Mehta", "Yash Chauhan", "Nisha Pillai", "Arjun Nair", "Zara Sheikh", "Dev Malhotra", "Ira Sinha", "Neel Verma", "Riya Das", "Om Bhat"],
+        sectionB: ["Advait Rao", "Shreya Kamble", "Parth Malhotra"],
+        sectionC: ["Isha Verma", "Kunal Sinha"],
       },
       {
         code: "SYEC",
         name: "SY BSc Electronics",
-        sections: ["A"],
+        sections: ["A", "B", "C"],
         rosterSection: "A",
         classTeacher: { username: "demo-ct-syec", displayName: "Meena Iyer" },
         subjects: [
           { code: "DIG", name: "Digital Circuits", teacher: { username: "demo-teacher-syec-dig", displayName: "Suresh Naik" } },
         ],
         students: ["Aditi Menon", "Rohit Bhandari", "Sana Shaikh", "Varun Rao", "Anjali Kulkarni", "Farhan Ali", "Pooja Deshpande", "Kiran Patil"],
+        sectionB: ["Ritesh Naik", "Payal Shaikh", "Gaurav Bhandari"],
+        sectionC: ["Snehal Deshpande", "Amit Patil"],
       },
     ],
   },
@@ -199,7 +209,7 @@ const DEPARTMENTS = [
       {
         code: "FYBCOM",
         name: "FY BCom",
-        sections: ["A"],
+        sections: ["A", "B", "C"],
         rosterSection: "A",
         classTeacher: { username: "demo-ct-fybcom", displayName: "Nandini Rao" },
         subjects: [
@@ -211,6 +221,8 @@ const DEPARTMENTS = [
           "Neha Chopra", "Rahul Bansal", "Priyanka Singh", "Karan Malhotra",
           "Ayesha Khan", "Siddharth Rao", "Tanya Mehta", "Vikas Sharma",
         ],
+        sectionB: ["Ankita Jain", "Rohan Bansal", "Shweta Chopra"],
+        sectionC: ["Nikhil Rao", "Divya Sharma"],
       },
     ],
   },
@@ -1070,7 +1082,9 @@ async function main(): Promise<void> {
             feesSectionId = rosterSectionId;
           }
         }
-        console.log(`    class: ${klass.name} — ${studentIds.length} students, ${klass.subjects.length} subjects`);
+        console.log(
+          `    class: ${klass.name} — ${klass.sections.length} sections, ${studentIds.length} students, ${klass.subjects.length} subjects`,
+        );
 
         // 3b) The struggler (student 0) is moved to backlog (ATKT) — the
         //     lifecycle status, audited, record never destroyed. Their F marks
@@ -1269,6 +1283,55 @@ async function main(): Promise<void> {
           }
         }
         console.log(`    timetable: P1–P3 Mon–Fri scheduled`);
+
+        // 5d) Sections B and C: freshly enrolled students, no records — the
+        //     A-anchored data above (attendance/marks/syllabus/timetable) is
+        //     untouched. Gives a future section-switcher real sections to
+        //     switch between (honestly empty of history).
+        let extraCount = 0;
+        for (const [sectionName, names] of [
+          ["B", klass.sectionB] as const,
+          ["C", klass.sectionC] as const,
+        ]) {
+          const sectionId = sectionIds.get(sectionName)!;
+          for (let j = 0; j < names.length; j++) {
+            const fullName = names[j]!;
+            const idx = klass.students.length + extraCount; // continues the class's per-field index series
+            const studentId = (
+              await expectJson<{ id: string }>(
+                await call("people.student-create", {
+                  cookie: adminCookie,
+                  body: { collegeId, admissionNo: `${klass.code}-${sectionName}${String(j + 1).padStart(2, "0")}`, fullName },
+                }),
+                [201],
+                `student ${fullName}`,
+              )
+            ).id;
+            const enroll = await call("people.student-enroll", {
+              cookie: adminCookie,
+              params: { studentId },
+              body: { sectionId, academicYear: YEAR },
+            });
+            if (enroll.status !== 200) throw new Error(`enroll ${fullName}: ${enroll.status}`);
+
+            // Same 2.5 profile depth as the section-A students above.
+            const surname = fullName.split(" ").slice(-1)[0] ?? fullName;
+            const dobYear = 2008 - (klass.code.startsWith("SY") ? 1 : klass.code.startsWith("TY") ? 2 : 0);
+            const profile = await call("people.student-update", {
+              cookie: adminCookie,
+              params: { studentId },
+              body: {
+                phone: `+91 ${9876500000 + idx}`,
+                guardianName: `${idx % 2 === 0 ? "Mr." : "Mrs."} ${surname}`,
+                guardianPhone: `+91 ${9822000000 + idx}`,
+                dob: `${dobYear}-${String((idx % 12) + 1).padStart(2, "0")}-${String((idx % 27) + 1).padStart(2, "0")}`,
+              },
+            });
+            if (profile.status !== 200) throw new Error(`profile ${fullName}: ${profile.status}`);
+            extraCount++;
+          }
+        }
+        console.log(`    sections B/C: ${extraCount} students enrolled (no records — fresh sections)`);
       }
     }
 
