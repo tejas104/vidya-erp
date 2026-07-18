@@ -635,14 +635,18 @@ export function createAcademicsHandlers(deps: AcademicsHandlerDeps): Record<stri
     if (!scope.ok) {
       return scope.result;
     }
-    // ponytail: the recency budget (query.limit) is spent college-wide
-    // BEFORE the section filter below, not per-section — a very busy
-    // college could push a quiet section's older corrections out of this
-    // page. Upgrade path if that bites: a resourceType/section-scoped audit
-    // index queryable directly by section instead of by action alone.
+    // ponytail: the recency budget (query.limit) is spent platform-wide
+    // BEFORE the section filter below — sys_audit_log has no college column,
+    // so every college's corrections share one budget (in the on-prem
+    // single-college deployment this equals college-wide; it only bites a
+    // multi-tenant install where another college's burst could push a quiet
+    // section's older corrections out of this page). Upgrade path: a
+    // section-scoped audit index queryable directly by section, not by
+    // action alone.
     const events = await deps.readAuditByAction("academics.attendance-corrected", query.limit);
 
-    // Corrections are logged college-wide; keep only this section's — cache
+    // Corrections are logged platform-wide (no per-college audit partition);
+    // keep only this section's — cache
     // each distinct session's sectionId so a burst of corrections on the
     // same session costs one lookup, not one per row.
     const sectionOfSession = new Map<string, string | null>();
