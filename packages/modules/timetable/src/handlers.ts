@@ -168,6 +168,25 @@ export function createTimetableHandlers(deps: TimetableHandlerDeps): Record<stri
     };
   };
 
+  /** Shared by my-today/my-week: entryView() + section/class name resolution. */
+  async function myEntryView(rows: TtbEntryRowLike[]) {
+    const base = await entryView(deps.directory, rows);
+    const orgIds = new Set<string>();
+    for (const row of rows) {
+      orgIds.add(row.sectionId);
+      orgIds.add(row.classId);
+    }
+    const names = await deps.directory.namesFor([...orgIds]);
+    return base.map((view, index) => {
+      const row = rows[index]!;
+      return {
+        ...view,
+        sectionName: names.get(row.sectionId) ?? row.sectionId,
+        className: names.get(row.classId) ?? row.classId,
+      };
+    });
+  }
+
   const myToday: RouteHandler = async (ctx) => {
     const principal = ctx.principal as Principal;
     const query = ctx.request.query as { academicYear: string };
@@ -178,27 +197,32 @@ export function createTimetableHandlers(deps: TimetableHandlerDeps): Record<stri
     const day = collegeDayOfWeek();
     const periods = await deps.repo.periodsFor(teacher.collegeId);
     const rows = day === 0 ? [] : await deps.repo.entriesForTeacherDay(teacher.teacherId, query.academicYear, day);
-    const base = await entryView(deps.directory, rows);
-    const orgIds = new Set<string>();
-    for (const row of rows) {
-      orgIds.add(row.sectionId);
-      orgIds.add(row.classId);
-    }
-    const names = await deps.directory.namesFor([...orgIds]);
-    const entries = base.map((view, index) => {
-      const row = rows[index]!;
-      return {
-        ...view,
-        sectionName: names.get(row.sectionId) ?? row.sectionId,
-        className: names.get(row.classId) ?? row.classId,
-      };
-    });
     return {
       status: 200,
       body: {
         dayOfWeek: day,
         periods: periods.map((p) => ({ periodNo: p.periodNo, starts: p.starts, ends: p.ends })),
-        entries,
+        entries: await myEntryView(rows),
+      },
+    };
+  };
+
+  const myWeek: RouteHandler = async (ctx) => {
+    const principal = ctx.principal as Principal;
+    const query = ctx.request.query as { academicYear: string };
+    const teacher = await deps.directory.teacherByIdentityUser(principal.id);
+    if (teacher === null) {
+      return notFound("this sign-in is not linked to a teacher record");
+    }
+    const [periods, rows] = await Promise.all([
+      deps.repo.periodsFor(teacher.collegeId),
+      deps.repo.entriesForTeacher(teacher.teacherId, query.academicYear),
+    ]);
+    return {
+      status: 200,
+      body: {
+        periods: periods.map((p) => ({ periodNo: p.periodNo, starts: p.starts, ends: p.ends })),
+        entries: await myEntryView(rows),
       },
     };
   };
@@ -210,5 +234,6 @@ export function createTimetableHandlers(deps: TimetableHandlerDeps): Record<stri
     "timetable.entry-delete": entryDelete,
     "timetable.section-grid": sectionGrid,
     "timetable.my-today": myToday,
+    "timetable.my-week": myWeek,
   };
 }

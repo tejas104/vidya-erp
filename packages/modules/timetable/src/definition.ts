@@ -160,6 +160,28 @@ const routes: RouteSpec[] = [
       404: { description: "This sign-in is not linked to a teacher record", schema: problemSchema },
     },
   },
+  {
+    id: "timetable.my-week",
+    module: MODULE_NAME,
+    method: "GET",
+    path: "/api/v1/timetable/my/week",
+    summary: "The signed-in teacher's periods for the whole week (self via the identity link)",
+    tags: ["timetable"],
+    auth: TEACHING,
+    request: { query: yearQuery },
+    responses: {
+      200: {
+        description: "The teacher's periods across all days",
+        schema: z.object({
+          periods: z.array(periodSchema),
+          entries: z.array(
+            entryViewSchema.extend({ sectionName: z.string(), className: z.string() }),
+          ),
+        }),
+      },
+      404: { description: "This sign-in is not linked to a teacher record", schema: problemSchema },
+    },
+  },
 ];
 
 export const timetableModuleDefinition: ModuleDefinition = {
