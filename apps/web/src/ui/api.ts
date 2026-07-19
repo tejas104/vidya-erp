@@ -292,6 +292,10 @@ export interface TtToday {
   periods: TtPeriod[];
   entries: (TtEntry & { sectionName: string; className: string })[];
 }
+export interface TtWeek {
+  periods: TtPeriod[];
+  entries: (TtEntry & { sectionName: string; className: string })[];
+}
 
 // --- coursework ---
 export interface CwkAssignment {
@@ -781,6 +785,7 @@ export const api = {
       `/api/v1/timetable/sections/${encodeURIComponent(sectionId)}/grid?academicYear=${year}`,
     ),
   ttMyToday: (year: string) => get<TtToday>(`/api/v1/timetable/my/today?academicYear=${year}`),
+  ttMyWeek: (year: string) => get<TtWeek>(`/api/v1/timetable/my/week?academicYear=${year}`),
   // --- coursework ---
   cwkCreateAssignment: (body: {
     classId: string; subjectId: string; title: string; instructions?: string;
