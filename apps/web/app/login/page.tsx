@@ -7,14 +7,16 @@ export const dynamic = "force-dynamic";
 
 type Role = "student" | "staff";
 
-const COPY: Record<Role, { eyebrow: string; lede: string }> = {
+const COPY: Record<Role, { eyebrow: string; lede: string; hint: string }> = {
   student: {
     eyebrow: "Student portal",
     lede: "See your attendance, marks and notices for the term.",
+    hint: "Use the sign-in your college linked to your record.",
   },
   staff: {
     eyebrow: "Staff sign-in",
     lede: "Your dashboard shows only the classes and records in your scope.",
+    hint: "Use your staff username.",
   },
 };
 
@@ -108,6 +110,7 @@ export default function LoginPage() {
           <p className="eyebrow login-eyebrow">{COPY[role].eyebrow}</p>
           <h1 className="login-title">Welcome back</h1>
           <p className="login-lede">{COPY[role].lede}</p>
+          <p className="login-hint">{COPY[role].hint}</p>
 
           <form onSubmit={submit} noValidate>
             <div className="field">

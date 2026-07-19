@@ -5,6 +5,7 @@ import { useMutation } from "@/ui/useMutation";
 import { useToast } from "@/ui/Toast";
 import { PageHeader } from "@/ui/PageHeader";
 import { StudentDrawer, type DrawerStudent } from "@/ui/StudentDrawer";
+import { DeniedState } from "@/ui/DeniedState";
 
 export const dynamic = "force-dynamic";
 const STATUSES: AttendanceStatus[] = ["present", "absent", "excused"];
@@ -128,7 +129,7 @@ export default function AttendancePage() {
       />
 
       {sections.length === 0 ? (
-        <div className="state"><strong>No sections you can record for.</strong> Open a period from your Today card to mark its attendance.</div>
+        <DeniedState title="No sections you can record for." message="Open a period from your Today card to mark its attendance." />
       ) : (
         <>
           <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 20 }}>

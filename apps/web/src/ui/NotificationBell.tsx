@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { api, type NoticeView, type NoticeKind } from "./api";
 import { Icon } from "./Icon";
 import { pushOverlay, popOverlay, isTopOverlay } from "./overlayStack";
+import { ago } from "./time";
 
 const SEEN_KEY = "vidya-notifs-seen";
 
@@ -18,16 +19,6 @@ const KIND_SOFT: Record<NoticeKind, string> = {
   event: "var(--brand-soft)",
   notice: "var(--line-2)",
 };
-
-/** "just now" / "3h ago" / "2d ago" / a date past a week. */
-function ago(iso: string): string {
-  const secs = (Date.now() - new Date(iso).getTime()) / 1000;
-  if (secs < 60) return "just now";
-  if (secs < 3600) return `${Math.floor(secs / 60)}m ago`;
-  if (secs < 86400) return `${Math.floor(secs / 3600)}h ago`;
-  if (secs < 604800) return `${Math.floor(secs / 86400)}d ago`;
-  return new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short" });
-}
 
 type Load =
   | { state: "loading" }

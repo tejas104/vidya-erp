@@ -9,6 +9,7 @@ import {
 } from "@/ui/api";
 import { Sparkline, StatTile, SubjectBars } from "@/ui/charts";
 import { ReportButton } from "@/ui/ReportButton";
+import { DeniedState } from "@/ui/DeniedState";
 
 export const dynamic = "force-dynamic";
 
@@ -50,9 +51,11 @@ export default function StudentPage({ params }: { params: Promise<{ studentId: s
         {load.state === "loading" ? <p className="page-lede" style={{ marginTop: 20 }}>Loading…</p> : null}
 
         {load.state === "forbidden" ? (
-          <div className="state" style={{ marginTop: 24 }}>
-            <strong>Outside your scope.</strong> None of this student's records fall within the
-            classes or subjects you can see.
+          <div style={{ marginTop: 24 }}>
+            <DeniedState
+              title="Outside your scope."
+              message="None of this student's records fall within the classes or subjects you can see."
+            />
           </div>
         ) : null}
         {load.state === "not-found" ? (

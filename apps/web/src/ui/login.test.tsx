@@ -38,11 +38,13 @@ describe("login page", () => {
     render(<LoginPage />);
     // defaults to student
     expect(screen.getByText("Student portal")).toBeInTheDocument();
+    expect(screen.getByText(/sign-in your college linked to your record/i)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Use demo student login" }));
     expect(screen.getByLabelText("Username")).toHaveValue("demo-student");
 
     fireEvent.click(screen.getByRole("tab", { name: "Staff" }));
     expect(screen.getByText("Staff sign-in")).toBeInTheDocument();
+    expect(screen.getByText(/use your staff username/i)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Use demo staff login" }));
     expect(screen.getByLabelText("Username")).toHaveValue("demo-admin");
   });

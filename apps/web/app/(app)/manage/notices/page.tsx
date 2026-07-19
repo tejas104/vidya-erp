@@ -10,6 +10,7 @@ import { ConfirmDialog } from "@/ui/ConfirmDialog";
 import { DataTable, type Column } from "@/ui/DataTable";
 import { Badge } from "@/ui/Badge";
 import { Skeleton } from "@/ui/Skeleton";
+import { ago } from "@/ui/time";
 
 export const dynamic = "force-dynamic";
 
@@ -111,6 +112,7 @@ export default function NoticesPage() {
       ),
     },
     { key: "aud", header: "Audience", render: (row) => <Badge>{row.audienceLabel}</Badge> },
+    { key: "created", header: "Created", render: (row) => <span className="num">{ago(row.createdAt)}</span> },
     { key: "from", header: "Publish", render: (row) => <span className="num">{row.publishAt.slice(0, 10)}</span> },
     { key: "to", header: "Expires", render: (row) => <span className="num">{row.expiresAt?.slice(0, 10) ?? "—"}</span> },
     { key: "status", header: "Status", render: (row) => <StatusBadge notice={row} now={now} /> },
