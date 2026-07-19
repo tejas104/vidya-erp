@@ -24,7 +24,8 @@ export const NAV: NavEntry[] = [
   // Teaching tools are teacher-owned. Admin is a non-teaching supervisor:
   // it oversees via Reports & Results but cannot change marks/attendance.
   { href: "/manage/classes", label: "My Classes", icon: "students", group: "Teaching", roles: ["teacher", "class_teacher"] },
-  { href: "/manage/my-timetable", label: "My Timetable", icon: "attendance", group: "Teaching", roles: ["teacher", "class_teacher", "hod"] },
+  // roles mirror the my/week route's TEACHING auth (teacher/class_teacher only) — a pure-hod would 403 on the page
+  { href: "/manage/my-timetable", label: "My Timetable", icon: "attendance", group: "Teaching", roles: ["teacher", "class_teacher"] },
   { href: "/manage/attendance", label: "Attendance", icon: "attendance", group: "Teaching", roles: ["teacher", "class_teacher"] },
   { href: "/manage/marks", label: "Marks", icon: "marks", group: "Teaching", roles: ["teacher"] },
   // --- coursework ---
