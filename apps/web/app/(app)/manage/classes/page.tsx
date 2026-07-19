@@ -22,6 +22,7 @@ import { Modal } from "@/ui/Modal";
 import { Field } from "@/ui/Field";
 import { Button } from "@/ui/Button";
 import { useToast } from "@/ui/Toast";
+import { ago } from "@/ui/time";
 
 export const dynamic = "force-dynamic";
 
@@ -38,16 +39,6 @@ const initials = (name: string): string => {
   const p = name.trim().split(/\s+/).filter(Boolean);
   return ((p[0]?.[0] ?? "") + (p.length > 1 ? p[p.length - 1]![0] : "")).toUpperCase() || "·";
 };
-
-/** "just now" / "3h ago" / "2d ago" / a date past a week (mirrors NotificationBell). */
-function ago(iso: string): string {
-  const secs = (Date.now() - new Date(iso).getTime()) / 1000;
-  if (secs < 60) return "just now";
-  if (secs < 3600) return `${Math.floor(secs / 60)}m ago`;
-  if (secs < 86400) return `${Math.floor(secs / 3600)}h ago`;
-  if (secs < 604800) return `${Math.floor(secs / 86400)}d ago`;
-  return new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short" });
-}
 
 type ClassOpt = {
   sectionId: string;

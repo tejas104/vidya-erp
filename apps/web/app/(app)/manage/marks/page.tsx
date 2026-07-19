@@ -4,6 +4,7 @@ import { api, currentAcademicYear, type AssessmentKind, type AssessmentView } fr
 import { useMutation } from "@/ui/useMutation";
 import { useToast } from "@/ui/Toast";
 import { PageHeader } from "@/ui/PageHeader";
+import { DeniedState } from "@/ui/DeniedState";
 
 export const dynamic = "force-dynamic";
 const KINDS: AssessmentKind[] = ["quiz", "exam", "assignment"];
@@ -67,7 +68,7 @@ export default function MarksPage() {
     return (
       <>
         <PageHeader eyebrow="Marks" title="Enter marks" lede="Create an assessment for your subject, then enter each student's score." />
-        <div className="state"><strong>No subject you teach.</strong> Marks are entered by a subject teacher.</div>
+        <DeniedState title="No subject you teach." message="Marks are entered by a subject teacher." />
       </>
     );
   }

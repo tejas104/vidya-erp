@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { api, type DocumentKind, type StudentDocument } from "@/ui/api";
 import { formatPaise } from "@/ui/money";
 import type { StudentFlags } from "@/ui/StudentCard";
+import { ago } from "@/ui/time";
 
 const DOC_KINDS: { value: DocumentKind; label: string }[] = [
   { value: "photo", label: "Photo" },
@@ -235,6 +236,7 @@ export function StudentDrawer({
                           <span className="cw-badge" style={{ marginRight: 6, background: "var(--line-2)", color: "var(--ink-2)" }}>{d.kind}</span>
                           {d.filename}
                         </span>
+                        <span className="num" style={{ color: "var(--ink-3)", flex: "none" }}>{ago(d.createdAt)}</span>
                         <a className="linklike" href={api.docDownloadUrl(d.id)} target="_blank" rel="noreferrer">view</a>
                         <button className="linklike" style={{ color: "var(--bad)", background: "none", border: 0, cursor: "pointer" }} onClick={() => void removeDoc(d.id)}>remove</button>
                       </div>
