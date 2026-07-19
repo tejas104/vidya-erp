@@ -62,6 +62,19 @@ describe("Sidebar (role-gated)", () => {
     expect(screen.queryByText("Administration")).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /^dashboard$/i })).not.toBeInTheDocument();
   });
+  it("a class_teacher sees a 'Class teacher' affordance above Teaching", () => {
+    render(<Sidebar roles={["class_teacher"]} open={false} onClose={() => {}} />);
+    expect(screen.getByText("Class teacher")).toBeInTheDocument();
+  });
+  it("a plain teacher sees Teaching but no 'Class teacher' affordance", () => {
+    render(<Sidebar roles={["teacher"]} open={false} onClose={() => {}} />);
+    expect(screen.getByText("Teaching")).toBeInTheDocument();
+    expect(screen.queryByText("Class teacher")).not.toBeInTheDocument();
+  });
+  it("a principal (no Teaching group) sees no 'Class teacher' affordance", () => {
+    render(<Sidebar roles={["principal"]} open={false} onClose={() => {}} />);
+    expect(screen.queryByText("Class teacher")).not.toBeInTheDocument();
+  });
 });
 
 describe("Topbar", () => {
