@@ -460,7 +460,7 @@ export default function DashboardPage() {
             ) : null}
 
             {/* KPI ROW */}
-            <section className="stats" aria-label="Key figures" style={{ marginBottom: 24 }}>
+            <section className="stats" aria-label="Key figures" style={{ marginBottom: "var(--space-5)" }}>
               {kpiAttendance ? <AttendanceSlot slot={kpiAttendance} /> : null}
               {kpiMarks ? <MarksSlot slot={kpiMarks} /> : null}
               <StatTile value={String(atRisk.length)} label="Students at risk" />

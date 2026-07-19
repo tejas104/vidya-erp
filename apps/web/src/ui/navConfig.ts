@@ -36,12 +36,12 @@ export const NAV: NavEntry[] = [
   // accountant reconciles against student records + documents (read-only)
   { href: "/manage/directory", label: "Student directory", icon: "students", group: "Fees", roles: ["accountant"] },
   // --- notices ---
-  { href: "/manage/notices", label: "Notices", icon: "file", group: "Administration", roles: ["admin", "principal"] },
+  { href: "/manage/notices", label: "Notices", icon: "bell", group: "Administration", roles: ["admin", "principal"] },
   // --- results ---
   { href: "/manage/results", label: "Results", icon: "marks", group: "Administration", roles: ["admin", "principal"] },
   { href: "/manage/backlogs", label: "Backlogs", icon: "marks", group: "Administration", roles: ["admin", "principal"] },
   // --- exams ---
-  { href: "/manage/exams", label: "Exams", icon: "attendance", group: "Administration", roles: ["admin"] },
+  { href: "/manage/exams", label: "Exams", icon: "check", group: "Administration", roles: ["admin"] },
   // --- leave ---
   { href: "/manage/leave", label: "Leave", icon: "file", group: "Teaching", roles: ["teacher", "class_teacher", "hod"] },
   // --- timetable ---

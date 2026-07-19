@@ -20,6 +20,12 @@ export function Sidebar({ roles, open, onClose }: { roles: Role[]; open: boolean
       <nav aria-label="Primary" className="shell-nav">
         {groups.map(({ group, entries }) => (
           <div key={group} className="shell-nav-group">
+            {group === "Teaching" && roles.includes("class_teacher") ? (
+              // Section name isn't in the session/grants payload (IDs only) —
+              // showing it here would need a new fetch, so we surface the
+              // role without it rather than add a dashboard call to the shell.
+              <p className="shell-nav-context">Class teacher</p>
+            ) : null}
             <p className="shell-nav-title">{group}</p>
             {entries.map((entry) => {
               const active = pathname === entry.href || pathname.startsWith(`${entry.href}/`);
