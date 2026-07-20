@@ -628,6 +628,8 @@ export const api = {
     get<ComparisonReport>(`/api/v1/analytics/compare/${level}/${encodeURIComponent(nodeId)}?academicYear=${year}`),
   distribution: (level: string, nodeId: string, year: string) =>
     get<DistributionResponse>(`/api/v1/analytics/distribution/${level}/${encodeURIComponent(nodeId)}?academicYear=${year}`),
+  recomputeAnalytics: (year: string) =>
+    post<{ enqueued: true }>("/api/v1/analytics/recompute", { academicYear: year }),
   // people
   sectionRoster: (sectionId: string) =>
     get<{ students: StudentView[] }>(`/api/v1/people/sections/${encodeURIComponent(sectionId)}/roster`),

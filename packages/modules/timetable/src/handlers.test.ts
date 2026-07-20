@@ -16,7 +16,7 @@ function ctx(principal: Principal, input: { params?: unknown; query?: unknown; b
 }
 
 function makeDeps(
-  opts: { clash?: "teacher" | "section" | "room"; teacherLinked?: boolean; weekRows?: Record<string, unknown>[] } = {},
+  opts: { clash?: "teacher" | "section" | "room"; teacherLinked?: boolean; weekRows?: Record<string, unknown>[]; denyScope?: boolean } = {},
 ) {
   const repo = {
     periodsFor: async () => [{ id: "p1", collegeId: "col_1", periodNo: 1, starts: "09:00", ends: "09:50", createdAt: new Date() }],
@@ -41,7 +41,9 @@ function makeDeps(
     namesFor: async (ids: readonly string[]) => new Map(ids.map((id) => [id, `n:${id}`])),
   } as unknown as PeopleDirectory;
 
-  const scopeChecker = { check: () => ({ granted: true, reason: "test" }) } as unknown as ScopeChecker;
+  const scopeChecker = {
+    check: () => ({ granted: opts.denyScope !== true, reason: "test" }),
+  } as unknown as ScopeChecker;
   return { repo, directory, scopeChecker };
 }
 
@@ -66,6 +68,20 @@ describe("timetable handlers", () => {
     const result = await handlers["timetable.entry-create"]!(ctx(admin, { body }));
     expect(result.status).toBe(201);
     expect((result.body as { subjectName: string }).subjectName).toBe("n:sub_1");
+  });
+
+  it("denies entry-create when the caller's scope does not cover the section (cross-college admin)", async () => {
+    const handlers = createTimetableHandlers(makeDeps({ denyScope: true }));
+    const result = await handlers["timetable.entry-create"]!(ctx(admin, { body }));
+    expect(result.status).toBe(403);
+  });
+
+  it("denies periods-set for a college outside the caller's scope", async () => {
+    const handlers = createTimetableHandlers(makeDeps({ denyScope: true }));
+    const result = await handlers["timetable.periods-set"]!(
+      ctx(admin, { params: { collegeId: "col_OTHER" }, body: { periods: [] } }),
+    );
+    expect(result.status).toBe(403);
   });
 
   it("my-today 404s an unlinked teacher sign-in", async () => {

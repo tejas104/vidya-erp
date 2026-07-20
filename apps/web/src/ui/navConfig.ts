@@ -9,7 +9,12 @@ export interface NavEntry {
   roles: Role[];
 }
 
-const ALL: Role[] = ["admin", "principal", "hod", "class_teacher", "teacher"];
+// All staff-side roles. Entries tagged ALL map to ANY_AUTHENTICATED routes
+// (dashboard, calendar, reports); accountant was wrongly omitted, so an
+// accountant had no nav path to /manage/reports at all. Student is
+// deliberately excluded — students live in the walled-garden /portal and
+// reach reports via its ReportButtons, not the staff nav (see shell.test).
+const ALL: Role[] = ["admin", "principal", "hod", "class_teacher", "teacher", "accountant"];
 
 /**
  * The single nav source. Entries appear only for callers whose roles

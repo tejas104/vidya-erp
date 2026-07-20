@@ -41,15 +41,13 @@ describe("migration harness (ADR-0008)", () => {
     expect(await tableExists("idn_scope_grants")).toBe(false);
 
     const reapplied = await migrateUp(pool, sources, logger);
-    expect(reapplied.map((entry) => `${entry.module}/${entry.name}`)).toEqual([
-      "system/0000_audit_log",
-      "identity/0000_identity",
-      "identity/0001_grant_provenance",
-      "people/0000_people",
-      "academics/0000_academics",
-      "analytics/0000_analytics",
-      "reporting/0000_reporting",
-    ]);
+    // Reapply must restore exactly what was rolled back, in the same order —
+    // derived from the live set rather than a hardcoded list so new modules'
+    // migrations can't silently fall out of this proof (the old fixed list
+    // had gone stale at 7 of 26).
+    expect(reapplied.map((entry) => `${entry.module}/${entry.name}`)).toEqual(
+      applied.applied.map((entry) => `${entry.module}/${entry.name}`),
+    );
     expect(await tableExists("sys_audit_log")).toBe(true);
     expect(await tableExists("idn_users")).toBe(true);
     expect(await tableExists("ppl_colleges")).toBe(true);

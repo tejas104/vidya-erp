@@ -130,6 +130,20 @@ export default function DashboardPage() {
   const [compare, setCompare] = useState<ComparisonReport | null>(null);
   const [distribution, setDistribution] = useState<DistributionResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
+  const [recomputing, setRecomputing] = useState(false);
+
+  async function handleRecompute() {
+    setRecomputing(true);
+    try {
+      await api.recomputeAnalytics(year);
+      setReloadKey((k) => k + 1);
+    } catch {
+      setError("Couldn't start the analytics rebuild. Try again shortly.");
+    } finally {
+      setRecomputing(false);
+    }
+  }
 
   useEffect(() => {
     let alive = true;
@@ -216,7 +230,7 @@ export default function DashboardPage() {
     return () => {
       alive = false;
     };
-  }, [year]);
+  }, [year, reloadKey]);
 
   if (error !== null) {
     return <div className="state">{error}</div>;
@@ -395,6 +409,16 @@ export default function DashboardPage() {
         title={`Good day, ${session.displayName.split(" ")[0]}.`}
         lede="Every figure here is drawn only from records you're allowed to read. Rooms outside your scope simply don't appear."
       />
+
+      {/* --- analytics rebuild (admin only): rollups are precomputed, so an
+              admin can force a rebuild after a bulk data change --- */}
+      {session.roles.includes("admin") ? (
+        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
+          <button type="button" className="btn ghost" onClick={handleRecompute} disabled={recomputing}>
+            {recomputing ? "Rebuilding analytics…" : "Recompute analytics"}
+          </button>
+        </div>
+      ) : null}
 
       {/* --- notices --- */}
       <Noticeboard />

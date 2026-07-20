@@ -1,4 +1,4 @@
-import type { Principal, RouteHandler, ScopeChecker } from "@vidya/platform";
+import type { OrgPath, Principal, RouteHandler, ScopeChecker } from "@vidya/platform";
 import type { PeopleDirectory } from "@vidya/module-people";
 import { SlotClashError, type TimetableRepo, type TtbEntryRowLike } from "./read-model";
 
@@ -54,8 +54,29 @@ async function entryView(
 }
 
 export function createTimetableHandlers(deps: TimetableHandlerDeps): Record<string, RouteHandler> {
+  // Per-record containment: the caller's grant must cover the target org.
+  // Follows section-grid — a "read" check on the timetable resource is the
+  // shared ScopeChecker's college-containment gate. Write authority itself is
+  // role-gated at the route (ADMIN_ONLY); the grant matrix has no timetable
+  // write verb (ADR-0010), so a create/update/delete check would deny even a
+  // legitimate admin — the read check is the correct containment expression.
+  function outOfScope(
+    principal: Principal,
+    org: OrgPath,
+  ): { status: number; body: { message: string } } | null {
+    const decision = deps.scopeChecker.check(principal, "read", {
+      module: "timetable",
+      resourceType: "timetable-entry",
+      org,
+    });
+    return decision.granted ? null : { status: 403, body: { message: "access denied" } };
+  }
+
   const periodsGet: RouteHandler = async (ctx) => {
+    const principal = ctx.principal as Principal;
     const params = ctx.request.params as { collegeId: string };
+    const denied = outOfScope(principal, { collegeId: params.collegeId });
+    if (denied) return denied;
     const periods = await deps.repo.periodsFor(params.collegeId);
     return {
       status: 200,
@@ -64,8 +85,11 @@ export function createTimetableHandlers(deps: TimetableHandlerDeps): Record<stri
   };
 
   const periodsSet: RouteHandler = async (ctx) => {
+    const principal = ctx.principal as Principal;
     const params = ctx.request.params as { collegeId: string };
     const body = ctx.request.body as { periods: { periodNo: number; starts: string; ends: string }[] };
+    const denied = outOfScope(principal, { collegeId: params.collegeId });
+    if (denied) return denied;
     if (!(await deps.directory.collegeExists(params.collegeId))) {
       return notFound("no such college");
     }
@@ -78,6 +102,7 @@ export function createTimetableHandlers(deps: TimetableHandlerDeps): Record<stri
   };
 
   const entryCreate: RouteHandler = async (ctx) => {
+    const principal = ctx.principal as Principal;
     const body = ctx.request.body as {
       sectionId: string;
       subjectId: string;
@@ -91,6 +116,8 @@ export function createTimetableHandlers(deps: TimetableHandlerDeps): Record<stri
     if (path === null || path.departmentId === undefined || path.classId === undefined || path.sectionId === undefined) {
       return notFound("no such section");
     }
+    const denied = outOfScope(principal, path);
+    if (denied) return denied;
     const subjectDept = await deps.directory.subjectDepartment(body.subjectId);
     if (subjectDept === null) {
       return notFound("no such subject");
@@ -125,11 +152,18 @@ export function createTimetableHandlers(deps: TimetableHandlerDeps): Record<stri
   };
 
   const entryDelete: RouteHandler = async (ctx) => {
+    const principal = ctx.principal as Principal;
     const params = ctx.request.params as { entryId: string };
     const entry = await deps.repo.getEntry(params.entryId);
     if (entry === null) {
       return notFound("no such entry");
     }
+    const path = await deps.directory.sectionPath(entry.sectionId);
+    if (path === null) {
+      return notFound("no such entry");
+    }
+    const denied = outOfScope(principal, path);
+    if (denied) return denied;
     await deps.repo.deleteEntry(params.entryId);
     return {
       status: 200,
