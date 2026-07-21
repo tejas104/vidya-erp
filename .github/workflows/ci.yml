@@ -92,3 +92,35 @@ jobs:
 
       - name: Next.js production build
         run: pnpm build
+
+      # E2E (#8): the only tier that exercises Next.js's real file-based router
+      # in a real browser over real HTTP — the guard against orphaned routes.
+      - name: Install Playwright browser
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Seed demo data for E2E
+        env:
+          VIDYA_ALLOW_DEMO_SEED: "true"
+        run: |
+          pnpm db:migrate
+          pnpm seed:demo
+
+      - name: E2E (real browser + HTTP through the App Router)
+        env:
+          # The e2e web server and worker run against the compose-equivalent
+          # service containers above; plain http in CI, so no Secure cookie.
+          SESSION_COOKIE_SECURE: "false"
+          VIDYA_ALLOW_DEMO_SEED: "true"
+        run: |
+          pnpm dev:worker &
+          WORKER_PID=$!
+          pnpm test:e2e
+          kill "$WORKER_PID" 2>/dev/null || true
+
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
