@@ -8,3 +8,4 @@ export * from "./Card/Card";
 export * from "./Skeleton/Skeleton";
 export * from "./EmptyState/EmptyState";
 export * from "./Tabs/Tabs";
+export * from "./PageHeader/PageHeader";
