@@ -1,1 +1,12 @@
-.btn { padding: 8px 16px; border-radius: var(--radius-sm, 8px); background: rebeccapurple; color: white; }
+.btn { font-family: var(--font-sans); font-size: var(--text-16); font-weight: 600;
+  padding: 11px 20px; border-radius: var(--radius-sm); border: 1px solid var(--ink);
+  background: var(--ink); color: var(--paper-raised); cursor: pointer;
+  transition: transform .08s ease, opacity .15s ease; }
+.btn:hover { opacity: .9; }
+.btn:active { transform: translateY(1px); }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+.sm { padding: 7px 14px; font-size: var(--text-14); }
+.primary { background: var(--brand); border-color: var(--brand); color: var(--on-brand); }
+.secondary { background: transparent; color: var(--ink); border-color: var(--rule-strong); }
+.danger { background: var(--bad); border-color: var(--bad); color: var(--on-brand); }
+.ghost { background: transparent; color: var(--ink); border-color: transparent; }
