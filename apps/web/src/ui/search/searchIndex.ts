@@ -27,10 +27,19 @@ type ApiLike = {
   }>;
 };
 
-let cache: IndexEntry[] | null = null;
+// Session cache keyed on the caller's roles — a role change (defensive; a
+// session is single-role today) must not serve another role's scoped results.
+let cache: { key: string; entries: IndexEntry[] } | null = null;
+const keyOf = (roles: Role[]): string => [...roles].sort().join(",");
 
 export function clearIndexCache(): void {
   cache = null;
+}
+
+/** The currently-cached index (any role), or null if not built yet. Lets the
+ *  palette render instantly on re-open without re-fetching. */
+export function getCachedIndex(): IndexEntry[] | null {
+  return cache?.entries ?? null;
 }
 
 export async function buildIndex(
@@ -38,7 +47,8 @@ export async function buildIndex(
   roles: Role[],
   onProgress?: (done: number, total: number) => void,
 ): Promise<IndexEntry[]> {
-  if (cache) return cache;
+  const key = keyOf(roles);
+  if (cache && cache.key === key) return cache.entries;
 
   const pages: IndexEntry[] = NAV.filter(
     (e) => e.group !== "TOP" && e.roles.some((r) => roles.includes(r)),
@@ -73,8 +83,8 @@ export async function buildIndex(
     }),
   );
 
-  cache = [...students, ...pages];
-  return cache;
+  cache = { key, entries: [...students, ...pages] };
+  return cache.entries;
 }
 
 export function filterIndex(entries: IndexEntry[], q: string): { students: IndexEntry[]; pages: IndexEntry[] } {

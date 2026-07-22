@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { buildIndex, filterIndex, clearIndexCache } from "./searchIndex";
+import { buildIndex, filterIndex, clearIndexCache, getCachedIndex } from "./searchIndex";
 
 const apiLike = {
   colleges: vi.fn(async () => ({ colleges: [{ id: "c1", name: "C", code: "C" }] })),
@@ -58,6 +58,20 @@ describe("buildIndex", () => {
     await buildIndex(apiLike as any, ["admin"]);
     await buildIndex(apiLike as any, ["admin"]);
     expect(apiLike.colleges).toHaveBeenCalledTimes(1);
+  });
+
+  it("re-fetches when roles change (cache keyed on roles — no cross-role serving)", async () => {
+    await buildIndex(apiLike as any, ["admin"]);
+    await buildIndex(apiLike as any, ["teacher"]);
+    expect(apiLike.colleges).toHaveBeenCalledTimes(2);
+  });
+
+  it("getCachedIndex returns the built index, null after clear", async () => {
+    expect(getCachedIndex()).toBeNull();
+    const idx = await buildIndex(apiLike as any, ["admin"]);
+    expect(getCachedIndex()).toBe(idx);
+    clearIndexCache();
+    expect(getCachedIndex()).toBeNull();
   });
 
   it("reports progress across pooled roster fetches", async () => {
