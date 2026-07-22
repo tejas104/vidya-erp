@@ -1,12 +1,53 @@
 "use client";
+import { useState } from "react";
 import { usePathname } from "next/navigation";
 import type { Role } from "./api";
 import { Icon } from "./Icon";
-import { visibleNav } from "./navConfig";
+import { domainLabel, visibleNav, type NavEntry } from "./navConfig";
+
+const COLLAPSE_KEY = "vidya-nav-collapsed";
+
+function loadCollapsed(): Set<string> {
+  if (typeof window === "undefined") return new Set();
+  try {
+    const raw = JSON.parse(window.localStorage.getItem(COLLAPSE_KEY) ?? "[]");
+    return new Set(Array.isArray(raw) ? raw : []);
+  } catch {
+    return new Set();
+  }
+}
 
 export function Sidebar({ roles, open, onClose }: { roles: Role[]; open: boolean; onClose: () => void }) {
   const pathname = usePathname();
   const groups = visibleNav(roles);
+  const [collapsed, setCollapsed] = useState<Set<string>>(loadCollapsed);
+
+  function toggle(group: string) {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(group)) next.delete(group);
+      else next.add(group);
+      window.localStorage.setItem(COLLAPSE_KEY, JSON.stringify([...next]));
+      return next;
+    });
+  }
+
+  function renderLink(entry: NavEntry) {
+    const active = pathname === entry.href || pathname.startsWith(`${entry.href}/`);
+    return (
+      <a
+        key={entry.href}
+        href={entry.href}
+        className={`shell-nav-link${active ? " active" : ""}`}
+        aria-current={active ? "page" : undefined}
+        onClick={onClose}
+      >
+        <Icon name={entry.icon} size={17} />
+        {entry.label}
+      </a>
+    );
+  }
+
   return (
     <aside className={`shell-side${open ? " open" : ""}`}>
       <div className="shell-side-head">
@@ -18,32 +59,26 @@ export function Sidebar({ roles, open, onClose }: { roles: Role[]; open: boolean
         </button>
       </div>
       <nav aria-label="Primary" className="shell-nav">
-        {groups.map(({ group, entries }) => (
-          <div key={group} className="shell-nav-group">
-            {group === "Teaching" && roles.includes("class_teacher") ? (
-              // Section name isn't in the session/grants payload (IDs only) —
-              // showing it here would need a new fetch, so we surface the
-              // role without it rather than add a dashboard call to the shell.
-              <p className="shell-nav-context">Class teacher</p>
-            ) : null}
-            <p className="shell-nav-title">{group}</p>
-            {entries.map((entry) => {
-              const active = pathname === entry.href || pathname.startsWith(`${entry.href}/`);
-              return (
-                <a
-                  key={entry.href}
-                  href={entry.href}
-                  className={`shell-nav-link${active ? " active" : ""}`}
-                  aria-current={active ? "page" : undefined}
-                  onClick={onClose}
-                >
-                  <Icon name={entry.icon} size={17} />
-                  {entry.label}
-                </a>
-              );
-            })}
-          </div>
-        ))}
+        {groups.map(({ group, entries }) =>
+          group === "TOP" ? (
+            <div key={group} className="shell-nav-group">
+              {entries.map(renderLink)}
+            </div>
+          ) : (
+            <div key={group} className="shell-nav-group">
+              <button
+                type="button"
+                className="shell-nav-title"
+                aria-expanded={!collapsed.has(group)}
+                onClick={() => toggle(group)}
+              >
+                {domainLabel(group)}
+                <Icon name="chevronDown" size={14} />
+              </button>
+              {!collapsed.has(group) ? entries.map(renderLink) : null}
+            </div>
+          ),
+        )}
       </nav>
       <p className="shell-side-foot">Records you're allowed to read — nothing else.</p>
     </aside>

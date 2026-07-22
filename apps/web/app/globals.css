@@ -1246,15 +1246,24 @@ a {
   color: var(--brand);
 }
 .shell-nav-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
   margin: 0 0 4px;
   padding: 0 var(--space-3);
+  background: none;
+  border: 0;
   font-family: var(--font-mono);
   font-size: 11px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--rail-ink);
   opacity: 0.62;
+  cursor: pointer;
 }
+.shell-nav-title svg { transition: transform 0.15s ease; }
+.shell-nav-title[aria-expanded="false"] svg { transform: rotate(-90deg); }
 .shell-nav-link {
   display: flex;
   align-items: center;

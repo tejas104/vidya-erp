@@ -72,6 +72,10 @@ const LABEL: Record<string, string> = {
   ADMINISTRATION: "Administration",
 };
 
+export function domainLabel(group: string): string {
+  return LABEL[group] ?? group;
+}
+
 export function visibleNav(roles: Role[]): { group: string; entries: NavEntry[] }[] {
   const groups: { group: string; entries: NavEntry[] }[] = [];
   for (const entry of NAV) {
