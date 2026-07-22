@@ -1,0 +1,35 @@
+.stack {
+  position: fixed;
+  bottom: var(--space-5);
+  right: var(--space-5);
+  display: grid;
+  gap: var(--space-2);
+  z-index: 120;
+}
+.toast {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--rule-strong);
+  border-left-width: 3px;
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-2);
+  font-size: var(--text-16);
+  max-width: 380px;
+}
+.good {
+  border-left-color: var(--good);
+}
+.danger {
+  border-left-color: var(--accent);
+}
+.info {
+  border-left-color: var(--line);
+}
+.icon {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+}
