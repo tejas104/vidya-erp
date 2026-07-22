@@ -12,3 +12,4 @@ export * from "./PageHeader/PageHeader";
 export * from "./Modal/Modal";
 export * from "./SlideOver/SlideOver";
 export * from "./Toast/Toast";
+export * from "./StatCard/StatCard";
