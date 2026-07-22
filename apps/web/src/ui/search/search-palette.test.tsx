@@ -18,6 +18,7 @@ vi.mock("./searchIndex", () => ({
 }));
 
 import { SearchPalette } from "./SearchPalette";
+import { buildIndex } from "./searchIndex";
 
 describe("SearchPalette", () => {
   it("filters and navigates on select", async () => {
@@ -45,5 +46,18 @@ describe("SearchPalette", () => {
     await waitFor(() => screen.getByText("Reports"));
     fireEvent.keyDown(input, { key: "Enter" });
     expect(push).toHaveBeenCalledWith("/manage/reports");
+  });
+
+  it("Retry rebuilds exactly once — no double-fire", async () => {
+    const mock = vi.mocked(buildIndex);
+    mock.mockClear();
+    mock.mockRejectedValueOnce(new Error("boom")); // cold build fails
+    render(<SearchPalette open onClose={() => {}} roles={["admin"]} />);
+    await screen.findByText(/couldn.t load/i); // error row
+    expect(mock).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole("button", { name: /retry/i }));
+    await waitFor(() => expect(mock).toHaveBeenCalledTimes(2)); // one more, not two
+    await new Promise((r) => setTimeout(r, 20)); // let any stray effect settle
+    expect(mock).toHaveBeenCalledTimes(2); // still 2 — no double-fire
   });
 });

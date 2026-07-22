@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Modal, Skeleton, EmptyState, Input } from "@vidya/ui-system";
 import { buildIndex, filterIndex, getCachedIndex, type IndexEntry } from "./searchIndex";
@@ -19,21 +19,30 @@ export function SearchPalette({
   const [q, setQ] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
 
+  // Guards against a second concurrent build — Retry is imperative and the
+  // open-effect must never stack a second build on top of an in-flight one.
+  const loadingRef = useRef(false);
   function load() {
+    if (loadingRef.current) return;
+    loadingRef.current = true;
     setLoadError(false);
     setProgress(null);
     buildIndex(api, roles, (done, total) => setProgress({ done, total }))
       .then((entries) => setIndex(entries))
-      .catch(() => setLoadError(true));
+      .catch(() => setLoadError(true))
+      .finally(() => {
+        loadingRef.current = false;
+      });
   }
 
-  // First open only — getCachedIndex() already seeded `index` above when a
-  // prior open already built it, so this only fires on a genuinely cold start.
+  // Cold-start build on open. Fires on `open` transitions only — NOT on
+  // loadError, so Retry (imperative, guarded) can't re-trigger it into a
+  // double build. getCachedIndex() already seeded `index` when a prior open
+  // built it, so a warm re-open does nothing.
   useEffect(() => {
-    if (!open || index !== null || loadError) return;
-    load();
+    if (open && index === null && !loadError) load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, index, loadError]);
+  }, [open]);
 
   useEffect(() => {
     const t = setTimeout(() => setQ(query), DEBOUNCE_MS);
