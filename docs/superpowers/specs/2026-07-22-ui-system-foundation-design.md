@@ -1,6 +1,6 @@
 # S1 — `packages/ui-system` foundation (Assignment #10, Part 1)
 
-**Status:** design, awaiting review
+**Status:** approved — build #10 S1→S5 first, then #10.5 (its precondition)
 **Date:** 2026-07-22
 **Parent:** Assignment #10 (UI overhaul). This is sub-project **S1** of five
 (S1 foundation → S2 migration+IA/nav → S3 responsive+PWA → S4 teacher
@@ -43,6 +43,17 @@ classes. The remaining ~27 screens migrate in S2.
    (`tokens.css`), not TS objects.
 3. **CSS Modules per component** consuming `var(--token)` — real encapsulation;
    makes "no ad-hoc styling" grep-enforceable.
+
+## Step zero — de-risk CSS interop before building anything
+The single thing that could invalidate this whole package shape is Next 16's
+handling of **CSS Modules imported from a workspace package under
+`output: standalone`**. So the first hour is a spike, not a primitive: scaffold
+the package with ONE dummy Button (+ `Button.module.css`), import it in one
+page, run the **prod build** (`pnpm --filter @vidya/web build && start`) and
+confirm the module's CSS is traced into the standalone output and renders. Only
+once that's proven do we build the remaining primitives. If it fails, we resolve
+the interop (transpilePackages / a small CSS entry) or fall back to a
+package-owned global sheet — before, not after, writing 15 components.
 
 ## Package shape
 ```
@@ -94,6 +105,11 @@ a workspace package are supported by Next 16.
 - **Density:** table row height 40px; forms roomier.
 - `tokens.css` is the **only** file permitted to contain raw hex values —
   the Part-3 grep proof asserts no hex outside it.
+- **Preserve the Register non-negotiables that are actually rendering.** The
+  collapse codifies what users see, but must carry three invariants forward
+  intact: IBM Plex Mono (`--font-figure`) on all figures, 1px hairline rules
+  (`--rule`/`--rule-strong` at `--rule-width`), and status-never-color-alone.
+  These are asserted in verification, not assumed.
 
 ## Primitive specs (parity + gaps)
 Props stay close to the current components so S2 migration is mechanical.
@@ -126,17 +142,31 @@ Port **the login screen** ([apps/web/app/login/page.tsx](../../../apps/web/app/l
 onto the package: it uses Button + Input today, is exercised by every e2e
 journey (all log in), and its bespoke `.login-*` classes are self-contained —
 so deleting them from `globals.css` and rebuilding the screen from primitives +
-one page-scoped module is a clean, low-risk first cut. Dashboard is the fallback
-if login's split-hero proves too bespoke to express as primitives in S1.
+one page-scoped module is a clean, low-risk first cut.
+
+**Fallback trigger (pre-decided to stop scope creep):** switch the proof screen
+to **dashboard** the moment login would require *either* more than **one**
+page-scoped `.module.css` *or* **any** new primitive not already in the S1 list
+above. The gradient split-hero is allowed to live as that one page-scoped module;
+it must not spawn new primitives. If it wants to, that's the signal login is too
+bespoke for the S1 proof — take the dashboard instead.
 
 ## Verification (S1 exit criteria — evidence, not intent)
 1. `pnpm -r typecheck` passes including the new package.
 2. Full e2e stays **18/18 green** (prod build + worker), proving the ported
    login screen still works through the real router.
 3. Ported screen renders correctly at **1280px and 360px** (screenshots).
-4. `grep` proof: the ported screen imports only `@vidya/ui-system` for UI, and
-   no hex values exist outside `tokens.css` for the code S1 touches.
-5. `git diff --stat` shows **zero** changes under any `handlers/`, `schema/`,
+4. **Non-negotiables proven, not assumed:** grep shows `--font-figure` is the
+   font on figures in Table and StatCard (and the ported screen's figures);
+   status primitives (StatusBadge, Toast) render an icon/label alongside color.
+5. **Permanent no-ad-hoc-styling gate, not a one-time grep.** Add a CI check
+   (stylelint `color-no-hex` scoped to `**/*.module.css` + a script asserting no
+   hex/`rgb(`/`rgba(` literals outside `packages/ui-system/src/tokens.css`),
+   **repo-wide**, with the current legacy files (`globals.css`, un-migrated
+   screens) in an **explicit ignore-list that S2 shrinks to empty**. This makes
+   "no ad-hoc styling" enforceable on every future commit, not just this one.
+   The check must fail if a new hex literal appears anywhere off the ignore-list.
+6. `git diff --stat` shows **zero** changes under any `handlers/`, `schema/`,
    `migrations/`, or platform `auth/`.
 
 ## Out of scope for S1 (later sub-projects)
@@ -147,9 +177,9 @@ teacher fast-path (S4); new e2e journeys (S5).
 ## Risks
 - **Login is bespoke** (split gradient hero). Mitigation: fallback to dashboard
   as the proof screen; the hero can be a page-scoped module, not a primitive.
-- **CSS Module + workspace-package interop in Next 16.** Mitigation: verify
-  `transpilePackages`/`output: standalone` handles it in the first build; the
-  build already emits standalone, so confirm the package's CSS is traced.
+- **CSS Module + workspace-package interop in Next 16.** Now handled by the
+  **Step zero** spike above — proven with a dummy Button through a prod build
+  before any real primitive is written.
 - **Token collapse regressions.** Mitigation: the collapse keeps the
   currently-rendering values; e2e + screenshots catch visual breakage on the
   ported screen. Full visual coverage comes as screens migrate in S2.
