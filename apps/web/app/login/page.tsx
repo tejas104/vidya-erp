@@ -21,12 +21,18 @@ const COPY: Record<Role, { eyebrow: string; lede: string; hint: string }> = {
 };
 
 // Dev-only convenience: Next inlines NODE_ENV at build, so this whole block
-// disappears from production bundles.
+// disappears from production bundles. One representative account per role from
+// scripts/seed-demo.ts — click to fill the form.
 const IS_DEV = process.env.NODE_ENV !== "production";
-const DEMO: Record<Role, { username: string; password: string }> = {
-  student: { username: "demo-student", password: "demo-student-pass-2026!" },
-  staff: { username: "demo-admin", password: "demo-admin-pass-2026!" },
-};
+const DEMO_ACCOUNTS: { label: string; username: string; password: string }[] = [
+  { label: "Admin", username: "demo-admin", password: "demo-admin-pass-2026!" },
+  { label: "Principal", username: "demo-principal", password: "demo-staff-pass-2026!" },
+  { label: "HoD", username: "demo-hod-cse", password: "demo-staff-pass-2026!" },
+  { label: "Class teacher", username: "demo-ct-fycs", password: "demo-teacher-pass-2026!" },
+  { label: "Teacher", username: "demo-teacher-ds", password: "demo-teacher-pass-2026!" },
+  { label: "Accountant", username: "demo-accountant", password: "demo-accountant-pass-2026!" },
+  { label: "Student", username: "demo-student", password: "demo-student-pass-2026!" },
+];
 
 export default function LoginPage() {
   const [role, setRole] = useState<Role>("student");
@@ -146,17 +152,26 @@ export default function LoginPage() {
           </form>
 
           {IS_DEV ? (
-            <button
-              type="button"
-              className="login-demo"
-              onClick={() => {
-                setUsername(DEMO[role].username);
-                setPassword(DEMO[role].password);
-                setError("");
-              }}
-            >
-              Use demo {role} login
-            </button>
+            <div className="login-demos">
+              <span className="login-demos-label">Demo accounts (dev only)</span>
+              <div className="login-demos-chips">
+                {DEMO_ACCOUNTS.map((acc) => (
+                  <button
+                    key={acc.username}
+                    type="button"
+                    className="login-demo-chip"
+                    title={`${acc.username} / ${acc.password}`}
+                    onClick={() => {
+                      setUsername(acc.username);
+                      setPassword(acc.password);
+                      setError("");
+                    }}
+                  >
+                    {acc.label}
+                  </button>
+                ))}
+              </div>
+            </div>
           ) : null}
         </div>
       </main>
