@@ -10,3 +10,4 @@ export * from "./EmptyState/EmptyState";
 export * from "./Tabs/Tabs";
 export * from "./PageHeader/PageHeader";
 export * from "./Modal/Modal";
+export * from "./SlideOver/SlideOver";

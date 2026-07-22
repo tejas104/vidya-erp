@@ -1,0 +1,57 @@
+.scrim {
+  position: fixed;
+  inset: 0;
+  background: var(--scrim);
+  z-index: 100;
+}
+.panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(400px, 100%);
+  background: var(--paper);
+  box-shadow: var(--shadow-2);
+  outline: none;
+  overflow-y: auto;
+  animation: slide-over-in 0.22s cubic-bezier(0.32, 0.72, 0, 1);
+}
+@keyframes slide-over-in {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--rule);
+}
+.title {
+  font-size: var(--text-20);
+  margin: 0;
+}
+.body {
+  padding: var(--space-5);
+}
+.closeBtn {
+  display: inline-grid;
+  place-items: center;
+  width: var(--space-6);
+  height: var(--space-6);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--ink-2);
+  font-size: var(--text-20);
+  line-height: 1;
+  cursor: pointer;
+}
+.closeBtn:hover {
+  background: var(--paper-sunken);
+  color: var(--ink);
+}
