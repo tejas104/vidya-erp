@@ -5,3 +5,4 @@ export * from "./DatePicker/DatePicker";
 export * from "./Table/Table";
 export * from "./StatusBadge/StatusBadge";
 export * from "./Card/Card";
+export * from "./Skeleton/Skeleton";
