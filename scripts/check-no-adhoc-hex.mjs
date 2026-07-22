@@ -7,14 +7,25 @@ const IGNORE = new Set([
   // add nothing here; only remove as screens migrate
 ]);
 const ALLOW = "packages/ui-system/src/tokens.css";
-const files = globSync("{apps,packages}/**/*.{css,module.css}", { exclude: ["**/node_modules/**"] });
+// Exclude deps and build output explicitly — .next/dist/coverage hold hashed,
+// hex-laden generated CSS that would false-fail the gate after any build.
+const files = globSync("{apps,packages}/**/*.{css,module.css}", {
+  exclude: ["**/node_modules/**", "**/.next/**", "**/dist/**", "**/coverage/**", "**/.turbo/**"],
+});
 const hex = /#[0-9a-fA-F]{3,8}\b|\brgba?\(/;
 const offenders = [];
 for (const f of files) {
   const rel = f.replaceAll("\\", "/");
   if (rel === ALLOW || IGNORE.has(rel)) continue;
-  const lines = readFileSync(f, "utf8").split("\n");
-  lines.forEach((l, i) => { if (hex.test(l)) offenders.push(`${rel}:${i + 1}: ${l.trim()}`); });
+  // Blank out block comments (preserve newlines so line numbers stay accurate)
+  // and url(...) refs (e.g. SVG fragment ids like url(#fade)) before scanning,
+  // so a hex inside a comment or an SVG ref never false-trips the gate.
+  const src = readFileSync(f, "utf8")
+    .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, " "))
+    .replace(/url\([^)]*\)/g, "url()");
+  src.split("\n").forEach((l, i) => {
+    if (hex.test(l)) offenders.push(`${rel}:${i + 1}: ${l.trim()}`);
+  });
 }
 if (offenders.length) {
   console.error("Ad-hoc color literals found outside tokens.css:\n" + offenders.join("\n"));
