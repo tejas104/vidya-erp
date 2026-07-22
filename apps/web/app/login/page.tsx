@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Button, Input } from "@vidya/ui-system";
 import { api, ApiError } from "@/ui/api";
+import styles from "./login.module.css";
 
 export const dynamic = "force-dynamic";
 
@@ -79,12 +81,16 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="login">
-      <aside className="login-hero" aria-hidden="true">
-        <div className="login-hero-inner">
-          <span className="login-word">vidya<span>.</span></span>
-          <p className="login-tagline">Sign in to see your attendance, marks and notices — everything scoped to you.</p>
-          <ul className="login-points">
+    <div className={styles.page}>
+      <aside className={styles.hero} aria-hidden="true">
+        <div className={styles.heroInner}>
+          <span className={styles.word}>
+            vidya<span>.</span>
+          </span>
+          <p className={styles.tagline}>
+            Sign in to see your attendance, marks and notices — everything scoped to you.
+          </p>
+          <ul className={styles.points}>
             <li>Attendance</li>
             <li>Marks &amp; results</li>
             <li>Notices &amp; calendar</li>
@@ -92,13 +98,13 @@ export default function LoginPage() {
         </div>
       </aside>
 
-      <main id="main" className="login-main">
-        <button type="button" className="login-theme" onClick={toggleTheme}>
+      <main id="main" className={styles.main}>
+        <button type="button" className={styles.themeToggle} onClick={toggleTheme}>
           {theme === "dark" ? "paper" : "chalk"}
         </button>
 
-        <div className="login-card">
-          <div className="login-seg" role="tablist" aria-label="Who is signing in">
+        <div className={styles.card}>
+          <div className={styles.seg} role="tablist" aria-label="Who is signing in">
             {(["student", "staff"] as Role[]).map((r) => (
               <button
                 key={r}
@@ -113,53 +119,51 @@ export default function LoginPage() {
             ))}
           </div>
 
-          <p className="eyebrow login-eyebrow">{COPY[role].eyebrow}</p>
-          <h1 className="login-title">Welcome back</h1>
-          <p className="login-lede">{COPY[role].lede}</p>
-          <p className="login-hint">{COPY[role].hint}</p>
+          <p className={`eyebrow ${styles.eyebrow}`}>{COPY[role].eyebrow}</p>
+          <h1 className={styles.title}>Welcome back</h1>
+          <p className={styles.lede}>{COPY[role].lede}</p>
+          <p className={styles.hint}>{COPY[role].hint}</p>
 
           <form onSubmit={submit} noValidate>
-            <div className="field">
-              <label htmlFor="username">Username</label>
-              <input
-                id="username"
-                name="username"
-                autoComplete="username"
-                autoFocus
-                value={username}
-                onChange={(event) => setUsername(event.target.value)}
-                required
-              />
-            </div>
-            <div className="field">
-              <label htmlFor="password">Password</label>
-              <input
-                id="password"
-                name="password"
-                type="password"
-                autoComplete="current-password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                required
-              />
-            </div>
+            <Input
+              id="username"
+              name="username"
+              label="Username"
+              autoComplete="username"
+              autoFocus
+              className={styles.fieldInput}
+              value={username}
+              onChange={(event) => setUsername(event.target.value)}
+              required
+            />
+            <Input
+              id="password"
+              name="password"
+              type="password"
+              label="Password"
+              autoComplete="current-password"
+              className={styles.fieldInput}
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              required
+            />
             <p className="formerror" role="alert" aria-live="polite">
               {error}
             </p>
-            <button className="btn login-submit" type="submit" disabled={busy}>
+            <Button type="submit" className={`login-submit ${styles.submit}`} disabled={busy}>
               {busy ? "Signing in…" : "Sign in"}
-            </button>
+            </Button>
           </form>
 
           {IS_DEV ? (
-            <div className="login-demos">
-              <span className="login-demos-label">Demo accounts (dev only)</span>
-              <div className="login-demos-chips">
+            <div className={styles.demos}>
+              <span className={styles.demosLabel}>Demo accounts (dev only)</span>
+              <div className={styles.demosChips}>
                 {DEMO_ACCOUNTS.map((acc) => (
                   <button
                     key={acc.username}
                     type="button"
-                    className="login-demo-chip"
+                    className={styles.demoChip}
                     title={`${acc.username} / ${acc.password}`}
                     onClick={() => {
                       setUsername(acc.username);
