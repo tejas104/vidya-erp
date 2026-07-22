@@ -23,7 +23,7 @@
   border-left-color: var(--good);
 }
 .danger {
-  border-left-color: var(--accent);
+  border-left-color: var(--bad);
 }
 .info {
   border-left-color: var(--line);

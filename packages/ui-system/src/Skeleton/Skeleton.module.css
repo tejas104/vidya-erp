@@ -7,3 +7,7 @@
 @keyframes shimmer {
   to { background-position: -200% 0; }
 }
+/* Respect reduced-motion: hold a static placeholder instead of the shimmer. */
+@media (prefers-reduced-motion: reduce) {
+  .skel { animation: none; }
+}
