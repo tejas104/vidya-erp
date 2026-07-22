@@ -1,0 +1,12 @@
+.field { display: block; margin-bottom: var(--space-4); }
+
+.label { display: block; font-size: var(--text-14); color: var(--ink-2);
+  margin-bottom: var(--space-2); font-weight: 600; }
+
+.select { width: 100%; font: inherit; padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm); border: 1px solid var(--rule-strong);
+  background: var(--paper-raised); color: var(--ink); }
+.select:focus-visible { border-color: var(--focus); }
+
+.hint { margin: var(--space-1) 0 0; font-size: var(--text-14); color: var(--ink-3); }
+.error { margin: var(--space-1) 0 0; font-size: var(--text-14); color: var(--accent); }
