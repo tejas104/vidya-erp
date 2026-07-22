@@ -18,7 +18,9 @@ export function Tabs({
     e.preventDefault();
     const dir = e.key === "ArrowRight" ? 1 : -1;
     const next = (index + dir + tabs.length) % tabs.length;
-    onChange(tabs[next].id);
+    const nextTab = tabs[next];
+    if (!nextTab) return;
+    onChange(nextTab.id);
     refs.current[next]?.focus();
   };
 
