@@ -48,6 +48,12 @@ describe("SearchPalette", () => {
     expect(push).toHaveBeenCalledWith("/manage/reports");
   });
 
+  it("focuses the search input on open (not the Modal close button)", async () => {
+    render(<SearchPalette open onClose={() => {}} roles={["admin"]} />);
+    const input = await screen.findByRole("textbox");
+    await waitFor(() => expect(input).toHaveFocus());
+  });
+
   it("Retry rebuilds exactly once — no double-fire", async () => {
     const mock = vi.mocked(buildIndex);
     mock.mockClear();

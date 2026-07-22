@@ -44,6 +44,17 @@ export function SearchPalette({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
+  // Modal's focus-trap lands on the Close button on open; move focus to the
+  // search input (after the trap's effect) so Cmd-K → type works immediately.
+  const inputWrapRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const raf = requestAnimationFrame(() => {
+      inputWrapRef.current?.querySelector("input")?.focus();
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [open]);
+
   useEffect(() => {
     const t = setTimeout(() => setQ(query), DEBOUNCE_MS);
     return () => clearTimeout(t);
@@ -105,13 +116,15 @@ export function SearchPalette({
 
   return (
     <Modal open={open} onClose={onClose} title="Search">
-      <Input
-        label="Search students or pages"
-        placeholder="Search students or pages…"
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        onKeyDown={onKeyDown}
-      />
+      <div ref={inputWrapRef}>
+        <Input
+          label="Search students or pages"
+          placeholder="Search students or pages…"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={onKeyDown}
+        />
+      </div>
       <div className={styles.results}>
         {index === null && !loadError ? (
           <div className={styles.loadingRow}>

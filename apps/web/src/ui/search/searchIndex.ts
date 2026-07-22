@@ -61,15 +61,18 @@ export async function buildIndex(
 
   // ponytail: O(sections) roster requests on first open, pooled at 6; holds
   // to ~1-2k students. Real fix = scoped students?q= endpoint scheduled on #11.
+  // Per-section .catch: one failing/transient roster must not sink the whole
+  // index (and take the always-available page shortcuts down with it) — that
+  // section just contributes zero students; the rest + pages still resolve.
   const rosters = await mapPool(
     sections,
     6,
-    (s) => apiLike.sectionRoster(s.id),
+    (s) => apiLike.sectionRoster(s.id).then((r) => r.students).catch(() => []),
     (done, total) => onProgress?.(done, total),
   );
 
   const students: IndexEntry[] = rosters.flatMap((roster) =>
-    roster.students.map((s) => {
+    roster.map((s) => {
       // index entries carry name/roll/section/href only — sectionRoster returns
       // PII (phone/guardian/dob); never copy those in. Adding PII fields
       // requires a deliberate privacy review (session-cached client-memory copy).

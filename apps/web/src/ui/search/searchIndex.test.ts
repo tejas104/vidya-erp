@@ -74,6 +74,42 @@ describe("buildIndex", () => {
     expect(getCachedIndex()).toBeNull();
   });
 
+  it("a failing section roster doesn't sink the index (pages + other students survive)", async () => {
+    const tree2 = {
+      college: { id: "c1", name: "C", code: "C" },
+      departments: [
+        {
+          id: "d", collegeId: "c1", name: "D", code: "D",
+          classes: [{ id: "cl", departmentId: "d", name: "I", code: "I", sections: [
+            { id: "s1", classId: "cl", name: "A" },
+            { id: "s2", classId: "cl", name: "B" },
+          ] }],
+          subjects: [],
+        },
+      ],
+    };
+    const roster = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("500")) // s1 transient failure
+      .mockResolvedValueOnce({
+        students: [
+          {
+            id: "st2", collegeId: "c1", admissionNo: "23CS002", fullName: "Bina Roy", status: "active",
+            identityUserId: null, enrollment: { sectionId: "s2", academicYear: "2026" },
+            phone: null, guardianName: null, guardianPhone: null, dob: null,
+          },
+        ],
+      });
+    const api2 = {
+      colleges: async () => ({ colleges: [{ id: "c1" }] }),
+      collegeTree: async () => tree2,
+      sectionRoster: roster,
+    };
+    const idx = await buildIndex(api2 as any, ["admin"]);
+    expect(idx.some((e) => e.kind === "student" && e.label === "Bina Roy")).toBe(true); // survivor
+    expect(idx.some((e) => e.kind === "page")).toBe(true); // page shortcuts survive
+  });
+
   it("reports progress across pooled roster fetches", async () => {
     const progress: { done: number; total: number }[] = [];
     await buildIndex(apiLike as any, ["admin"], (done, total) => progress.push({ done, total }));
