@@ -35,11 +35,13 @@ AsyncState({ loading, error, onRetry, isEmpty, empty, children })
 Every migrated **list** screen routes its fetch state through this. One component, tested once; screens pass their states in.
 
 ### F3 — Generalized student SlideOver
-Refactor `apps/web/src/ui/StudentDrawer.tsx` (289 lines, student-specific) to compose the S1 `@vidya/ui-system` `SlideOver` (focus-trap/ESC/scrim) + `Tabs` with tabs **overview / attendance / marks / fees / documents** (its existing content). New public shape:
+Refactor `apps/web/src/ui/StudentDrawer.tsx` (289 lines, student-specific) to compose the S1 `@vidya/ui-system` `SlideOver` (focus-trap/ESC/scrim) + `Tabs` with tabs **overview / attendance / marks / fees / documents** (its existing content). **Keep the current data-passing model** (callers already hold the row data) — re-chrome, don't re-architect:
 ```
-StudentSlideOver({ studentId, open, onClose })   // fetches its own tab data
+StudentSlideOver({ student, canManage?, onClose })   // student: DrawerStudent | null; open = student !== null
 ```
-Wire it in from every **student-bearing table**: attendance, classes (already use StudentDrawer), + fees, results, directory, students. Row click / a "view" affordance opens it for that student. **Also upgrade S2a search:** a student result opens `StudentSlideOver` instead of routing to `/students/[id]` (the full-page profile at `/students/[id]` REMAINS for direct links — assignment requirement). Results respect role scope (data comes from the same scoped endpoints).
+Swap its bespoke `.cw-scrim`/drawer chrome for the S1 `SlideOver` + `Tabs`; content unchanged. Migrate the two existing callers (attendance, classes) to it, then wire it into the other **student-bearing tables** — fees, results, directory, students — each of which assembles a `DrawerStudent` from its row data (name/roll/section/pct it already renders). Row click / a "view" affordance opens it.
+- **Search stays full-page.** The S2a global-search student result keeps routing to `/students/[id]` — search isn't a table and only has id/name/roll (no row data to seed the drawer); forcing a studentId-fetch refactor for it is out of scope. The assignment ties the SlideOver to *tables*. The full-page profile at `/students/[id]` remains for direct links regardless.
+- Results respect role scope (the row data + any drawer fetch come from the same scoped endpoints).
 
 ## Migration recipe (per screen — the plan applies this in domain batches)
 For each `app/**/page.tsx`:
