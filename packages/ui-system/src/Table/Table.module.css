@@ -1,0 +1,32 @@
+.wrap { overflow-x: auto; }
+.table { width: 100%; border-collapse: collapse; font-size: var(--text-14); }
+.table thead { position: sticky; top: 0; background: var(--paper-raised); }
+.table th {
+  height: 40px;
+  text-align: left;
+  font-family: var(--font-figure);
+  font-weight: 500;
+  font-size: var(--text-12);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  padding: 0 var(--space-3);
+  border-bottom: 1px solid var(--rule-strong);
+}
+.table td {
+  height: 40px;
+  padding: 0 var(--space-3);
+  border-bottom: 1px solid var(--rule);
+}
+.table tbody tr:hover { background: var(--paper-sunken); }
+.sortBtn {
+  font: inherit;
+  background: none;
+  border: none;
+  padding: 0;
+  color: inherit;
+  cursor: pointer;
+  text-transform: inherit;
+  letter-spacing: inherit;
+}
+.figure { font-family: var(--font-figure); font-variant-numeric: tabular-nums; }
