@@ -81,6 +81,9 @@
   --grad-hero: linear-gradient(120deg, #3d4bc4 0%, #5a6be8 58%, #7c63e8 100%);
   --grad-brand: linear-gradient(140deg, #6b7bff, #4a5bd8);
   --grad-now: linear-gradient(120deg, #4a5bd8, #6b7bff);
+  /* on-gradient hero decoration (structural; white ink + translucent glass on the fixed hero gradient, theme-independent) */
+  --hero-bloom: hsl(0 0% 100% / 18%);
+  --hero-glass: hsl(0 0% 100% / 85%);
   /* ring arc stops (SVG linearGradient per status) */
   --ring-good-a: #4a5bd8;
   --ring-good-b: #6b7bff;

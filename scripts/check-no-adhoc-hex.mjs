@@ -12,7 +12,11 @@ const ALLOW = "packages/ui-system/src/tokens.css";
 const files = globSync("{apps,packages}/**/*.{css,module.css}", {
   exclude: ["**/node_modules/**", "**/.next/**", "**/dist/**", "**/coverage/**", "**/.turbo/**"],
 });
-const hex = /#[0-9a-fA-F]{3,8}\b|\brgba?\(/;
+// hex, plus the CSS color FUNCTIONS (rgb/rgba/hsl/hsla/hwb/lab/lch/oklab/oklch/
+// color) — so a literal can't dodge the gate by switching notation (e.g.
+// rgba(255,255,255,.18) -> hsl(0 0% 100% / 18%)). Named colors are not matched
+// (regex would false-trip on `white-space` etc.); reviewers catch those.
+const hex = /#[0-9a-fA-F]{3,8}\b|\b(rgba?|hsla?|hwb|lab|lch|oklab|oklch|color)\(/;
 const offenders = [];
 for (const f of files) {
   const rel = f.replaceAll("\\", "/");

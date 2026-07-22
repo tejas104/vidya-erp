@@ -8,7 +8,7 @@
 .hero {
   position: relative;
   background: var(--grad-hero);
-  color: white;
+  color: var(--on-brand);
   overflow: hidden;
   display: flex;
   align-items: center;
@@ -18,7 +18,7 @@
   content: "";
   position: absolute;
   inset: 0;
-  background: radial-gradient(120% 80% at 15% 10%, hsl(0 0% 100% / 18%), transparent 55%);
+  background: radial-gradient(120% 80% at 15% 10%, var(--hero-bloom), transparent 55%);
   pointer-events: none;
 }
 .heroInner { position: relative; padding: clamp(32px, 6vw, 72px); max-width: 460px; }
@@ -48,7 +48,7 @@
   width: 6px;
   height: 6px;
   border-radius: 999px;
-  background: hsl(0 0% 100% / 85%);
+  background: var(--hero-glass);
 }
 
 .main {
