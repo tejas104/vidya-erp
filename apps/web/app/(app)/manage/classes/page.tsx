@@ -15,7 +15,7 @@ import {
 import { RingStat } from "@/ui/RingStat";
 import { StudentCard, type StudentFlags } from "@/ui/StudentCard";
 import { TodayTimeline } from "@/ui/TodayTimeline";
-import { StudentDrawer, type DrawerStudent } from "@/ui/StudentDrawer";
+import { StudentSlideOver, type DrawerStudent } from "@/ui/StudentSlideOver";
 import { Skeleton } from "@/ui/Skeleton";
 import { EmptyState } from "@/ui/EmptyState";
 import { Modal } from "@/ui/Modal";
@@ -462,7 +462,7 @@ export default function ClassWorkspacePage() {
         </div>
       )}
 
-      <StudentDrawer
+      <StudentSlideOver
         student={open}
         canManage={canManage}
         onClose={() => setOpen(null)}

@@ -4,7 +4,7 @@ import { api, currentAcademicYear, type AttendanceStatus, type RosterCard } from
 import { useMutation } from "@/ui/useMutation";
 import { useToast } from "@/ui/Toast";
 import { PageHeader } from "@/ui/PageHeader";
-import { StudentDrawer, type DrawerStudent } from "@/ui/StudentDrawer";
+import { StudentSlideOver, type DrawerStudent } from "@/ui/StudentSlideOver";
 import { DeniedState } from "@/ui/DeniedState";
 
 export const dynamic = "force-dynamic";
@@ -219,7 +219,7 @@ export default function AttendancePage() {
         </>
       )}
 
-      <StudentDrawer student={info} canManage={false} onClose={() => setInfo(null)} />
+      <StudentSlideOver student={info} canManage={false} onClose={() => setInfo(null)} />
     </>
   );
 }

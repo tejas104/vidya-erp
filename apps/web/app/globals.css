@@ -1031,15 +1031,7 @@ a {
 .cw-nowline .l { flex: 1; height: 1px; background: var(--bad); opacity: 0.45; }
 .cw-nowline .t { font-family: var(--font-mono); font-size: 9.5px; color: var(--bad); font-weight: 600; }
 
-/* slide-over drawer */
-.cw-scrim { position: fixed; inset: 0; background: var(--scrim); opacity: 0; pointer-events: none; transition: opacity 0.18s; z-index: 100; }
-.cw-scrim.open { opacity: 1; pointer-events: auto; }
-.cw-drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(400px, 100%); background: var(--paper); transform: translateX(100%); transition: transform 0.22s cubic-bezier(0.32, 0.72, 0, 1); z-index: 101; overflow-y: auto; box-shadow: var(--shadow-2); }
-.cw-drawer.open { transform: none; }
-.cw-dr-hero { background: var(--grad-hero); padding: 20px; color: #fff; position: relative; }
-.cw-dr-photo { width: 54px; height: 54px; border-radius: 14px; background: rgba(255, 255, 255, 0.2); display: grid; place-items: center; font-size: 18px; font-weight: 700; margin-bottom: 10px; border: 1.5px solid rgba(255, 255, 255, 0.3); }
-.cw-dr-close { position: absolute; right: 14px; top: 14px; background: rgba(255, 255, 255, 0.16); border: 0; width: 26px; height: 26px; border-radius: 7px; color: #fff; font-size: 15px; cursor: pointer; }
-.cw-dr-close:hover { background: rgba(255, 255, 255, 0.28); }
+/* slide-over drawer content (chrome now provided by @vidya/ui-system SlideOver) */
 .cw-dr-sec { background: var(--surface); margin: 12px; border-radius: var(--radius); border: 1px solid var(--rule); padding: 14px; box-shadow: var(--shadow); }
 .cw-dr-sec h4 { font-size: 10.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 10px; font-weight: 700; }
 .cw-dl { display: grid; grid-template-columns: 96px 1fr; gap: 7px 10px; font-size: 12.5px; }
@@ -1062,7 +1054,7 @@ a {
   .cw-rings { grid-template-columns: repeat(2, 1fr); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .cw-card, .cw-drawer, .cw-scrim { transition: none; }
+  .cw-card { transition: none; }
 }
 
 /* ============================================================================
