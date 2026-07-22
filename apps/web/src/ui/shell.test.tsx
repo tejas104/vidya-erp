@@ -86,13 +86,13 @@ describe("Sidebar (role-gated)", () => {
 
 describe("Topbar", () => {
   it("toggles the theme attribute", () => {
-    render(<Topbar displayName="Asha Rao" onMenu={() => {}} />);
+    render(<Topbar displayName="Asha Rao" onMenu={() => {}} onSearch={() => {}} />);
     fireEvent.click(screen.getByRole("button", { name: /asha rao/i }));
     fireEvent.click(screen.getByRole("menuitem", { name: /chalk|paper/i }));
     expect(document.documentElement.getAttribute("data-theme")).toMatch(/dark|light/);
   });
   it("signs out via the user menu", async () => {
-    render(<Topbar displayName="Asha Rao" onMenu={() => {}} />);
+    render(<Topbar displayName="Asha Rao" onMenu={() => {}} onSearch={() => {}} />);
     fireEvent.click(screen.getByRole("button", { name: /asha rao/i }));
     fireEvent.click(screen.getByRole("menuitem", { name: /sign out/i }));
     expect(api.logout).toHaveBeenCalled();

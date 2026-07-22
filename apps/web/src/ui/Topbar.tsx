@@ -5,7 +5,17 @@ import { Icon } from "./Icon";
 import { Menu } from "./Menu";
 import { NotificationBell } from "./NotificationBell";
 
-export function Topbar({ displayName, year, onMenu }: { displayName: string; year?: string; onMenu: () => void }) {
+export function Topbar({
+  displayName,
+  year,
+  onMenu,
+  onSearch,
+}: {
+  displayName: string;
+  year?: string;
+  onMenu: () => void;
+  onSearch?: () => void;
+}) {
   const [theme, setTheme] = useState<"light" | "dark" | null>(null);
 
   useEffect(() => {
@@ -34,7 +44,10 @@ export function Topbar({ displayName, year, onMenu }: { displayName: string; yea
       <button type="button" className="ui-iconbtn shell-hamburger" aria-label="Open menu" onClick={onMenu}>
         <Icon name="menu" />
       </button>
-      <div className="shell-top-spacer" />
+      <button type="button" className="shell-search-btn" onClick={onSearch}>
+        <Icon name="search" size={16} />
+        <span>Search… ⌘K</span>
+      </button>
       {year !== undefined ? <span className="shell-top-year num">AY {year}</span> : null}
       <NotificationBell />
       <Menu
