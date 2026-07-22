@@ -36,6 +36,7 @@ const nextConfig: NextConfig = {
   // Workspace packages ship TypeScript source; Next transpiles them.
   transpilePackages: [
     "@vidya/platform",
+    "@vidya/ui-system",
     "@vidya/module-system",
     "@vidya/module-identity",
     "@vidya/module-people",

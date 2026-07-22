@@ -164,6 +164,9 @@ importers:
       '@vidya/platform':
         specifier: workspace:*
         version: link:../../packages/platform
+      '@vidya/ui-system':
+        specifier: workspace:*
+        version: link:../../packages/ui-system
       next:
         specifier: ^16.0.0
         version: 16.2.9(@opentelemetry/api@1.9.1)(@playwright/test@1.61.1)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
@@ -737,6 +740,25 @@ importers:
       '@types/pg':
         specifier: ^8.15.0
         version: 8.20.0
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
+
+  packages/ui-system:
+    dependencies:
+      react:
+        specifier: ^19.2.0
+        version: 19.2.7
+      react-dom:
+        specifier: ^19.2.0
+        version: 19.2.7(react@19.2.7)
+    devDependencies:
+      '@types/react':
+        specifier: ^19.1.0
+        version: 19.2.17
+      '@types/react-dom':
+        specifier: ^19.1.0
+        version: 19.2.3(@types/react@19.2.17)
       typescript:
         specifier: ^5.8.3
         version: 5.9.3
