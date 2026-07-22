@@ -52,6 +52,30 @@ describe("Modal", () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 
+  it("does not re-run the focus trap when onClose identity changes while open", () => {
+    // Callers commonly pass an inline `onClose={() => setOpen(false)}`, which
+    // is a new function on every parent re-render. The trap effect must not
+    // key off that identity — otherwise it tears down/re-runs on every
+    // unrelated re-render and yanks focus back to the first child.
+    const { rerender } = render(
+      <Modal open onClose={() => {}} title="Confirm">
+        <button>First</button>
+        <button>Second</button>
+      </Modal>,
+    );
+    const second = screen.getByText("Second");
+    second.focus();
+    expect(document.activeElement).toBe(second);
+
+    rerender(
+      <Modal open onClose={() => {}} title="Confirm">
+        <button>First</button>
+        <button>Second</button>
+      </Modal>,
+    );
+    expect(document.activeElement).toBe(second);
+  });
+
   it("restores focus to the opener on close", () => {
     function Harness() {
       const [open, setOpen] = useState(false);
