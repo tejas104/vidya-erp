@@ -1,0 +1,161 @@
+/* ============================================================================
+ * @vidya/ui-system — design tokens (single source).
+ *
+ * Cool-navy "reference" system: flat white panels on a flat cool-grey field,
+ * a dark navy rail, one brand blue, semantic good/warn/bad pairs whose
+ * meaning must survive — so GRADIENTS ARE STRUCTURAL ONLY (hero, active nav,
+ * avatars, "now" marker, ring arcs), NEVER a surface fill. Dark is DERIVED,
+ * same cool-navy family. This is the only place these vars are defined —
+ * apps/web/app/globals.css no longer declares any of them.
+ * ========================================================================== */
+:root {
+  /* Preserved from the old shadowed "Register" :root, which was never
+   * actually overridden for this property (only custom props got shadowed
+   * by source order — a plain property with no later declaration stands). */
+  color-scheme: light;
+  /* surfaces */
+  --paper: #f7f7f9;
+  --paper-raised: #ffffff;
+  --paper-sunken: #f1f2f6;
+  --surface: #ffffff;
+  --surface-2: #f1f2f6;
+  --rule: #e8e9ef;
+  --rule-strong: #d8dae4;
+  --line-2: #f1f2f6;
+  /* ink */
+  --ink: #171a26;
+  --ink-2: #5a6076;
+  --ink-3: #9096a8;
+  /* brand + semantic (danger/warn/good each carry a -soft) */
+  --brand: #4a5bd8;
+  --brand-soft: #eef0fe;
+  --on-brand: #fff;
+  --line: #4a5bd8; /* chart/link hue = brand blue */
+  --focus: #4a5bd8;
+  --good: #1f9268;
+  --good-soft: #e9f7f1;
+  --warn: #c97a11;
+  --warn-soft: #fdf3e5;
+  --bad: #d6455d;
+  --bad-soft: #fdecef;
+  --accent: #d6455d; /* was the examiner's red; now the danger red */
+  --accent-soft: #fdecef;
+  /* the dark navy rail */
+  --rail: #2a2f45;
+  --rail-2: #232739;
+  --rail-ink: #a8aec4;
+  --side-bg: #2a2f45;
+  --side-active: #3a4062;
+  --scrim: rgba(20, 22, 34, 0.42);
+  /* geometry */
+  --radius: 12px;
+  --radius-sm: 8px;
+  --r: 12px;
+  --rule-width: 1px;
+  --shadow: 0 1px 2px rgba(23, 26, 38, 0.04), 0 4px 12px rgba(23, 26, 38, 0.05);
+  --shadow-2: 0 2px 4px rgba(23, 26, 38, 0.05), 0 12px 32px rgba(23, 26, 38, 0.09);
+  --sh: var(--shadow);
+  --sh-lg: var(--shadow-2);
+  /* type — Inter interface, IBM Plex Mono figures */
+  --font-display: var(--font-inter), system-ui, sans-serif;
+  --font-body: var(--font-inter), system-ui, sans-serif;
+  --font-sans: var(--font-inter), system-ui, sans-serif;
+  --font-figure: var(--font-plex-mono), ui-monospace, monospace;
+  --font-mono: var(--font-figure); /* alias: ported rules referenced --font-mono */
+  /* fixed type scale */
+  --text-12: 12px;
+  --text-14: 14px;
+  --text-16: 16px;
+  --text-20: 20px;
+  --text-24: 24px;
+  --text-32: 32px;
+  /* scale (app shell) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  /* structural gradients only */
+  --grad-hero: linear-gradient(120deg, #3d4bc4 0%, #5a6be8 58%, #7c63e8 100%);
+  --grad-brand: linear-gradient(140deg, #6b7bff, #4a5bd8);
+  --grad-now: linear-gradient(120deg, #4a5bd8, #6b7bff);
+  /* ring arc stops (SVG linearGradient per status) */
+  --ring-good-a: #4a5bd8;
+  --ring-good-b: #6b7bff;
+  --ring-warn-a: #c97a11;
+  --ring-warn-b: #e0a23a;
+  --ring-bad-a: #d6455d;
+  --ring-bad-b: #f0708a;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #14161f;
+    --paper-raised: #1c1f2b;
+    --paper-sunken: #22252f;
+    --surface: #1c1f2b;
+    --surface-2: #22252f;
+    --rule: #2a2e3c;
+    --rule-strong: #3a3f50;
+    --line-2: #22252f;
+    --ink: #e7e9f2;
+    --ink-2: #a6abbe;
+    --ink-3: #6e7488;
+    --brand: #6b7bff;
+    --brand-soft: #23273b;
+    --on-brand: #171a26; /* lighter brand blue in dark mode reads better with dark text than white (~4.9:1 vs ~3.6:1) */
+    --line: #6b7bff;
+    --focus: #6b7bff;
+    --good: #4fb88a;
+    --good-soft: #15271f;
+    --warn: #e0a23a;
+    --warn-soft: #2b2312;
+    --bad: #e8677d;
+    --bad-soft: #2e1820;
+    --accent: #e8677d;
+    --accent-soft: #2e1820;
+    --rail: #101219;
+    --rail-2: #0c0e14;
+    --rail-ink: #8a90a6;
+    --side-bg: #101219;
+    --side-active: #23273b;
+    --scrim: rgba(0, 0, 0, 0.55);
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.35);
+    --shadow-2: 0 2px 6px rgba(0, 0, 0, 0.5), 0 18px 44px rgba(0, 0, 0, 0.45);
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #14161f;
+  --paper-raised: #1c1f2b;
+  --paper-sunken: #22252f;
+  --surface: #1c1f2b;
+  --surface-2: #22252f;
+  --rule: #2a2e3c;
+  --rule-strong: #3a3f50;
+  --line-2: #22252f;
+  --ink: #e7e9f2;
+  --ink-2: #a6abbe;
+  --ink-3: #6e7488;
+  --brand: #6b7bff;
+  --brand-soft: #23273b;
+  --on-brand: #171a26;
+  --line: #6b7bff;
+  --focus: #6b7bff;
+  --good: #4fb88a;
+  --good-soft: #15271f;
+  --warn: #e0a23a;
+  --warn-soft: #2b2312;
+  --bad: #e8677d;
+  --bad-soft: #2e1820;
+  --accent: #e8677d;
+  --accent-soft: #2e1820;
+  --rail: #101219;
+  --rail-2: #0c0e14;
+  --rail-ink: #8a90a6;
+  --side-bg: #101219;
+  --side-active: #23273b;
+  --scrim: rgba(0, 0, 0, 0.55);
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.35);
+  --shadow-2: 0 2px 6px rgba(0, 0, 0, 0.5), 0 18px 44px rgba(0, 0, 0, 0.45);
+}
