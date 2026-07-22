@@ -4,3 +4,4 @@ export * from "./Select/Select";
 export * from "./DatePicker/DatePicker";
 export * from "./Table/Table";
 export * from "./StatusBadge/StatusBadge";
+export * from "./Card/Card";
