@@ -1,8 +1,16 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { ToastProvider } from "@vidya/ui-system";
 import FeesPage from "../../app/(app)/manage/fees/page";
 import { api, ApiError, type FeeInvoiceView } from "./api";
-import { ToastProvider } from "./Toast";
+
+function renderPage() {
+  return render(
+    <ToastProvider>
+      <FeesPage />
+    </ToastProvider>,
+  );
+}
 
 vi.mock("./api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./api")>();
@@ -68,7 +76,7 @@ beforeEach(() => {
 });
 
 async function openLedger() {
-  render(<ToastProvider><FeesPage /></ToastProvider>);
+  renderPage();
   fireEvent.change(await screen.findByLabelText("Section"), { target: { value: "sec_1" } });
   await screen.findByText("Meera Iyer");
 }
@@ -113,7 +121,7 @@ describe("/manage/fees — the counter", () => {
   });
 
   it("hides the Setup tab from the accountant", async () => {
-    render(<ToastProvider><FeesPage /></ToastProvider>);
+    renderPage();
     await screen.findByLabelText("Section");
     expect(screen.queryByRole("tab", { name: "Setup" })).not.toBeInTheDocument();
   });
@@ -121,7 +129,7 @@ describe("/manage/fees — the counter", () => {
   it("lets the admin add a fee head from the Setup tab", async () => {
     mock("session").mockResolvedValue({ userId: "u_adm", displayName: "Admin", roles: ["admin"], grants: [] });
     mock("feesCreateHead").mockResolvedValue({ id: "head_9", collegeId: "col_1", name: "Tuition" });
-    render(<ToastProvider><FeesPage /></ToastProvider>);
+    renderPage();
     await screen.findByLabelText("Section");
     fireEvent.click(await screen.findByRole("tab", { name: "Setup" }));
     fireEvent.change(screen.getByLabelText("New head"), { target: { value: "Tuition" } });
@@ -135,7 +143,7 @@ describe("/manage/fees — the counter", () => {
       from: "2026-07-13", to: "2026-07-13", totalPaise: 150_000,
       byMode: [{ mode: "cash", totalPaise: 100_000, count: 2 }, { mode: "upi", totalPaise: 50_000, count: 1 }],
     });
-    render(<ToastProvider><FeesPage /></ToastProvider>);
+    renderPage();
     await screen.findByLabelText("Section");
     fireEvent.click(screen.getByRole("tab", { name: "Collections" }));
     fireEvent.click(screen.getByRole("button", { name: /show collections/i }));

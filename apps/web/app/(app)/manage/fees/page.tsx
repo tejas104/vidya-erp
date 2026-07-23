@@ -1,23 +1,19 @@
 "use client";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   api, ApiError, currentAcademicYear,
   type AdjustmentKind, type FeeCollectionSummary, type FeeGenerationRunView, type FeeHeadView,
   type FeeInvoiceView, type FeePaymentView, type FeeStructureView, type PaymentMode,
 } from "@/ui/api";
 import { formatPaise, formatPaiseInWords } from "@/ui/money";
-import { Tabs } from "@/ui/Tabs";
 import { StatTile } from "@/ui/charts";
-import { useToast } from "@/ui/Toast";
-import { PageHeader } from "@/ui/PageHeader";
-import { Button } from "@/ui/Button";
-import { Field } from "@/ui/Field";
-import { Modal } from "@/ui/Modal";
-import { ConfirmDialog } from "@/ui/ConfirmDialog";
-import { DataTable, type Column } from "@/ui/DataTable";
-import { Badge } from "@/ui/Badge";
-import { EmptyState } from "@/ui/EmptyState";
-import { Skeleton } from "@/ui/Skeleton";
+import { AsyncState } from "@/ui/AsyncState";
+import { StudentSlideOver, type DrawerStudent } from "@/ui/StudentSlideOver";
+import {
+  useToast, Button, Input, Select, Modal, Table, StatusBadge, Tabs, EmptyState, Skeleton, PageHeader,
+  type TableColumn,
+} from "@vidya/ui-system";
+import styles from "./page.module.css";
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +23,19 @@ type ClassOption = { id: string; label: string };
 const MODES: PaymentMode[] = ["cash", "upi", "card", "bank", "gateway"];
 const KINDS: AdjustmentKind[] = ["scholarship", "fine", "refund", "waiver"];
 
+const AVATARS = [
+  "linear-gradient(140deg,#6B7BFF,#4A5BD8)",
+  "linear-gradient(140deg,#F59E0B,#D97706)",
+  "linear-gradient(140deg,#10B981,#059669)",
+  "linear-gradient(140deg,#8B5CF6,#7C3AED)",
+  "linear-gradient(140deg,#EC4899,#DB2777)",
+  "linear-gradient(140deg,#06B6D4,#0891B2)",
+];
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  return ((parts[0]?.[0] ?? "") + (parts.length > 1 ? parts[parts.length - 1]![0] : "")).toUpperCase() || "·";
+}
+
 /** "1234.50" (rupees, as typed at the counter) → integer paise, or null if not a positive amount. */
 function parseRupees(raw: string): number | null {
   const rupees = Number(raw);
@@ -34,39 +43,43 @@ function parseRupees(raw: string): number | null {
   return Math.round(rupees * 100);
 }
 
-function StatusBadge({ invoice, today }: { invoice: FeeInvoiceView; today: string }) {
-  if (invoice.status === "paid") return <Badge tone="good">paid</Badge>;
-  if (invoice.status === "waived") return <Badge>waived</Badge>;
-  if (invoice.status === "part") return <Badge tone="warn">part</Badge>;
-  return invoice.dueOn < today ? <Badge tone="danger">overdue</Badge> : <Badge>pending</Badge>;
+function invoiceBadge(invoice: FeeInvoiceView, today: string): ReactNode {
+  if (invoice.status === "paid") return <StatusBadge status="good">paid</StatusBadge>;
+  if (invoice.status === "waived") return <StatusBadge status="neutral">waived</StatusBadge>;
+  if (invoice.status === "part") return <StatusBadge status="warn">part</StatusBadge>;
+  return invoice.dueOn < today ? <StatusBadge status="danger">overdue</StatusBadge> : <StatusBadge status="neutral">pending</StatusBadge>;
 }
 
 /** The signature moment: a receipt counterfoil, rendered after a payment lands. */
 function Counterfoil({ payment, invoice }: { payment: FeePaymentView; invoice: FeeInvoiceView }) {
   return (
-    <div
-      role="figure"
-      aria-label={`Receipt ${payment.receiptNo}`}
-      style={{ borderTop: "2px dashed var(--rule-strong)", paddingTop: "var(--space-4)", display: "grid", gap: "var(--space-2)" }}
-    >
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-        <span className="num" style={{ fontSize: 12, letterSpacing: "0.08em", color: "var(--ink-2)" }}>RECEIPT</span>
-        <strong className="num" style={{ fontSize: 24 }}>#{payment.receiptNo}</strong>
+    <div role="figure" aria-label={`Receipt ${payment.receiptNo}`} className={styles.counterfoil}>
+      <div className={styles.counterfoilHead}>
+        <span className={`num ${styles.receiptLabel}`}>RECEIPT</span>
+        <strong className={`num ${styles.receiptNo}`}>#{payment.receiptNo}</strong>
       </div>
-      <div className="num" style={{ fontSize: 20 }}>{formatPaise(payment.amountPaise)}</div>
-      <div style={{ fontSize: 13, color: "var(--ink-2)" }}>{formatPaiseInWords(payment.amountPaise)}</div>
-      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-        <Badge>{payment.mode}</Badge>
-        <span style={{ fontSize: 13.5 }}>
+      <div className={`num ${styles.receiptAmount}`}>{formatPaise(payment.amountPaise)}</div>
+      <div className={styles.receiptWords}>{formatPaiseInWords(payment.amountPaise)}</div>
+      <div className={styles.receiptMeta}>
+        <StatusBadge status="neutral">{payment.mode}</StatusBadge>
+        <span>
           {invoice.headName} — <strong>{invoice.studentName}</strong> ({invoice.admissionNo})
         </span>
       </div>
-      <div className="num" style={{ fontSize: 12, color: "var(--ink-3)" }}>
+      <div className={`num ${styles.receiptTime}`}>
         {new Date(payment.receivedAt).toLocaleString()}
       </div>
     </div>
   );
 }
+
+type LedgerRow = {
+  student: ReactNode; head: ReactNode; due: ReactNode; amount: ReactNode; paid: ReactNode;
+  dues: ReactNode; status: ReactNode; actions: ReactNode;
+};
+type DefaulterRow = { student: ReactNode; head: ReactNode; due: ReactNode; dues: ReactNode };
+type StructureRow = { head: ReactNode; inst: ReactNode; amount: ReactNode; due: ReactNode };
+type ModeRow = { mode: ReactNode; count: ReactNode; total: ReactNode };
 
 export default function FeesPage() {
   const toast = useToast();
@@ -76,6 +89,8 @@ export default function FeesPage() {
   const [sections, setSections] = useState<SectionOption[] | null>(null);
   const [sectionId, setSectionId] = useState("");
   const [invoices, setInvoices] = useState<FeeInvoiceView[]>([]);
+  const [invoicesLoading, setInvoicesLoading] = useState(false);
+  const [invoicesError, setInvoicesError] = useState(false);
   const [query, setQuery] = useState("");
   const [defaulters, setDefaulters] = useState<FeeInvoiceView[]>([]);
   const [saving, setSaving] = useState(false);
@@ -113,6 +128,8 @@ export default function FeesPage() {
   const [from, setFrom] = useState(today);
   const [to, setTo] = useState(today);
   const [summary, setSummary] = useState<FeeCollectionSummary | null>(null);
+  // student slide-over
+  const [viewing, setViewing] = useState<FeeInvoiceView | null>(null);
 
   useEffect(() => {
     api.session().then((me) => {
@@ -168,10 +185,15 @@ export default function FeesPage() {
 
   const loadInvoices = useCallback(async () => {
     if (sectionId === "") { setInvoices([]); return; }
+    setInvoicesLoading(true);
+    setInvoicesError(false);
     try {
       setInvoices((await api.feesSectionInvoices(sectionId, year)).invoices);
     } catch {
       setInvoices([]);
+      setInvoicesError(true);
+    } finally {
+      setInvoicesLoading(false);
     }
   }, [sectionId, year]);
   useEffect(() => { void loadInvoices(); }, [loadInvoices]);
@@ -204,9 +226,9 @@ export default function FeesPage() {
       applyInvoice(invoice);
       setPaying(invoice);
       setReceipt(payment);
-      toast.show(`Receipt #${payment.receiptNo} issued.`, "good");
+      toast.push({ status: "good", message: `Receipt #${payment.receiptNo} issued.` });
     } catch (caught) {
-      toast.show(caught instanceof ApiError ? caught.message : "Couldn't record the payment.", "danger");
+      toast.push({ status: "danger", message: caught instanceof ApiError ? caught.message : "Couldn't record the payment." });
     } finally {
       setSaving(false);
     }
@@ -229,9 +251,9 @@ export default function FeesPage() {
       });
       applyInvoice(invoice);
       setAdjusting(null);
-      toast.show(`${kind.charAt(0).toUpperCase()}${kind.slice(1)} recorded.`, "good");
+      toast.push({ status: "good", message: `${kind.charAt(0).toUpperCase()}${kind.slice(1)} recorded.` });
     } catch (caught) {
-      toast.show(caught instanceof ApiError ? caught.message : "Couldn't record the adjustment.", "danger");
+      toast.push({ status: "danger", message: caught instanceof ApiError ? caught.message : "Couldn't record the adjustment." });
     } finally {
       setSaving(false);
       setConfirmWaive(false);
@@ -245,9 +267,9 @@ export default function FeesPage() {
       const head = await api.feesCreateHead({ collegeId, name: newHead.trim() });
       setHeads((rows) => [...rows, head]);
       setNewHead("");
-      toast.show(`Head "${head.name}" added.`, "good");
+      toast.push({ status: "good", message: `Head "${head.name}" added.` });
     } catch (caught) {
-      toast.show(caught instanceof ApiError ? caught.message : "Couldn't add the head.", "danger");
+      toast.push({ status: "danger", message: caught instanceof ApiError ? caught.message : "Couldn't add the head." });
     } finally {
       setSaving(false);
     }
@@ -257,9 +279,9 @@ export default function FeesPage() {
     try {
       await api.feesDeleteHead(head.id);
       setHeads((rows) => rows.filter((row) => row.id !== head.id));
-      toast.show(`Head "${head.name}" deleted.`, "good");
+      toast.push({ status: "good", message: `Head "${head.name}" deleted.` });
     } catch (caught) {
-      toast.show(caught instanceof ApiError ? caught.message : "Couldn't delete — still used by a structure.", "danger");
+      toast.push({ status: "danger", message: caught instanceof ApiError ? caught.message : "Couldn't delete — still used by a structure." });
     }
   }
 
@@ -272,12 +294,12 @@ export default function FeesPage() {
         classId, headId: structHeadId, academicYear: year,
         amountPaise: paise, dueOn: structDue, installmentNo: Number(structInst) || 1,
       });
-      toast.show("Structure set.", "good");
+      toast.push({ status: "good", message: "Structure set." });
       setStructOpen(false);
       setStructAmount("");
       await loadStructures();
     } catch (caught) {
-      toast.show(caught instanceof ApiError ? caught.message : "Couldn't set the structure.", "danger");
+      toast.push({ status: "danger", message: caught instanceof ApiError ? caught.message : "Couldn't set the structure." });
     } finally {
       setSaving(false);
     }
@@ -293,7 +315,7 @@ export default function FeesPage() {
         status: "pending", invoicesCreated: 0, invoicesSkipped: 0, error: null,
       });
     } catch (caught) {
-      toast.show(caught instanceof ApiError ? caught.message : "Couldn't start the run.", "danger");
+      toast.push({ status: "danger", message: caught instanceof ApiError ? caught.message : "Couldn't start the run." });
     }
   }
 
@@ -303,11 +325,33 @@ export default function FeesPage() {
       setSummary(await api.feesCollectionSummary(collegeId, from, to));
     } catch (caught) {
       setSummary(null);
-      toast.show(caught instanceof ApiError ? caught.message : "Couldn't load collections.", "danger");
+      toast.push({ status: "danger", message: caught instanceof ApiError ? caught.message : "Couldn't load collections." });
     }
   }
 
-  if (sections === null) return <Skeleton lines={5} />;
+  function toDrawerStudent(row: FeeInvoiceView, idx: number): DrawerStudent {
+    return {
+      studentId: row.studentId,
+      initials: initials(row.studentName),
+      gradient: AVATARS[idx % AVATARS.length]!,
+      rollNo: row.admissionNo,
+      name: row.studentName,
+      section: (sections ?? []).find((section) => section.id === row.sectionId)?.label ?? "",
+      status: row.status,
+      pct: null,
+      attended: 0,
+      total: 0,
+      lastMark: null,
+      backlogs: 0,
+      flags: { backlog: false, yb: false },
+      phone: null,
+      guardianName: null,
+      guardianPhone: null,
+      dob: null,
+    };
+  }
+
+  if (sections === null) return <Skeleton height={16} />;
 
   const q = query.trim().toLowerCase();
   const visible = q === ""
@@ -316,75 +360,92 @@ export default function FeesPage() {
         (row) => row.studentName.toLowerCase().includes(q) || row.admissionNo.toLowerCase().includes(q),
       );
 
-  const ledgerColumns: Column<FeeInvoiceView>[] = [
-    {
-      key: "student", header: "Student",
-      render: (row) => (
-        <span>
-          <strong>{row.studentName}</strong>
-          <span className="num" style={{ display: "block", fontSize: 12, color: "var(--ink-3)" }}>{row.admissionNo}</span>
-        </span>
-      ),
-    },
-    { key: "head", header: "Head", render: (row) => row.headName },
-    { key: "due", header: "Due on", render: (row) => <span className="num">{row.dueOn}</span> },
-    { key: "amount", header: "Amount", align: "right", render: (row) => <span className="num">{formatPaise(row.amountPaise)}</span> },
-    { key: "paid", header: "Paid", align: "right", render: (row) => <span className="num">{formatPaise(row.paidPaise)}</span> },
-    { key: "dues", header: "Dues", align: "right", render: (row) => <strong className="num">{formatPaise(row.duesPaise)}</strong> },
-    { key: "status", header: "Status", render: (row) => <StatusBadge invoice={row} today={today} /> },
-    {
-      key: "actions", header: "", align: "right",
-      render: (row) =>
-        canManage ? (
-          <span style={{ display: "inline-flex", gap: 8 }}>
+  const ledgerColumns: TableColumn<LedgerRow>[] = [
+    { key: "student", header: "Student" },
+    { key: "head", header: "Head" },
+    { key: "due", header: "Due on", figure: true },
+    { key: "amount", header: "Amount", figure: true },
+    { key: "paid", header: "Paid", figure: true },
+    { key: "dues", header: "Dues", figure: true },
+    { key: "status", header: "Status" },
+    { key: "actions", header: "" },
+  ];
+  const ledgerRows: LedgerRow[] = visible.map((row, idx) => ({
+    student: (
+      <span>
+        <strong>{row.studentName}</strong>
+        <span className={`num ${styles.admissionNo}`}>{row.admissionNo}</span>
+      </span>
+    ),
+    head: row.headName,
+    due: <span className="num">{row.dueOn}</span>,
+    amount: <span className="num">{formatPaise(row.amountPaise)}</span>,
+    paid: <span className="num">{formatPaise(row.paidPaise)}</span>,
+    dues: <strong className="num">{formatPaise(row.duesPaise)}</strong>,
+    status: invoiceBadge(row, today),
+    actions: (
+      <span className={styles.actionsRow}>
+        <Button variant="ghost" onClick={() => setViewing(row)}>View</Button>
+        {canManage ? (
+          <>
             {row.status !== "waived" && row.status !== "paid" ? (
               <Button variant="ghost" onClick={() => openPayment(row)}>Take payment</Button>
             ) : null}
             {row.status !== "waived" ? (
               <Button variant="ghost" onClick={() => openAdjustment(row)}>Adjust</Button>
             ) : null}
-          </span>
-        ) : (
-          <span className="stat-sub">view only</span>
-        ),
-    },
-  ];
+          </>
+        ) : null}
+      </span>
+    ),
+  }));
 
-  const structureColumns: Column<FeeStructureView>[] = [
-    { key: "head", header: "Head", render: (row) => <strong>{row.headName}</strong> },
-    { key: "inst", header: "Inst.", align: "right", render: (row) => <span className="num">{row.installmentNo}</span> },
-    { key: "amount", header: "Amount", align: "right", render: (row) => <span className="num">{formatPaise(row.amountPaise)}</span> },
-    { key: "due", header: "Due on", render: (row) => <span className="num">{row.dueOn}</span> },
+  const structureColumns: TableColumn<StructureRow>[] = [
+    { key: "head", header: "Head" },
+    { key: "inst", header: "Inst.", figure: true },
+    { key: "amount", header: "Amount", figure: true },
+    { key: "due", header: "Due on", figure: true },
   ];
+  const structureRows: StructureRow[] = structures.map((row) => ({
+    head: <strong>{row.headName}</strong>,
+    inst: <span className="num">{row.installmentNo}</span>,
+    amount: <span className="num">{formatPaise(row.amountPaise)}</span>,
+    due: <span className="num">{row.dueOn}</span>,
+  }));
 
-  const modeColumns: Column<FeeCollectionSummary["byMode"][number]>[] = [
-    { key: "mode", header: "Mode", render: (row) => <Badge>{row.mode}</Badge> },
-    { key: "count", header: "Receipts", align: "right", render: (row) => <span className="num">{row.count}</span> },
-    { key: "total", header: "Collected", align: "right", render: (row) => <strong className="num">{formatPaise(row.totalPaise)}</strong> },
+  const modeColumns: TableColumn<ModeRow>[] = [
+    { key: "mode", header: "Mode" },
+    { key: "count", header: "Receipts", figure: true },
+    { key: "total", header: "Collected", figure: true },
   ];
+  const modeRows: ModeRow[] = (summary?.byMode ?? []).map((row) => ({
+    mode: <StatusBadge status="neutral">{row.mode}</StatusBadge>,
+    count: <span className="num">{row.count}</span>,
+    total: <strong className="num">{formatPaise(row.totalPaise)}</strong>,
+  }));
 
-  const defaulterColumns: Column<FeeInvoiceView>[] = [
-    {
-      key: "student", header: "Student",
-      render: (row) => (
-        <span>
-          <strong>{row.studentName}</strong>
-          <span className="num" style={{ display: "block", fontSize: 12, color: "var(--ink-3)" }}>{row.admissionNo}</span>
-        </span>
-      ),
-    },
-    { key: "head", header: "Head", render: (row) => row.headName },
-    { key: "due", header: "Due on", render: (row) => <span className="num">{row.dueOn}</span> },
-    { key: "dues", header: "Dues", align: "right", render: (row) => <strong className="num">{formatPaise(row.duesPaise)}</strong> },
+  const defaulterColumns: TableColumn<DefaulterRow>[] = [
+    { key: "student", header: "Student" },
+    { key: "head", header: "Head" },
+    { key: "due", header: "Due on", figure: true },
+    { key: "dues", header: "Dues", figure: true },
   ];
+  const defaulterRows: DefaulterRow[] = defaulters.map((row) => ({
+    student: (
+      <span>
+        <strong>{row.studentName}</strong>
+        <span className={`num ${styles.admissionNo}`}>{row.admissionNo}</span>
+      </span>
+    ),
+    head: row.headName,
+    due: <span className="num">{row.dueOn}</span>,
+    dues: <strong className="num">{formatPaise(row.duesPaise)}</strong>,
+  }));
 
   return (
     <>
-      <PageHeader
-        eyebrow={`Fees · ${year}`}
-        title="Fee counter"
-        lede="Open a section's ledger, take a payment, hand over the receipt."
-      />
+      <PageHeader title="Fee counter" />
+      <p className={styles.lede}>Open a section's ledger, take a payment, hand over the receipt.</p>
 
       <Tabs
         tabs={[
@@ -398,40 +459,44 @@ export default function FeesPage() {
 
       {tab === "counter" ? (
         <>
-      <div style={{ display: "flex", gap: "var(--space-4)", flexWrap: "wrap", alignItems: "flex-end" }}>
-        <Field label="Section" htmlFor="fee-section">
-          <select id="fee-section" value={sectionId} onChange={(event) => setSectionId(event.target.value)} style={{ minWidth: 220 }}>
-            <option value="">Pick a section…</option>
-            {sections.map((section) => (
-              <option key={section.id} value={section.id}>{section.label}</option>
-            ))}
-          </select>
-        </Field>
-        <Field label="Find student" htmlFor="fee-query">
-          <input
-            id="fee-query" placeholder="Name or admission no."
-            value={query} onChange={(event) => setQuery(event.target.value)} style={{ minWidth: 240 }}
-          />
-        </Field>
+      <div className={styles.pickerRow}>
+        <Select
+          id="fee-section" label="Section" className={styles.wide}
+          value={sectionId} onChange={(event) => setSectionId(event.target.value)}
+          options={[{ value: "", label: "Pick a section…" }, ...sections.map((section) => ({ value: section.id, label: section.label }))]}
+        />
+        <Input
+          id="fee-query" label="Find student" placeholder="Name or admission no." className={styles.queryWide}
+          value={query} onChange={(event) => setQuery(event.target.value)}
+        />
       </div>
 
       <section className="section" aria-label="Invoice ledger">
         {sectionId === "" ? (
-          <EmptyState title="Pick a section to open its ledger." message="Every invoice for the year appears as a ruled row." />
+          <EmptyState title="Pick a section to open its ledger." body="Every invoice for the year appears as a ruled row." />
         ) : (
-          <DataTable
-            columns={ledgerColumns} rows={visible} rowKey={(row) => row.id}
-            empty={{ title: `No invoices for ${year}.`, message: "Invoices appear once they are generated for this section's class." }}
-          />
+          <AsyncState
+            loading={invoicesLoading}
+            error={invoicesError}
+            onRetry={() => void loadInvoices()}
+            isEmpty={visible.length === 0}
+            empty={<EmptyState title={`No invoices for ${year}.`} body="Invoices appear once they are generated for this section's class." />}
+          >
+            <Table columns={ledgerColumns} rows={ledgerRows} />
+          </AsyncState>
         )}
       </section>
 
       <section className="section" aria-label="Outstanding dues">
         <div className="section-head"><h2>Outstanding dues</h2></div>
-        <DataTable
-          columns={defaulterColumns} rows={defaulters} rowKey={(row) => row.id}
-          empty={{ title: `No outstanding dues for ${year}.`, message: "Every generated invoice is settled." }}
-        />
+        <AsyncState
+          loading={false}
+          error={false}
+          isEmpty={defaulters.length === 0}
+          empty={<EmptyState title={`No outstanding dues for ${year}.`} body="Every generated invoice is settled." />}
+        >
+          <Table columns={defaulterColumns} rows={defaulterRows} />
+        </AsyncState>
       </section>
         </>
       ) : null}
@@ -440,21 +505,19 @@ export default function FeesPage() {
         <>
           <section className="section" aria-label="Fee heads">
             <div className="section-head"><h2>Fee heads</h2></div>
-            <div style={{ display: "grid", gap: 0 }}>
+            <div className={styles.headsList}>
               {heads.map((head) => (
-                <div key={head.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: "1px solid var(--rule)", padding: "6px 0" }}>
+                <div key={head.id} className={styles.headRow}>
                   <span>{head.name}</span>
                   <Button variant="ghost" onClick={() => void removeHead(head)}>Delete</Button>
                 </div>
               ))}
               {heads.length === 0 ? (
-                <p style={{ fontSize: 13.5, color: "var(--ink-2)" }}>No heads yet — add Tuition, Library, Lab…</p>
+                <p className={styles.headsEmpty}>No heads yet — add Tuition, Library, Lab…</p>
               ) : null}
             </div>
-            <div style={{ display: "flex", gap: "var(--space-3)", alignItems: "flex-end", marginTop: "var(--space-3)" }}>
-              <Field label="New head" htmlFor="head-name">
-                <input id="head-name" placeholder="e.g. Tuition" value={newHead} onChange={(event) => setNewHead(event.target.value)} />
-              </Field>
+            <div className={styles.addHeadRow}>
+              <Input id="head-name" label="New head" placeholder="e.g. Tuition" value={newHead} onChange={(event) => setNewHead(event.target.value)} />
               <Button onClick={() => void addHead()} loading={saving} disabled={newHead.trim() === ""}>Add head</Button>
             </div>
           </section>
@@ -462,19 +525,18 @@ export default function FeesPage() {
           <section className="section" aria-label="Class structures">
             <div className="section-head">
               <h2>Class structures · {year}</h2>
-              <span style={{ display: "inline-flex", gap: 8 }}>
+              <span className={styles.actionsRow}>
                 <Button variant="ghost" onClick={() => setStructOpen(true)} disabled={classId === "" || heads.length === 0}>Set structure</Button>
                 <Button onClick={() => setConfirmGenerate(true)} disabled={classId === "" || structures.length === 0}>Generate invoices</Button>
               </span>
             </div>
-            <Field label="Class" htmlFor="fee-class">
-              <select id="fee-class" value={classId} onChange={(event) => setClassId(event.target.value)} style={{ maxWidth: 280 }}>
-                <option value="">Pick a class…</option>
-                {classes.map((cls) => <option key={cls.id} value={cls.id}>{cls.label}</option>)}
-              </select>
-            </Field>
+            <Select
+              id="fee-class" label="Class" className={styles.structPicker}
+              value={classId} onChange={(event) => setClassId(event.target.value)}
+              options={[{ value: "", label: "Pick a class…" }, ...classes.map((cls) => ({ value: cls.id, label: cls.label }))]}
+            />
             {run ? (
-              <p className="num" style={{ fontSize: 13 }} aria-live="polite">
+              <p className={`num ${styles.runStatus}`} aria-live="polite">
                 {run.status === "failed"
                   ? `Generation failed: ${run.error ?? "unknown error"}`
                   : run.status === "completed"
@@ -483,12 +545,16 @@ export default function FeesPage() {
               </p>
             ) : null}
             {classId === "" ? (
-              <EmptyState title="Pick a class to see its fee structures." message="One row per head, year and installment." />
+              <EmptyState title="Pick a class to see its fee structures." body="One row per head, year and installment." />
             ) : (
-              <DataTable
-                columns={structureColumns} rows={structures} rowKey={(row) => row.id}
-                empty={{ title: `No structures for ${year}.`, message: "Set one with the button above — invoices generate from structures." }}
-              />
+              <AsyncState
+                loading={false}
+                error={false}
+                isEmpty={structures.length === 0}
+                empty={<EmptyState title={`No structures for ${year}.`} body="Set one with the button above — invoices generate from structures." />}
+              >
+                <Table columns={structureColumns} rows={structureRows} />
+              </AsyncState>
             )}
           </section>
         </>
@@ -496,27 +562,27 @@ export default function FeesPage() {
 
       {tab === "collections" ? (
         <section className="section" aria-label="Collections">
-          <div style={{ display: "flex", gap: "var(--space-4)", flexWrap: "wrap", alignItems: "flex-end", marginBottom: "var(--space-4)" }}>
-            <Field label="From" htmlFor="col-from">
-              <input id="col-from" type="date" value={from} onChange={(event) => setFrom(event.target.value)} />
-            </Field>
-            <Field label="To" htmlFor="col-to">
-              <input id="col-to" type="date" value={to} onChange={(event) => setTo(event.target.value)} />
-            </Field>
+          <div className={styles.collectionsRow}>
+            <Input id="col-from" label="From" type="date" value={from} onChange={(event) => setFrom(event.target.value)} />
+            <Input id="col-to" label="To" type="date" value={to} onChange={(event) => setTo(event.target.value)} />
             <Button onClick={() => void loadSummary()}>Show collections</Button>
           </div>
           {summary === null ? (
-            <EmptyState title="Pick a range and show collections." message="Totals come from issued receipts — reconcile the cash box against them." />
+            <EmptyState title="Pick a range and show collections." body="Totals come from issued receipts — reconcile the cash box against them." />
           ) : (
             <>
-              <section className="stats" aria-label="Collection totals" style={{ marginBottom: "var(--space-4)" }}>
+              <section className={`stats ${styles.statsSection}`} aria-label="Collection totals">
                 <StatTile value={formatPaise(summary.totalPaise)} label="Collected" sub={`${summary.from} → ${summary.to}`} />
                 <StatTile value={String(summary.byMode.reduce((n, m) => n + m.count, 0))} label="Receipts issued" />
               </section>
-              <DataTable
-                columns={modeColumns} rows={summary.byMode} rowKey={(row) => row.mode}
-                empty={{ title: "No collections in this range.", message: "Payments recorded at the counter appear here." }}
-              />
+              <AsyncState
+                loading={false}
+                error={false}
+                isEmpty={summary.byMode.length === 0}
+                empty={<EmptyState title="No collections in this range." body="Payments recorded at the counter appear here." />}
+              >
+                <Table columns={modeColumns} rows={modeRows} />
+              </AsyncState>
             </>
           )}
         </section>
@@ -548,23 +614,18 @@ export default function FeesPage() {
             <Counterfoil payment={receipt} invoice={paying} />
           </div>
         ) : (
-          <div style={{ display: "grid", gap: "var(--space-3)" }}>
-            <p style={{ margin: 0, fontSize: 13.5, color: "var(--ink-2)" }}>
+          <div className={styles.formGrid}>
+            <p className={styles.payingInfo}>
               {paying?.headName} · dues <strong className="num">{formatPaise(paying?.duesPaise ?? 0)}</strong>
             </p>
-            <div style={{ display: "flex", gap: "var(--space-4)", flexWrap: "wrap" }}>
-              <Field label="Amount (₹)" htmlFor="pay-amount">
-                <input id="pay-amount" inputMode="decimal" value={amount} onChange={(event) => setAmount(event.target.value)} style={{ width: 140 }} />
-              </Field>
-              <Field label="Mode" htmlFor="pay-mode">
-                <select id="pay-mode" value={mode} onChange={(event) => setMode(event.target.value as PaymentMode)}>
-                  {MODES.map((m) => <option key={m} value={m}>{m}</option>)}
-                </select>
-              </Field>
+            <div className={styles.formRow}>
+              <Input id="pay-amount" label="Amount (₹)" inputMode="decimal" value={amount} onChange={(event) => setAmount(event.target.value)} className={styles.amountField} />
+              <Select
+                id="pay-mode" label="Mode" value={mode} onChange={(event) => setMode(event.target.value as PaymentMode)}
+                options={MODES.map((m) => ({ value: m, label: m }))}
+              />
             </div>
-            <Field label="Reference (optional)" htmlFor="pay-ref">
-              <input id="pay-ref" placeholder="UPI ref / cheque no." value={payRef} onChange={(event) => setPayRef(event.target.value)} />
-            </Field>
+            <Input id="pay-ref" label="Reference (optional)" placeholder="UPI ref / cheque no." value={payRef} onChange={(event) => setPayRef(event.target.value)} />
           </div>
         )}
       </Modal>
@@ -587,20 +648,15 @@ export default function FeesPage() {
           </>
         }
       >
-        <div style={{ display: "grid", gap: "var(--space-3)" }}>
-          <div style={{ display: "flex", gap: "var(--space-4)", flexWrap: "wrap" }}>
-            <Field label="Kind" htmlFor="adj-kind">
-              <select id="adj-kind" value={kind} onChange={(event) => setKind(event.target.value as AdjustmentKind)}>
-                {KINDS.map((k) => <option key={k} value={k}>{k}</option>)}
-              </select>
-            </Field>
-            <Field label="Amount (₹)" htmlFor="adj-amount">
-              <input id="adj-amount" inputMode="decimal" value={adjAmount} onChange={(event) => setAdjAmount(event.target.value)} style={{ width: 140 }} />
-            </Field>
+        <div className={styles.formGrid}>
+          <div className={styles.formRow}>
+            <Select
+              id="adj-kind" label="Kind" value={kind} onChange={(event) => setKind(event.target.value as AdjustmentKind)}
+              options={KINDS.map((k) => ({ value: k, label: k }))}
+            />
+            <Input id="adj-amount" label="Amount (₹)" inputMode="decimal" value={adjAmount} onChange={(event) => setAdjAmount(event.target.value)} className={styles.amountField} />
           </div>
-          <Field label="Reason" htmlFor="adj-reason">
-            <input id="adj-reason" placeholder="Why this adjustment is being made" value={reason} onChange={(event) => setReason(event.target.value)} />
-          </Field>
+          <Input id="adj-reason" label="Reason" placeholder="Why this adjustment is being made" value={reason} onChange={(event) => setReason(event.target.value)} />
         </div>
       </Modal>
 
@@ -622,44 +678,55 @@ export default function FeesPage() {
           </>
         }
       >
-        <div style={{ display: "grid", gap: "var(--space-3)" }}>
-          <Field label="Head" htmlFor="struct-head">
-            <select id="struct-head" value={structHeadId} onChange={(event) => setStructHeadId(event.target.value)}>
-              <option value="">Pick a head…</option>
-              {heads.map((head) => <option key={head.id} value={head.id}>{head.name}</option>)}
-            </select>
-          </Field>
-          <div style={{ display: "flex", gap: "var(--space-4)", flexWrap: "wrap" }}>
-            <Field label="Amount (₹)" htmlFor="struct-amount">
-              <input id="struct-amount" inputMode="decimal" value={structAmount} onChange={(event) => setStructAmount(event.target.value)} style={{ width: 140 }} />
-            </Field>
-            <Field label="Due on" htmlFor="struct-due">
-              <input id="struct-due" type="date" value={structDue} onChange={(event) => setStructDue(event.target.value)} />
-            </Field>
-            <Field label="Installment" htmlFor="struct-inst">
-              <input id="struct-inst" type="number" min={1} max={12} value={structInst} onChange={(event) => setStructInst(event.target.value)} style={{ width: 90 }} />
-            </Field>
+        <div className={styles.formGrid}>
+          <Select
+            id="struct-head" label="Head" value={structHeadId} onChange={(event) => setStructHeadId(event.target.value)}
+            options={[{ value: "", label: "Pick a head…" }, ...heads.map((head) => ({ value: head.id, label: head.name }))]}
+          />
+          <div className={styles.formRow}>
+            <Input id="struct-amount" label="Amount (₹)" inputMode="decimal" value={structAmount} onChange={(event) => setStructAmount(event.target.value)} className={styles.amountField} />
+            <Input id="struct-due" label="Due on" type="date" value={structDue} onChange={(event) => setStructDue(event.target.value)} />
+            <Input id="struct-inst" label="Installment" type="number" min={1} max={12} value={structInst} onChange={(event) => setStructInst(event.target.value)} className={styles.instField} />
           </div>
         </div>
       </Modal>
 
-      <ConfirmDialog
+      <Modal
         open={confirmGenerate}
+        onClose={() => setConfirmGenerate(false)}
         title="Generate invoices"
-        message={`Generate invoices for ${classes.find((cls) => cls.id === classId)?.label ?? ""} · ${year}? Students already invoiced are skipped, so re-running is safe.`}
-        confirmLabel="Generate"
-        onConfirm={() => void startGenerate()}
-        onCancel={() => setConfirmGenerate(false)}
-      />
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setConfirmGenerate(false)}>Cancel</Button>
+            <Button onClick={() => void startGenerate()}>Generate</Button>
+          </>
+        }
+      >
+        <p className={styles.confirmMessage}>
+          Generate invoices for {classes.find((cls) => cls.id === classId)?.label ?? ""} · {year}? Students already invoiced are skipped, so re-running is safe.
+        </p>
+      </Modal>
 
-      <ConfirmDialog
+      <Modal
         open={confirmWaive}
+        onClose={() => setConfirmWaive(false)}
         title="Waive this invoice"
-        message={`Waive ${formatPaise(parseRupees(adjAmount) ?? 0)} for ${adjusting?.studentName ?? ""}? No further payments will be accepted on a waived invoice.`}
-        confirmLabel="Waive"
-        danger
-        onConfirm={() => void submitAdjustment()}
-        onCancel={() => setConfirmWaive(false)}
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setConfirmWaive(false)}>Cancel</Button>
+            <Button variant="danger" onClick={() => void submitAdjustment()}>Waive</Button>
+          </>
+        }
+      >
+        <p className={styles.confirmMessage}>
+          Waive {formatPaise(parseRupees(adjAmount) ?? 0)} for {adjusting?.studentName ?? ""}? No further payments will be accepted on a waived invoice.
+        </p>
+      </Modal>
+
+      <StudentSlideOver
+        student={viewing ? toDrawerStudent(viewing, visible.indexOf(viewing)) : null}
+        canManage={false}
+        onClose={() => setViewing(null)}
       />
     </>
   );

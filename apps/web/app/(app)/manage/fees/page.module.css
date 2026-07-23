@@ -1,0 +1,122 @@
+.lede {
+  margin: calc(-1 * var(--space-3)) 0 var(--space-4);
+  color: var(--ink-2);
+}
+.pickerRow {
+  display: flex;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+.wide {
+  min-width: 220px;
+}
+.queryWide {
+  min-width: 240px;
+}
+.admissionNo {
+  display: block;
+  font-size: var(--text-12);
+  color: var(--ink-3);
+}
+.actionsRow {
+  display: inline-flex;
+  gap: var(--space-2);
+}
+.headsList {
+  display: grid;
+  gap: 0;
+}
+.headRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-top: 1px solid var(--rule);
+  padding: var(--space-2) 0;
+}
+.headsEmpty {
+  font-size: var(--text-14);
+  color: var(--ink-2);
+}
+.addHeadRow {
+  display: flex;
+  gap: var(--space-3);
+  align-items: flex-end;
+  margin-top: var(--space-3);
+}
+.structPicker {
+  max-width: 280px;
+}
+.runStatus {
+  font-size: var(--text-14);
+}
+.collectionsRow {
+  display: flex;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  align-items: flex-end;
+  margin-bottom: var(--space-4);
+}
+.statsSection {
+  margin-bottom: var(--space-4);
+}
+.formGrid {
+  display: grid;
+  gap: var(--space-3);
+}
+.formRow {
+  display: flex;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+.amountField {
+  width: 140px;
+}
+.instField {
+  width: 90px;
+}
+.payingInfo {
+  margin: 0;
+  font-size: var(--text-14);
+  color: var(--ink-2);
+}
+.confirmMessage {
+  margin: 0;
+}
+.counterfoil {
+  border-top: 2px dashed var(--rule-strong);
+  padding-top: var(--space-4);
+  display: grid;
+  gap: var(--space-2);
+}
+.counterfoilHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.receiptLabel {
+  font-size: var(--text-12);
+  letter-spacing: 0.08em;
+  color: var(--ink-2);
+}
+.receiptNo {
+  font-size: var(--text-24);
+}
+.receiptAmount {
+  font-size: var(--text-20);
+}
+.receiptWords {
+  font-size: var(--text-14);
+  color: var(--ink-2);
+}
+.receiptMeta {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  flex-wrap: wrap;
+  font-size: var(--text-14);
+}
+.receiptTime {
+  font-size: var(--text-12);
+  color: var(--ink-3);
+}
