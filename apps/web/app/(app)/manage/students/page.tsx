@@ -1,14 +1,10 @@
 "use client";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { api, ApiError, currentAcademicYear, type OrgTree, type StudentView, type StudentStatus } from "@/ui/api";
-import { useToast } from "@/ui/Toast";
-import { PageHeader } from "@/ui/PageHeader";
-import { Button } from "@/ui/Button";
-import { Field } from "@/ui/Field";
-import { Modal } from "@/ui/Modal";
-import { DataTable, type Column } from "@/ui/DataTable";
-import { EmptyState } from "@/ui/EmptyState";
-import { Skeleton } from "@/ui/Skeleton";
+import { useToast, Button, Input, Select, Modal, Table, EmptyState, Skeleton, PageHeader, type TableColumn } from "@vidya/ui-system";
+import { AsyncState } from "@/ui/AsyncState";
+import { StudentSlideOver, type DrawerStudent } from "@/ui/StudentSlideOver";
+import styles from "./page.module.css";
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +23,19 @@ const STATUS_LABEL: Record<string, string> = Object.fromEntries(
   STATUS_OPTIONS.map((o) => [o.value, o.label]),
 );
 
+const AVATARS = [
+  "linear-gradient(140deg,#6B7BFF,#4A5BD8)",
+  "linear-gradient(140deg,#F59E0B,#D97706)",
+  "linear-gradient(140deg,#10B981,#059669)",
+  "linear-gradient(140deg,#8B5CF6,#7C3AED)",
+  "linear-gradient(140deg,#EC4899,#DB2777)",
+  "linear-gradient(140deg,#06B6D4,#0891B2)",
+];
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  return ((parts[0]?.[0] ?? "") + (parts.length > 1 ? parts[parts.length - 1]![0] : "")).toUpperCase() || "·";
+}
+
 /** Flattens the org tree into "Class · Section" options (no student-list endpoint — browse per section). */
 function sectionOptions(tree: OrgTree): SectionOpt[] {
   const options: SectionOpt[] = [];
@@ -40,6 +49,8 @@ function sectionOptions(tree: OrgTree): SectionOpt[] {
   return options;
 }
 
+type Row = { admissionNo: ReactNode; name: ReactNode; status: ReactNode; actions: ReactNode };
+
 export default function StudentsPage() {
   const toast = useToast();
   const year = useMemo(() => currentAcademicYear(), []);
@@ -47,6 +58,7 @@ export default function StudentsPage() {
   const [failed, setFailed] = useState(false);
   const [sectionId, setSectionId] = useState("");
   const [roster, setRoster] = useState<StudentView[] | null>(null);
+  const [rosterError, setRosterError] = useState(false);
   const [adding, setAdding] = useState(false);
   const [transfer, setTransfer] = useState<StudentView | null>(null);
   const [transferTo, setTransferTo] = useState("");
@@ -61,6 +73,7 @@ export default function StudentsPage() {
   const [eGuardianPhone, setEGuardianPhone] = useState("");
   const [eDob, setEDob] = useState("");
   const [users, setUsers] = useState<{ id: string; username: string; displayName: string }[]>([]);
+  const [viewing, setViewing] = useState<StudentView | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -88,10 +101,12 @@ export default function StudentsPage() {
 
   const loadRoster = useCallback(async () => {
     if (!sectionId) return;
+    setRosterError(false);
     try {
       setRoster((await api.sectionRoster(sectionId)).students);
     } catch {
-      setRoster([]);
+      setRoster(null);
+      setRosterError(true);
     }
   }, [sectionId]);
   useEffect(() => {
@@ -104,13 +119,13 @@ export default function StudentsPage() {
     try {
       const student = await api.createStudent({ collegeId: tree.college.id, admissionNo, fullName });
       await api.enrollStudent(student.id, { sectionId, academicYear: year });
-      toast.show(`${fullName} enrolled.`, "good");
+      toast.push({ status: "good", message: `${fullName} enrolled.` });
       setAdding(false);
       setAdmissionNo("");
       setFullName("");
       await loadRoster();
     } catch (caught) {
-      toast.show(caught instanceof ApiError ? caught.message : "Couldn't add the student.", "danger");
+      toast.push({ status: "danger", message: caught instanceof ApiError ? caught.message : "Couldn't add the student." });
     } finally {
       setSaving(false);
     }
@@ -121,11 +136,11 @@ export default function StudentsPage() {
     setSaving(true);
     try {
       await api.enrollStudent(transfer.id, { sectionId: transferTo, academicYear: year });
-      toast.show(`${transfer.fullName} transferred.`, "good");
+      toast.push({ status: "good", message: `${transfer.fullName} transferred.` });
       setTransfer(null);
       await loadRoster();
     } catch (caught) {
-      toast.show(caught instanceof ApiError ? caught.message : "Couldn't transfer.", "danger");
+      toast.push({ status: "danger", message: caught instanceof ApiError ? caught.message : "Couldn't transfer." });
     } finally {
       setSaving(false);
     }
@@ -136,14 +151,14 @@ export default function StudentsPage() {
     setSaving(true);
     try {
       await api.linkStudentIdentity(linking.id, linkUserId === "__unlink" ? null : linkUserId);
-      toast.show(
-        linkUserId === "__unlink" ? `${linking.fullName} unlinked.` : `${linking.fullName} linked to a sign-in.`,
-        "good",
-      );
+      toast.push({
+        status: "good",
+        message: linkUserId === "__unlink" ? `${linking.fullName} unlinked.` : `${linking.fullName} linked to a sign-in.`,
+      });
       setLinking(null);
       await loadRoster();
     } catch (caught) {
-      toast.show(caught instanceof ApiError ? caught.message : "Couldn't update the link.", "danger");
+      toast.push({ status: "danger", message: caught instanceof ApiError ? caught.message : "Couldn't update the link." });
     } finally {
       setSaving(false);
     }
@@ -167,11 +182,11 @@ export default function StudentsPage() {
         guardianPhone: eGuardianPhone.trim() || null,
         dob: eDob.trim() || null,
       });
-      toast.show(`${editing.fullName}'s profile updated.`, "good");
+      toast.push({ status: "good", message: `${editing.fullName}'s profile updated.` });
       setEditing(null);
       await loadRoster();
     } catch (caught) {
-      toast.show(caught instanceof ApiError ? caught.message : "Couldn't update.", "danger");
+      toast.push({ status: "danger", message: caught instanceof ApiError ? caught.message : "Couldn't update." });
     } finally {
       setSaving(false);
     }
@@ -181,95 +196,127 @@ export default function StudentsPage() {
     if (next === student.status) return;
     try {
       await api.updateStudent(student.id, { status: next });
-      toast.show(`${student.fullName} → ${STATUS_LABEL[next] ?? next}.`, "good");
+      toast.push({ status: "good", message: `${student.fullName} → ${STATUS_LABEL[next] ?? next}.` });
       await loadRoster();
+      setViewing((current) => (current && current.id === student.id ? { ...current, status: next } : current));
     } catch (caught) {
-      toast.show(caught instanceof ApiError ? caught.message : "Couldn't update.", "danger");
+      toast.push({ status: "danger", message: caught instanceof ApiError ? caught.message : "Couldn't update." });
     }
   }
 
-  if (failed) return <EmptyState title="Couldn't load the college." message="Try again shortly." />;
-  if (tree === null) return <Skeleton lines={5} />;
+  function toDrawerStudent(row: StudentView, idx: number, sectionLabel: string): DrawerStudent {
+    return {
+      studentId: row.id,
+      initials: initials(row.fullName),
+      gradient: AVATARS[idx % AVATARS.length]!,
+      rollNo: row.admissionNo,
+      name: row.fullName,
+      section: sectionLabel,
+      status: row.status,
+      pct: null,
+      attended: 0,
+      total: 0,
+      lastMark: null,
+      backlogs: row.status === "backlog" ? 1 : 0,
+      flags: { backlog: row.status === "backlog", yb: row.status === "year_back" },
+      phone: row.phone,
+      guardianName: row.guardianName,
+      guardianPhone: row.guardianPhone,
+      dob: row.dob,
+    };
+  }
+
+  if (failed) return <EmptyState title="Couldn't load the college." body="Try again shortly." />;
+  if (tree === null) {
+    return (
+      <div className={styles.skeletonStack} aria-hidden="true">
+        <Skeleton height={16} /><Skeleton height={16} /><Skeleton height={16} /><Skeleton height={16} /><Skeleton height={16} />
+      </div>
+    );
+  }
 
   const options = sectionOptions(tree);
-  const columns: Column<StudentView>[] = [
-    { key: "admissionNo", header: "Admission no.", render: (row) => <span className="num">{row.admissionNo}</span> },
-    {
-      key: "name",
-      header: "Student",
-      render: (row) => (
-        <a className="risk-name" href={`/students/${encodeURIComponent(row.id)}`}>
-          {row.fullName}
-        </a>
-      ),
-    },
-    {
-      key: "status",
-      header: "Status",
-      render: (row) => (
-        <select
-          aria-label={`Status for ${row.fullName}`}
-          value={row.status}
-          onChange={(event) => void setStatus(row, event.target.value as StudentStatus)}
-          style={{ font: "inherit", padding: "4px 8px", borderRadius: 6, border: "1px solid var(--rule-strong)", background: "var(--paper-raised)", color: "var(--ink)" }}
-        >
-          {STATUS_OPTIONS.map((opt) => (
-            <option key={opt.value} value={opt.value}>{opt.label}</option>
-          ))}
-          {/* keep a legacy value selectable if a record still carries it */}
-          {STATUS_OPTIONS.every((opt) => opt.value !== row.status) ? (
-            <option value={row.status}>{row.status}</option>
-          ) : null}
-        </select>
-      ),
-    },
-    {
-      key: "actions",
-      header: "",
-      align: "right",
-      render: (row) => (
-        <span style={{ display: "inline-flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
-          <Button variant="ghost" onClick={() => openEdit(row)}>Edit</Button>
-          <Button variant="ghost" onClick={() => { setLinkUserId(""); setLinking(row); }}>
-            {row.identityUserId === null ? "Link sign-in" : "Sign-in ✓"}
-          </Button>
-          <Button variant="ghost" onClick={() => { setTransferTo(""); setTransfer(row); }}>Transfer</Button>
-        </span>
-      ),
-    },
+  const sectionLabel = options.find((option) => option.sectionId === sectionId)?.label ?? "";
+  const columns: TableColumn<Row>[] = [
+    { key: "admissionNo", header: "Admission no.", figure: true },
+    { key: "name", header: "Student" },
+    { key: "status", header: "Status" },
+    { key: "actions", header: "" },
   ];
+  const rows: Row[] = (roster ?? []).map((row, idx) => ({
+    admissionNo: row.admissionNo,
+    name: (
+      <a className="risk-name" href={`/students/${encodeURIComponent(row.id)}`}>
+        {row.fullName}
+      </a>
+    ),
+    status: (
+      <select
+        aria-label={`Status for ${row.fullName}`}
+        value={row.status}
+        onChange={(event) => void setStatus(row, event.target.value as StudentStatus)}
+        className={styles.statusSelect}
+      >
+        {STATUS_OPTIONS.map((opt) => (
+          <option key={opt.value} value={opt.value}>{opt.label}</option>
+        ))}
+        {/* keep a legacy value selectable if a record still carries it */}
+        {STATUS_OPTIONS.every((opt) => opt.value !== row.status) ? (
+          <option value={row.status}>{row.status}</option>
+        ) : null}
+      </select>
+    ),
+    actions: (
+      <span className={styles.rowActions}>
+        <Button variant="ghost" onClick={() => setViewing(row)}>View</Button>
+        <Button variant="ghost" onClick={() => openEdit(row)}>Edit</Button>
+        <Button variant="ghost" onClick={() => { setLinkUserId(""); setLinking(row); }}>
+          {row.identityUserId === null ? "Link sign-in" : "Sign-in ✓"}
+        </Button>
+        <Button variant="ghost" onClick={() => { setTransferTo(""); setTransfer(row); }}>Transfer</Button>
+      </span>
+    ),
+  }));
 
   return (
     <>
       <PageHeader
-        eyebrow="Students"
         title="Student records"
-        lede="Browse a section's roster; add, transfer or deactivate students. There is no global list — students live in sections."
         actions={<Button onClick={() => setAdding(true)} disabled={options.length === 0}>Add student</Button>}
       />
+      <p className={styles.lede}>
+        Browse a section&apos;s roster; add, transfer or deactivate students. There is no global list — students live in sections.
+      </p>
 
       {options.length === 0 ? (
-        <EmptyState title="No sections yet." message="Create departments, classes and sections in Organisation first." />
+        <EmptyState title="No sections yet." body="Create departments, classes and sections in Organisation first." />
       ) : (
         <>
-          <Field label="Section" htmlFor="sec-pick">
-            <select id="sec-pick" value={sectionId} onChange={(event) => setSectionId(event.target.value)} style={{ maxWidth: 340 }}>
-              {options.map((option) => (
-                <option key={option.sectionId} value={option.sectionId}>{option.label}</option>
-              ))}
-            </select>
-          </Field>
-          <div style={{ marginTop: "var(--space-4)" }}>
-            {roster === null ? (
-              <Skeleton lines={4} />
-            ) : (
-              <DataTable
-                columns={columns}
-                rows={roster}
-                rowKey={(row) => row.id}
-                empty={{ title: "No students enrolled here.", message: "Add one with the button above." }}
-              />
-            )}
+          <div className={styles.sectionPicker}>
+            <Select
+              id="sec-pick"
+              label="Section"
+              value={sectionId}
+              onChange={(event) => setSectionId(event.target.value)}
+              options={options.map((option) => ({ value: option.sectionId, label: option.label }))}
+            />
+          </div>
+          <div className={styles.tableWrap}>
+            <AsyncState
+              loading={roster === null && !rosterError}
+              error={rosterError}
+              onRetry={() => void loadRoster()}
+              isEmpty={roster !== null && roster.length === 0}
+              empty={
+                <EmptyState
+                  title="No students enrolled here."
+                  body="Add one with the button above."
+                  action={{ label: "Add student", onClick: () => setAdding(true) }}
+                />
+              }
+            >
+              <Table columns={columns} rows={rows} />
+            </AsyncState>
           </div>
         </>
       )}
@@ -277,7 +324,7 @@ export default function StudentsPage() {
       <Modal
         open={adding}
         onClose={() => setAdding(false)}
-        title={`Add student — ${options.find((option) => option.sectionId === sectionId)?.label ?? ""}`}
+        title={`Add student — ${sectionLabel}`}
         footer={
           <>
             <Button variant="ghost" onClick={() => setAdding(false)}>Cancel</Button>
@@ -287,13 +334,9 @@ export default function StudentsPage() {
           </>
         }
       >
-        <div style={{ display: "grid", gap: "var(--space-3)" }}>
-          <Field label="Admission no." htmlFor="stu-adm" hint="Unique, e.g. FYCS-015">
-            <input id="stu-adm" value={admissionNo} onChange={(event) => setAdmissionNo(event.target.value)} />
-          </Field>
-          <Field label="Full name" htmlFor="stu-name">
-            <input id="stu-name" value={fullName} onChange={(event) => setFullName(event.target.value)} />
-          </Field>
+        <div className={styles.formGrid}>
+          <Input id="stu-adm" label="Admission no." hint="Unique, e.g. FYCS-015" value={admissionNo} onChange={(event) => setAdmissionNo(event.target.value)} />
+          <Input id="stu-name" label="Full name" value={fullName} onChange={(event) => setFullName(event.target.value)} />
         </div>
       </Modal>
 
@@ -310,16 +353,16 @@ export default function StudentsPage() {
           </>
         }
       >
-        <Field label="To section" htmlFor="stu-transfer">
-          <select id="stu-transfer" value={transferTo} onChange={(event) => setTransferTo(event.target.value)}>
-            <option value="">Choose…</option>
-            {options
-              .filter((option) => option.sectionId !== sectionId)
-              .map((option) => (
-                <option key={option.sectionId} value={option.sectionId}>{option.label}</option>
-              ))}
-          </select>
-        </Field>
+        <Select
+          id="stu-transfer"
+          label="To section"
+          value={transferTo}
+          onChange={(event) => setTransferTo(event.target.value)}
+          options={[
+            { value: "", label: "Choose…" },
+            ...options.filter((option) => option.sectionId !== sectionId).map((option) => ({ value: option.sectionId, label: option.label })),
+          ]}
+        />
       </Modal>
 
       <Modal
@@ -335,19 +378,18 @@ export default function StudentsPage() {
           </>
         }
       >
-        <Field
+        <Select
+          id="stu-link"
           label="Identity user"
-          htmlFor="stu-link"
           hint="The linked sign-in gets the student portal (their own attendance and marks only)."
-        >
-          <select id="stu-link" value={linkUserId} onChange={(event) => setLinkUserId(event.target.value)}>
-            <option value="">Choose…</option>
-            {linking?.identityUserId !== null ? <option value="__unlink">— Unlink current sign-in —</option> : null}
-            {users.map((user) => (
-              <option key={user.id} value={user.id}>{user.displayName} ({user.username})</option>
-            ))}
-          </select>
-        </Field>
+          value={linkUserId}
+          onChange={(event) => setLinkUserId(event.target.value)}
+          options={[
+            { value: "", label: "Choose…" },
+            ...(linking?.identityUserId !== null ? [{ value: "__unlink", label: "— Unlink current sign-in —" }] : []),
+            ...users.map((user) => ({ value: user.id, label: `${user.displayName} (${user.username})` })),
+          ]}
+        />
       </Modal>
 
       <Modal
@@ -361,21 +403,20 @@ export default function StudentsPage() {
           </>
         }
       >
-        <div style={{ display: "grid", gap: "var(--space-3)" }}>
-          <Field label="Student phone" htmlFor="e-phone">
-            <input id="e-phone" inputMode="tel" value={ePhone} onChange={(e) => setEPhone(e.target.value)} placeholder="+91 …" />
-          </Field>
-          <Field label="Date of birth" htmlFor="e-dob">
-            <input id="e-dob" type="date" value={eDob} onChange={(e) => setEDob(e.target.value)} />
-          </Field>
-          <Field label="Guardian name" htmlFor="e-guardian">
-            <input id="e-guardian" value={eGuardian} onChange={(e) => setEGuardian(e.target.value)} placeholder="Parent / guardian" />
-          </Field>
-          <Field label="Guardian phone" htmlFor="e-gphone">
-            <input id="e-gphone" inputMode="tel" value={eGuardianPhone} onChange={(e) => setEGuardianPhone(e.target.value)} placeholder="+91 …" />
-          </Field>
+        <div className={styles.formGrid}>
+          <Input id="e-phone" label="Student phone" inputMode="tel" value={ePhone} onChange={(e) => setEPhone(e.target.value)} placeholder="+91 …" />
+          <Input id="e-dob" label="Date of birth" type="date" value={eDob} onChange={(e) => setEDob(e.target.value)} />
+          <Input id="e-guardian" label="Guardian name" value={eGuardian} onChange={(e) => setEGuardian(e.target.value)} placeholder="Parent / guardian" />
+          <Input id="e-gphone" label="Guardian phone" inputMode="tel" value={eGuardianPhone} onChange={(e) => setEGuardianPhone(e.target.value)} placeholder="+91 …" />
         </div>
       </Modal>
+
+      <StudentSlideOver
+        student={viewing ? toDrawerStudent(viewing, roster?.indexOf(viewing) ?? 0, sectionLabel) : null}
+        canManage
+        onSetStatus={(next) => viewing && void setStatus(viewing, next as StudentStatus)}
+        onClose={() => setViewing(null)}
+      />
     </>
   );
 }
