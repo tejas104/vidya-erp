@@ -26,7 +26,11 @@ export function Table<T>({
         <thead>
           <tr>
             {columns.map((col) => (
-              <th key={col.key} scope="col">
+              <th
+                key={col.key}
+                scope="col"
+                aria-sort={col.sortable ? (sort?.key === col.key ? (sort.dir === "asc" ? "ascending" : "descending") : "none") : undefined}
+              >
                 {col.sortable ? (
                   <button type="button" className={styles.sortBtn} onClick={() => onSortChange?.(col.key)}>
                     {col.header}
