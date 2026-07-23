@@ -1,0 +1,45 @@
+.lede {
+  margin: calc(-1 * var(--space-3)) 0 var(--space-4);
+  color: var(--ink-2);
+}
+.skeletonStack {
+  display: grid;
+  gap: var(--space-2);
+}
+.addRow {
+  display: flex;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+.recentList {
+  margin-top: var(--space-4);
+  display: grid;
+  gap: var(--space-2);
+}
+.recentRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  padding: var(--space-2) 0;
+  border-top: 1px solid var(--rule);
+}
+.recentActions {
+  display: flex;
+  gap: var(--space-2);
+}
+.classPicker {
+  max-width: 340px;
+}
+.tableWrap {
+  margin-top: var(--space-4);
+}
+.formGrid {
+  display: grid;
+  gap: var(--space-3);
+}
+.confirmMessage {
+  margin: 0;
+}

@@ -1,7 +1,16 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { ToastProvider } from "@vidya/ui-system";
 import TeachersPage from "../../app/(app)/manage/teachers/page";
 import { api } from "./api";
+
+function renderPage() {
+  return render(
+    <ToastProvider>
+      <TeachersPage />
+    </ToastProvider>,
+  );
+}
 
 vi.mock("./api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./api")>();
@@ -41,7 +50,7 @@ beforeEach(() => {
 
 describe("/manage/teachers", () => {
   it("creates a teacher with the college id", async () => {
-    render(<TeachersPage />);
+    renderPage();
     fireEvent.change(await screen.findByLabelText("Staff no."), { target: { value: "S-9" } });
     fireEvent.change(screen.getByLabelText("Full name"), { target: { value: "New Teacher" } });
     fireEvent.click(screen.getByRole("button", { name: /add teacher/i }));
@@ -51,7 +60,7 @@ describe("/manage/teachers", () => {
     expect(await screen.findByText("New Teacher")).toBeInTheDocument();
   });
   it("assigns the created teacher as subject_teacher with a subject", async () => {
-    render(<TeachersPage />);
+    renderPage();
     fireEvent.change(await screen.findByLabelText("Staff no."), { target: { value: "S-9" } });
     fireEvent.change(screen.getByLabelText("Full name"), { target: { value: "New Teacher" } });
     fireEvent.click(screen.getByRole("button", { name: /add teacher/i }));

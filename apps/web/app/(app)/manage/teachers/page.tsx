@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   api,
   ApiError,
@@ -9,17 +9,22 @@ import {
   type TeacherView,
   type UserView,
 } from "@/ui/api";
-import { useToast } from "@/ui/Toast";
-import { PageHeader } from "@/ui/PageHeader";
-import { Card } from "@/ui/Card";
-import { Button } from "@/ui/Button";
-import { Field } from "@/ui/Field";
-import { Modal } from "@/ui/Modal";
-import { ConfirmDialog } from "@/ui/ConfirmDialog";
-import { DataTable, type Column } from "@/ui/DataTable";
-import { Badge } from "@/ui/Badge";
-import { EmptyState } from "@/ui/EmptyState";
-import { Skeleton } from "@/ui/Skeleton";
+import {
+  useToast,
+  Button,
+  Input,
+  Select,
+  Modal,
+  Table,
+  StatusBadge,
+  Card,
+  EmptyState,
+  Skeleton,
+  PageHeader,
+  type TableColumn,
+} from "@vidya/ui-system";
+import { AsyncState } from "@/ui/AsyncState";
+import styles from "./page.module.css";
 
 export const dynamic = "force-dynamic";
 
@@ -39,6 +44,8 @@ function classOptions(tree: OrgTree): ClassOpt[] {
   return options;
 }
 
+type Row = { teacher: ReactNode; kind: ReactNode; year: ReactNode; actions: ReactNode };
+
 export default function TeachersPage() {
   const toast = useToast();
   const year = useMemo(() => currentAcademicYear(), []);
@@ -52,6 +59,7 @@ export default function TeachersPage() {
   // assignments browser
   const [classId, setClassId] = useState("");
   const [assignments, setAssignments] = useState<AssignmentView[] | null>(null);
+  const [assignmentsError, setAssignmentsError] = useState(false);
   const [teacherNames, setTeacherNames] = useState<Record<string, string>>({});
   const [removal, setRemoval] = useState<AssignmentView | null>(null);
   // link + assign modals
@@ -92,6 +100,7 @@ export default function TeachersPage() {
 
   const loadAssignments = useCallback(async () => {
     if (!classId) return;
+    setAssignmentsError(false);
     try {
       const { assignments: rows } = await api.classTeacherAssignments(classId);
       setAssignments(rows);
@@ -110,7 +119,8 @@ export default function TeachersPage() {
         setTeacherNames((current) => ({ ...current, ...Object.fromEntries(fetched) }));
       }
     } catch {
-      setAssignments([]);
+      setAssignments(null);
+      setAssignmentsError(true);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [classId]);
@@ -124,11 +134,11 @@ export default function TeachersPage() {
     try {
       const teacher = await api.createTeacher({ collegeId: tree.college.id, staffNo, fullName });
       setRecent((current) => [teacher, ...current]);
-      toast.show(`${teacher.fullName} added.`, "good");
+      toast.push({ status: "good", message: `${teacher.fullName} added.` });
       setStaffNo("");
       setFullName("");
     } catch (caught) {
-      toast.show(caught instanceof ApiError ? caught.message : "Couldn't add the teacher.", "danger");
+      toast.push({ status: "danger", message: caught instanceof ApiError ? caught.message : "Couldn't add the teacher." });
     } finally {
       setSaving(false);
     }
@@ -140,10 +150,10 @@ export default function TeachersPage() {
     try {
       const { teacher, grants } = await api.linkTeacherIdentity(linking.id, linkUserId);
       setRecent((current) => current.map((t) => (t.id === teacher.id ? teacher : t)));
-      toast.show(`Linked — ${grants.upserted} grant(s) derived.`, "good");
+      toast.push({ status: "good", message: `Linked — ${grants.upserted} grant(s) derived.` });
       setLinking(null);
     } catch (caught) {
-      toast.show(caught instanceof ApiError ? caught.message : "Couldn't link.", "danger");
+      toast.push({ status: "danger", message: caught instanceof ApiError ? caught.message : "Couldn't link." });
     } finally {
       setSaving(false);
     }
@@ -160,11 +170,11 @@ export default function TeachersPage() {
         kind: assignKind,
         academicYear: year,
       });
-      toast.show("Assignment created — the identity grant derives when the teacher is linked.", "good");
+      toast.push({ status: "good", message: "Assignment created — the identity grant derives when the teacher is linked." });
       setAssigning(null);
       if (assignClassId === classId) await loadAssignments();
     } catch (caught) {
-      toast.show(caught instanceof ApiError ? caught.message : "Couldn't create the assignment.", "danger");
+      toast.push({ status: "danger", message: caught instanceof ApiError ? caught.message : "Couldn't create the assignment." });
     } finally {
       setSaving(false);
     }
@@ -174,67 +184,73 @@ export default function TeachersPage() {
     if (!removal) return;
     try {
       await api.removeAssignment(removal.id);
-      toast.show("Assignment removed (derived grant revoked).", "good");
+      toast.push({ status: "good", message: "Assignment removed (derived grant revoked)." });
       setRemoval(null);
       await loadAssignments();
     } catch (caught) {
       setRemoval(null);
-      toast.show(caught instanceof ApiError ? caught.message : "Couldn't remove.", "danger");
+      toast.push({ status: "danger", message: caught instanceof ApiError ? caught.message : "Couldn't remove." });
     }
   }
 
-  if (failed) return <EmptyState title="Couldn't load the college." message="Try again shortly." />;
-  if (tree === null) return <Skeleton lines={5} />;
+  if (failed) return <EmptyState title="Couldn't load the college." body="Try again shortly." />;
+  if (tree === null) {
+    return (
+      <div className={styles.skeletonStack} aria-hidden="true">
+        <Skeleton height={16} /><Skeleton height={16} /><Skeleton height={16} /><Skeleton height={16} /><Skeleton height={16} />
+      </div>
+    );
+  }
 
   const classes = classOptions(tree);
   const assignSubjects = classes.find((option) => option.classId === assignClassId)?.subjects ?? [];
   const subjectNames = new Map(tree.departments.flatMap((d) => d.subjects.map((s) => [s.id, s.name] as const)));
-  const assignmentColumns: Column<AssignmentView>[] = [
-    { key: "teacher", header: "Teacher", render: (row) => teacherNames[row.teacherId] ?? row.teacherId },
-    {
-      key: "kind",
-      header: "Role",
-      render: (row) =>
-        row.kind === "class_teacher" ? <Badge tone="good">class teacher</Badge> : <Badge>{subjectNames.get(row.subjectId ?? "") ?? "subject"}</Badge>,
-    },
-    { key: "year", header: "Year", render: (row) => <span className="num">{row.academicYear}</span> },
-    {
-      key: "actions",
-      header: "",
-      align: "right",
-      render: (row) => <Button variant="danger" onClick={() => setRemoval(row)}>Remove</Button>,
-    },
+  const assignmentColumns: TableColumn<Row>[] = [
+    { key: "teacher", header: "Teacher" },
+    { key: "kind", header: "Role" },
+    { key: "year", header: "Year", figure: true },
+    { key: "actions", header: "" },
   ];
+  const assignmentRows: Row[] = (assignments ?? []).map((row) => ({
+    teacher: teacherNames[row.teacherId] ?? row.teacherId,
+    kind:
+      row.kind === "class_teacher" ? (
+        <StatusBadge status="good">class teacher</StatusBadge>
+      ) : (
+        <StatusBadge status="neutral">{subjectNames.get(row.subjectId ?? "") ?? "subject"}</StatusBadge>
+      ),
+    year: row.academicYear,
+    actions: <Button variant="danger" onClick={() => setRemoval(row)}>Remove</Button>,
+  }));
 
   return (
     <>
-      <PageHeader
-        eyebrow="Teachers"
-        title="Teacher records & assignments"
-        lede="Assignments derive scope grants once the teacher is linked to a sign-in (ADR-0015). Browse by class — teachers appear where they teach."
-      />
+      <PageHeader title="Teacher records & assignments" />
+      <p className={styles.lede}>
+        Assignments derive scope grants once the teacher is linked to a sign-in (ADR-0015). Browse by class — teachers appear where they teach.
+      </p>
 
       <Card title="Add a teacher">
-        <div style={{ display: "flex", gap: "var(--space-4)", flexWrap: "wrap", alignItems: "flex-end" }}>
-          <Field label="Staff no." htmlFor="tch-staff" hint="Unique, e.g. S-1042">
-            <input id="tch-staff" value={staffNo} onChange={(event) => setStaffNo(event.target.value)} />
-          </Field>
-          <Field label="Full name" htmlFor="tch-name">
-            <input id="tch-name" value={fullName} onChange={(event) => setFullName(event.target.value)} />
-          </Field>
+        <div className={styles.addRow}>
+          <Input id="tch-staff" label="Staff no." hint="Unique, e.g. S-1042" value={staffNo} onChange={(event) => setStaffNo(event.target.value)} />
+          <Input id="tch-name" label="Full name" value={fullName} onChange={(event) => setFullName(event.target.value)} />
           <Button onClick={() => void addTeacher()} loading={saving} disabled={staffNo.trim() === "" || fullName.trim() === ""}>
             Add teacher
           </Button>
         </div>
         {recent.length > 0 ? (
-          <div style={{ marginTop: "var(--space-4)", display: "grid", gap: "var(--space-2)" }}>
+          <div className={styles.recentList}>
             {recent.map((teacher) => (
-              <div key={teacher.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap", padding: "8px 0", borderTop: "1px solid var(--rule)" }}>
+              <div key={teacher.id} className={styles.recentRow}>
                 <span>
-                  <strong>{teacher.fullName}</strong> <span className="num" style={{ opacity: 0.6 }}>{teacher.staffNo}</span>{" "}
-                  {teacher.identityUserId !== null ? <Badge tone="good">linked</Badge> : <Badge tone="warn">no sign-in</Badge>}
+                  <strong>{teacher.fullName}</strong> <span className="num">{teacher.staffNo}</span>{" "}
+                  {teacher.identityUserId !== null ? (
+                    <StatusBadge status="good">linked</StatusBadge>
+                  ) : (
+                    <StatusBadge status="warn">no sign-in</StatusBadge>
+                  )}
                 </span>
-                <span style={{ display: "flex", gap: 8 }}>
+                <span className={styles.recentActions}>
                   <Button variant="ghost" onClick={() => { setLinkUserId(""); setLinking(teacher); }}>Link identity</Button>
                   <Button variant="ghost" onClick={() => setAssigning(teacher)}>Assign</Button>
                 </span>
@@ -246,24 +262,25 @@ export default function TeachersPage() {
 
       <section className="section" aria-label="Assignments by class">
         <div className="section-head"><h2>Assignments by class</h2></div>
-        <Field label="Class" htmlFor="tch-class">
-          <select id="tch-class" value={classId} onChange={(event) => setClassId(event.target.value)} style={{ maxWidth: 340 }}>
-            {classes.map((option) => (
-              <option key={option.classId} value={option.classId}>{option.label}</option>
-            ))}
-          </select>
-        </Field>
-        <div style={{ marginTop: "var(--space-4)" }}>
-          {assignments === null ? (
-            <Skeleton lines={3} />
-          ) : (
-            <DataTable
-              columns={assignmentColumns}
-              rows={assignments}
-              rowKey={(row) => row.id}
-              empty={{ title: "No assignments for this class.", message: "Add a teacher above, then Assign." }}
-            />
-          )}
+        <div className={styles.classPicker}>
+          <Select
+            id="tch-class"
+            label="Class"
+            value={classId}
+            onChange={(event) => setClassId(event.target.value)}
+            options={classes.map((option) => ({ value: option.classId, label: option.label }))}
+          />
+        </div>
+        <div className={styles.tableWrap}>
+          <AsyncState
+            loading={assignments === null && !assignmentsError}
+            error={assignmentsError}
+            onRetry={() => void loadAssignments()}
+            isEmpty={assignments !== null && assignments.length === 0}
+            empty={<EmptyState title="No assignments for this class." body="Add a teacher above, then Assign." />}
+          >
+            <Table columns={assignmentColumns} rows={assignmentRows} />
+          </AsyncState>
         </div>
       </section>
 
@@ -278,14 +295,17 @@ export default function TeachersPage() {
           </>
         }
       >
-        <Field label="Identity user" htmlFor="tch-user" hint="Grants for existing assignments derive on link.">
-          <select id="tch-user" value={linkUserId} onChange={(event) => setLinkUserId(event.target.value)}>
-            <option value="">Choose…</option>
-            {users.map((user) => (
-              <option key={user.id} value={user.id}>{user.displayName} ({user.username})</option>
-            ))}
-          </select>
-        </Field>
+        <Select
+          id="tch-user"
+          label="Identity user"
+          hint="Grants for existing assignments derive on link."
+          value={linkUserId}
+          onChange={(event) => setLinkUserId(event.target.value)}
+          options={[
+            { value: "", label: "Choose…" },
+            ...users.map((user) => ({ value: user.id, label: `${user.displayName} (${user.username})` })),
+          ]}
+        />
       </Modal>
 
       <Modal
@@ -305,49 +325,56 @@ export default function TeachersPage() {
           </>
         }
       >
-        <div style={{ display: "grid", gap: "var(--space-3)" }}>
-          <Field label="Class" htmlFor="asg-class">
-            <select
-              id="asg-class"
-              value={assignClassId}
-              onChange={(event) => {
-                setAssignClassId(event.target.value);
-                const subjects = classes.find((option) => option.classId === event.target.value)?.subjects ?? [];
-                setAssignSubjectId(subjects[0]?.id ?? "");
-              }}
-            >
-              {classes.map((option) => (
-                <option key={option.classId} value={option.classId}>{option.label}</option>
-              ))}
-            </select>
-          </Field>
-          <Field label="Role" htmlFor="asg-kind" hint="class_teacher records attendance; subject_teacher enters marks for one subject.">
-            <select id="asg-kind" value={assignKind} onChange={(event) => setAssignKind(event.target.value as typeof assignKind)}>
-              <option value="subject_teacher">subject_teacher</option>
-              <option value="class_teacher">class_teacher</option>
-            </select>
-          </Field>
+        <div className={styles.formGrid}>
+          <Select
+            id="asg-class"
+            label="Class"
+            value={assignClassId}
+            onChange={(event) => {
+              setAssignClassId(event.target.value);
+              const subjects = classes.find((option) => option.classId === event.target.value)?.subjects ?? [];
+              setAssignSubjectId(subjects[0]?.id ?? "");
+            }}
+            options={classes.map((option) => ({ value: option.classId, label: option.label }))}
+          />
+          <Select
+            id="asg-kind"
+            label="Role"
+            hint="class_teacher records attendance; subject_teacher enters marks for one subject."
+            value={assignKind}
+            onChange={(event) => setAssignKind(event.target.value as typeof assignKind)}
+            options={[
+              { value: "subject_teacher", label: "subject_teacher" },
+              { value: "class_teacher", label: "class_teacher" },
+            ]}
+          />
           {assignKind === "subject_teacher" ? (
-            <Field label="Subject" htmlFor="asg-subject">
-              <select id="asg-subject" value={assignSubjectId} onChange={(event) => setAssignSubjectId(event.target.value)}>
-                {assignSubjects.map((subject) => (
-                  <option key={subject.id} value={subject.id}>{subject.name}</option>
-                ))}
-              </select>
-            </Field>
+            <Select
+              id="asg-subject"
+              label="Subject"
+              value={assignSubjectId}
+              onChange={(event) => setAssignSubjectId(event.target.value)}
+              options={assignSubjects.map((subject) => ({ value: subject.id, label: subject.name }))}
+            />
           ) : null}
         </div>
       </Modal>
 
-      <ConfirmDialog
+      <Modal
         open={removal !== null}
+        onClose={() => setRemoval(null)}
         title="Remove assignment"
-        message={`Remove this assignment${removal ? ` (${teacherNames[removal.teacherId] ?? removal.teacherId})` : ""}? The derived grant is revoked first.`}
-        confirmLabel="Confirm"
-        danger
-        onConfirm={() => void confirmRemoval()}
-        onCancel={() => setRemoval(null)}
-      />
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setRemoval(null)}>Cancel</Button>
+            <Button variant="danger" onClick={() => void confirmRemoval()}>Confirm</Button>
+          </>
+        }
+      >
+        <p className={styles.confirmMessage}>
+          Remove this assignment{removal ? ` (${teacherNames[removal.teacherId] ?? removal.teacherId})` : ""}? The derived grant is revoked first.
+        </p>
+      </Modal>
     </>
   );
 }
