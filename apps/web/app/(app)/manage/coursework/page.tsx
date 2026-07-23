@@ -1,21 +1,28 @@
 "use client";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ChangeEvent, type ReactNode } from "react";
 import { api, ApiError, currentAcademicYear, type CwkAssignment, type CwkMaterial, type CwkSubmission } from "@/ui/api";
-import { useToast } from "@/ui/Toast";
-import { PageHeader } from "@/ui/PageHeader";
-import { Card } from "@/ui/Card";
-import { Button } from "@/ui/Button";
-import { Field } from "@/ui/Field";
-import { Modal } from "@/ui/Modal";
-import { ConfirmDialog } from "@/ui/ConfirmDialog";
-import { DataTable, type Column } from "@/ui/DataTable";
-import { Badge } from "@/ui/Badge";
-import { EmptyState } from "@/ui/EmptyState";
-import { Skeleton } from "@/ui/Skeleton";
+import { AsyncState } from "@/ui/AsyncState";
+import {
+  useToast,
+  Button,
+  Input,
+  Select,
+  Table,
+  StatusBadge,
+  Card,
+  Modal,
+  EmptyState,
+  Skeleton,
+  PageHeader,
+  type TableColumn,
+} from "@vidya/ui-system";
+import styles from "./page.module.css";
 
 export const dynamic = "force-dynamic";
 
 type Target = { classId: string; subjectId: string; label: string };
+type AssignmentRow = { title: ReactNode; due: ReactNode; max: ReactNode; subs: ReactNode; actions: ReactNode };
+type MaterialRow = { title: ReactNode; type: ReactNode; size: ReactNode; dl: ReactNode };
 
 export default function CourseworkPage() {
   const toast = useToast();
@@ -23,8 +30,9 @@ export default function CourseworkPage() {
   const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
   const [targets, setTargets] = useState<Target[] | null>(null);
   const [targetIdx, setTargetIdx] = useState(0);
-  const [assignments, setAssignments] = useState<CwkAssignment[]>([]);
-  const [materials, setMaterials] = useState<CwkMaterial[]>([]);
+  const [assignments, setAssignments] = useState<CwkAssignment[] | null>(null);
+  const [materials, setMaterials] = useState<CwkMaterial[] | null>(null);
+  const [listsError, setListsError] = useState(false);
   const [saving, setSaving] = useState(false);
   // create-assignment modal
   const [creating, setCreating] = useState(false);
@@ -61,6 +69,9 @@ export default function CourseworkPage() {
   const target = targets?.[targetIdx];
   const load = useCallback(async () => {
     if (!target) return;
+    setAssignments(null);
+    setMaterials(null);
+    setListsError(false);
     try {
       const [a, m] = await Promise.all([
         api.cwkClassAssignments(target.classId, year),
@@ -71,6 +82,7 @@ export default function CourseworkPage() {
     } catch {
       setAssignments([]);
       setMaterials([]);
+      setListsError(true);
     }
   }, [target, year]);
   useEffect(() => {
@@ -90,13 +102,13 @@ export default function CourseworkPage() {
         ...(maxScore !== "" ? { maxScore: Number(maxScore) } : {}),
         academicYear: year,
       });
-      toast.show(`Assignment "${title}" created.`, "good");
+      toast.push({ status: "good", message: `Assignment "${title}" created.` });
       setCreating(false);
       setTitle("");
       setInstructions("");
       await load();
     } catch (caught) {
-      toast.show(caught instanceof ApiError ? caught.message : "Couldn't create.", "danger");
+      toast.push({ status: "danger", message: caught instanceof ApiError ? caught.message : "Couldn't create." });
     } finally {
       setSaving(false);
     }
@@ -118,15 +130,15 @@ export default function CourseworkPage() {
     if (raw === undefined || raw === "") return;
     try {
       await api.cwkEvaluate(submission.id, { score: Number(raw), feedback: "" });
-      toast.show(`${submission.studentName} scored.`, "good");
+      toast.push({ status: "good", message: `${submission.studentName} scored.` });
       if (evalFor) await openEvaluate(evalFor);
       await load();
     } catch (caught) {
-      toast.show(caught instanceof ApiError ? caught.message : "Couldn't score.", "danger");
+      toast.push({ status: "danger", message: caught instanceof ApiError ? caught.message : "Couldn't score." });
     }
   }
 
-  function onFile(event: React.ChangeEvent<HTMLInputElement>) {
+  function onFile(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
@@ -151,13 +163,13 @@ export default function CourseworkPage() {
         dataBase64: matFile.dataBase64,
         academicYear: year,
       });
-      toast.show(`"${matTitle}" uploaded.`, "good");
+      toast.push({ status: "good", message: `"${matTitle}" uploaded.` });
       setUploading(false);
       setMatTitle("");
       setMatFile(null);
       await load();
     } catch (caught) {
-      toast.show(caught instanceof ApiError ? caught.message : "Couldn't upload.", "danger");
+      toast.push({ status: "danger", message: caught instanceof ApiError ? caught.message : "Couldn't upload." });
     } finally {
       setSaving(false);
     }
@@ -167,86 +179,110 @@ export default function CourseworkPage() {
     if (!doomed) return;
     try {
       await api.cwkDeleteAssignment(doomed.id);
-      toast.show("Assignment deleted.", "good");
+      toast.push({ status: "good", message: "Assignment deleted." });
       setDoomed(null);
       await load();
     } catch (caught) {
       setDoomed(null);
-      toast.show(caught instanceof ApiError ? caught.message : "Couldn't delete.", "danger");
+      toast.push({ status: "danger", message: caught instanceof ApiError ? caught.message : "Couldn't delete." });
     }
   }
 
-  if (targets === null) return <Skeleton lines={5} />;
+  if (targets === null) {
+    return (
+      <div className={styles.skeletonStack} aria-hidden="true">
+        <Skeleton height={16} /><Skeleton height={16} /><Skeleton height={16} /><Skeleton height={16} /><Skeleton height={16} />
+      </div>
+    );
+  }
   if (targets.length === 0) {
     return (
       <>
-        <PageHeader eyebrow="Coursework" title="Assignments & study material" />
-        <EmptyState title="No subject you teach." message="Coursework is managed by a subject's teacher." />
+        <PageHeader title="Assignments & study material" />
+        <EmptyState title="No subject you teach." body="Coursework is managed by a subject's teacher." />
       </>
     );
   }
 
-  const assignmentColumns: Column<CwkAssignment>[] = [
-    { key: "title", header: "Assignment", render: (row) => <strong>{row.title}</strong> },
-    { key: "due", header: "Due", render: (row) => <span className="num">{row.dueOn}</span> },
-    { key: "max", header: "Max", align: "right", render: (row) => <span className="num">{row.maxScore ?? "—"}</span> },
-    { key: "subs", header: "Submissions", align: "right", render: (row) => <span className="num">{row.submissions ?? 0}</span> },
-    {
-      key: "actions",
-      header: "",
-      align: "right",
-      render: (row) => (
-        <span style={{ display: "inline-flex", gap: 8 }}>
-          <Button variant="ghost" onClick={() => void openEvaluate(row)}>Evaluate</Button>
-          <Button variant="danger" onClick={() => setDoomed(row)}>Delete</Button>
-        </span>
-      ),
-    },
+  const assignmentColumns: TableColumn<AssignmentRow>[] = [
+    { key: "title", header: "Assignment" },
+    { key: "due", header: "Due", figure: true },
+    { key: "max", header: "Max", figure: true },
+    { key: "subs", header: "Submissions", figure: true },
+    { key: "actions", header: "" },
   ];
-  const materialColumns: Column<CwkMaterial>[] = [
-    { key: "title", header: "Material", render: (row) => <strong>{row.title}</strong> },
-    { key: "type", header: "Type", render: (row) => <Badge>{row.contentType.split("/")[1] ?? row.contentType}</Badge> },
-    { key: "size", header: "Size", align: "right", render: (row) => <span className="num">{(row.sizeBytes / 1024).toFixed(1)} KB</span> },
-    {
-      key: "dl",
-      header: "",
-      align: "right",
-      render: (row) => (
-        <a className="btn ghost" href={api.cwkMaterialUrl(row.id)} download>Download</a>
-      ),
-    },
+  const assignmentRows: AssignmentRow[] = (assignments ?? []).map((row) => ({
+    title: <strong>{row.title}</strong>,
+    due: <span className="num">{row.dueOn}</span>,
+    max: <span className="num">{row.maxScore ?? "—"}</span>,
+    subs: <span className="num">{row.submissions ?? 0}</span>,
+    actions: (
+      <span className={styles.rowActions}>
+        <Button variant="ghost" onClick={() => void openEvaluate(row)}>Evaluate</Button>
+        <Button variant="danger" onClick={() => setDoomed(row)}>Delete</Button>
+      </span>
+    ),
+  }));
+  const materialColumns: TableColumn<MaterialRow>[] = [
+    { key: "title", header: "Material" },
+    { key: "type", header: "Type" },
+    { key: "size", header: "Size", figure: true },
+    { key: "dl", header: "" },
   ];
+  const materialRows: MaterialRow[] = (materials ?? []).map((row) => ({
+    title: <strong>{row.title}</strong>,
+    type: <StatusBadge status="neutral">{row.contentType.split("/")[1] ?? row.contentType}</StatusBadge>,
+    size: <span className="num">{(row.sizeBytes / 1024).toFixed(1)} KB</span>,
+    dl: <a className="btn ghost" href={api.cwkMaterialUrl(row.id)} download>Download</a>,
+  }));
 
   return (
     <>
       <PageHeader
-        eyebrow="Coursework"
         title="Assignments & study material"
-        lede="Create assignments, evaluate submissions, and share notes — scoped to the subject you teach."
         actions={
-          <span style={{ display: "flex", gap: 8 }}>
+          <span className={styles.headerActions}>
             <Button variant="ghost" onClick={() => setUploading(true)}>Upload material</Button>
             <Button onClick={() => setCreating(true)}>New assignment</Button>
           </span>
         }
       />
+      <p className={styles.lede}>Create assignments, evaluate submissions, and share notes — scoped to the subject you teach.</p>
 
-      <Field label="Class · subject" htmlFor="cwk-target">
-        <select id="cwk-target" value={targetIdx} onChange={(event) => setTargetIdx(Number(event.target.value))} style={{ maxWidth: 360 }}>
-          {targets.map((t, index) => (
-            <option key={`${t.classId}-${t.subjectId}`} value={index}>{t.label}</option>
-          ))}
-        </select>
-      </Field>
+      <div className={styles.targetPicker}>
+        <Select
+          id="cwk-target"
+          label="Class · subject"
+          value={targetIdx}
+          onChange={(event) => setTargetIdx(Number(event.target.value))}
+          options={targets.map((t, index) => ({ value: String(index), label: t.label }))}
+        />
+      </div>
 
       <section className="section" aria-label="Assignments">
         <div className="section-head"><h2>Assignments</h2></div>
-        <DataTable columns={assignmentColumns} rows={assignments} rowKey={(row) => row.id} empty={{ title: "No assignments yet.", message: "Create one with the button above." }} />
+        <AsyncState
+          loading={assignments === null && !listsError}
+          error={listsError}
+          onRetry={() => void load()}
+          isEmpty={assignments !== null && assignments.length === 0}
+          empty={<EmptyState title="No assignments yet." body="Create one with the button above." />}
+        >
+          <Table columns={assignmentColumns} rows={assignmentRows} />
+        </AsyncState>
       </section>
 
       <section className="section" aria-label="Study material">
         <div className="section-head"><h2>Study material</h2></div>
-        <DataTable columns={materialColumns} rows={materials} rowKey={(row) => row.id} empty={{ title: "No material yet.", message: "Upload notes for your students." }} />
+        <AsyncState
+          loading={materials === null && !listsError}
+          error={listsError}
+          onRetry={() => void load()}
+          isEmpty={materials !== null && materials.length === 0}
+          empty={<EmptyState title="No material yet." body="Upload notes for your students." />}
+        >
+          <Table columns={materialColumns} rows={materialRows} />
+        </AsyncState>
       </section>
 
       {/* CREATE ASSIGNMENT */}
@@ -261,20 +297,15 @@ export default function CourseworkPage() {
           </>
         }
       >
-        <div style={{ display: "grid", gap: "var(--space-3)" }}>
-          <Field label="Title" htmlFor="cwk-title">
-            <input id="cwk-title" value={title} onChange={(event) => setTitle(event.target.value)} />
-          </Field>
-          <Field label="Instructions" htmlFor="cwk-instr">
-            <textarea id="cwk-instr" rows={4} value={instructions} onChange={(event) => setInstructions(event.target.value)} />
-          </Field>
-          <div style={{ display: "flex", gap: "var(--space-4)", flexWrap: "wrap" }}>
-            <Field label="Due on" htmlFor="cwk-due">
-              <input id="cwk-due" type="date" value={dueOn} onChange={(event) => setDueOn(event.target.value)} />
-            </Field>
-            <Field label="Max score (optional)" htmlFor="cwk-max">
-              <input id="cwk-max" type="number" value={maxScore} onChange={(event) => setMaxScore(event.target.value)} style={{ width: 110 }} />
-            </Field>
+        <div className={styles.formGrid}>
+          <Input id="cwk-title" label="Title" value={title} onChange={(event) => setTitle(event.target.value)} />
+          <div className={styles.field}>
+            <label htmlFor="cwk-instr" className={styles.fieldLabel}>Instructions</label>
+            <textarea id="cwk-instr" rows={4} className={styles.textarea} value={instructions} onChange={(event) => setInstructions(event.target.value)} />
+          </div>
+          <div className={styles.formRow}>
+            <Input id="cwk-due" label="Due on" type="date" value={dueOn} onChange={(event) => setDueOn(event.target.value)} />
+            <Input id="cwk-max" label="Max score (optional)" type="number" className={styles.narrow} value={maxScore} onChange={(event) => setMaxScore(event.target.value)} />
           </div>
         </div>
       </Modal>
@@ -287,25 +318,25 @@ export default function CourseworkPage() {
         footer={<Button onClick={() => setEvalFor(null)}>Done</Button>}
       >
         {subs === null ? (
-          <Skeleton lines={3} />
+          <div className={styles.skeletonStack} aria-hidden="true">
+            <Skeleton height={14} /><Skeleton height={14} /><Skeleton height={14} />
+          </div>
         ) : subs.length === 0 ? (
           <p className="strip-empty">No submissions yet.</p>
         ) : (
-          <div style={{ display: "grid", gap: "var(--space-2)" }}>
+          <div className={styles.subList}>
             {subs.map((submission) => (
-              <div key={submission.id} style={{ borderTop: "1px solid var(--rule)", padding: "8px 0" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
+              <div key={submission.id} className={styles.subRow}>
+                <div className={styles.subHead}>
                   <strong>{submission.studentName}</strong>
-                  <span className="num" style={{ opacity: 0.6, fontSize: 12 }}>
-                    {new Date(submission.submittedAt).toLocaleString()}
-                  </span>
+                  <span className={`num ${styles.subMeta}`}>{new Date(submission.submittedAt).toLocaleString()}</span>
                 </div>
-                {submission.body !== "" ? (
-                  <p style={{ margin: "6px 0", fontSize: 13.5, whiteSpace: "pre-wrap" }}>{submission.body}</p>
-                ) : null}
-                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                {submission.body !== "" ? <p className={styles.subBody}>{submission.body}</p> : null}
+                <div className={styles.subScore}>
                   {submission.score !== null ? (
-                    <Badge tone="good">scored {submission.score}{evalFor?.maxScore != null ? `/${evalFor.maxScore}` : ""}</Badge>
+                    <StatusBadge status="good">
+                      scored {submission.score}{evalFor?.maxScore != null ? `/${evalFor.maxScore}` : ""}
+                    </StatusBadge>
                   ) : (
                     <>
                       <input
@@ -313,8 +344,8 @@ export default function CourseworkPage() {
                         placeholder="score"
                         aria-label={`score for ${submission.studentName}`}
                         value={scores[submission.id] ?? ""}
+                        className={styles.scoreInput}
                         onChange={(event) => setScores((current) => ({ ...current, [submission.id]: event.target.value }))}
-                        style={{ width: 90 }}
                       />
                       <Button variant="ghost" onClick={() => void evaluateOne(submission)}>Save score</Button>
                     </>
@@ -338,25 +369,27 @@ export default function CourseworkPage() {
           </>
         }
       >
-        <div style={{ display: "grid", gap: "var(--space-3)" }}>
-          <Field label="Title" htmlFor="mat-title">
-            <input id="mat-title" value={matTitle} onChange={(event) => setMatTitle(event.target.value)} />
-          </Field>
-          <Field label="File (≤1MB)" htmlFor="mat-file">
-            <input id="mat-file" type="file" onChange={onFile} />
-          </Field>
+        <div className={styles.formGrid}>
+          <Input id="mat-title" label="Title" value={matTitle} onChange={(event) => setMatTitle(event.target.value)} />
+          <Input id="mat-file" label="File (≤1MB)" type="file" onChange={onFile} />
         </div>
       </Modal>
 
-      <ConfirmDialog
+      <Modal
         open={doomed !== null}
+        onClose={() => setDoomed(null)}
         title="Delete assignment"
-        message={`Delete "${doomed?.title ?? ""}"? Blocked once submissions exist.`}
-        confirmLabel="Delete"
-        danger
-        onConfirm={() => void removeAssignment()}
-        onCancel={() => setDoomed(null)}
-      />
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setDoomed(null)}>Cancel</Button>
+            <Button variant="danger" onClick={() => void removeAssignment()}>Delete</Button>
+          </>
+        }
+      >
+        <p className={styles.confirmMessage}>
+          Delete &quot;{doomed?.title ?? ""}&quot;? Blocked once submissions exist.
+        </p>
+      </Modal>
     </>
   );
 }
