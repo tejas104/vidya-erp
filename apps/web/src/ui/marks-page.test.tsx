@@ -1,7 +1,16 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+import { ToastProvider } from "@vidya/ui-system";
 import MarksPage from "../../app/(app)/manage/marks/page";
 import { api } from "./api";
+
+function renderPage() {
+  return render(
+    <ToastProvider>
+      <MarksPage />
+    </ToastProvider>,
+  );
+}
 
 vi.mock("./api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./api")>();
@@ -23,7 +32,7 @@ beforeEach(() => {
 
 describe("marks entry", () => {
   it("creates an assessment for the caller's class+subject", async () => {
-    render(<MarksPage />);
+    renderPage();
     fireEvent.change(await screen.findByLabelText(/assessment name/i), { target: { value: "Quiz 1" } });
     fireEvent.change(screen.getByLabelText(/max score/i), { target: { value: "10" } });
     fireEvent.click(screen.getByRole("button", { name: /create assessment/i }));
