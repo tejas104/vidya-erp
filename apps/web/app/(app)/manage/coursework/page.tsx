@@ -9,7 +9,6 @@ import {
   Select,
   Table,
   StatusBadge,
-  Card,
   Modal,
   EmptyState,
   Skeleton,
