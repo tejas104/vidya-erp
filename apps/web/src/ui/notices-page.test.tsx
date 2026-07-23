@@ -1,8 +1,17 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { ToastProvider } from "@vidya/ui-system";
 import NoticesPage from "../../app/(app)/manage/notices/page";
 import { Noticeboard } from "./Noticeboard";
 import { api, type NoticeView } from "./api";
+
+function renderPage() {
+  return render(
+    <ToastProvider>
+      <NoticesPage />
+    </ToastProvider>,
+  );
+}
 
 vi.mock("./api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./api")>();
@@ -56,7 +65,7 @@ beforeEach(() => {
 
 describe("/manage/notices", () => {
   it("derives scheduled/live/expired from the publish window", async () => {
-    render(<NoticesPage />);
+    renderPage();
     expect(await screen.findByText("Sports day")).toBeInTheDocument();
     expect(screen.getByText("live")).toBeInTheDocument();
     expect(screen.getByText("scheduled")).toBeInTheDocument();
@@ -64,7 +73,7 @@ describe("/manage/notices", () => {
   });
 
   it("composes to a class audience", async () => {
-    render(<NoticesPage />);
+    renderPage();
     fireEvent.click(await screen.findByRole("button", { name: /new notice/i }));
     fireEvent.change(screen.getByLabelText("Title"), { target: { value: "Fresh" } });
     fireEvent.change(screen.getByLabelText("Body"), { target: { value: "Read this." } });
