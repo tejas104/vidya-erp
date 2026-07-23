@@ -12,17 +12,13 @@ import {
   type StudentView,
   type TtToday,
 } from "@/ui/api";
-import { RingStat } from "@/ui/RingStat";
+import { StatCard, EmptyState, Modal, Input, Select, Button, Skeleton, useToast } from "@vidya/ui-system";
+import { AsyncState } from "@/ui/AsyncState";
 import { StudentCard, type StudentFlags } from "@/ui/StudentCard";
 import { TodayTimeline } from "@/ui/TodayTimeline";
 import { StudentSlideOver, type DrawerStudent } from "@/ui/StudentSlideOver";
-import { Skeleton } from "@/ui/Skeleton";
-import { EmptyState } from "@/ui/EmptyState";
-import { Modal } from "@/ui/Modal";
-import { Field } from "@/ui/Field";
-import { Button } from "@/ui/Button";
-import { useToast } from "@/ui/Toast";
 import { ago } from "@/ui/time";
+import styles from "./page.module.css";
 
 export const dynamic = "force-dynamic";
 
@@ -164,11 +160,11 @@ export default function ClassWorkspacePage() {
     if (!open) return;
     try {
       await api.updateStudent(open.studentId, { status: status as StudentStatus });
-      toast.show(`${open.name} → ${status}.`, "good");
+      toast.push({ status: "good", message: `${open.name} → ${status}.` });
       setOpen((cur) => (cur && cur.studentId === open.studentId ? { ...cur, status } : cur));
       setReloadTick((n) => n + 1); // refresh cards/flags
     } catch (caught) {
-      toast.show(caught instanceof ApiError ? caught.message : "Couldn't change status.", "danger");
+      toast.push({ status: "danger", message: caught instanceof ApiError ? caught.message : "Couldn't change status." });
     }
   }
 
@@ -185,13 +181,13 @@ export default function ClassWorkspacePage() {
         sectionId: opt.sectionId,
         academicYear: year,
       });
-      toast.show(`${newName.trim()} added to ${opt.className} · ${opt.sectionName}.`, "good");
+      toast.push({ status: "good", message: `${newName.trim()} added to ${opt.className} · ${opt.sectionName}.` });
       setAdding(false);
       setNewAdm("");
       setNewName("");
       setReloadTick((n) => n + 1);
     } catch (caught) {
-      toast.show(caught instanceof ApiError ? caught.message : "Couldn't add the student.", "danger");
+      toast.push({ status: "danger", message: caught instanceof ApiError ? caught.message : "Couldn't add the student." });
     } finally {
       setSaving(false);
     }
@@ -256,7 +252,7 @@ export default function ClassWorkspacePage() {
       .catch(() => undefined);
   }
 
-  if (error && opts.length === 0) return <EmptyState title="Couldn't load." message={error} />;
+  if (error && opts.length === 0) return <EmptyState title="Couldn't load." body={error} />;
 
   const chip = (f: Filter, label: string, n: number) => (
     <button type="button" className={`cw-chip${filter === f ? " on" : ""}`} onClick={() => setFilter(f)}>
@@ -273,17 +269,18 @@ export default function ClassWorkspacePage() {
       ) : (
         <div className="cw-grid">
           <div className="cw-main">
-            <label className="field" style={{ maxWidth: 380, marginBottom: 16 }}>
-              <span>Class</span>
-              <select value={pick} onChange={(e) => setPick(Number(e.target.value))}>
-                {opts.map((o, i) => (
-                  <option key={o.sectionId + (o.subjectId ?? "")} value={i}>
-                    {o.className} · {o.sectionName}
-                    {o.subjectName ? ` · ${o.subjectName}` : ""}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <div className={styles.classPicker}>
+              <Select
+                id="cw-class-pick"
+                label="Class"
+                value={pick}
+                onChange={(e) => setPick(Number(e.target.value))}
+                options={opts.map((o, i) => ({
+                  value: String(i),
+                  label: `${o.className} · ${o.sectionName}${o.subjectName ? ` · ${o.subjectName}` : ""}`,
+                }))}
+              />
+            </div>
 
             <div className="cw-hero">
               <div className="cw-hero-eyebrow">
@@ -318,7 +315,7 @@ export default function ClassWorkspacePage() {
             </div>
 
             <div className="cw-rings">
-              <RingStat
+              <StatCard
                 pct={avgAtt}
                 display={`${avgAtt}%`}
                 label="Class attendance"
@@ -326,7 +323,7 @@ export default function ClassWorkspacePage() {
                 sub={opt?.subjectName ?? "all subjects"}
                 tone={avgAtt < 75 ? "warn" : "good"}
               />
-              <RingStat
+              <StatCard
                 pct={total ? (shortN / total) * 100 : 0}
                 display={`${shortN}`}
                 label="Short of 75%"
@@ -334,7 +331,7 @@ export default function ClassWorkspacePage() {
                 sub="eligibility risk"
                 tone="bad"
               />
-              <RingStat
+              <StatCard
                 pct={total ? (backlogN / total) * 100 : 0}
                 display={`${backlogN}`}
                 label="In backlog"
@@ -342,7 +339,7 @@ export default function ClassWorkspacePage() {
                 sub="ATKT · lifecycle"
                 tone="warn"
               />
-              <RingStat
+              <StatCard
                 pct={total && feesDues ? (feesN / total) * 100 : 0}
                 display={feesDues ? `${feesN}` : "—"}
                 label="Fees pending"
@@ -372,28 +369,30 @@ export default function ClassWorkspacePage() {
               ) : null}
             </div>
 
-            {cards === null ? (
-              <Skeleton lines={4} />
-            ) : error ? (
-              <div className="state"><strong>{error}</strong> Try again shortly.</div>
-            ) : visible.length === 0 ? (
-              <div className="state"><strong>No students match.</strong> Try a different filter or clear the search.</div>
-            ) : (
-              <div className="cw-cards">
-                {visible.map((c) => (
-                  <StudentCard
-                    key={c.student.id}
-                    initials={initials(c.student.fullName)}
-                    gradient={AVATARS[c.idx % AVATARS.length]!}
-                    rollNo={c.student.admissionNo}
-                    name={c.student.fullName}
-                    pct={c.att?.pct ?? null}
-                    flags={flagsFor(c, feesDues?.get(c.student.id) ?? 0)}
-                    onOpen={() => void openCard(c)}
-                  />
-                ))}
-              </div>
-            )}
+            <AsyncState
+              loading={cards === null && error === null}
+              error={error !== null}
+              onRetry={() => setReloadTick((n) => n + 1)}
+            >
+              {visible.length === 0 ? (
+                <div className="state"><strong>No students match.</strong> Try a different filter or clear the search.</div>
+              ) : (
+                <div className="cw-cards">
+                  {visible.map((c) => (
+                    <StudentCard
+                      key={c.student.id}
+                      initials={initials(c.student.fullName)}
+                      gradient={AVATARS[c.idx % AVATARS.length]!}
+                      rollNo={c.student.admissionNo}
+                      name={c.student.fullName}
+                      pct={c.att?.pct ?? null}
+                      flags={flagsFor(c, feesDues?.get(c.student.id) ?? 0)}
+                      onOpen={() => void openCard(c)}
+                    />
+                  ))}
+                </div>
+              )}
+            </AsyncState>
           </div>
 
           <aside className="cw-aside">
@@ -403,7 +402,9 @@ export default function ClassWorkspacePage() {
                 <span className="hint">{teachers ? `${teachers.length}` : ""}</span>
               </div>
               {teachers === null ? (
-                <Skeleton lines={3} />
+                <div className={styles.asideSkeleton} aria-hidden="true">
+                  <Skeleton height={14} /><Skeleton height={14} /><Skeleton height={14} />
+                </div>
               ) : teachers.length === 0 ? (
                 <p className="strip-empty" style={{ padding: "10px 16px" }}>No teachers assigned yet.</p>
               ) : (
@@ -430,7 +431,9 @@ export default function ClassWorkspacePage() {
                 <span className="hint">{corrections ? `${corrections.length}` : ""}</span>
               </div>
               {corrections === null ? (
-                <Skeleton lines={3} />
+                <div className={styles.asideSkeleton} aria-hidden="true">
+                  <Skeleton height={14} /><Skeleton height={14} /><Skeleton height={14} />
+                </div>
               ) : corrections.length === 0 ? (
                 <p className="strip-empty" style={{ padding: "10px 16px" }}>No corrections recorded.</p>
               ) : (
@@ -456,7 +459,13 @@ export default function ClassWorkspacePage() {
                 <h2>Today</h2>
                 <span className="hint">{today ? `${today.entries.length} periods` : ""}</span>
               </div>
-              {today === null ? <Skeleton lines={3} /> : <TodayTimeline today={today} />}
+              {today === null ? (
+                <div className={styles.asideSkeleton} aria-hidden="true">
+                  <Skeleton height={14} /><Skeleton height={14} /><Skeleton height={14} />
+                </div>
+              ) : (
+                <TodayTimeline today={today} />
+              )}
             </div>
           </aside>
         </div>
@@ -482,16 +491,12 @@ export default function ClassWorkspacePage() {
           </>
         }
       >
-        <div style={{ display: "grid", gap: "var(--space-3)" }}>
-          <p style={{ margin: 0, fontSize: 13, color: "var(--ink-2)" }}>
+        <div className={styles.formGrid}>
+          <p className={styles.formHint}>
             Added straight into your section and enrolled for {year}. The record is audited and never deleted.
           </p>
-          <Field label="Admission no." htmlFor="add-adm">
-            <input id="add-adm" value={newAdm} onChange={(e) => setNewAdm(e.target.value)} placeholder="e.g. FYCS-015" />
-          </Field>
-          <Field label="Full name" htmlFor="add-name">
-            <input id="add-name" value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Student name" />
-          </Field>
+          <Input id="add-adm" label="Admission no." value={newAdm} onChange={(e) => setNewAdm(e.target.value)} placeholder="e.g. FYCS-015" />
+          <Input id="add-name" label="Full name" value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Student name" />
         </div>
       </Modal>
     </>
