@@ -9,17 +9,21 @@ import {
   type UnitView,
   type TopicView,
 } from "@/ui/api";
-import { useToast } from "@/ui/Toast";
-import { PageHeader } from "@/ui/PageHeader";
-import { Card } from "@/ui/Card";
-import { Button } from "@/ui/Button";
-import { Field } from "@/ui/Field";
-import { Modal } from "@/ui/Modal";
-import { ConfirmDialog } from "@/ui/ConfirmDialog";
-import { Badge } from "@/ui/Badge";
-import { EmptyState } from "@/ui/EmptyState";
-import { Skeleton } from "@/ui/Skeleton";
-import { RingStat } from "@/ui/RingStat";
+import { AsyncState } from "@/ui/AsyncState";
+import {
+  useToast,
+  Button,
+  Input,
+  Select,
+  Modal,
+  Card,
+  StatusBadge,
+  StatCard,
+  EmptyState,
+  Skeleton,
+  PageHeader,
+} from "@vidya/ui-system";
+import styles from "./page.module.css";
 
 export const dynamic = "force-dynamic";
 
@@ -123,11 +127,11 @@ export default function SyllabusPage() {
     setSaving(true);
     try {
       await api.createUnit({ classId, subjectId, academicYear: year, title: newUnitTitle });
-      toast.show(`Unit "${newUnitTitle}" added.`, "good");
+      toast.push({ status: "good", message: `Unit "${newUnitTitle}" added.` });
       setNewUnitTitle("");
       await load();
     } catch (caught) {
-      toast.show(saveErrorMessage(caught, "Couldn't add the unit."), "danger");
+      toast.push({ status: "danger", message: saveErrorMessage(caught, "Couldn't add the unit.") });
     } finally {
       setSaving(false);
     }
@@ -138,11 +142,11 @@ export default function SyllabusPage() {
     setSaving(true);
     try {
       await api.updateUnit(renamingUnit.id, { title: renameUnitTitle });
-      toast.show("Unit renamed.", "good");
+      toast.push({ status: "good", message: "Unit renamed." });
       setRenamingUnit(null);
       await load();
     } catch (caught) {
-      toast.show(saveErrorMessage(caught, "Couldn't rename the unit."), "danger");
+      toast.push({ status: "danger", message: saveErrorMessage(caught, "Couldn't rename the unit.") });
     } finally {
       setSaving(false);
     }
@@ -152,12 +156,12 @@ export default function SyllabusPage() {
     if (!deletingUnit) return;
     try {
       await api.deleteUnit(deletingUnit.id);
-      toast.show("Unit deleted.", "good");
+      toast.push({ status: "good", message: "Unit deleted." });
       setDeletingUnit(null);
       await load();
     } catch (caught) {
       setDeletingUnit(null);
-      toast.show(saveErrorMessage(caught, "Couldn't delete the unit."), "danger");
+      toast.push({ status: "danger", message: saveErrorMessage(caught, "Couldn't delete the unit.") });
     }
   }
 
@@ -167,11 +171,11 @@ export default function SyllabusPage() {
     setSaving(true);
     try {
       await api.addTopic(unit.id, { title });
-      toast.show(`Topic "${title}" added.`, "good");
+      toast.push({ status: "good", message: `Topic "${title}" added.` });
       setNewTopicTitle((current) => ({ ...current, [unit.id]: "" }));
       await load();
     } catch (caught) {
-      toast.show(saveErrorMessage(caught, "Couldn't add the topic."), "danger");
+      toast.push({ status: "danger", message: saveErrorMessage(caught, "Couldn't add the topic.") });
     } finally {
       setSaving(false);
     }
@@ -182,11 +186,11 @@ export default function SyllabusPage() {
     setSaving(true);
     try {
       await api.updateTopic(renamingTopic.id, { title: renameTopicTitle });
-      toast.show("Topic renamed.", "good");
+      toast.push({ status: "good", message: "Topic renamed." });
       setRenamingTopic(null);
       await load();
     } catch (caught) {
-      toast.show(saveErrorMessage(caught, "Couldn't rename the topic."), "danger");
+      toast.push({ status: "danger", message: saveErrorMessage(caught, "Couldn't rename the topic.") });
     } finally {
       setSaving(false);
     }
@@ -196,12 +200,12 @@ export default function SyllabusPage() {
     if (!deletingTopic) return;
     try {
       await api.deleteTopic(deletingTopic.id);
-      toast.show("Topic deleted.", "good");
+      toast.push({ status: "good", message: "Topic deleted." });
       setDeletingTopic(null);
       await load();
     } catch (caught) {
       setDeletingTopic(null);
-      toast.show(saveErrorMessage(caught, "Couldn't delete the topic."), "danger");
+      toast.push({ status: "danger", message: saveErrorMessage(caught, "Couldn't delete the topic.") });
     }
   }
 
@@ -211,19 +215,24 @@ export default function SyllabusPage() {
       await api.setTopicCoverage(topic.id, value === "" ? null : value);
       await load();
     } catch (caught) {
-      toast.show(saveErrorMessage(caught, "Couldn't update coverage."), "danger");
+      toast.push({ status: "danger", message: saveErrorMessage(caught, "Couldn't update coverage.") });
     } finally {
       setSaving(false);
     }
   }
 
-  if (failed) return <EmptyState title="Couldn't load the college." message="Try again shortly." />;
-  if (tree === null) return <Skeleton lines={5} />;
+  if (failed) return <EmptyState title="Couldn't load the college." body="Try again shortly." />;
+  if (tree === null) {
+    return (
+      <div className={styles.skeletonStack} aria-hidden="true">
+        <Skeleton height={16} /><Skeleton height={16} /><Skeleton height={16} /><Skeleton height={16} /><Skeleton height={16} />
+      </div>
+    );
+  }
 
   const classes = classOptions(tree);
   const subjects = classes.find((option) => option.classId === classId)?.subjects ?? [];
   const editable = editableSet.has(`${classId}:${subjectId}`);
-  const loading = syllabus === null && !loadError;
   const units = (syllabus?.units ?? [])
     .filter((unit) => unit.subjectId === subjectId)
     .slice()
@@ -231,174 +240,146 @@ export default function SyllabusPage() {
 
   return (
     <>
-      <PageHeader
-        eyebrow="Syllabus"
-        title="Syllabus & coverage"
-        lede="Units and topics for a class · subject, with per-topic taught dates rolling up to a coverage percentage."
-      />
+      <PageHeader title="Syllabus & coverage" />
+      <p className={styles.lede}>
+        Units and topics for a class · subject, with per-topic taught dates rolling up to a coverage percentage.
+      </p>
 
-      <div style={{ display: "flex", gap: "var(--space-4)", flexWrap: "wrap", alignItems: "flex-end" }}>
-        <Field label="Class" htmlFor="syl-class">
-          <select
-            id="syl-class"
-            value={classId}
-            onChange={(event) => {
-              setClassId(event.target.value);
-              const nextSubjects = classes.find((option) => option.classId === event.target.value)?.subjects ?? [];
-              setSubjectId(nextSubjects[0]?.id ?? "");
-            }}
-            style={{ maxWidth: 280 }}
-          >
-            {classes.map((option) => (
-              <option key={option.classId} value={option.classId}>{option.label}</option>
-            ))}
-          </select>
-        </Field>
-        <Field label="Subject" htmlFor="syl-subject">
-          <select id="syl-subject" value={subjectId} onChange={(event) => setSubjectId(event.target.value)} style={{ maxWidth: 280 }}>
-            {subjects.map((subject) => (
-              <option key={subject.id} value={subject.id}>{subject.name}</option>
-            ))}
-          </select>
-        </Field>
+      <div className={styles.pickerRow}>
+        <Select
+          id="syl-class"
+          label="Class"
+          value={classId}
+          onChange={(event) => {
+            setClassId(event.target.value);
+            const nextSubjects = classes.find((option) => option.classId === event.target.value)?.subjects ?? [];
+            setSubjectId(nextSubjects[0]?.id ?? "");
+          }}
+          options={classes.map((option) => ({ value: option.classId, label: option.label }))}
+        />
+        <Select
+          id="syl-subject"
+          label="Subject"
+          value={subjectId}
+          onChange={(event) => setSubjectId(event.target.value)}
+          options={subjects.map((subject) => ({ value: subject.id, label: subject.name }))}
+        />
       </div>
 
-      {loading ? (
-        <Skeleton lines={5} />
-      ) : loadError ? (
-        <EmptyState title="Couldn't load the syllabus." message="Try again shortly." />
-      ) : (
-        <>
-          {editable ? (
-            <Card title="Add a unit">
-              <div style={{ display: "flex", gap: "var(--space-4)", alignItems: "flex-end", flexWrap: "wrap" }}>
-                <Field label="Title" htmlFor="unit-title">
-                  <input id="unit-title" value={newUnitTitle} onChange={(event) => setNewUnitTitle(event.target.value)} />
-                </Field>
-                <Button onClick={() => void addUnit()} loading={saving} disabled={newUnitTitle.trim() === ""}>
-                  Add unit
-                </Button>
-              </div>
-            </Card>
-          ) : null}
-
-          {units.length === 0 ? (
-            <EmptyState
-              title={editable ? "No syllabus yet — add the first unit." : "No syllabus published for this subject."}
-            />
-          ) : (
-            <div style={{ display: "grid", gap: "var(--space-4)" }}>
-              {units.map((unit) => {
-                const taughtCount = unit.topics.filter((topic) => topic.taughtOn !== null).length;
-                const tone = unit.coveragePct >= 100 ? "good" : unit.coveragePct > 0 ? "warn" : "bad";
-                const topics = unit.topics.slice().sort((a, b) => a.position - b.position);
-                return (
-                  <Card
-                    key={unit.id}
-                    title={unit.title}
-                    actions={
-                      editable ? (
-                        <span style={{ display: "flex", gap: 8 }}>
-                          <Button
-                            variant="ghost"
-                            disabled={saving}
-                            onClick={() => {
-                              setRenameUnitTitle(unit.title);
-                              setRenamingUnit(unit);
-                            }}
-                          >
-                            Rename
-                          </Button>
-                          <Button variant="danger" disabled={saving} onClick={() => setDeletingUnit(unit)}>
-                            Delete
-                          </Button>
-                        </span>
-                      ) : undefined
-                    }
-                  >
-                    <RingStat
-                      pct={unit.coveragePct}
-                      display={`${Math.round(unit.coveragePct)}%`}
-                      label="Coverage"
-                      value={`${taughtCount}/${unit.topics.length} topics`}
-                      tone={tone}
-                    />
-                    <div style={{ marginTop: "var(--space-3)", display: "grid", gap: 4 }}>
-                      {topics.length === 0 ? (
-                        <p className="strip-empty">No topics yet.</p>
-                      ) : (
-                        topics.map((topic) => (
-                          <div
-                            key={topic.id}
-                            style={{
-                              display: "flex",
-                              justifyContent: "space-between",
-                              alignItems: "center",
-                              gap: 8,
-                              flexWrap: "wrap",
-                              padding: "6px 0",
-                              borderTop: "1px solid var(--rule)",
-                            }}
-                          >
-                            <span>
-                              {topic.title}{" "}
-                              {topic.taughtOn !== null ? (
-                                <Badge tone="good">taught {topic.taughtOn}</Badge>
-                              ) : (
-                                <Badge tone="warn">pending</Badge>
-                              )}
-                            </span>
-                            <span style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                              {editable ? (
-                                <>
-                                  <input
-                                    type="date"
-                                    aria-label={`Taught date for ${topic.title}`}
-                                    value={topic.taughtOn ?? today}
-                                    disabled={saving}
-                                    onChange={(event) => void markTaught(topic, event.target.value)}
-                                  />
-                                  <Button
-                                    variant="ghost"
-                                    disabled={saving}
-                                    onClick={() => {
-                                      setRenameTopicTitle(topic.title);
-                                      setRenamingTopic(topic);
-                                    }}
-                                  >
-                                    Rename
-                                  </Button>
-                                  <Button variant="danger" disabled={saving} onClick={() => setDeletingTopic(topic)}>
-                                    Delete
-                                  </Button>
-                                </>
-                              ) : null}
-                            </span>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                    {editable ? (
-                      <div style={{ display: "flex", gap: 8, marginTop: "var(--space-3)", alignItems: "flex-end", flexWrap: "wrap" }}>
-                        <Field label="New topic" htmlFor={`topic-${unit.id}`}>
-                          <input
-                            id={`topic-${unit.id}`}
-                            value={newTopicTitle[unit.id] ?? ""}
-                            onChange={(event) => setNewTopicTitle((current) => ({ ...current, [unit.id]: event.target.value }))}
-                          />
-                        </Field>
-                        <Button variant="ghost" disabled={saving || (newTopicTitle[unit.id] ?? "").trim() === ""} onClick={() => void addTopicTo(unit)}>
-                          Add topic
-                        </Button>
-                      </div>
-                    ) : null}
-                  </Card>
-                );
-              })}
+      <AsyncState loading={syllabus === null && !loadError} error={loadError} onRetry={() => void load()}>
+        {editable ? (
+          <Card title="Add a unit">
+            <div className={styles.pickerRow}>
+              <Input id="unit-title" label="Title" value={newUnitTitle} onChange={(event) => setNewUnitTitle(event.target.value)} />
+              <Button onClick={() => void addUnit()} loading={saving} disabled={newUnitTitle.trim() === ""}>
+                Add unit
+              </Button>
             </div>
-          )}
-        </>
-      )}
+          </Card>
+        ) : null}
+
+        {units.length === 0 ? (
+          <EmptyState title={editable ? "No syllabus yet — add the first unit." : "No syllabus published for this subject."} />
+        ) : (
+          <div className={styles.unitsGrid}>
+            {units.map((unit) => {
+              const taughtCount = unit.topics.filter((topic) => topic.taughtOn !== null).length;
+              const tone = unit.coveragePct >= 100 ? "good" : unit.coveragePct > 0 ? "warn" : "bad";
+              const topics = unit.topics.slice().sort((a, b) => a.position - b.position);
+              return (
+                <Card
+                  key={unit.id}
+                  title={unit.title}
+                  actions={
+                    editable ? (
+                      <span className={styles.cardActions}>
+                        <Button
+                          variant="ghost"
+                          disabled={saving}
+                          onClick={() => {
+                            setRenameUnitTitle(unit.title);
+                            setRenamingUnit(unit);
+                          }}
+                        >
+                          Rename
+                        </Button>
+                        <Button variant="danger" disabled={saving} onClick={() => setDeletingUnit(unit)}>
+                          Delete
+                        </Button>
+                      </span>
+                    ) : undefined
+                  }
+                >
+                  <StatCard
+                    pct={unit.coveragePct}
+                    display={`${Math.round(unit.coveragePct)}%`}
+                    label="Coverage"
+                    value={`${taughtCount}/${unit.topics.length} topics`}
+                    tone={tone}
+                  />
+                  <div className={styles.topicsList}>
+                    {topics.length === 0 ? (
+                      <p className="strip-empty">No topics yet.</p>
+                    ) : (
+                      topics.map((topic) => (
+                        <div key={topic.id} className={styles.topicRow}>
+                          <span>
+                            {topic.title}{" "}
+                            {topic.taughtOn !== null ? (
+                              <StatusBadge status="good">taught {topic.taughtOn}</StatusBadge>
+                            ) : (
+                              <StatusBadge status="warn">pending</StatusBadge>
+                            )}
+                          </span>
+                          <span className={styles.topicActions}>
+                            {editable ? (
+                              <>
+                                <input
+                                  type="date"
+                                  aria-label={`Taught date for ${topic.title}`}
+                                  value={topic.taughtOn ?? today}
+                                  disabled={saving}
+                                  onChange={(event) => void markTaught(topic, event.target.value)}
+                                />
+                                <Button
+                                  variant="ghost"
+                                  disabled={saving}
+                                  onClick={() => {
+                                    setRenameTopicTitle(topic.title);
+                                    setRenamingTopic(topic);
+                                  }}
+                                >
+                                  Rename
+                                </Button>
+                                <Button variant="danger" disabled={saving} onClick={() => setDeletingTopic(topic)}>
+                                  Delete
+                                </Button>
+                              </>
+                            ) : null}
+                          </span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                  {editable ? (
+                    <div className={styles.topicForm}>
+                      <Input
+                        id={`topic-${unit.id}`}
+                        label="New topic"
+                        value={newTopicTitle[unit.id] ?? ""}
+                        onChange={(event) => setNewTopicTitle((current) => ({ ...current, [unit.id]: event.target.value }))}
+                      />
+                      <Button variant="ghost" disabled={saving || (newTopicTitle[unit.id] ?? "").trim() === ""} onClick={() => void addTopicTo(unit)}>
+                        Add topic
+                      </Button>
+                    </div>
+                  ) : null}
+                </Card>
+              );
+            })}
+          </div>
+        )}
+      </AsyncState>
 
       <Modal
         open={renamingUnit !== null}
@@ -411,9 +392,7 @@ export default function SyllabusPage() {
           </>
         }
       >
-        <Field label="Title" htmlFor="rename-unit-title">
-          <input id="rename-unit-title" value={renameUnitTitle} onChange={(event) => setRenameUnitTitle(event.target.value)} />
-        </Field>
+        <Input id="rename-unit-title" label="Title" value={renameUnitTitle} onChange={(event) => setRenameUnitTitle(event.target.value)} />
       </Modal>
 
       <Modal
@@ -427,30 +406,36 @@ export default function SyllabusPage() {
           </>
         }
       >
-        <Field label="Title" htmlFor="rename-topic-title">
-          <input id="rename-topic-title" value={renameTopicTitle} onChange={(event) => setRenameTopicTitle(event.target.value)} />
-        </Field>
+        <Input id="rename-topic-title" label="Title" value={renameTopicTitle} onChange={(event) => setRenameTopicTitle(event.target.value)} />
       </Modal>
 
-      <ConfirmDialog
+      <Modal
         open={deletingUnit !== null}
+        onClose={() => setDeletingUnit(null)}
         title="Delete unit"
-        message={`Delete "${deletingUnit?.title ?? ""}" and all its topics?`}
-        confirmLabel="Delete"
-        danger
-        onConfirm={() => void confirmDeleteUnit()}
-        onCancel={() => setDeletingUnit(null)}
-      />
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setDeletingUnit(null)}>Cancel</Button>
+            <Button variant="danger" onClick={() => void confirmDeleteUnit()}>Delete</Button>
+          </>
+        }
+      >
+        <p className={styles.confirmMessage}>Delete &quot;{deletingUnit?.title ?? ""}&quot; and all its topics?</p>
+      </Modal>
 
-      <ConfirmDialog
+      <Modal
         open={deletingTopic !== null}
+        onClose={() => setDeletingTopic(null)}
         title="Delete topic"
-        message={`Delete "${deletingTopic?.title ?? ""}"?`}
-        confirmLabel="Delete"
-        danger
-        onConfirm={() => void confirmDeleteTopic()}
-        onCancel={() => setDeletingTopic(null)}
-      />
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setDeletingTopic(null)}>Cancel</Button>
+            <Button variant="danger" onClick={() => void confirmDeleteTopic()}>Delete</Button>
+          </>
+        }
+      >
+        <p className={styles.confirmMessage}>Delete &quot;{deletingTopic?.title ?? ""}&quot;?</p>
+      </Modal>
     </>
   );
 }

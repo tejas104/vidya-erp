@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   api,
   ApiError,
@@ -8,18 +8,26 @@ import {
   type ExamSlotView,
   type OrgTree,
 } from "@/ui/api";
-import { useToast } from "@/ui/Toast";
-import { PageHeader } from "@/ui/PageHeader";
-import { Button } from "@/ui/Button";
-import { Field } from "@/ui/Field";
-import { Modal } from "@/ui/Modal";
-import { ConfirmDialog } from "@/ui/ConfirmDialog";
-import { Badge } from "@/ui/Badge";
-import { Card } from "@/ui/Card";
-import { EmptyState } from "@/ui/EmptyState";
-import { Skeleton } from "@/ui/Skeleton";
+import { AsyncState } from "@/ui/AsyncState";
+import {
+  useToast,
+  Button,
+  Input,
+  Select,
+  Modal,
+  StatusBadge,
+  Card,
+  Table,
+  EmptyState,
+  Skeleton,
+  PageHeader,
+  type TableColumn,
+} from "@vidya/ui-system";
+import styles from "./page.module.css";
 
 export const dynamic = "force-dynamic";
+
+type Row = { date: ReactNode; time: ReactNode; paper: ReactNode; series: ReactNode; room: ReactNode; actions: ReactNode };
 
 export default function ExamsPage() {
   const toast = useToast();
@@ -76,7 +84,7 @@ export default function ExamsPage() {
       setSlots(rows);
     } catch (caught) {
       setSlots([]);
-      toast.show(caught instanceof ApiError ? caught.message : "Couldn't load the schedule.", "danger");
+      toast.push({ status: "danger", message: caught instanceof ApiError ? caught.message : "Couldn't load the schedule." });
     }
   }
 
@@ -89,9 +97,9 @@ export default function ExamsPage() {
       setSelectedSeries(created.id);
       setCreatingSeries(false);
       setSeriesName("");
-      toast.show(`Series "${created.name}" created.`, "good");
+      toast.push({ status: "good", message: `Series "${created.name}" created.` });
     } catch (caught) {
-      toast.show(caught instanceof ApiError ? caught.message : "Couldn't create the series.", "danger");
+      toast.push({ status: "danger", message: caught instanceof ApiError ? caught.message : "Couldn't create the series." });
     } finally {
       setSavingSeries(false);
     }
@@ -104,9 +112,9 @@ export default function ExamsPage() {
       setSeries((rows) => rows.filter((row) => row.id !== doomedSeries.id));
       if (selectedSeries === doomedSeries.id) setSelectedSeries("");
       setSlots((rows) => rows === null ? null : rows.filter((row) => row.seriesId !== doomedSeries.id));
-      toast.show("Series deleted.", "good");
+      toast.push({ status: "good", message: "Series deleted." });
     } catch (caught) {
-      toast.show(caught instanceof ApiError ? caught.message : "Couldn't delete.", "danger");
+      toast.push({ status: "danger", message: caught instanceof ApiError ? caught.message : "Couldn't delete." });
     } finally {
       setDoomedSeries(null);
     }
@@ -124,9 +132,9 @@ export default function ExamsPage() {
       setSlots((rows) => [...(rows ?? []), slot]);
       if (clash !== undefined) setClashes((map) => ({ ...map, [slot.id]: clash }));
       setSubjectId("");
-      toast.show(clash !== undefined ? "Scheduled — with a room clash warning." : "Paper scheduled.", clash !== undefined ? "info" : "good");
+      toast.push({ status: clash !== undefined ? "info" : "good", message: clash !== undefined ? "Scheduled — with a room clash warning." : "Paper scheduled." });
     } catch (caught) {
-      toast.show(caught instanceof ApiError ? caught.message : "Couldn't schedule.", "danger");
+      toast.push({ status: "danger", message: caught instanceof ApiError ? caught.message : "Couldn't schedule." });
     } finally {
       setAddingSlot(false);
     }
@@ -136,37 +144,60 @@ export default function ExamsPage() {
     try {
       await api.exmDeleteSlot(slot.id);
       setSlots((rows) => rows === null ? null : rows.filter((row) => row.id !== slot.id));
-      toast.show("Paper removed.", "good");
+      toast.push({ status: "good", message: "Paper removed." });
     } catch (caught) {
-      toast.show(caught instanceof ApiError ? caught.message : "Couldn't remove.", "danger");
+      toast.push({ status: "danger", message: caught instanceof ApiError ? caught.message : "Couldn't remove." });
     }
   }
 
-  if (tree === null) return <Skeleton lines={5} />;
-  if (tree === "error") return <EmptyState title="Couldn't load the organisation." message="Try again shortly." />;
+  if (tree === null) return <Skeleton height={16} />;
+  if (tree === "error") return <EmptyState title="Couldn't load the organisation." body="Try again shortly." />;
 
   const visibleSlots = (slots ?? [])
     .filter((slot) => selectedSeries === "" || slot.seriesId === selectedSeries)
     .sort((a, b) => a.onDate.localeCompare(b.onDate) || a.starts.localeCompare(b.starts));
 
+  const columns: TableColumn<Row>[] = [
+    { key: "date", header: "Date", figure: true },
+    { key: "time", header: "Time", figure: true },
+    { key: "paper", header: "Paper" },
+    { key: "series", header: "Series" },
+    { key: "room", header: "Room" },
+    { key: "actions", header: "" },
+  ];
+  const rows: Row[] = visibleSlots.map((slot) => ({
+    date: slot.onDate,
+    time: `${slot.starts}–${slot.ends}`,
+    paper: <strong>{slot.subjectName}</strong>,
+    series: slot.seriesName,
+    room: (
+      <>
+        {slot.room === "" ? "—" : slot.room}{" "}
+        {clashes[slot.id] !== undefined ? <StatusBadge status="warn">{clashes[slot.id]}</StatusBadge> : null}
+      </>
+    ),
+    actions: <Button variant="ghost" onClick={() => void removeSlot(slot)}>Remove</Button>,
+  }));
+
   return (
     <>
       <PageHeader
-        eyebrow="Exams"
         title="The exam timetable"
-        lede="Create a series, then schedule each paper — date, time, room. Room clashes with lessons warn but never block."
         actions={<Button onClick={() => setCreatingSeries(true)}>New series</Button>}
       />
+      <p className={styles.lede}>
+        Create a series, then schedule each paper — date, time, room. Room clashes with lessons warn but never block.
+      </p>
 
       <section className="section" aria-label="Exam series">
         <div className="section-head"><h2>Series · {year}</h2></div>
         {series.length === 0 ? (
-          <EmptyState title="No exam series yet." message="Create one — every paper hangs off a series." />
+          <EmptyState title="No exam series yet." body="Create one — every paper hangs off a series." />
         ) : (
           <Card>
             {series.map((row) => (
-              <div key={row.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "9px 0", borderTop: "1px solid var(--rule)" }}>
-                <label style={{ display: "inline-flex", gap: 10, alignItems: "center", cursor: "pointer" }}>
+              <div key={row.id} className={styles.seriesRow}>
+                <label className={styles.seriesLabel}>
                   <input
                     type="radio"
                     name="exm-series"
@@ -175,8 +206,8 @@ export default function ExamsPage() {
                     aria-label={`Select ${row.name}`}
                   />
                   <strong>{row.name}</strong>
-                  <Badge>{row.term}</Badge>
-                  <span className="num" style={{ fontSize: 12.5, opacity: 0.65 }}>{row.slotCount} papers</span>
+                  <StatusBadge status="neutral">{row.term}</StatusBadge>
+                  <span className={`num ${styles.seriesCount}`}>{row.slotCount} papers</span>
                 </label>
                 <Button variant="danger" onClick={() => setDoomedSeries(row)}>Delete</Button>
               </div>
@@ -188,76 +219,43 @@ export default function ExamsPage() {
       <section className="section" aria-label="Slot editor">
         <div className="section-head"><h2>Papers</h2></div>
         <Card>
-          <Field label="Class" htmlFor="exm-class">
-            <select id="exm-class" value={classId} onChange={(event) => void loadSlots(event.target.value)}>
-              <option value="">Pick a class…</option>
-              {classes.map((cls) => (<option key={cls.id} value={cls.id}>{cls.name}</option>))}
-            </select>
-          </Field>
+          <Select
+            id="exm-class"
+            label="Class"
+            value={classId}
+            onChange={(event) => void loadSlots(event.target.value)}
+            options={[{ value: "", label: "Pick a class…" }, ...classes.map((cls) => ({ value: cls.id, label: cls.name }))]}
+          />
 
-          {classId !== "" && slots === null ? <Skeleton lines={3} /> : null}
+          {classId !== "" ? (
+            <AsyncState loading={slots === null} error={false} isEmpty={visibleSlots.length === 0} empty={<EmptyState title="No exams scheduled." body="Add the first paper below." />}>
+              <div className={styles.tableWrap}>
+                <Table columns={columns} rows={rows} />
+              </div>
+            </AsyncState>
+          ) : null}
+
           {classId !== "" && slots !== null ? (
-            <>
-              {visibleSlots.length === 0 ? (
-                <EmptyState title="No exams scheduled." message="Add the first paper below." />
-              ) : (
-                <div className="ui-tablewrap" style={{ marginTop: "var(--space-3)" }}>
-                  <table className="ui-table">
-                    <thead>
-                      <tr>
-                        <th scope="col">Date</th><th scope="col">Time</th><th scope="col">Paper</th>
-                        <th scope="col">Series</th><th scope="col">Room</th><th scope="col" />
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {visibleSlots.map((slot) => (
-                        <tr key={slot.id}>
-                          <td><span className="num">{slot.onDate}</span></td>
-                          <td><span className="num">{slot.starts}–{slot.ends}</span></td>
-                          <td><strong>{slot.subjectName}</strong></td>
-                          <td>{slot.seriesName}</td>
-                          <td>
-                            {slot.room === "" ? "—" : slot.room}{" "}
-                            {clashes[slot.id] !== undefined ? <Badge tone="warn">{clashes[slot.id]}</Badge> : null}
-                          </td>
-                          <td style={{ textAlign: "right" }}>
-                            <Button variant="ghost" onClick={() => void removeSlot(slot)}>Remove</Button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-
-              {selectedSeries === "" ? (
-                <p style={{ fontSize: 13, opacity: 0.7 }}>Select a series above to add papers.</p>
-              ) : (
-                <div style={{ display: "flex", gap: "var(--space-3)", flexWrap: "wrap", alignItems: "flex-end", marginTop: "var(--space-3)" }}>
-                  <Field label="Subject" htmlFor="exm-subject">
-                    <select id="exm-subject" value={subjectId} onChange={(event) => setSubjectId(event.target.value)}>
-                      <option value="">Subject…</option>
-                      {subjects.map((subject) => (<option key={subject.id} value={subject.id}>{subject.name}</option>))}
-                    </select>
-                  </Field>
-                  <Field label="Date" htmlFor="exm-date">
-                    <input id="exm-date" type="date" value={onDate} onChange={(event) => setOnDate(event.target.value)} />
-                  </Field>
-                  <Field label="Starts" htmlFor="exm-starts">
-                    <input id="exm-starts" type="time" value={starts} onChange={(event) => setStarts(event.target.value)} style={{ width: 110 }} />
-                  </Field>
-                  <Field label="Ends" htmlFor="exm-ends">
-                    <input id="exm-ends" type="time" value={ends} onChange={(event) => setEnds(event.target.value)} style={{ width: 110 }} />
-                  </Field>
-                  <Field label="Room" htmlFor="exm-room">
-                    <input id="exm-room" value={room} onChange={(event) => setRoom(event.target.value)} style={{ width: 110 }} />
-                  </Field>
-                  <Button onClick={() => void addSlot()} loading={addingSlot} disabled={subjectId === "" || onDate === ""}>
-                    Add paper
-                  </Button>
-                </div>
-              )}
-            </>
+            selectedSeries === "" ? (
+              <p className={styles.hint}>Select a series above to add papers.</p>
+            ) : (
+              <div className={styles.slotForm}>
+                <Select
+                  id="exm-subject"
+                  label="Subject"
+                  value={subjectId}
+                  onChange={(event) => setSubjectId(event.target.value)}
+                  options={[{ value: "", label: "Subject…" }, ...subjects.map((subject) => ({ value: subject.id, label: subject.name }))]}
+                />
+                <Input id="exm-date" label="Date" type="date" value={onDate} onChange={(event) => setOnDate(event.target.value)} />
+                <Input id="exm-starts" label="Starts" type="time" value={starts} onChange={(event) => setStarts(event.target.value)} className={styles.narrow} />
+                <Input id="exm-ends" label="Ends" type="time" value={ends} onChange={(event) => setEnds(event.target.value)} className={styles.narrow} />
+                <Input id="exm-room" label="Room" value={room} onChange={(event) => setRoom(event.target.value)} className={styles.narrow} />
+                <Button onClick={() => void addSlot()} loading={addingSlot} disabled={subjectId === "" || onDate === ""}>
+                  Add paper
+                </Button>
+              </div>
+            )
           ) : null}
         </Card>
       </section>
@@ -275,25 +273,27 @@ export default function ExamsPage() {
           </>
         }
       >
-        <div style={{ display: "grid", gap: "var(--space-3)" }}>
-          <Field label="Name" htmlFor="exm-series-name">
-            <input id="exm-series-name" value={seriesName} onChange={(event) => setSeriesName(event.target.value)} placeholder="Midterm" />
-          </Field>
-          <Field label="Term" htmlFor="exm-series-term">
-            <input id="exm-series-term" value={seriesTerm} onChange={(event) => setSeriesTerm(event.target.value)} />
-          </Field>
+        <div className={styles.formGrid}>
+          <Input id="exm-series-name" label="Name" value={seriesName} onChange={(event) => setSeriesName(event.target.value)} placeholder="Midterm" />
+          <Input id="exm-series-term" label="Term" value={seriesTerm} onChange={(event) => setSeriesTerm(event.target.value)} />
         </div>
       </Modal>
 
-      <ConfirmDialog
+      <Modal
         open={doomedSeries !== null}
+        onClose={() => setDoomedSeries(null)}
         title="Delete exam series"
-        message={`Delete "${doomedSeries?.name ?? ""}" and every paper in it? Students stop seeing the schedule immediately.`}
-        confirmLabel="Delete"
-        danger
-        onConfirm={() => void removeSeries()}
-        onCancel={() => setDoomedSeries(null)}
-      />
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setDoomedSeries(null)}>Cancel</Button>
+            <Button variant="danger" onClick={() => void removeSeries()}>Delete</Button>
+          </>
+        }
+      >
+        <p className={styles.confirmMessage}>
+          Delete &quot;{doomedSeries?.name ?? ""}&quot; and every paper in it? Students stop seeing the schedule immediately.
+        </p>
+      </Modal>
     </>
   );
 }
