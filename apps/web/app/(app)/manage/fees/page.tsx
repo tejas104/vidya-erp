@@ -337,7 +337,10 @@ export default function FeesPage() {
       rollNo: row.admissionNo,
       name: row.studentName,
       section: (sections ?? []).find((section) => section.id === row.sectionId)?.label ?? "",
-      status: row.status,
+      // A fee invoice carries no student LIFECYCLE status; do not feed the
+      // invoice's payment status (paid/waived/pending) into the drawer's
+      // lifecycle-status field. Fees is a canManage=false view — status isn't editable here.
+      status: "",
       pct: null,
       attended: 0,
       total: 0,
