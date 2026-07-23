@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   api,
   ApiError,
@@ -10,17 +10,23 @@ import {
   type PublicationView,
   type StudentResult,
 } from "@/ui/api";
-import { useToast } from "@/ui/Toast";
-import { PageHeader } from "@/ui/PageHeader";
-import { Button } from "@/ui/Button";
-import { Field } from "@/ui/Field";
-import { Modal } from "@/ui/Modal";
-import { ConfirmDialog } from "@/ui/ConfirmDialog";
-import { DataTable, type Column } from "@/ui/DataTable";
-import { Badge } from "@/ui/Badge";
-import { Card } from "@/ui/Card";
-import { EmptyState } from "@/ui/EmptyState";
-import { Skeleton } from "@/ui/Skeleton";
+import {
+  useToast,
+  Button,
+  Input,
+  Select,
+  Modal,
+  Table,
+  StatusBadge,
+  Card,
+  EmptyState,
+  Skeleton,
+  PageHeader,
+  type TableColumn,
+} from "@vidya/ui-system";
+import { AsyncState } from "@/ui/AsyncState";
+import { StudentSlideOver, type DrawerStudent } from "@/ui/StudentSlideOver";
+import styles from "./page.module.css";
 
 export const dynamic = "force-dynamic";
 
@@ -47,6 +53,21 @@ const DEFAULT_BANDS: GradeBand[] = [
   { minPct: 40, grade: "D", points: 5 },
   { minPct: 0, grade: "F", points: 0 },
 ];
+
+const AVATARS = [
+  "linear-gradient(140deg,#6B7BFF,#4A5BD8)",
+  "linear-gradient(140deg,#F59E0B,#D97706)",
+  "linear-gradient(140deg,#10B981,#059669)",
+  "linear-gradient(140deg,#8B5CF6,#7C3AED)",
+  "linear-gradient(140deg,#EC4899,#DB2777)",
+  "linear-gradient(140deg,#06B6D4,#0891B2)",
+];
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  return ((parts[0]?.[0] ?? "") + (parts.length > 1 ? parts[parts.length - 1]![0] : "")).toUpperCase() || "·";
+}
+
+type Row = { rank: ReactNode; student: ReactNode; grades: ReactNode; sgpa: ReactNode; actions: ReactNode };
 
 export default function ResultsPage() {
   const toast = useToast();
@@ -75,6 +96,7 @@ export default function ResultsPage() {
   const [term, setTerm] = useState("Term 1");
   const [confirmPublish, setConfirmPublish] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  const [viewing, setViewing] = useState<StudentResult | null>(null);
 
   const collegeId = tree !== null && tree !== "error" ? tree.college.id : null;
   const classes = tree !== null && tree !== "error" ? tree.departments.flatMap((dep) => dep.classes) : [];
@@ -113,13 +135,13 @@ export default function ResultsPage() {
   async function saveCredits() {
     if (creditRows === null) return;
     const entries = creditRows.filter((row) => row.credits >= 1).map((row) => ({ subjectId: row.subjectId, credits: row.credits }));
-    if (entries.length === 0) { toast.show("Set at least one subject's credits.", "danger"); return; }
+    if (entries.length === 0) { toast.push({ status: "danger", message: "Set at least one subject's credits." }); return; }
     setSavingCredits(true);
     try {
       await api.resSetCredits({ classId: creditsClassId, academicYear: year, entries });
-      toast.show("Credits saved.", "good");
+      toast.push({ status: "good", message: "Credits saved." });
     } catch (caught) {
-      toast.show(caught instanceof ApiError ? caught.message : "Couldn't save credits.", "danger");
+      toast.push({ status: "danger", message: caught instanceof ApiError ? caught.message : "Couldn't save credits." });
     } finally {
       setSavingCredits(false);
     }
@@ -133,9 +155,9 @@ export default function ResultsPage() {
       const created = await api.resCreateScale({ collegeId, name: scaleName, bands });
       setScales((rows) => [...rows, created]);
       setEditingScale(false);
-      toast.show(`Scale "${created.name}" created.`, "good");
+      toast.push({ status: "good", message: `Scale "${created.name}" created.` });
     } catch (caught) {
-      toast.show(caught instanceof ApiError ? caught.message : "Couldn't create the scale.", "danger");
+      toast.push({ status: "danger", message: caught instanceof ApiError ? caught.message : "Couldn't create the scale." });
     } finally {
       setSavingScale(false);
     }
@@ -146,9 +168,9 @@ export default function ResultsPage() {
     try {
       await api.resDeleteScale(doomedScale.id);
       setScales((rows) => rows.filter((row) => row.id !== doomedScale.id));
-      toast.show("Scale deleted.", "good");
+      toast.push({ status: "good", message: "Scale deleted." });
     } catch (caught) {
-      toast.show(caught instanceof ApiError ? caught.message : "Couldn't delete.", "danger");
+      toast.push({ status: "danger", message: caught instanceof ApiError ? caught.message : "Couldn't delete." });
     } finally {
       setDoomedScale(null);
     }
@@ -164,7 +186,7 @@ export default function ResultsPage() {
       if (caught instanceof ApiError && caught.status === 422) setPreview({ state: "no-credits" });
       else {
         setPreview({ state: "idle" });
-        toast.show(caught instanceof ApiError ? caught.message : "Couldn't compile results.", "danger");
+        toast.push({ status: "danger", message: caught instanceof ApiError ? caught.message : "Couldn't compile results." });
       }
     }
   }
@@ -174,50 +196,74 @@ export default function ResultsPage() {
     try {
       const publication = await api.resPublish({ classId: previewClassId, academicYear: year, term, scaleId: previewScaleId });
       setPreview((state) => (state.state === "ok" ? { ...state, publications: [...state.publications, publication] } : state));
-      toast.show(`${term} published — students see it now.`, "good");
+      toast.push({ status: "good", message: `${term} published — students see it now.` });
     } catch (caught) {
-      toast.show(caught instanceof ApiError ? caught.message : "Couldn't publish.", "danger");
+      toast.push({ status: "danger", message: caught instanceof ApiError ? caught.message : "Couldn't publish." });
     } finally {
       setPublishing(false);
       setConfirmPublish(false);
     }
   }
 
-  if (tree === null) return <Skeleton lines={5} />;
-  if (tree === "error") return <EmptyState title="Couldn't load the organisation." message="Try again shortly." />;
+  function toDrawerStudent(row: StudentResult, idx: number, sectionLabel: string): DrawerStudent {
+    const backlogs = row.subjects.filter((subject) => subject.points === 0).length;
+    return {
+      studentId: row.studentId,
+      initials: initials(row.studentName),
+      gradient: AVATARS[idx % AVATARS.length]!,
+      rollNo: row.admissionNo,
+      name: row.studentName,
+      section: sectionLabel,
+      status: backlogs > 0 ? "backlog" : "active",
+      pct: null,
+      attended: 0,
+      total: 0,
+      lastMark: null,
+      backlogs,
+      flags: { backlog: backlogs > 0, yb: false },
+      phone: null,
+      guardianName: null,
+      guardianPhone: null,
+      dob: null,
+    };
+  }
+
+  if (tree === null) return <Skeleton height={16} />;
+  if (tree === "error") return <EmptyState title="Couldn't load the organisation." body="Try again shortly." />;
 
   const bandProblem = bandsProblem(bands);
-  const previewColumns: Column<StudentResult>[] = [
-    { key: "rank", header: "Rank", render: (row) => <span className="num">{row.rank}</span> },
-    {
-      key: "student", header: "Student",
-      render: (row) => (
-        <span>
-          <strong>{row.studentName}</strong>{" "}
-          <span className="num" style={{ opacity: 0.6, fontSize: 12.5 }}>{row.admissionNo}</span>
-        </span>
-      ),
-    },
-    {
-      key: "grades", header: "Grades",
-      render: (row) => (
-        <span style={{ display: "inline-flex", gap: 6, flexWrap: "wrap" }}>
-          {row.subjects.map((subject) => (
-            <Badge key={subject.subjectId}>{`${subject.subjectName.slice(0, 14)} ${subject.grade}`}</Badge>
-          ))}
-        </span>
-      ),
-    },
-    { key: "sgpa", header: "SGPA", align: "right", render: (row) => <strong className="num">{row.sgpa.toFixed(2)}</strong> },
+  const previewColumns: TableColumn<Row>[] = [
+    { key: "rank", header: "Rank", figure: true },
+    { key: "student", header: "Student" },
+    { key: "grades", header: "Grades" },
+    { key: "sgpa", header: "SGPA", figure: true },
+    { key: "actions", header: "" },
   ];
+  const previewRows: Row[] = preview.state === "ok" ? preview.rows.map((row) => ({
+    rank: row.rank,
+    student: (
+      <span>
+        <strong>{row.studentName}</strong>{" "}
+        <span className={`num ${styles.admissionNo}`}>{row.admissionNo}</span>
+      </span>
+    ),
+    grades: (
+      <span className={styles.gradeChips}>
+        {row.subjects.map((subject) => (
+          <StatusBadge key={subject.subjectId} status="neutral">{`${subject.subjectName.slice(0, 14)} ${subject.grade}`}</StatusBadge>
+        ))}
+      </span>
+    ),
+    sgpa: <strong className="num">{row.sgpa.toFixed(2)}</strong>,
+    actions: <Button variant="ghost" onClick={() => setViewing(row)}>View</Button>,
+  })) : [];
 
   return (
     <>
-      <PageHeader
-        eyebrow="Results"
-        title="The marksheet desk"
-        lede="Define the grade scale, set subject credits, compile a class, and publish — students see nothing until you do."
-      />
+      <PageHeader title="The marksheet desk" />
+      <p className={styles.lede}>
+        Define the grade scale, set subject credits, compile a class, and publish — students see nothing until you do.
+      </p>
 
       <section className="section" aria-label="Grade scales">
         <div className="section-head">
@@ -227,15 +273,15 @@ export default function ResultsPage() {
           </Button>
         </div>
         {scales.length === 0 ? (
-          <EmptyState title="No grade scale yet." message="Create one — the compile step needs it." />
+          <EmptyState title="No grade scale yet." body="Create one — the compile step needs it." />
         ) : (
           <Card>
             {scales.map((scale) => (
-              <div key={scale.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "9px 0", borderTop: "1px solid var(--rule)" }}>
-                <span style={{ display: "inline-flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+              <div key={scale.id} className={styles.scaleRow}>
+                <span className={styles.scaleLabel}>
                   <strong>{scale.name}</strong>
-                  {scale.locked ? <Badge>in use</Badge> : null}
-                  <span className="num" style={{ fontSize: 12.5, opacity: 0.7 }}>
+                  {scale.locked ? <StatusBadge status="neutral">in use</StatusBadge> : null}
+                  <span className={`num ${styles.scaleBands}`}>
                     {[...scale.bands].sort((a, b) => b.minPct - a.minPct).map((band) => `${band.minPct}→${band.grade}/${band.points}`).join(" · ")}
                   </span>
                 </span>
@@ -251,20 +297,21 @@ export default function ResultsPage() {
       <section className="section" aria-label="Subject credits">
         <div className="section-head"><h2>Subject credits · {year}</h2></div>
         <Card>
-          <Field label="Class" htmlFor="res-credits-class">
-            <select id="res-credits-class" value={creditsClassId} onChange={(event) => void loadCredits(event.target.value)}>
-              <option value="">Pick a class…</option>
-              {classes.map((cls) => (<option key={cls.id} value={cls.id}>{cls.name}</option>))}
-            </select>
-          </Field>
-          {creditsClassId !== "" && creditRows === null ? <Skeleton lines={3} /> : null}
+          <Select
+            id="res-credits-class"
+            label="Class"
+            value={creditsClassId}
+            onChange={(event) => void loadCredits(event.target.value)}
+            options={[{ value: "", label: "Pick a class…" }, ...classes.map((cls) => ({ value: cls.id, label: cls.name }))]}
+          />
+          {creditsClassId !== "" && creditRows === null ? <Skeleton height={16} /> : null}
           {creditRows !== null && creditRows.length === 0 ? (
-            <EmptyState title="No subjects in this class's department." message="Create subjects first under Organisation." />
+            <EmptyState title="No subjects in this class's department." body="Create subjects first under Organisation." />
           ) : null}
           {creditRows !== null && creditRows.length > 0 ? (
-            <div style={{ display: "grid", gap: "var(--space-2)", marginTop: "var(--space-3)" }}>
+            <div className={styles.creditList}>
               {creditRows.map((row, index) => (
-                <div key={row.subjectId} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, borderTop: "1px solid var(--rule)", padding: "6px 0" }}>
+                <div key={row.subjectId} className={styles.creditRow}>
                   <label htmlFor={`res-credit-${row.subjectId}`}>{row.name}</label>
                   <input
                     id={`res-credit-${row.subjectId}`}
@@ -274,15 +321,15 @@ export default function ResultsPage() {
                       const credits = Number(event.target.value);
                       setCreditRows((rows) => rows === null ? null : rows.map((r, i) => (i === index ? { ...r, credits } : r)));
                     }}
-                    style={{ width: 90 }}
+                    className={styles.creditInput}
                     aria-label={`${row.name} credits`}
                   />
                 </div>
               ))}
-              <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "var(--space-2)" }}>
+              <div className={styles.creditSave}>
                 <Button onClick={() => void saveCredits()} loading={savingCredits}>Save credits</Button>
               </div>
-              <p style={{ margin: 0, fontSize: 12.5, opacity: 0.65 }}>Subjects left at 0 are not counted in SGPA.</p>
+              <p className={styles.creditHint}>Subjects left at 0 are not counted in SGPA.</p>
             </div>
           ) : null}
         </Card>
@@ -291,59 +338,55 @@ export default function ResultsPage() {
       <section className="section" aria-label="Compile and publish">
         <div className="section-head"><h2>Compile &amp; publish · {year}</h2></div>
         <Card>
-          <div style={{ display: "flex", gap: "var(--space-4)", flexWrap: "wrap", alignItems: "flex-end" }}>
-            <Field label="Class" htmlFor="res-preview-class">
-              <select id="res-preview-class" value={previewClassId} onChange={(event) => { setPreviewClassId(event.target.value); setPreview({ state: "idle" }); }}>
-                <option value="">Pick a class…</option>
-                {classes.map((cls) => (<option key={cls.id} value={cls.id}>{cls.name}</option>))}
-              </select>
-            </Field>
-            <Field label="Grade scale" htmlFor="res-preview-scale">
-              <select id="res-preview-scale" value={previewScaleId} onChange={(event) => { setPreviewScaleId(event.target.value); setPreview({ state: "idle" }); }}>
-                <option value="">Pick a scale…</option>
-                {scales.map((scale) => (<option key={scale.id} value={scale.id}>{scale.name}</option>))}
-              </select>
-            </Field>
+          <div className={styles.pickerRow}>
+            <Select
+              id="res-preview-class"
+              label="Class"
+              value={previewClassId}
+              onChange={(event) => { setPreviewClassId(event.target.value); setPreview({ state: "idle" }); }}
+              options={[{ value: "", label: "Pick a class…" }, ...classes.map((cls) => ({ value: cls.id, label: cls.name }))]}
+            />
+            <Select
+              id="res-preview-scale"
+              label="Grade scale"
+              value={previewScaleId}
+              onChange={(event) => { setPreviewScaleId(event.target.value); setPreview({ state: "idle" }); }}
+              options={[{ value: "", label: "Pick a scale…" }, ...scales.map((scale) => ({ value: scale.id, label: scale.name }))]}
+            />
             <Button onClick={() => void loadPreview()} disabled={previewClassId === "" || previewScaleId === ""}>
               Compile
             </Button>
           </div>
 
-          {preview.state === "loading" ? <Skeleton lines={4} /> : null}
           {preview.state === "no-credits" ? (
-            <EmptyState title="No credits set for this class." message="Set subject credits above, then compile again." />
+            <EmptyState title="No credits set for this class." body="Set subject credits above, then compile again." />
           ) : null}
-          {preview.state === "ok" ? (
-            <div style={{ marginTop: "var(--space-4)" }}>
-              {preview.publications.length > 0 ? (
-                <p style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 0 }}>
-                  <span style={{ fontSize: 13 }}>Published:</span>
-                  {preview.publications.map((publication) => (
-                    <Badge key={publication.id} tone="good">{publication.term}</Badge>
-                  ))}
-                </p>
-              ) : null}
-              <DataTable
-                columns={previewColumns}
-                rows={preview.rows}
-                rowKey={(row) => row.studentId}
-                empty={{ title: "No computable results.", message: "No marks are recorded for this class yet." }}
-              />
-              {preview.rows.length > 0 ? (
-                <div style={{ display: "flex", gap: "var(--space-3)", alignItems: "flex-end", justifyContent: "flex-end", marginTop: "var(--space-3)", flexWrap: "wrap" }}>
-                  <Field label="Term" htmlFor="res-term">
-                    <input id="res-term" value={term} onChange={(event) => setTerm(event.target.value)} style={{ width: 120 }} />
-                  </Field>
-                  <Button
-                    onClick={() => setConfirmPublish(true)}
-                    disabled={term.trim() === "" || preview.publications.some((publication) => publication.term === term.trim())}
-                  >
-                    Publish
-                  </Button>
-                </div>
-              ) : null}
-            </div>
-          ) : null}
+          <AsyncState loading={preview.state === "loading"} error={false} isEmpty={preview.state === "ok" && preview.rows.length === 0} empty={<EmptyState title="No computable results." body="No marks are recorded for this class yet." />}>
+            {preview.state === "ok" ? (
+              <div className={styles.previewBlock}>
+                {preview.publications.length > 0 ? (
+                  <p className={styles.publishedRow}>
+                    <span>Published:</span>
+                    {preview.publications.map((publication) => (
+                      <StatusBadge key={publication.id} status="good">{publication.term}</StatusBadge>
+                    ))}
+                  </p>
+                ) : null}
+                <Table columns={previewColumns} rows={previewRows} />
+                {preview.rows.length > 0 ? (
+                  <div className={styles.publishRow}>
+                    <Input id="res-term" label="Term" value={term} onChange={(event) => setTerm(event.target.value)} className={styles.narrow} />
+                    <Button
+                      onClick={() => setConfirmPublish(true)}
+                      disabled={term.trim() === "" || preview.publications.some((publication) => publication.term === term.trim())}
+                    >
+                      Publish
+                    </Button>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+          </AsyncState>
         </Card>
       </section>
 
@@ -360,28 +403,26 @@ export default function ResultsPage() {
           </>
         }
       >
-        <div style={{ display: "grid", gap: "var(--space-3)" }}>
-          <Field label="Name" htmlFor="res-scale-name">
-            <input id="res-scale-name" value={scaleName} onChange={(event) => setScaleName(event.target.value)} />
-          </Field>
-          <div style={{ display: "grid", gap: 6 }}>
+        <div className={styles.formGrid}>
+          <Input id="res-scale-name" label="Name" value={scaleName} onChange={(event) => setScaleName(event.target.value)} />
+          <div className={styles.bandsList}>
             {bands.map((band, index) => (
-              <div key={index} style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <div key={index} className={styles.bandRow}>
                 <input
                   type="number" min={0} max={100} value={band.minPct} aria-label={`Band ${index + 1} minimum %`}
                   onChange={(event) => setBands((rows) => rows.map((row, i) => (i === index ? { ...row, minPct: Number(event.target.value) } : row)))}
-                  style={{ width: 84 }}
+                  className={styles.bandPct}
                 />
-                <span style={{ fontSize: 13, opacity: 0.6 }}>% →</span>
+                <span className={styles.bandArrow}>% →</span>
                 <input
                   value={band.grade} aria-label={`Band ${index + 1} grade`}
                   onChange={(event) => setBands((rows) => rows.map((row, i) => (i === index ? { ...row, grade: event.target.value } : row)))}
-                  style={{ width: 70 }}
+                  className={styles.bandGrade}
                 />
                 <input
                   type="number" min={0} max={10} value={band.points} aria-label={`Band ${index + 1} points`}
                   onChange={(event) => setBands((rows) => rows.map((row, i) => (i === index ? { ...row, points: Number(event.target.value) } : row)))}
-                  style={{ width: 70 }}
+                  className={styles.bandGrade}
                 />
                 <Button variant="ghost" onClick={() => setBands((rows) => rows.filter((_, i) => i !== index))} aria-label={`Remove band ${index + 1}`}>
                   ×
@@ -400,23 +441,40 @@ export default function ResultsPage() {
         </div>
       </Modal>
 
-      <ConfirmDialog
+      <Modal
         open={confirmPublish}
+        onClose={() => setConfirmPublish(false)}
         title="Publish results"
-        message={`Publish ${classOf(previewClassId)?.name ?? "this class"} · ${term} results? Students see them immediately.`}
-        confirmLabel="Publish"
-        onConfirm={() => void publish()}
-        onCancel={() => setConfirmPublish(false)}
-      />
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setConfirmPublish(false)}>Cancel</Button>
+            <Button onClick={() => void publish()} loading={publishing}>Publish</Button>
+          </>
+        }
+      >
+        <p className={styles.confirmMessage}>
+          Publish {classOf(previewClassId)?.name ?? "this class"} · {term} results? Students see them immediately.
+        </p>
+      </Modal>
 
-      <ConfirmDialog
+      <Modal
         open={doomedScale !== null}
+        onClose={() => setDoomedScale(null)}
         title="Delete grade scale"
-        message={`Delete "${doomedScale?.name ?? ""}"? Scales used by a publication can't be deleted.`}
-        confirmLabel="Delete"
-        danger
-        onConfirm={() => void removeScale()}
-        onCancel={() => setDoomedScale(null)}
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setDoomedScale(null)}>Cancel</Button>
+            <Button variant="danger" onClick={() => void removeScale()}>Delete</Button>
+          </>
+        }
+      >
+        <p className={styles.confirmMessage}>Delete &quot;{doomedScale?.name ?? ""}&quot;? Scales used by a publication can&apos;t be deleted.</p>
+      </Modal>
+
+      <StudentSlideOver
+        student={viewing ? toDrawerStudent(viewing, preview.state === "ok" ? preview.rows.indexOf(viewing) : 0, classOf(previewClassId)?.name ?? "") : null}
+        canManage={false}
+        onClose={() => setViewing(null)}
       />
     </>
   );
