@@ -1,7 +1,16 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { ToastProvider } from "@vidya/ui-system";
 import OrgPage from "../../app/(app)/manage/org/page";
 import { api } from "./api";
+
+function renderPage() {
+  return render(
+    <ToastProvider>
+      <OrgPage />
+    </ToastProvider>,
+  );
+}
 
 vi.mock("./api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./api")>();
@@ -36,13 +45,13 @@ beforeEach(() => {
 
 describe("/manage/org", () => {
   it("renders the tree", async () => {
-    render(<OrgPage />);
+    renderPage();
     expect(await screen.findByText("Computer Science · CSE")).toBeInTheDocument();
     expect(screen.getByText("FY CS")).toBeInTheDocument();
     expect(screen.getByText("Sec A")).toBeInTheDocument();
   });
   it("creates a department with the right body", async () => {
-    render(<OrgPage />);
+    renderPage();
     fireEvent.click(await screen.findByRole("button", { name: /new department/i }));
     fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Physics" } });
     fireEvent.change(screen.getByLabelText("Code"), { target: { value: "PHY" } });

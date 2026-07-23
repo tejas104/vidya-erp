@@ -1,16 +1,9 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError, type OrgTree, type OrgUnitType } from "@/ui/api";
-import { useToast } from "@/ui/Toast";
-import { PageHeader } from "@/ui/PageHeader";
-import { Card } from "@/ui/Card";
-import { Button } from "@/ui/Button";
-import { Field } from "@/ui/Field";
-import { Modal } from "@/ui/Modal";
-import { ConfirmDialog } from "@/ui/ConfirmDialog";
-import { Badge } from "@/ui/Badge";
-import { EmptyState } from "@/ui/EmptyState";
-import { Skeleton } from "@/ui/Skeleton";
+import { useToast, Button, Input, Modal, StatusBadge, Card, EmptyState, PageHeader } from "@vidya/ui-system";
+import { AsyncState } from "@/ui/AsyncState";
+import styles from "./page.module.css";
 
 export const dynamic = "force-dynamic";
 
@@ -33,6 +26,7 @@ export default function OrgPage() {
   const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
+    setFailed(false);
     try {
       const { colleges } = await api.colleges();
       const college = colleges[0];
@@ -42,6 +36,7 @@ export default function OrgPage() {
       }
       setTree(await api.collegeTree(college.id));
     } catch {
+      setTree(null);
       setFailed(true);
     }
   }, []);
@@ -68,15 +63,15 @@ export default function OrgPage() {
         else if (editor.unit === "class") await api.createClass({ departmentId: editor.parentId, name, code });
         else if (editor.unit === "subject") await api.createSubject({ departmentId: editor.parentId, name, code });
         else await api.createSection({ classId: editor.parentId, name });
-        toast.show(`${editor.unit[0]!.toUpperCase()}${editor.unit.slice(1)} "${name}" created.`, "good");
+        toast.push({ status: "good", message: `${editor.unit[0]!.toUpperCase()}${editor.unit.slice(1)} "${name}" created.` });
       } else {
         await api.renameOrgUnit(editor.unit, editor.unitId, name);
-        toast.show("Renamed.", "good");
+        toast.push({ status: "good", message: "Renamed." });
       }
       setEditor(null);
       await load();
     } catch (caught) {
-      toast.show(caught instanceof ApiError ? caught.message : "Couldn't save.", "danger");
+      toast.push({ status: "danger", message: caught instanceof ApiError ? caught.message : "Couldn't save." });
     } finally {
       setSaving(false);
     }
@@ -86,51 +81,47 @@ export default function OrgPage() {
     if (!doomed) return;
     try {
       await api.deleteOrgUnit(doomed.unit, doomed.unitId);
-      toast.show(`Deleted "${doomed.label}".`, "good");
+      toast.push({ status: "good", message: `Deleted "${doomed.label}".` });
       setDoomed(null);
       await load();
     } catch (caught) {
       setDoomed(null);
-      toast.show(
-        caught instanceof ApiError && caught.status === 409
-          ? `"${doomed.label}" still has children or records — remove those first.`
-          : "Couldn't delete.",
-        "danger",
-      );
+      toast.push({
+        status: "danger",
+        message:
+          caught instanceof ApiError && caught.status === 409
+            ? `"${doomed.label}" still has children or records — remove those first.`
+            : "Couldn't delete.",
+      });
     }
-  }
-
-  if (failed) {
-    return <EmptyState title="Couldn't load the organisation." message="Try again shortly." />;
-  }
-  if (tree === null) {
-    return <Skeleton lines={5} />;
   }
 
   return (
     <>
       <PageHeader
-        eyebrow="Organisation"
-        title={tree.college.name}
-        lede="Departments, classes, sections and subjects. Deleting is blocked while a unit still has children or records."
+        title={tree?.college.name ?? "Organisation"}
         actions={
-          <Button onClick={() => openCreate("department", tree.college.id, tree.college.name)}>New department</Button>
+          tree ? <Button onClick={() => openCreate("department", tree.college.id, tree.college.name)}>New department</Button> : undefined
         }
       />
+      <p className={styles.lede}>
+        Departments, classes, sections and subjects. Deleting is blocked while a unit still has children or records.
+      </p>
 
-      {tree.departments.length === 0 ? (
-        <EmptyState
-          title="No departments yet."
-          message="Create the first department to start building the college."
-        />
-      ) : (
-        <div style={{ display: "grid", gap: "var(--space-4)" }}>
-          {tree.departments.map((dept) => (
+      <AsyncState
+        loading={tree === null && !failed}
+        error={failed}
+        onRetry={() => void load()}
+        isEmpty={tree !== null && tree.departments.length === 0}
+        empty={<EmptyState title="No departments yet." body="Create the first department to start building the college." />}
+      >
+        <div className={styles.deptGrid}>
+          {tree?.departments.map((dept) => (
             <Card
               key={dept.id}
               title={`${dept.name} · ${dept.code}`}
               actions={
-                <span style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <span className={styles.cardActions}>
                   <Button variant="ghost" onClick={() => openCreate("class", dept.id, dept.name)}>New class</Button>
                   <Button variant="ghost" onClick={() => openCreate("subject", dept.id, dept.name)}>New subject</Button>
                   <Button variant="ghost" onClick={() => openRename("department", dept.id, dept.name)}>Rename</Button>
@@ -144,13 +135,13 @@ export default function OrgPage() {
                 <p className="strip-empty">No classes yet.</p>
               ) : (
                 dept.classes.map((klass) => (
-                  <div key={klass.id} style={{ padding: "10px 0", borderTop: "1px solid var(--rule)", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                  <div key={klass.id} className={styles.classRow}>
                     <span>
-                      <strong>{klass.name}</strong> <span className="num" style={{ opacity: 0.6 }}>{klass.code}</span>
+                      <strong>{klass.name}</strong> <span className="num">{klass.code}</span>
                     </span>
-                    <span style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+                    <span className={styles.classRowActions}>
                       {klass.sections.map((section) => (
-                        <Badge key={section.id}>Sec {section.name}</Badge>
+                        <StatusBadge key={section.id} status="neutral">Sec {section.name}</StatusBadge>
                       ))}
                       <Button variant="ghost" onClick={() => openCreate("section", klass.id, klass.name)}>New section</Button>
                       <Button variant="ghost" onClick={() => openRename("class", klass.id, klass.name)}>Rename</Button>
@@ -162,17 +153,17 @@ export default function OrgPage() {
                 ))
               )}
               {dept.subjects.length > 0 ? (
-                <div style={{ marginTop: "var(--space-3)", display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+                <div className={styles.subjectRow}>
                   <span className="stat-sub num">subjects</span>
                   {dept.subjects.map((subject) => (
-                    <Badge key={subject.id} tone="good">{subject.name}</Badge>
+                    <StatusBadge key={subject.id} status="good">{subject.name}</StatusBadge>
                   ))}
                 </div>
               ) : null}
             </Card>
           ))}
         </div>
-      )}
+      </AsyncState>
 
       <Modal
         open={editor !== null}
@@ -193,27 +184,29 @@ export default function OrgPage() {
           </>
         }
       >
-        <div style={{ display: "grid", gap: "var(--space-3)" }}>
-          <Field label="Name" htmlFor="org-name">
-            <input id="org-name" value={name} onChange={(event) => setName(event.target.value)} />
-          </Field>
+        <div className={styles.formGrid}>
+          <Input id="org-name" label="Name" value={name} onChange={(event) => setName(event.target.value)} />
           {editor?.kind === "create" && HAS_CODE[editor.unit] ? (
-            <Field label="Code" htmlFor="org-code" hint="Short unique code, e.g. CSE">
-              <input id="org-code" value={code} onChange={(event) => setCode(event.target.value)} />
-            </Field>
+            <Input id="org-code" label="Code" hint="Short unique code, e.g. CSE" value={code} onChange={(event) => setCode(event.target.value)} />
           ) : null}
         </div>
       </Modal>
 
-      <ConfirmDialog
+      <Modal
         open={doomed !== null}
+        onClose={() => setDoomed(null)}
         title={`Delete ${doomed?.unit ?? ""}`}
-        message={`Delete "${doomed?.label ?? ""}"? This only works when it has no children or records.`}
-        confirmLabel="Confirm"
-        danger
-        onConfirm={() => void confirmDelete()}
-        onCancel={() => setDoomed(null)}
-      />
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setDoomed(null)}>Cancel</Button>
+            <Button variant="danger" onClick={() => void confirmDelete()}>Confirm</Button>
+          </>
+        }
+      >
+        <p className={styles.confirmMessage}>
+          Delete &quot;{doomed?.label ?? ""}&quot;? This only works when it has no children or records.
+        </p>
+      </Modal>
     </>
   );
 }
