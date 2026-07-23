@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   api,
   ApiError,
@@ -8,19 +8,27 @@ import {
   type TtEntry,
   type TtPeriod,
 } from "@/ui/api";
-import { useToast } from "@/ui/Toast";
-import { PageHeader } from "@/ui/PageHeader";
-import { Card } from "@/ui/Card";
-import { Button } from "@/ui/Button";
-import { Field } from "@/ui/Field";
-import { Modal } from "@/ui/Modal";
-import { ConfirmDialog } from "@/ui/ConfirmDialog";
-import { EmptyState } from "@/ui/EmptyState";
-import { Skeleton } from "@/ui/Skeleton";
+import {
+  useToast,
+  Button,
+  Input,
+  Select,
+  Modal,
+  Table,
+  EmptyState,
+  Skeleton,
+  PageHeader,
+  type TableColumn,
+} from "@vidya/ui-system";
+import styles from "./page.module.css";
 
 export const dynamic = "force-dynamic";
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const DAY_KEYS = ["d1", "d2", "d3", "d4", "d5", "d6"] as const;
+type DayKey = (typeof DAY_KEYS)[number];
+type Row = { period: ReactNode } & Record<DayKey, ReactNode>;
+
 type SectionOpt = { sectionId: string; label: string; classId: string; departmentId: string };
 
 function sectionOptions(tree: OrgTree): SectionOpt[] {
@@ -127,10 +135,10 @@ export default function TimetablePage() {
     setSaving(true);
     try {
       await api.ttPeriodsSet(tree.college.id, periods);
-      toast.show("Period template saved.", "good");
+      toast.push({ status: "good", message: "Period template saved." });
       setEditingPeriods(false);
     } catch (caught) {
-      toast.show(caught instanceof ApiError ? caught.message : "Couldn't save the template.", "danger");
+      toast.push({ status: "danger", message: caught instanceof ApiError ? caught.message : "Couldn't save the template." });
     } finally {
       setSaving(false);
     }
@@ -149,11 +157,11 @@ export default function TimetablePage() {
         periodNo: slot.periodNo,
         academicYear: year,
       });
-      toast.show("Scheduled.", "good");
+      toast.push({ status: "good", message: "Scheduled." });
       setSlot(null);
       await loadGrid();
     } catch (caught) {
-      toast.show(caught instanceof ApiError ? caught.message : "Couldn't schedule.", "danger");
+      toast.push({ status: "danger", message: caught instanceof ApiError ? caught.message : "Couldn't schedule." });
     } finally {
       setSaving(false);
     }
@@ -163,103 +171,91 @@ export default function TimetablePage() {
     if (!doomed) return;
     try {
       await api.ttEntryDelete(doomed.id);
-      toast.show("Unscheduled.", "good");
+      toast.push({ status: "good", message: "Unscheduled." });
       setDoomed(null);
       await loadGrid();
     } catch (caught) {
       setDoomed(null);
-      toast.show(caught instanceof ApiError ? caught.message : "Couldn't remove.", "danger");
+      toast.push({ status: "danger", message: caught instanceof ApiError ? caught.message : "Couldn't remove." });
     }
   }
 
-  if (failed) return <EmptyState title="Couldn't load the timetable." message="Try again shortly." />;
-  if (tree === null) return <Skeleton lines={5} />;
+  if (failed) return <EmptyState title="Couldn't load the timetable." body="Try again shortly." />;
+  if (tree === null) return <Skeleton height={16} />;
 
   const options = sectionOptions(tree);
   const subjects = tree.departments.find((dept) => dept.id === section?.departmentId)?.subjects ?? [];
   const cell = (day: number, periodNo: number) =>
     (entries ?? []).find((entry) => entry.dayOfWeek === day && entry.periodNo === periodNo);
 
+  const columns: TableColumn<Row>[] = [
+    { key: "period", header: "Period" },
+    ...DAYS.map((day, index) => ({ key: DAY_KEYS[index]!, header: day })),
+  ];
+  const rows: Row[] = periods.map((period) => {
+    const row = {
+      period: (
+        <>
+          <strong>P{period.periodNo}</strong> <span className={`num ${styles.periodTime}`}>{period.starts}–{period.ends}</span>
+        </>
+      ),
+    } as Row;
+    DAY_KEYS.forEach((key, index) => {
+      const day = index + 1;
+      const entry = cell(day, period.periodNo);
+      row[key] = entry ? (
+        <button type="button" onClick={() => setDoomed(entry)} title="Click to unschedule" className={styles.entryBtn}>
+          <strong>{entry.subjectName}</strong>
+          <br />
+          <span className={styles.entryMeta}>{entry.teacherName}</span>
+          {entry.room !== "" ? <span className={`num ${styles.entryRoom}`}> · {entry.room}</span> : null}
+        </button>
+      ) : (
+        <button
+          type="button"
+          aria-label={`Schedule ${DAYS[index]} period ${period.periodNo}`}
+          onClick={() => { setSubjectId(""); setTeacherId(""); setRoom(""); setSlot({ day, periodNo: period.periodNo }); }}
+          className={styles.emptyBtn}
+        >
+          +
+        </button>
+      );
+    });
+    return row;
+  });
+
   return (
     <>
       <PageHeader
-        eyebrow="Timetable"
         title="Weekly timetable"
-        lede="A fixed period grid per section. The database refuses double-bookings — a busy teacher, section or room answers with a clear message."
         actions={<Button variant="ghost" onClick={() => setEditingPeriods(true)}>Edit periods</Button>}
       />
+      <p className={styles.lede}>
+        A fixed period grid per section. The database refuses double-bookings — a busy teacher, section or room answers with a clear message.
+      </p>
 
       {periods.length === 0 ? (
         <EmptyState
           title="No period template yet."
-          message="Define the college's periods first — e.g. P1 09:00–09:50 …"
-          action={<Button onClick={() => setEditingPeriods(true)}>Define periods</Button>}
+          body="Define the college's periods first — e.g. P1 09:00–09:50 …"
+          action={{ label: "Define periods", onClick: () => setEditingPeriods(true) }}
         />
       ) : options.length === 0 ? (
-        <EmptyState title="No sections yet." message="Create classes and sections in Organisation first." />
+        <EmptyState title="No sections yet." body="Create classes and sections in Organisation first." />
       ) : (
         <>
-          <Field label="Section" htmlFor="tt-section">
-            <select id="tt-section" value={sectionId} onChange={(event) => setSectionId(event.target.value)} style={{ maxWidth: 340 }}>
-              {options.map((option) => (
-                <option key={option.sectionId} value={option.sectionId}>{option.label}</option>
-              ))}
-            </select>
-          </Field>
+          <div className={styles.sectionPicker}>
+            <Select
+              id="tt-section"
+              label="Section"
+              value={sectionId}
+              onChange={(event) => setSectionId(event.target.value)}
+              options={options.map((option) => ({ value: option.sectionId, label: option.label }))}
+            />
+          </div>
 
-          <div className="ui-tablewrap" style={{ marginTop: "var(--space-4)" }}>
-            <table className="ui-table" style={{ minWidth: 760 }}>
-              <thead>
-                <tr>
-                  <th scope="col">Period</th>
-                  {DAYS.map((day) => (
-                    <th key={day} scope="col">{day}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {periods.map((period) => (
-                  <tr key={period.periodNo}>
-                    <td>
-                      <strong>P{period.periodNo}</strong>{" "}
-                      <span className="num" style={{ opacity: 0.6, fontSize: 12 }}>
-                        {period.starts}–{period.ends}
-                      </span>
-                    </td>
-                    {DAYS.map((_, index) => {
-                      const day = index + 1;
-                      const entry = cell(day, period.periodNo);
-                      return (
-                        <td key={day}>
-                          {entry ? (
-                            <button
-                              type="button"
-                              onClick={() => setDoomed(entry)}
-                              title="Click to unschedule"
-                              style={{ display: "block", width: "100%", textAlign: "left", border: "none", background: "var(--good-soft)", borderRadius: "var(--radius-sm)", padding: "6px 8px", cursor: "pointer", font: "inherit", fontSize: 12.5 }}
-                            >
-                              <strong>{entry.subjectName}</strong>
-                              <br />
-                              <span style={{ opacity: 0.75 }}>{entry.teacherName}</span>
-                              {entry.room !== "" ? <span className="num" style={{ opacity: 0.6 }}> · {entry.room}</span> : null}
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              aria-label={`Schedule ${DAYS[index]} period ${period.periodNo}`}
-                              onClick={() => { setSubjectId(""); setTeacherId(""); setRoom(""); setSlot({ day, periodNo: period.periodNo }); }}
-                              style={{ width: "100%", border: "1px dashed var(--rule-strong)", background: "transparent", color: "var(--ink-3)", borderRadius: "var(--radius-sm)", padding: "10px 0", cursor: "pointer", font: "inherit" }}
-                            >
-                              +
-                            </button>
-                          )}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className={styles.tableWrap}>
+            <Table columns={columns} rows={rows} />
           </div>
         </>
       )}
@@ -276,22 +272,22 @@ export default function TimetablePage() {
           </>
         }
       >
-        <div style={{ display: "grid", gap: "var(--space-2)" }}>
+        <div className={styles.periodEditor}>
           {periods.map((period, index) => (
-            <div key={index} style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              <span className="num" style={{ width: 32 }}>P{period.periodNo}</span>
+            <div key={index} className={styles.periodRow}>
+              <span className={`num ${styles.periodNo}`}>P{period.periodNo}</span>
               <input
                 aria-label={`period ${period.periodNo} starts`}
                 value={period.starts}
                 onChange={(event) => setPeriods((current) => current.map((p, i) => (i === index ? { ...p, starts: event.target.value } : p)))}
-                style={{ width: 90 }}
+                className={styles.timeInput}
               />
               <span>–</span>
               <input
                 aria-label={`period ${period.periodNo} ends`}
                 value={period.ends}
                 onChange={(event) => setPeriods((current) => current.map((p, i) => (i === index ? { ...p, ends: event.target.value } : p)))}
-                style={{ width: 90 }}
+                className={styles.timeInput}
               />
               <Button variant="ghost" onClick={() => setPeriods((current) => current.filter((_, i) => i !== index).map((p, i) => ({ ...p, periodNo: i + 1 })))}>
                 Remove
@@ -322,38 +318,41 @@ export default function TimetablePage() {
           </>
         }
       >
-        <div style={{ display: "grid", gap: "var(--space-3)" }}>
-          <Field label="Subject" htmlFor="tt-subject">
-            <select id="tt-subject" value={subjectId} onChange={(event) => setSubjectId(event.target.value)}>
-              <option value="">Choose…</option>
-              {subjects.map((subject) => (
-                <option key={subject.id} value={subject.id}>{subject.name}</option>
-              ))}
-            </select>
-          </Field>
-          <Field label="Teacher" htmlFor="tt-teacher" hint="Teachers assigned to this class.">
-            <select id="tt-teacher" value={teacherId} onChange={(event) => setTeacherId(event.target.value)}>
-              <option value="">Choose…</option>
-              {teachers.map((teacher) => (
-                <option key={teacher.id} value={teacher.id}>{teacher.name}</option>
-              ))}
-            </select>
-          </Field>
-          <Field label="Room (optional)" htmlFor="tt-room">
-            <input id="tt-room" value={room} onChange={(event) => setRoom(event.target.value)} placeholder="204" />
-          </Field>
+        <div className={styles.formGrid}>
+          <Select
+            id="tt-subject"
+            label="Subject"
+            value={subjectId}
+            onChange={(event) => setSubjectId(event.target.value)}
+            options={[{ value: "", label: "Choose…" }, ...subjects.map((subject) => ({ value: subject.id, label: subject.name }))]}
+          />
+          <Select
+            id="tt-teacher"
+            label="Teacher"
+            hint="Teachers assigned to this class."
+            value={teacherId}
+            onChange={(event) => setTeacherId(event.target.value)}
+            options={[{ value: "", label: "Choose…" }, ...teachers.map((teacher) => ({ value: teacher.id, label: teacher.name }))]}
+          />
+          <Input id="tt-room" label="Room (optional)" value={room} onChange={(event) => setRoom(event.target.value)} placeholder="204" />
         </div>
       </Modal>
 
-      <ConfirmDialog
+      <Modal
         open={doomed !== null}
+        onClose={() => setDoomed(null)}
         title="Unschedule period"
-        message={doomed ? `Remove ${doomed.subjectName} (${doomed.teacherName}) from ${DAYS[doomed.dayOfWeek - 1]} P${doomed.periodNo}?` : ""}
-        confirmLabel="Remove"
-        danger
-        onConfirm={() => void removeEntry()}
-        onCancel={() => setDoomed(null)}
-      />
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setDoomed(null)}>Cancel</Button>
+            <Button variant="danger" onClick={() => void removeEntry()}>Remove</Button>
+          </>
+        }
+      >
+        <p className={styles.confirmMessage}>
+          {doomed ? `Remove ${doomed.subjectName} (${doomed.teacherName}) from ${DAYS[doomed.dayOfWeek - 1]} P${doomed.periodNo}?` : ""}
+        </p>
+      </Modal>
     </>
   );
 }
