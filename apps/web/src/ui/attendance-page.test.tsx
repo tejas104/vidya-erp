@@ -1,7 +1,16 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+import { ToastProvider } from "@vidya/ui-system";
 import AttendancePage from "../../app/(app)/manage/attendance/page";
 import { api } from "./api";
+
+function renderPage() {
+  return render(
+    <ToastProvider>
+      <AttendancePage />
+    </ToastProvider>,
+  );
+}
 
 vi.mock("./api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./api")>();
@@ -23,7 +32,7 @@ beforeEach(() => {
 
 describe("attendance entry", () => {
   it("loads the roster for the caller's section and submits present-by-default entries", async () => {
-    render(<AttendancePage />);
+    renderPage();
     // roster appears
     expect(await screen.findByText("Aarav Sharma")).toBeInTheDocument();
     // submit
@@ -35,7 +44,7 @@ describe("attendance entry", () => {
   });
 
   it("touch fast path: mark an absentee, then 'All present' resets before save", async () => {
-    render(<AttendancePage />);
+    renderPage();
     await screen.findByText("Aarav Sharma");
     // one tap on the 'absent' target for the row
     fireEvent.click(screen.getByRole("button", { name: "absent" }));
