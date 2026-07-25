@@ -1,7 +1,16 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { ToastProvider } from "@vidya/ui-system";
 import UsersPage from "../../app/(app)/manage/users/page";
 import { api } from "./api";
+
+function renderPage() {
+  return render(
+    <ToastProvider>
+      <UsersPage />
+    </ToastProvider>,
+  );
+}
 
 vi.mock("./api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./api")>();
@@ -43,13 +52,13 @@ beforeEach(() => {
 
 describe("/manage/users", () => {
   it("lists users with roles and status", async () => {
-    render(<UsersPage />);
+    renderPage();
     expect(await screen.findByText("demo-hod-cse")).toBeInTheDocument();
     expect(screen.getByText("Dr. Radhika Menon")).toBeInTheDocument();
     expect(screen.getByText("active")).toBeInTheDocument();
   });
   it("creates a user with roles", async () => {
-    render(<UsersPage />);
+    renderPage();
     fireEvent.click(await screen.findByRole("button", { name: /new user/i }));
     fireEvent.change(screen.getByLabelText("Username"), { target: { value: "pw.user" } });
     fireEvent.change(screen.getByLabelText("Display name"), { target: { value: "PW User" } });

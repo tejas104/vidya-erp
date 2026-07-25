@@ -1,0 +1,85 @@
+.lede {
+  margin: calc(-1 * var(--space-3)) 0 var(--space-4);
+  color: var(--ink-2);
+}
+.skeletonStack {
+  display: grid;
+  gap: var(--space-2);
+}
+.headerActions {
+  display: flex;
+  gap: var(--space-2);
+}
+.badgeRow {
+  display: inline-flex;
+  gap: var(--space-1);
+  flex-wrap: wrap;
+}
+.dim {
+  opacity: 0.5;
+}
+.tableActions {
+  display: inline-flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.formGrid {
+  display: grid;
+  gap: var(--space-3);
+}
+.field {
+  display: block;
+}
+.label {
+  display: block;
+  font-size: var(--text-14);
+  color: var(--ink-2);
+  margin-bottom: var(--space-2);
+  font-weight: 600;
+}
+.rolesRow {
+  display: flex;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+.roleLabel {
+  display: inline-flex;
+  gap: var(--space-2);
+  align-items: center;
+  font-size: var(--text-14);
+}
+.noTopMargin {
+  margin-top: 0;
+}
+.noMargin {
+  margin: 0;
+}
+.grantsList {
+  display: grid;
+  gap: var(--space-2);
+  margin-bottom: var(--space-5);
+}
+.grantRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--rule);
+}
+.grantMeta {
+  font-size: var(--text-14);
+}
+.grantForm {
+  display: grid;
+  gap: var(--space-3);
+  border-top: 1px solid var(--rule-strong);
+  padding-top: var(--space-4);
+}
+.tokenBox {
+  word-break: break-all;
+  background: var(--paper-sunken);
+  padding: var(--space-3);
+  border-radius: var(--radius-sm);
+}
