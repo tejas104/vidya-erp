@@ -1,7 +1,16 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+import { ToastProvider } from "@vidya/ui-system";
 import LeavePage from "../../app/(app)/manage/leave/page";
 import { api } from "./api";
+
+function renderPage() {
+  return render(
+    <ToastProvider>
+      <LeavePage />
+    </ToastProvider>,
+  );
+}
 
 vi.mock("./api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./api")>();
@@ -42,7 +51,7 @@ describe("LeavePage", () => {
       grants: [{ org: { collegeId: "col_1", departmentId: "dep_a" } }],
     });
     mock("lvsPending").mockResolvedValue({ requests: [pending] });
-    render(<LeavePage />);
+    renderPage();
     await waitFor(() => expect(screen.getByText("Ravi Kumar")).toBeInTheDocument());
     expect(screen.getByRole("button", { name: /approve/i })).toBeInTheDocument();
   });
@@ -53,7 +62,7 @@ describe("LeavePage", () => {
       grants: [{ org: { collegeId: "col_1", departmentId: "dep_a" } }],
     });
     mock("lvsPending").mockResolvedValue({ requests: [pending] });
-    render(<LeavePage />);
+    renderPage();
     await waitFor(() => expect(screen.getByText("Ravi Kumar")).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: /reject/i }));
     const confirm = await screen.findByRole("button", { name: /confirm reject/i });
@@ -69,7 +78,7 @@ describe("LeavePage", () => {
     mock("lvsMine").mockResolvedValue({
       requests: [{ ...pending, id: "lvr_2", status: "approved" }],
     });
-    render(<LeavePage />);
+    renderPage();
     await waitFor(() => expect(screen.getByText("approved")).toBeInTheDocument());
     expect(screen.getByRole("button", { name: /apply/i })).toBeInTheDocument();
     expect(screen.getByText(/approved/i)).toBeInTheDocument();
