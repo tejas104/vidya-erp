@@ -16,8 +16,7 @@ import {
   type Tile,
   type TtToday,
 } from "@/ui/api";
-import { Card } from "@/ui/Card";
-import { PageHeader } from "@/ui/PageHeader";
+import { Card, PageHeader } from "@vidya/ui-system";
 import { Noticeboard } from "@/ui/Noticeboard";
 import {
   AttendanceSlot,
@@ -30,6 +29,7 @@ import {
   SubjectBars,
   TrendLine,
 } from "@/ui/charts";
+import styles from "./page.module.css";
 
 export const dynamic = "force-dynamic";
 
@@ -258,11 +258,10 @@ export default function DashboardPage() {
     const inMin = featured && featured.startMin !== null ? featured.startMin - day.nowMin : null;
     return (
       <>
-        <PageHeader
-          eyebrow={session.roles.join(" · ")}
-          title={`Good day, ${session.displayName.split(" ")[0]}.`}
-          lede="Your day — the class in front of you first. Every figure is drawn only from records you may read."
-        />
+        <PageHeader title={`Good day, ${session.displayName.split(" ")[0]}.`} />
+        <p className={styles.lede}>
+          Your day — the class in front of you first. Every figure is drawn only from records you may read.
+        </p>
 
         {featured ? (
           <section className="td-cmd td-depth" aria-label="Next class">
@@ -404,11 +403,10 @@ export default function DashboardPage() {
 
   return (
     <>
-      <PageHeader
-        eyebrow={session.roles.join(" · ")}
-        title={`Good day, ${session.displayName.split(" ")[0]}.`}
-        lede="Every figure here is drawn only from records you're allowed to read. Rooms outside your scope simply don't appear."
-      />
+      <PageHeader title={`Good day, ${session.displayName.split(" ")[0]}.`} />
+      <p className={styles.lede}>
+        Every figure here is drawn only from records you're allowed to read. Rooms outside your scope simply don't appear.
+      </p>
 
       {/* --- analytics rebuild (admin only): rollups are precomputed, so an
               admin can force a rebuild after a bulk data change --- */}
