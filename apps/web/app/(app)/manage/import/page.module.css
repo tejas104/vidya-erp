@@ -1,0 +1,50 @@
+.lede {
+  margin: calc(-1 * var(--space-3)) 0 var(--space-4);
+  color: var(--ink-2);
+}
+.formGrid {
+  display: grid;
+  gap: var(--space-3);
+}
+.formRow {
+  display: flex;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+.field {
+  display: block;
+}
+.label {
+  display: block;
+  font-size: var(--text-14);
+  color: var(--ink-2);
+  margin-bottom: var(--space-2);
+  font-weight: 600;
+}
+.narrow {
+  width: 120px;
+}
+.checkboxLabel {
+  display: inline-flex;
+  gap: var(--space-2);
+  align-items: center;
+  font-size: var(--text-14);
+  padding-top: var(--space-3);
+}
+.textarea {
+  width: 100%;
+  font-family: var(--font-mono);
+  font-size: var(--text-14);
+  padding: var(--space-3);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--rule-strong);
+  background: var(--paper);
+  color: var(--ink);
+}
+.textarea:focus-visible {
+  border-color: var(--focus);
+}
+.stats {
+  margin-bottom: var(--space-4);
+}

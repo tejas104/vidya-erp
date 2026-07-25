@@ -1,7 +1,16 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
+import { ToastProvider } from "@vidya/ui-system";
 import ImportPage from "../../app/(app)/manage/import/page";
 import { api } from "./api";
+
+function renderPage() {
+  return render(
+    <ToastProvider>
+      <ImportPage />
+    </ToastProvider>,
+  );
+}
 
 vi.mock("./api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./api")>();
@@ -23,7 +32,7 @@ beforeEach(() => {
 
 describe("/manage/import", () => {
   it("submits the CSV as a dry-run and shows the completed summary", async () => {
-    render(<ImportPage />);
+    renderPage();
     const csv = "admission_no,full_name\nX-1,A One\nX-2,B Two";
     fireEvent.change(await screen.findByLabelText(/csv content/i), { target: { value: csv } });
     fireEvent.click(screen.getByRole("button", { name: /run import/i }));
@@ -32,7 +41,8 @@ describe("/manage/import", () => {
         expect.objectContaining({ kind: "students", collegeId: "col_1", dryRun: true, csv }),
       ),
     );
-    expect(await screen.findByText(/2 ok/i)).toBeInTheDocument();
-    expect(screen.getByText(/completed/i)).toBeInTheDocument();
+    const result = await screen.findByRole("region", { name: /import result/i });
+    expect(within(result).getByText(/2 ok/i)).toBeInTheDocument();
+    expect(within(result).getByText(/completed/i)).toBeInTheDocument();
   });
 });
