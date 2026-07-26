@@ -44,7 +44,7 @@ export default function CalendarPage() {
 
   return (
     <>
-      <PageHeader title="Academic calendar" />
+      <PageHeader eyebrow="Calendar" title="Academic calendar" />
       <p className={styles.lede}>
         Holidays, exams and events across the college — everything on the calendar, scoped to what you may see.
       </p>

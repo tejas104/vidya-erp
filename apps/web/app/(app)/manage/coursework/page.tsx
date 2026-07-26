@@ -197,7 +197,7 @@ export default function CourseworkPage() {
   if (targets.length === 0) {
     return (
       <>
-        <PageHeader title="Assignments & study material" />
+        <PageHeader eyebrow="Coursework" title="Assignments & study material" />
         <EmptyState title="No subject you teach." body="Coursework is managed by a subject's teacher." />
       </>
     );
@@ -238,6 +238,7 @@ export default function CourseworkPage() {
   return (
     <>
       <PageHeader
+        eyebrow="Coursework"
         title="Assignments & study material"
         actions={
           <span className={styles.headerActions}>

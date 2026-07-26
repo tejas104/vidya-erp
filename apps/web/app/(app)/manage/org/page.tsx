@@ -99,6 +99,7 @@ export default function OrgPage() {
   return (
     <>
       <PageHeader
+        eyebrow="Organisation"
         title={tree?.college.name ?? "Organisation"}
         actions={
           tree ? <Button onClick={() => openCreate("department", tree.college.id, tree.college.name)}>New department</Button> : undefined

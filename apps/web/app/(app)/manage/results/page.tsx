@@ -260,7 +260,7 @@ export default function ResultsPage() {
 
   return (
     <>
-      <PageHeader title="The marksheet desk" />
+      <PageHeader eyebrow="Results" title="The marksheet desk" />
       <p className={styles.lede}>
         Define the grade scale, set subject credits, compile a class, and publish — students see nothing until you do.
       </p>

@@ -281,6 +281,7 @@ export default function StudentsPage() {
   return (
     <>
       <PageHeader
+        eyebrow="Students"
         title="Student records"
         actions={<Button onClick={() => setAdding(true)} disabled={options.length === 0}>Add student</Button>}
       />

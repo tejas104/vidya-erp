@@ -129,7 +129,7 @@ export default function DirectoryPage() {
 
   return (
     <>
-      <PageHeader title="Student directory" />
+      <PageHeader eyebrow="Records" title="Student directory" />
       <p className={styles.lede}>
         Browse rosters and student documents — read-only, for reconciling fees and records. Nothing here can be changed.
       </p>

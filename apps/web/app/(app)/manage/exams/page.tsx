@@ -182,6 +182,7 @@ export default function ExamsPage() {
   return (
     <>
       <PageHeader
+        eyebrow="Exams"
         title="The exam timetable"
         actions={<Button onClick={() => setCreatingSeries(true)}>New series</Button>}
       />

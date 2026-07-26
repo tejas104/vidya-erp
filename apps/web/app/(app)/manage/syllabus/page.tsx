@@ -240,7 +240,7 @@ export default function SyllabusPage() {
 
   return (
     <>
-      <PageHeader title="Syllabus & coverage" />
+      <PageHeader eyebrow="Syllabus" title="Syllabus & coverage" />
       <p className={styles.lede}>
         Units and topics for a class · subject, with per-topic taught dates rolling up to a coverage percentage.
       </p>

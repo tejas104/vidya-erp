@@ -129,7 +129,7 @@ export default function AttendancePage() {
 
   return (
     <>
-      <PageHeader title="Record attendance" />
+      <PageHeader eyebrow="Attendance" title="Record attendance" />
       <p className={styles.lede}>
         {subjectId !== ""
           ? `Marking your subject's period (${slot}). Tap a card to mark; tap the name to see the student.`

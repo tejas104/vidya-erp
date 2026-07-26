@@ -182,6 +182,7 @@ export default function LeavePage() {
   return (
     <>
       <PageHeader
+        eyebrow="Leave"
         title="Staff leave"
         actions={<Button onClick={() => setApplying(true)}>Apply for leave</Button>}
       />

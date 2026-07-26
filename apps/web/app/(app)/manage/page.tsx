@@ -5,7 +5,7 @@ export const dynamic = "force-dynamic";
 export default function ManageIndex() {
   return (
     <>
-      <PageHeader title="The office" />
+      <PageHeader eyebrow="Manage" title="The office" />
       <p className={styles.lede}>Pick a task from the sidebar. You only see the areas your role can act on.</p>
     </>
   );

@@ -225,7 +225,7 @@ export default function TeachersPage() {
 
   return (
     <>
-      <PageHeader title="Teacher records & assignments" />
+      <PageHeader eyebrow="Teachers" title="Teacher records & assignments" />
       <p className={styles.lede}>
         Assignments derive scope grants once the teacher is linked to a sign-in (ADR-0015). Browse by class — teachers appear where they teach.
       </p>

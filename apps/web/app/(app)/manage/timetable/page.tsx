@@ -227,6 +227,7 @@ export default function TimetablePage() {
   return (
     <>
       <PageHeader
+        eyebrow="Timetable"
         title="Weekly timetable"
         actions={<Button variant="ghost" onClick={() => setEditingPeriods(true)}>Edit periods</Button>}
       />

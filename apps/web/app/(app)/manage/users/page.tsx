@@ -289,6 +289,7 @@ export default function UsersPage() {
   return (
     <>
       <PageHeader
+        eyebrow="Users"
         title="Sign-ins & access"
         actions={
           <span className={styles.headerActions}>

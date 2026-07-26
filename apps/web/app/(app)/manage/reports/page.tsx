@@ -152,6 +152,7 @@ export default function ReportsPage() {
   return (
     <>
       <PageHeader
+        eyebrow="Reports"
         title="Reports"
         actions={<Button variant="ghost" onClick={() => void load()}>Refresh</Button>}
       />

@@ -76,7 +76,7 @@ export default function MyTimetablePage() {
 
   return (
     <>
-      <PageHeader title="My timetable" />
+      <PageHeader eyebrow="Timetable" title="My timetable" />
       <p className={styles.lede}>Your own weekly schedule, across every day you teach.</p>
       <AsyncState
         loading={week === null && !error}

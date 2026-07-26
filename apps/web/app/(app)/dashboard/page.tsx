@@ -258,7 +258,7 @@ export default function DashboardPage() {
     const inMin = featured && featured.startMin !== null ? featured.startMin - day.nowMin : null;
     return (
       <>
-        <PageHeader title={`Good day, ${session.displayName.split(" ")[0]}.`} />
+        <PageHeader eyebrow={session.roles.join(" · ")} title={`Good day, ${session.displayName.split(" ")[0]}.`} />
         <p className={styles.lede}>
           Your day — the class in front of you first. Every figure is drawn only from records you may read.
         </p>
@@ -403,7 +403,7 @@ export default function DashboardPage() {
 
   return (
     <>
-      <PageHeader title={`Good day, ${session.displayName.split(" ")[0]}.`} />
+      <PageHeader eyebrow={session.roles.join(" · ")} title={`Good day, ${session.displayName.split(" ")[0]}.`} />
       <p className={styles.lede}>
         Every figure here is drawn only from records you're allowed to read. Rooms outside your scope simply don't appear.
       </p>

@@ -447,7 +447,7 @@ export default function FeesPage() {
 
   return (
     <>
-      <PageHeader title="Fee counter" />
+      <PageHeader eyebrow={`Fees · ${year}`} title="Fee counter" />
       <p className={styles.lede}>Open a section's ledger, take a payment, hand over the receipt.</p>
 
       <Tabs

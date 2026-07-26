@@ -114,7 +114,7 @@ export default function ImportPage() {
 
   return (
     <>
-      <PageHeader title="Bulk CSV import" />
+      <PageHeader eyebrow="Import" title="Bulk CSV import" />
       <p className={styles.lede}>Paste or upload a CSV of students or teachers. Dry-run validates every row and writes nothing.</p>
 
       <Card>

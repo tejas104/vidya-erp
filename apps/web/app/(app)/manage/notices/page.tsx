@@ -142,6 +142,7 @@ export default function NoticesPage() {
   return (
     <>
       <PageHeader
+        eyebrow="Notices"
         title="The noticeboard"
         actions={<Button onClick={() => setComposing(true)}>New notice</Button>}
       />
