@@ -10,6 +10,8 @@ import {
 import { Sparkline, StatTile, SubjectBars } from "@/ui/charts";
 import { ReportButton } from "@/ui/ReportButton";
 import { DeniedState } from "@/ui/DeniedState";
+import { AsyncState } from "@/ui/AsyncState";
+import styles from "./page.module.css";
 
 export const dynamic = "force-dynamic";
 
@@ -48,26 +50,33 @@ export default function StudentPage({ params }: { params: Promise<{ studentId: s
       <a className="linklike" href="/dashboard">
         ← Back to the register
       </a>
-        {load.state === "loading" ? <p className="page-lede" style={{ marginTop: 20 }}>Loading…</p> : null}
 
-        {load.state === "forbidden" ? (
-          <div style={{ marginTop: 24 }}>
-            <DeniedState
-              title="Outside your scope."
-              message="None of this student's records fall within the classes or subjects you can see."
-            />
-          </div>
-        ) : null}
-        {load.state === "not-found" ? (
-          <div className="state" style={{ marginTop: 24 }}>
-            <strong>No such student.</strong> This record may have been removed.
-          </div>
-        ) : null}
-        {load.state === "error" ? (
-          <div className="state" style={{ marginTop: 24 }}>
-            Something went wrong. Try again shortly.
-          </div>
-        ) : null}
+      {load.state === "loading" ? (
+        <div className={styles.stateRow}>
+          <AsyncState loading error={false}>
+            {null}
+          </AsyncState>
+        </div>
+      ) : null}
+
+      {load.state === "forbidden" ? (
+        <div className={styles.stateRow}>
+          <DeniedState
+            title="Outside your scope."
+            message="None of this student's records fall within the classes or subjects you can see."
+          />
+        </div>
+      ) : null}
+      {load.state === "not-found" ? (
+        <div className={`state ${styles.stateRow}`}>
+          <strong>No such student.</strong> This record may have been removed.
+        </div>
+      ) : null}
+      {load.state === "error" ? (
+        <div className={`state ${styles.stateRow}`}>
+          Something went wrong. Try again shortly.
+        </div>
+      ) : null}
 
       {load.state === "ok" ? <StudentBody data={load.data} year={year} /> : null}
     </>
@@ -77,7 +86,7 @@ export default function StudentPage({ params }: { params: Promise<{ studentId: s
 function StudentBody({ data, year }: { data: StudentPerformance; year: string }) {
   return (
     <>
-      <p className="eyebrow" style={{ marginTop: 18 }}>
+      <p className={`eyebrow ${styles.pageEyebrow}`}>
         Student performance
       </p>
       <h1 className="page-title">{data.name}</h1>
@@ -85,7 +94,7 @@ function StudentBody({ data, year }: { data: StudentPerformance; year: string })
         Computed from exactly the attendance and marks you're permitted to read. The overall figure
         appears only when you can see every subject.
       </p>
-      <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 24 }}>
+      <div className={styles.reportRow}>
         <ReportButton
           params={{ kind: "student-performance", studentId: data.studentId }}
           year={year}
@@ -100,7 +109,7 @@ function StudentBody({ data, year }: { data: StudentPerformance; year: string })
         />
       </div>
 
-      <div className="card" style={{ marginBottom: 28 }}>
+      <div className={`card ${styles.statsCard}`}>
         <div className="stats">
           {data.attendance !== null ? (
             <StatTile
@@ -118,8 +127,8 @@ function StudentBody({ data, year }: { data: StudentPerformance; year: string })
           )}
         </div>
         {data.attendance !== null && data.attendance.monthly.length > 0 ? (
-          <div style={{ marginTop: 18, maxWidth: 320 }}>
-            <div className="tile-kind" style={{ marginBottom: 6 }}>
+          <div className={styles.trendWrap}>
+            <div className={`tile-kind ${styles.trendLabel}`}>
               Attendance trend
             </div>
             <Sparkline
@@ -149,14 +158,14 @@ function StudentBody({ data, year }: { data: StudentPerformance; year: string })
                 index,
               }))}
             />
-            <div className="grid" style={{ marginTop: 22 }}>
+            <div className={`grid ${styles.subjectsGrid}`}>
               {data.subjects.map((subject) => (
                 <div className="card" key={subject.subjectId}>
                   <div className="tile-head">
-                    <div className="tile-name" style={{ fontSize: 17 }}>
+                    <div className={`tile-name ${styles.subjectName}`}>
                       {subject.name}
                     </div>
-                    <span className="num" style={{ fontSize: 18 }}>
+                    <span className={`num ${styles.subjectPct}`}>
                       {subject.avgPct}%
                     </span>
                   </div>
