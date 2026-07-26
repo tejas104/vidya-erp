@@ -23,4 +23,12 @@ describe("PageHeader", () => {
     render(<PageHeader title="Roster" />);
     expect(screen.getByRole("heading", { level: 1, name: "Roster" })).toBeInTheDocument();
   });
+
+  it("renders the eyebrow when passed and omits it when absent", () => {
+    const { rerender } = render(<PageHeader title="Attendance" eyebrow="Attendance" />);
+    expect(screen.getByText("Attendance", { selector: "p" })).toBeInTheDocument();
+
+    rerender(<PageHeader title="Attendance" />);
+    expect(screen.queryByText("Attendance", { selector: "p" })).not.toBeInTheDocument();
+  });
 });
