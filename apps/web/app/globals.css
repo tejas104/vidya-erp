@@ -648,39 +648,6 @@ a {
 .ui-badge.danger { color: var(--accent); background: var(--accent-soft); border-color: transparent; }
 
 /* --- kit: overlays --- */
-.ui-scrim {
-  position: fixed;
-  inset: 0;
-  background: var(--scrim);
-  display: grid;
-  place-items: center;
-  padding: var(--space-5);
-  z-index: 100;
-}
-.ui-modal {
-  width: min(520px, 100%);
-  background: var(--surface);
-  border: 1px solid var(--rule);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-2);
-  outline: none;
-}
-.ui-modal-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: var(--space-4) var(--space-5);
-  border-bottom: 1px solid var(--rule);
-}
-.ui-modal-head h2 { font-size: 19px; }
-.ui-modal-body { padding: var(--space-5); }
-.ui-modal-foot {
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--space-3);
-  padding: var(--space-4) var(--space-5);
-  border-top: 1px solid var(--rule);
-}
 .ui-iconbtn {
   display: inline-grid;
   place-items: center;
@@ -836,28 +803,6 @@ a {
 @keyframes ui-shimmer {
   to { background-position: -200% 0; }
 }
-.ui-tabs {
-  display: flex;
-  gap: var(--space-2);
-  border-bottom: 1px solid var(--rule-strong);
-  margin-bottom: var(--space-5);
-}
-.ui-tab {
-  border: none;
-  background: transparent;
-  color: var(--ink-2);
-  font: inherit;
-  font-size: 15px;
-  padding: 10px 14px;
-  cursor: pointer;
-  border-bottom: 2.5px solid transparent;
-  margin-bottom: -1px;
-}
-.ui-tab.active {
-  color: var(--ink);
-  font-weight: 700;
-  border-bottom-color: var(--accent);
-}
 
 /* --- flashcards: the teacher's visual roster, composed from Register primitives.
  *     The signature carries down to the student: each card's anchor is a mini
@@ -949,13 +894,6 @@ a {
 
 /* rings */
 .cw-rings { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
-.cw-ring-card { background: var(--surface); border: 1px solid var(--rule); border-radius: var(--radius); padding: 15px; box-shadow: var(--shadow); display: flex; gap: 13px; align-items: center; }
-.cw-ring { width: 56px; height: 56px; flex-shrink: 0; position: relative; }
-.cw-ring svg { transform: rotate(-90deg); }
-.cw-ring-v { position: absolute; inset: 0; display: grid; place-items: center; font-family: var(--font-mono); font-size: 13px; font-weight: 600; letter-spacing: -0.03em; }
-.cw-ring-meta .rk { font-size: 11px; color: var(--ink-3); font-weight: 500; margin-bottom: 2px; }
-.cw-ring-meta .rv { font-size: 15px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.2; }
-.cw-ring-meta .rs { font-size: 11px; color: var(--ink-3); font-family: var(--font-mono); margin-top: 1px; }
 
 /* panel */
 .cw-panel { background: var(--surface); border: 1px solid var(--rule); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
@@ -1199,7 +1137,6 @@ a {
   body * { visibility: hidden !important; }
   .receipt-print, .receipt-print * { visibility: visible !important; }
   .receipt-print { position: absolute; inset: 0; margin: 24px; box-shadow: none !important; }
-  .ui-scrim { background: none !important; backdrop-filter: none !important; }
 }
 
 /* --- the shell --- */
