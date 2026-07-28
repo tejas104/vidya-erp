@@ -146,7 +146,7 @@ export default function BacklogsPage() {
     { key: "name", header: "Student" },
     { key: "count", header: "Backlogs" },
     { key: "subjects", header: "Backlog subjects" },
-    { key: "sgpa", header: "SGPA", figure: true },
+    { key: "sgpa", header: "SGPA", figure: true, align: "right" },
     { key: "actions", header: "" },
   ];
   const rows: Row[] = load.state === "ok" ? load.rows.map((row) => ({

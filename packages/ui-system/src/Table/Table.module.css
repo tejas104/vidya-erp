@@ -30,3 +30,4 @@
   letter-spacing: inherit;
 }
 .figure { font-family: var(--font-figure); font-variant-numeric: tabular-nums; }
+.right { text-align: right; }

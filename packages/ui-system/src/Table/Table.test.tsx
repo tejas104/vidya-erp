@@ -18,4 +18,19 @@ describe("Table", () => {
     expect(screen.getByText("23CS001")).toHaveAttribute("data-figure", "1");
     expect(screen.getByRole("columnheader")).toHaveAttribute("aria-sort", "ascending");
   });
+
+  it("right-aligns a column's header and cell when align is right", () => {
+    render(
+      <Table
+        columns={[
+          { key: "name", header: "Name" },
+          { key: "dues", header: "Dues", align: "right" },
+        ]}
+        rows={[{ name: "Asha", dues: "₹500" }]}
+      />,
+    );
+    expect(screen.getByRole("columnheader", { name: "Dues" }).className).toMatch(/right/);
+    expect(screen.getByText("₹500").className).toMatch(/right/);
+    expect(screen.getByRole("columnheader", { name: "Name" }).className).toBe("");
+  });
 });

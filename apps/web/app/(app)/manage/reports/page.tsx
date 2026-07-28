@@ -128,9 +128,9 @@ export default function ReportsPage() {
     { key: "format", header: "Format" },
     { key: "year", header: "Year", figure: true },
     { key: "status", header: "Status" },
-    { key: "rows", header: "Rows", figure: true },
+    { key: "rows", header: "Rows", figure: true, align: "right" },
     { key: "created", header: "Requested", figure: true },
-    { key: "actions", header: "" },
+    { key: "actions", header: "", align: "right" },
   ];
   const tableRows: ReportRow[] = (reports ?? []).map((row) => ({
     kind: row.kind,

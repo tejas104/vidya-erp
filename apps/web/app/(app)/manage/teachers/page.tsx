@@ -209,7 +209,7 @@ export default function TeachersPage() {
     { key: "teacher", header: "Teacher" },
     { key: "kind", header: "Role" },
     { key: "year", header: "Year", figure: true },
-    { key: "actions", header: "" },
+    { key: "actions", header: "", align: "right" },
   ];
   const assignmentRows: Row[] = (assignments ?? []).map((row) => ({
     teacher: teacherNames[row.teacherId] ?? row.teacherId,

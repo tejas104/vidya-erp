@@ -148,7 +148,7 @@ export default function LeavePage() {
     { key: "dates", header: "Dates", figure: true },
     { key: "kind", header: "Kind" },
     { key: "reason", header: "Reason" },
-    { key: "actions", header: "" },
+    { key: "actions", header: "", align: "right" },
   ];
   const approvalRows: ApprovalRow[] = pending.map((row) => ({
     teacher: <strong>{row.teacherName}</strong>,

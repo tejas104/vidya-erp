@@ -104,7 +104,7 @@ export default function ImportPage() {
   if (failed) return <EmptyState title="Couldn't load the college." body="Try again shortly." />;
 
   const errorColumns: TableColumn<{ row: React.ReactNode; message: React.ReactNode }>[] = [
-    { key: "row", header: "Row", figure: true },
+    { key: "row", header: "Row", figure: true, align: "right" },
     { key: "message", header: "Problem" },
   ];
   const errorRows = (result?.errors ?? []).map((row: ErrorRow) => ({

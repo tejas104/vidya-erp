@@ -241,7 +241,7 @@ export default function StudentsPage() {
     { key: "admissionNo", header: "Admission no.", figure: true },
     { key: "name", header: "Student" },
     { key: "status", header: "Status" },
-    { key: "actions", header: "" },
+    { key: "actions", header: "", align: "right" },
   ];
   const rows: Row[] = (roster ?? []).map((row, idx) => ({
     admissionNo: row.admissionNo,

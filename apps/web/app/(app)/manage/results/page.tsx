@@ -236,7 +236,7 @@ export default function ResultsPage() {
     { key: "rank", header: "Rank", figure: true },
     { key: "student", header: "Student" },
     { key: "grades", header: "Grades" },
-    { key: "sgpa", header: "SGPA", figure: true },
+    { key: "sgpa", header: "SGPA", figure: true, align: "right" },
     { key: "actions", header: "" },
   ];
   const previewRows: Row[] = preview.state === "ok" ? preview.rows.map((row) => ({

@@ -258,8 +258,8 @@ export default function UsersPage() {
     { key: "name", header: "Name" },
     { key: "roles", header: "Roles" },
     { key: "status", header: "Status" },
-    { key: "grants", header: "Grants", figure: true },
-    { key: "actions", header: "" },
+    { key: "grants", header: "Grants", figure: true, align: "right" },
+    { key: "actions", header: "", align: "right" },
   ];
   const rows: Row[] = (users ?? []).map((row) => ({
     username: <span className="num">{row.username}</span>,

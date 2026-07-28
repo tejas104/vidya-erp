@@ -206,9 +206,9 @@ export default function CourseworkPage() {
   const assignmentColumns: TableColumn<AssignmentRow>[] = [
     { key: "title", header: "Assignment" },
     { key: "due", header: "Due", figure: true },
-    { key: "max", header: "Max", figure: true },
-    { key: "subs", header: "Submissions", figure: true },
-    { key: "actions", header: "" },
+    { key: "max", header: "Max", figure: true, align: "right" },
+    { key: "subs", header: "Submissions", figure: true, align: "right" },
+    { key: "actions", header: "", align: "right" },
   ];
   const assignmentRows: AssignmentRow[] = (assignments ?? []).map((row) => ({
     title: <strong>{row.title}</strong>,
@@ -225,8 +225,8 @@ export default function CourseworkPage() {
   const materialColumns: TableColumn<MaterialRow>[] = [
     { key: "title", header: "Material" },
     { key: "type", header: "Type" },
-    { key: "size", header: "Size", figure: true },
-    { key: "dl", header: "" },
+    { key: "size", header: "Size", figure: true, align: "right" },
+    { key: "dl", header: "", align: "right" },
   ];
   const materialRows: MaterialRow[] = (materials ?? []).map((row) => ({
     title: <strong>{row.title}</strong>,

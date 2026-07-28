@@ -110,7 +110,7 @@ export default function DirectoryPage() {
     { key: "name", header: "Student" },
     { key: "status", header: "Status" },
     { key: "guardian", header: "Guardian" },
-    { key: "actions", header: "" },
+    { key: "actions", header: "", align: "right" },
   ];
   const rows: Row[] = (roster ?? []).map((row) => ({
     admissionNo: row.admissionNo,

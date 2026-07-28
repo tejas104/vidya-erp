@@ -367,11 +367,11 @@ export default function FeesPage() {
     { key: "student", header: "Student" },
     { key: "head", header: "Head" },
     { key: "due", header: "Due on", figure: true },
-    { key: "amount", header: "Amount", figure: true },
-    { key: "paid", header: "Paid", figure: true },
-    { key: "dues", header: "Dues", figure: true },
+    { key: "amount", header: "Amount", figure: true, align: "right" },
+    { key: "paid", header: "Paid", figure: true, align: "right" },
+    { key: "dues", header: "Dues", figure: true, align: "right" },
     { key: "status", header: "Status" },
-    { key: "actions", header: "" },
+    { key: "actions", header: "", align: "right" },
   ];
   const ledgerRows: LedgerRow[] = visible.map((row, idx) => ({
     student: (
@@ -405,8 +405,8 @@ export default function FeesPage() {
 
   const structureColumns: TableColumn<StructureRow>[] = [
     { key: "head", header: "Head" },
-    { key: "inst", header: "Inst.", figure: true },
-    { key: "amount", header: "Amount", figure: true },
+    { key: "inst", header: "Inst.", figure: true, align: "right" },
+    { key: "amount", header: "Amount", figure: true, align: "right" },
     { key: "due", header: "Due on", figure: true },
   ];
   const structureRows: StructureRow[] = structures.map((row) => ({
@@ -418,8 +418,8 @@ export default function FeesPage() {
 
   const modeColumns: TableColumn<ModeRow>[] = [
     { key: "mode", header: "Mode" },
-    { key: "count", header: "Receipts", figure: true },
-    { key: "total", header: "Collected", figure: true },
+    { key: "count", header: "Receipts", figure: true, align: "right" },
+    { key: "total", header: "Collected", figure: true, align: "right" },
   ];
   const modeRows: ModeRow[] = (summary?.byMode ?? []).map((row) => ({
     mode: <StatusBadge status="neutral">{row.mode}</StatusBadge>,
@@ -431,7 +431,7 @@ export default function FeesPage() {
     { key: "student", header: "Student" },
     { key: "head", header: "Head" },
     { key: "due", header: "Due on", figure: true },
-    { key: "dues", header: "Dues", figure: true },
+    { key: "dues", header: "Dues", figure: true, align: "right" },
   ];
   const defaulterRows: DefaulterRow[] = defaulters.map((row) => ({
     student: (

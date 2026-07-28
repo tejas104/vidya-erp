@@ -122,7 +122,7 @@ export default function NoticesPage() {
     { key: "from", header: "Publish", figure: true },
     { key: "to", header: "Expires", figure: true },
     { key: "status", header: "Status" },
-    { key: "actions", header: "" },
+    { key: "actions", header: "", align: "right" },
   ];
   const rows: NoticeRow[] = notices.map((row) => ({
     title: (
