@@ -24,6 +24,10 @@
     transform: translateX(0);
   }
 }
+/* Respect reduced-motion: skip the slide-in, panel just appears open. */
+@media (prefers-reduced-motion: reduce) {
+  .panel { animation: none; }
+}
 .head {
   display: flex;
   align-items: center;
