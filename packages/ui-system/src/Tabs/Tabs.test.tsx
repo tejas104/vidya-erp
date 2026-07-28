@@ -32,4 +32,11 @@ describe("Tabs", () => {
     expect(screen.getByRole("tab", { name: "Alpha" })).toHaveAttribute("tabindex", "-1");
     expect(screen.getByRole("tab", { name: "Gamma" })).toHaveAttribute("tabindex", "-1");
   });
+
+  it("gives each tab an id and points aria-controls at its matching panel", () => {
+    render(<Tabs tabs={tabs} active="a" onChange={vi.fn()} />);
+    const tab = screen.getByRole("tab", { name: "Beta" });
+    expect(tab).toHaveAttribute("id", "tab-b");
+    expect(tab).toHaveAttribute("aria-controls", "panel-b");
+  });
 });

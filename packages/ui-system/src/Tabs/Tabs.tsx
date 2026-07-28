@@ -36,6 +36,8 @@ export function Tabs({
             }}
             type="button"
             role="tab"
+            id={`tab-${tab.id}`}
+            aria-controls={`panel-${tab.id}`}
             aria-selected={selected}
             tabIndex={selected ? 0 : -1}
             className={`${styles.tab}${selected ? ` ${styles.active}` : ""}`}

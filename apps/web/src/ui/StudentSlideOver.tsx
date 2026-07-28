@@ -164,7 +164,7 @@ export function StudentSlideOver({
 
           <Tabs tabs={TABS} active={tab} onChange={setTab} />
 
-          <div className={styles.panel}>
+          <div className={styles.panel} role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`} tabIndex={0}>
             {tab === "overview" ? (
               <>
                 <div className="cw-dr-sec">

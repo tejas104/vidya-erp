@@ -449,7 +449,7 @@ export default function FeesPage() {
       />
 
       {tab === "counter" ? (
-        <>
+        <div role="tabpanel" id="panel-counter" aria-labelledby="tab-counter" tabIndex={0}>
       <div className={styles.pickerRow}>
         <Select
           id="fee-section" label="Section" className={styles.wide}
@@ -489,11 +489,11 @@ export default function FeesPage() {
           <Table columns={defaulterColumns} rows={defaulterRows} />
         </AsyncState>
       </section>
-        </>
+        </div>
       ) : null}
 
       {tab === "setup" && isAdmin ? (
-        <>
+        <div role="tabpanel" id="panel-setup" aria-labelledby="tab-setup" tabIndex={0}>
           <section className="section" aria-label="Fee heads">
             <div className="section-head"><h2>Fee heads</h2></div>
             <div className={styles.headsList}>
@@ -548,10 +548,11 @@ export default function FeesPage() {
               </AsyncState>
             )}
           </section>
-        </>
+        </div>
       ) : null}
 
       {tab === "collections" ? (
+        <div role="tabpanel" id="panel-collections" aria-labelledby="tab-collections" tabIndex={0}>
         <section className="section" aria-label="Collections">
           <div className={styles.collectionsRow}>
             <Input id="col-from" label="From" type="date" value={from} onChange={(event) => setFrom(event.target.value)} />
@@ -577,6 +578,7 @@ export default function FeesPage() {
             </>
           )}
         </section>
+        </div>
       ) : null}
 
       {/* RECORD PAYMENT → COUNTERFOIL */}
