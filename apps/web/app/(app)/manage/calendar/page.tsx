@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { api, type NoticeView } from "@/ui/api";
 import { AsyncState } from "@/ui/AsyncState";
 import { EmptyState, PageHeader } from "@vidya/ui-system";
@@ -10,31 +10,30 @@ export const dynamic = "force-dynamic";
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 export default function CalendarPage() {
-  const [load, setLoad] = useState<{ state: "loading" } | { state: "error" } | { state: "ok"; events: NoticeView[] }>({
-    state: "loading",
-  });
+  const [fetchState, setFetchState] = useState<
+    { state: "loading" } | { state: "error" } | { state: "ok"; events: NoticeView[] }
+  >({ state: "loading" });
 
-  useEffect(() => {
-    let alive = true;
-    api
-      .ntcVisible()
-      .then((r) => {
-        if (!alive) return;
-        const events = r.notices
-          .filter((n) => n.eventDate !== null)
-          .sort((a, b) => (a.eventDate! < b.eventDate! ? -1 : 1));
-        setLoad({ state: "ok", events });
-      })
-      .catch(() => alive && setLoad({ state: "error" }));
-    return () => {
-      alive = false;
-    };
+  const load = useCallback(async () => {
+    setFetchState({ state: "loading" });
+    try {
+      const r = await api.ntcVisible();
+      const events = r.notices
+        .filter((n) => n.eventDate !== null)
+        .sort((a, b) => (a.eventDate! < b.eventDate! ? -1 : 1));
+      setFetchState({ state: "ok", events });
+    } catch {
+      setFetchState({ state: "error" });
+    }
   }, []);
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   // group by "Month Year"
   const groups: { label: string; items: NoticeView[] }[] = [];
-  if (load.state === "ok") {
-    for (const ev of load.events) {
+  if (fetchState.state === "ok") {
+    for (const ev of fetchState.events) {
       const d = new Date(ev.eventDate! + "T00:00:00");
       const label = `${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
       const g = groups.find((x) => x.label === label) ?? (groups.push({ label, items: [] }), groups[groups.length - 1]!);
@@ -50,9 +49,11 @@ export default function CalendarPage() {
       </p>
 
       <AsyncState
-        loading={load.state === "loading"}
-        error={load.state === "error"}
-        isEmpty={load.state === "ok" && load.events.length === 0}
+        loading={fetchState.state === "loading"}
+        error={fetchState.state === "error"}
+        errorMessage="Couldn't load the calendar. Try again shortly."
+        onRetry={() => void load()}
+        isEmpty={fetchState.state === "ok" && fetchState.events.length === 0}
         empty={<EmptyState title="Nothing on the calendar yet." body="Holidays, exam dates and events will appear here." />}
       >
         {groups.map((group) => (

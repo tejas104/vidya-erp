@@ -266,7 +266,12 @@ export default function SyllabusPage() {
         />
       </div>
 
-      <AsyncState loading={syllabus === null && !loadError} error={loadError} onRetry={() => void load()}>
+      <AsyncState
+        loading={syllabus === null && !loadError}
+        error={loadError}
+        errorMessage="Couldn't load the syllabus. Try again shortly."
+        onRetry={() => void load()}
+      >
         {editable ? (
           <Card title="Add a unit">
             <div className={styles.pickerRow}>

@@ -81,6 +81,7 @@ export default function MyTimetablePage() {
       <AsyncState
         loading={week === null && !error}
         error={error}
+        errorMessage="Couldn't load your timetable. Try again shortly."
         onRetry={() => void load()}
         isEmpty={week !== null && (week.periods.length === 0 || week.entries.length === 0)}
         empty={<EmptyState title="No periods scheduled." body="Nothing is on your timetable yet." />}

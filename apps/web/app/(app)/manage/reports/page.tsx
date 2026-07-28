@@ -211,6 +211,7 @@ export default function ReportsPage() {
       <AsyncState
         loading={reports === null && !failed}
         error={failed}
+        errorMessage="Couldn't load your reports. Try again shortly."
         onRetry={() => void load()}
         isEmpty={reports !== null && reports.length === 0}
         empty={<EmptyState title="No reports yet." body="Generate one above — it appears here as it runs." />}

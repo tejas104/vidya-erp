@@ -46,7 +46,7 @@ describe("/manage/my-timetable (teacher weekly grid)", () => {
   it("shows an error state on other failures", async () => {
     (api.ttMyWeek as ReturnType<typeof vi.fn>).mockRejectedValue(new Error("boom"));
     render(<MyTimetablePage />);
-    expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't load this.");
+    expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't load your timetable. Try again shortly.");
     expect(screen.getByRole("button", { name: /retry/i })).toBeInTheDocument();
   });
 });

@@ -13,6 +13,16 @@ describe("AsyncState", () => {
     fireEvent.click(screen.getByRole("button", { name: /retry/i }));
     expect(onRetry).toHaveBeenCalled();
   });
+  it("shows the default message when errorMessage is omitted, and the given one when passed", () => {
+    const { rerender } = render(<AsyncState loading={false} error>data</AsyncState>);
+    expect(screen.getByText("Couldn't load this.")).toBeInTheDocument();
+    rerender(
+      <AsyncState loading={false} error errorMessage="Couldn't load the organisation. Try again shortly.">
+        data
+      </AsyncState>,
+    );
+    expect(screen.getByText("Couldn't load the organisation. Try again shortly.")).toBeInTheDocument();
+  });
   it("shows the empty node when isEmpty, else children", () => {
     const { rerender } = render(
       <AsyncState loading={false} error={false} isEmpty empty={<div>nothing yet</div>}>rows</AsyncState>);

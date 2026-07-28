@@ -112,6 +112,7 @@ export default function OrgPage() {
       <AsyncState
         loading={tree === null && !failed}
         error={failed}
+        errorMessage="Couldn't load the organisation. Try again shortly."
         onRetry={() => void load()}
         isEmpty={tree !== null && tree.departments.length === 0}
         empty={<EmptyState title="No departments yet." body="Create the first department to start building the college." />}

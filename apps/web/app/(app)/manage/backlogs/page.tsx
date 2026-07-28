@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   api,
   ApiError,
@@ -50,7 +50,7 @@ export default function BacklogsPage() {
   const [scales, setScales] = useState<GradeScaleView[]>([]);
   const [classId, setClassId] = useState("");
   const [scaleId, setScaleId] = useState("");
-  const [load, setLoad] = useState<
+  const [fetchState, setFetchState] = useState<
     | { state: "idle" }
     | { state: "loading" }
     | { state: "no-credits" }
@@ -85,36 +85,31 @@ export default function BacklogsPage() {
       .catch(() => setTree("error"));
   }, []);
 
-  useEffect(() => {
+  const load = useCallback(async () => {
     if (classId === "" || scaleId === "") {
-      setLoad({ state: "idle" });
+      setFetchState({ state: "idle" });
       return;
     }
-    let alive = true;
-    setLoad({ state: "loading" });
-    api
-      .resClassResults(classId, year, scaleId)
-      .then((res) => {
-        if (!alive) return;
-        const rows: BacklogRow[] = res.rows
-          .map((student) => ({
-            student,
-            subjects: student.subjects
-              .filter((s) => s.points === 0)
-              .map((s) => ({ subjectId: s.subjectId, subjectName: s.subjectName, grade: s.grade })),
-          }))
-          .filter((r) => r.subjects.length > 0)
-          .sort((a, b) => b.subjects.length - a.subjects.length);
-        setLoad({ state: "ok", rows });
-      })
-      .catch((caught) => {
-        if (!alive) return;
-        setLoad({ state: caught instanceof ApiError && caught.status === 422 ? "no-credits" : "error" });
-      });
-    return () => {
-      alive = false;
-    };
+    setFetchState({ state: "loading" });
+    try {
+      const res = await api.resClassResults(classId, year, scaleId);
+      const rows: BacklogRow[] = res.rows
+        .map((student) => ({
+          student,
+          subjects: student.subjects
+            .filter((s) => s.points === 0)
+            .map((s) => ({ subjectId: s.subjectId, subjectName: s.subjectName, grade: s.grade })),
+        }))
+        .filter((r) => r.subjects.length > 0)
+        .sort((a, b) => b.subjects.length - a.subjects.length);
+      setFetchState({ state: "ok", rows });
+    } catch (caught) {
+      setFetchState({ state: caught instanceof ApiError && caught.status === 422 ? "no-credits" : "error" });
+    }
   }, [classId, scaleId, year]);
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   function toDrawerStudent(row: BacklogRow, idx: number): DrawerStudent {
     return {
@@ -149,7 +144,7 @@ export default function BacklogsPage() {
     { key: "sgpa", header: "SGPA", figure: true, align: "right" },
     { key: "actions", header: "" },
   ];
-  const rows: Row[] = load.state === "ok" ? load.rows.map((row) => ({
+  const rows: Row[] = fetchState.state === "ok" ? fetchState.rows.map((row) => ({
     admissionNo: row.student.admissionNo,
     name: (
       <a className="risk-name" href={`/students/${encodeURIComponent(row.student.studentId)}`}>
@@ -197,17 +192,19 @@ export default function BacklogsPage() {
         />
       </div>
 
-      {load.state === "idle" ? (
+      {fetchState.state === "idle" ? (
         <div className="state"><strong>Pick a class and grade scale</strong> to compile its backlog status.</div>
-      ) : load.state === "no-credits" ? (
+      ) : fetchState.state === "no-credits" ? (
         <div className="state">
           <strong>No credits set for this class yet.</strong> Set subject credits on the Results desk, then the backlog status compiles.
         </div>
       ) : (
         <AsyncState
-          loading={load.state === "loading"}
-          error={load.state === "error"}
-          isEmpty={load.state === "ok" && load.rows.length === 0}
+          loading={fetchState.state === "loading"}
+          error={fetchState.state === "error"}
+          errorMessage="Couldn't compile backlogs. Try again shortly."
+          onRetry={() => void load()}
+          isEmpty={fetchState.state === "ok" && fetchState.rows.length === 0}
           empty={<EmptyState title="Clear register — no backlogs." body="No student in this class is carrying an F this year." />}
         >
           <Table columns={columns} rows={rows} />
@@ -215,7 +212,7 @@ export default function BacklogsPage() {
       )}
 
       <StudentSlideOver
-        student={viewing ? toDrawerStudent(viewing, load.state === "ok" ? load.rows.indexOf(viewing) : 0) : null}
+        student={viewing ? toDrawerStudent(viewing, fetchState.state === "ok" ? fetchState.rows.indexOf(viewing) : 0) : null}
         canManage={false}
         onClose={() => setViewing(null)}
       />

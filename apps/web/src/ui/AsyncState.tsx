@@ -3,9 +3,9 @@ import type { ReactNode } from "react";
 import { Skeleton, Button } from "@vidya/ui-system";
 import styles from "./AsyncState.module.css";
 export function AsyncState({
-  loading, error, onRetry, isEmpty, empty, children,
+  loading, error, errorMessage, onRetry, isEmpty, empty, children,
 }: {
-  loading: boolean; error: boolean; onRetry?: () => void;
+  loading: boolean; error: boolean; errorMessage?: ReactNode; onRetry?: () => void;
   isEmpty?: boolean; empty?: ReactNode; children: ReactNode;
 }) {
   if (loading) {
@@ -18,7 +18,7 @@ export function AsyncState({
   if (error) {
     return (
       <div className={styles.error} role="alert">
-        <span>Couldn&apos;t load this.</span>
+        <span>{errorMessage ?? "Couldn't load this."}</span>
         {onRetry ? <Button variant="secondary" size="sm" onClick={onRetry}>Retry</Button> : null}
       </div>
     );
