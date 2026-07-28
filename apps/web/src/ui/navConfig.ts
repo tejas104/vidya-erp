@@ -58,7 +58,6 @@ export const NAV: NavEntry[] = [
   { href: "/manage/teachers", label: "Teachers", icon: "teachers", group: "PEOPLE", roles: ["admin"] },
   { href: "/manage/users", label: "Users", icon: "key", group: "ADMINISTRATION", roles: ["admin"] },
   { href: "/manage/import", label: "Import", icon: "upload", group: "ADMINISTRATION", roles: ["admin"] },
-  { href: "/manage/system", label: "System", icon: "key", group: "ADMINISTRATION", roles: ["admin"] },
   { href: "/manage/reports", label: "Reports", icon: "file", group: "REPORTS", roles: ALL },
 ];
 
