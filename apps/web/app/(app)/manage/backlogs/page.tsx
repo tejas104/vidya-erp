@@ -9,6 +9,7 @@ import {
   type StudentResult,
 } from "@/ui/api";
 import { AsyncState } from "@/ui/AsyncState";
+import { AVATARS, initials } from "@/ui/avatar";
 import { StudentSlideOver, type DrawerStudent } from "@/ui/StudentSlideOver";
 import { Button, EmptyState, PageHeader, Select, Skeleton, StatusBadge, Table, type TableColumn } from "@vidya/ui-system";
 import styles from "./page.module.css";
@@ -22,19 +23,6 @@ export const dynamic = "force-dynamic";
  * settings surface exists.
  */
 const ATKT_LIMIT = 5;
-
-const AVATARS = [
-  "linear-gradient(140deg,#6B7BFF,#4A5BD8)",
-  "linear-gradient(140deg,#F59E0B,#D97706)",
-  "linear-gradient(140deg,#10B981,#059669)",
-  "linear-gradient(140deg,#8B5CF6,#7C3AED)",
-  "linear-gradient(140deg,#EC4899,#DB2777)",
-  "linear-gradient(140deg,#06B6D4,#0891B2)",
-];
-function initials(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  return ((parts[0]?.[0] ?? "") + (parts.length > 1 ? parts[parts.length - 1]![0] : "")).toUpperCase() || "·";
-}
 
 /** A backlog is a subject that earned zero grade points (an F) — PDF 2.3. */
 type BacklogRow = {

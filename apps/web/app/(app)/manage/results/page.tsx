@@ -25,6 +25,7 @@ import {
   type TableColumn,
 } from "@vidya/ui-system";
 import { AsyncState } from "@/ui/AsyncState";
+import { AVATARS, initials } from "@/ui/avatar";
 import { StudentSlideOver, type DrawerStudent } from "@/ui/StudentSlideOver";
 import styles from "./page.module.css";
 
@@ -53,19 +54,6 @@ const DEFAULT_BANDS: GradeBand[] = [
   { minPct: 40, grade: "D", points: 5 },
   { minPct: 0, grade: "F", points: 0 },
 ];
-
-const AVATARS = [
-  "linear-gradient(140deg,#6B7BFF,#4A5BD8)",
-  "linear-gradient(140deg,#F59E0B,#D97706)",
-  "linear-gradient(140deg,#10B981,#059669)",
-  "linear-gradient(140deg,#8B5CF6,#7C3AED)",
-  "linear-gradient(140deg,#EC4899,#DB2777)",
-  "linear-gradient(140deg,#06B6D4,#0891B2)",
-];
-function initials(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  return ((parts[0]?.[0] ?? "") + (parts.length > 1 ? parts[parts.length - 1]![0] : "")).toUpperCase() || "·";
-}
 
 type Row = { rank: ReactNode; student: ReactNode; grades: ReactNode; sgpa: ReactNode; actions: ReactNode };
 

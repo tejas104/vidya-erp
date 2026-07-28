@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react
 import { api, ApiError, currentAcademicYear, type OrgTree, type StudentView, type StudentStatus } from "@/ui/api";
 import { useToast, Button, Input, Select, Modal, Table, EmptyState, Skeleton, PageHeader, type TableColumn } from "@vidya/ui-system";
 import { AsyncState } from "@/ui/AsyncState";
+import { AVATARS, initials } from "@/ui/avatar";
 import { StudentSlideOver, type DrawerStudent } from "@/ui/StudentSlideOver";
 import styles from "./page.module.css";
 
@@ -22,19 +23,6 @@ const STATUS_OPTIONS: { value: StudentStatus; label: string }[] = [
 const STATUS_LABEL: Record<string, string> = Object.fromEntries(
   STATUS_OPTIONS.map((o) => [o.value, o.label]),
 );
-
-const AVATARS = [
-  "linear-gradient(140deg,#6B7BFF,#4A5BD8)",
-  "linear-gradient(140deg,#F59E0B,#D97706)",
-  "linear-gradient(140deg,#10B981,#059669)",
-  "linear-gradient(140deg,#8B5CF6,#7C3AED)",
-  "linear-gradient(140deg,#EC4899,#DB2777)",
-  "linear-gradient(140deg,#06B6D4,#0891B2)",
-];
-function initials(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  return ((parts[0]?.[0] ?? "") + (parts.length > 1 ? parts[parts.length - 1]![0] : "")).toUpperCase() || "·";
-}
 
 /** Flattens the org tree into "Class · Section" options (no student-list endpoint — browse per section). */
 function sectionOptions(tree: OrgTree): SectionOpt[] {

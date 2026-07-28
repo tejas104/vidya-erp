@@ -18,23 +18,12 @@ import { StudentCard, type StudentFlags } from "@/ui/StudentCard";
 import { TodayTimeline } from "@/ui/TodayTimeline";
 import { StudentSlideOver, type DrawerStudent } from "@/ui/StudentSlideOver";
 import { ago } from "@/ui/time";
+import { AVATARS, initials } from "@/ui/avatar";
 import styles from "./page.module.css";
 
 export const dynamic = "force-dynamic";
 
 const SHORT = 75;
-const AVATARS = [
-  "linear-gradient(140deg,#6B7BFF,#4A5BD8)",
-  "linear-gradient(140deg,#F59E0B,#D97706)",
-  "linear-gradient(140deg,#10B981,#059669)",
-  "linear-gradient(140deg,#8B5CF6,#7C3AED)",
-  "linear-gradient(140deg,#EC4899,#DB2777)",
-  "linear-gradient(140deg,#06B6D4,#0891B2)",
-];
-const initials = (name: string): string => {
-  const p = name.trim().split(/\s+/).filter(Boolean);
-  return ((p[0]?.[0] ?? "") + (p.length > 1 ? p[p.length - 1]![0] : "")).toUpperCase() || "·";
-};
 
 type ClassOpt = {
   sectionId: string;
