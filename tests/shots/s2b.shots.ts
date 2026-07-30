@@ -12,12 +12,14 @@ import { mkdirSync } from "node:fs";
 
 const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3001";
 const outDir = "docs/assignment-10";
-const CREDS = { username: "demo-admin", password: "demo-admin-pass-2026!" };
+const ADMIN = { username: "demo-admin", password: "demo-admin-pass-2026!" };
+/** /portal is STUDENT_ONLY — shooting it as the admin yields a 403, not the screen. */
+const STUDENT = { username: "demo-student", password: "demo-student-pass-2026!" };
 
 const DESKTOP = { width: 1280, height: 900 };
 const MOBILE = { width: 360, height: 740 };
 
-/** One migrated screen per task-domain (see the S2b batch table). */
+/** One migrated screen per task-domain (see the S2b batch table), all admin-visible. */
 const SCREENS: { name: string; path: string }[] = [
   { name: "students", path: "/manage/students" }, // PEOPLE (B1)
   { name: "attendance", path: "/manage/attendance" }, // TEACH (B2)
@@ -26,14 +28,13 @@ const SCREENS: { name: string; path: string }[] = [
   { name: "notices", path: "/manage/notices" }, // COMMUNICATION (B4)
   { name: "reports", path: "/manage/reports" }, // REPORTS (B4)
   { name: "users", path: "/manage/users" }, // ADMINISTRATION (B5)
-  { name: "portal", path: "/portal" }, // PORTAL (B6)
 ];
 
-async function login(page: Page) {
+async function login(page: Page, creds: { username: string; password: string } = ADMIN) {
   await page.goto(`${baseURL}/login`);
   await page.waitForSelector("#username");
-  await page.fill("#username", CREDS.username);
-  await page.fill("#password", CREDS.password);
+  await page.fill("#username", creds.username);
+  await page.fill("#password", creds.password);
   await page.click('button[type="submit"]');
   await page.waitForURL((u) => !u.pathname.startsWith("/login"), { timeout: 15000 });
   await page.waitForLoadState("networkidle");
@@ -58,6 +59,19 @@ async function screensAt(browser: Browser, viewport: typeof DESKTOP, suffix: str
     await settle(page);
     await shot(page, `s2b-${name}-${suffix}.png`);
   }
+  await page.close();
+}
+
+/** PORTAL (B6) — must authenticate as the student, or the screen 403s. */
+async function portalAt(browser: Browser, viewport: typeof DESKTOP, suffix: string) {
+  const page = await browser.newPage({ viewport });
+  await login(page, STUDENT);
+  await page.goto(`${baseURL}/portal`);
+  await settle(page);
+  if (await page.getByText(/Couldn't load your register/i).count()) {
+    console.warn("!! /portal rendered its error state — check the student's seed data");
+  }
+  await shot(page, `s2b-portal-${suffix}.png`);
   await page.close();
 }
 
@@ -112,6 +126,8 @@ async function main() {
   try {
     await screensAt(browser, DESKTOP, "1280");
     await screensAt(browser, MOBILE, "360");
+    await portalAt(browser, DESKTOP, "1280");
+    await portalAt(browser, MOBILE, "360");
     await slideOverAt(browser, DESKTOP, "1280");
     await slideOverAt(browser, MOBILE, "360");
     await slideOverAt(browser, DESKTOP, "1280", true); // dark mode — I6 avatar ink
