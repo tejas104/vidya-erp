@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   api,
   ApiError,
@@ -73,7 +73,15 @@ export default function BacklogsPage() {
       .catch(() => setTree("error"));
   }, []);
 
+  // Guards against a stale-response race: switching class/scale re-invokes `load`
+  // (it is callable directly from onRetry, not only via the effect below), so a
+  // slower in-flight request from a since-abandoned selection must not clobber a
+  // newer one's state when it finally resolves — the same intent as the `alive`
+  // flag other screens keep per-effect, adapted for a load() that is re-entrant
+  // across separate invocations.
+  const loadSeq = useRef(0);
   const load = useCallback(async () => {
+    const seq = ++loadSeq.current;
     if (classId === "" || scaleId === "") {
       setFetchState({ state: "idle" });
       return;
@@ -81,6 +89,7 @@ export default function BacklogsPage() {
     setFetchState({ state: "loading" });
     try {
       const res = await api.resClassResults(classId, year, scaleId);
+      if (loadSeq.current !== seq) return; // a newer load has started; drop this result
       const rows: BacklogRow[] = res.rows
         .map((student) => ({
           student,
@@ -92,6 +101,7 @@ export default function BacklogsPage() {
         .sort((a, b) => b.subjects.length - a.subjects.length);
       setFetchState({ state: "ok", rows });
     } catch (caught) {
+      if (loadSeq.current !== seq) return; // a newer load has started; drop this failure
       setFetchState({ state: caught instanceof ApiError && caught.status === 422 ? "no-credits" : "error" });
     }
   }, [classId, scaleId, year]);
