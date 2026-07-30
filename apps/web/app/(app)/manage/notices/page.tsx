@@ -144,11 +144,9 @@ export default function NoticesPage() {
       <PageHeader
         eyebrow="Notices"
         title="The noticeboard"
+        lede="Publish to the whole college, the staff room, or one department or class — readers see only what's addressed to them."
         actions={<Button onClick={() => setComposing(true)}>New notice</Button>}
       />
-      <p className={styles.lede}>
-        Publish to the whole college, the staff room, or one department or class — readers see only what's addressed to them.
-      </p>
 
       <section className="section" aria-label="All notices">
         <AsyncState

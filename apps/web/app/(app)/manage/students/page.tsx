@@ -271,11 +271,9 @@ export default function StudentsPage() {
       <PageHeader
         eyebrow="Students"
         title="Student records"
+        lede="Browse a section's roster; add, transfer or deactivate students. There is no global list — students live in sections."
         actions={<Button onClick={() => setAdding(true)} disabled={options.length === 0}>Add student</Button>}
       />
-      <p className={styles.lede}>
-        Browse a section&apos;s roster; add, transfer or deactivate students. There is no global list — students live in sections.
-      </p>
 
       {options.length === 0 ? (
         <EmptyState title="No sections yet." body="Create departments, classes and sections in Organisation first." />

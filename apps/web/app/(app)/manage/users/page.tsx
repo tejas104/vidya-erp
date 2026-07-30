@@ -291,6 +291,7 @@ export default function UsersPage() {
       <PageHeader
         eyebrow="Users"
         title="Sign-ins & access"
+        lede="Accounts, role memberships and scope grants. Role or grant changes sign the user out everywhere."
         actions={
           <span className={styles.headerActions}>
             <Button variant="ghost" onClick={() => void runVerify()}>Verify grants</Button>
@@ -298,7 +299,6 @@ export default function UsersPage() {
           </span>
         }
       />
-      <p className={styles.lede}>Accounts, role memberships and scope grants. Role or grant changes sign the user out everywhere.</p>
 
       <AsyncState loading={false} error={false} isEmpty={users.length === 0} empty={<EmptyState title="No users yet." />}>
         <Table columns={columns} rows={rows} />

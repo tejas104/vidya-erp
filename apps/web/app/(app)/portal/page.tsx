@@ -177,12 +177,15 @@ export default function PortalPage() {
 
   return (
     <>
-      <PageHeader eyebrow="My register" title={`Hello, ${me.student.fullName.split(" ")[0]}.`} />
-      <p className={styles.lede}>
-        {me.enrollment
-          ? `${me.enrollment.className} · Section ${me.enrollment.sectionName} · AY ${me.enrollment.academicYear} · ${me.student.admissionNo}`
-          : `Admission no. ${me.student.admissionNo} — not enrolled this year.`}
-      </p>
+      <PageHeader
+        eyebrow="My register"
+        title={`Hello, ${me.student.fullName.split(" ")[0]}.`}
+        lede={
+          me.enrollment
+            ? `${me.enrollment.className} · Section ${me.enrollment.sectionName} · AY ${me.enrollment.academicYear} · ${me.student.admissionNo}`
+            : `Admission no. ${me.student.admissionNo} — not enrolled this year.`
+        }
+      />
 
       <section className="stats" aria-label="My figures" style={{ marginBottom: "var(--space-5)" }}>
         <StatTile

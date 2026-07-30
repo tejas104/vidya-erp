@@ -97,8 +97,11 @@ export default function MarksPage() {
   if (targets.length === 0) {
     return (
       <>
-        <PageHeader eyebrow="Marks" title="Enter marks" />
-        <p className={styles.lede}>Create an assessment for your subject, then enter each student&apos;s score.</p>
+        <PageHeader
+          eyebrow="Marks"
+          title="Enter marks"
+          lede="Create an assessment for your subject, then enter each student's score."
+        />
         <DeniedState title="No subject you teach." message="Marks are entered by a subject teacher." />
       </>
     );
@@ -119,8 +122,11 @@ export default function MarksPage() {
 
   return (
     <>
-      <PageHeader eyebrow="Marks" title="Enter marks" />
-      <p className={styles.lede}>Create an assessment for your subject, then enter each student&apos;s score.</p>
+      <PageHeader
+        eyebrow="Marks"
+        title="Enter marks"
+        lede="Create an assessment for your subject, then enter each student's score."
+      />
 
       <div className={styles.targetPicker}>
         <Select

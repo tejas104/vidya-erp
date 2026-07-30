@@ -31,4 +31,12 @@ describe("PageHeader", () => {
     rerender(<PageHeader title="Attendance" />);
     expect(screen.queryByText("Attendance", { selector: "p" })).not.toBeInTheDocument();
   });
+
+  it("renders the lede when passed and omits it when absent", () => {
+    const { rerender } = render(<PageHeader title="Attendance" lede="Track daily attendance." />);
+    expect(screen.getByText("Track daily attendance.", { selector: "p" })).toBeInTheDocument();
+
+    rerender(<PageHeader title="Attendance" />);
+    expect(screen.queryByText("Track daily attendance.", { selector: "p" })).not.toBeInTheDocument();
+  });
 });

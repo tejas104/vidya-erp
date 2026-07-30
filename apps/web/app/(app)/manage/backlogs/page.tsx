@@ -158,10 +158,11 @@ export default function BacklogsPage() {
 
   return (
     <>
-      <PageHeader eyebrow="Examinations · ATKT" title="Backlog status" />
-      <p className={styles.lede}>
-        Every student carrying an F (zero grade points) this year, and their count against the ATKT limit of {ATKT_LIMIT}. Compiled live from marks — a cleared re-exam drops the student off this list automatically.
-      </p>
+      <PageHeader
+        eyebrow="Examinations · ATKT"
+        title="Backlog status"
+        lede={`Every student carrying an F (zero grade points) this year, and their count against the ATKT limit of ${ATKT_LIMIT}. Compiled live from marks — a cleared re-exam drops the student off this list automatically.`}
+      />
 
       <div className={styles.pickerRow}>
         <Select

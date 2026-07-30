@@ -101,13 +101,11 @@ export default function OrgPage() {
       <PageHeader
         eyebrow="Organisation"
         title={tree?.college.name ?? "Organisation"}
+        lede="Departments, classes, sections and subjects. Deleting is blocked while a unit still has children or records."
         actions={
           tree ? <Button onClick={() => openCreate("department", tree.college.id, tree.college.name)}>New department</Button> : undefined
         }
       />
-      <p className={styles.lede}>
-        Departments, classes, sections and subjects. Deleting is blocked while a unit still has children or records.
-      </p>
 
       <AsyncState
         loading={tree === null && !failed}

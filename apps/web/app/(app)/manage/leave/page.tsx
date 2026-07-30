@@ -184,9 +184,9 @@ export default function LeavePage() {
       <PageHeader
         eyebrow="Leave"
         title="Staff leave"
+        lede="Apply for leave and track your requests. Approvers see a queue below."
         actions={<Button onClick={() => setApplying(true)}>Apply for leave</Button>}
       />
-      <p className={styles.lede}>Apply for leave and track your requests. Approvers see a queue below.</p>
 
       {isApprover && pending.length > 0 ? (
         <section className="section" aria-label="Approvals">

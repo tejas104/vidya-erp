@@ -114,8 +114,11 @@ export default function ImportPage() {
 
   return (
     <>
-      <PageHeader eyebrow="Import" title="Bulk CSV import" />
-      <p className={styles.lede}>Paste or upload a CSV of students or teachers. Dry-run validates every row and writes nothing.</p>
+      <PageHeader
+        eyebrow="Import"
+        title="Bulk CSV import"
+        lede="Paste or upload a CSV of students or teachers. Dry-run validates every row and writes nothing."
+      />
 
       <Card>
         <div className={styles.formGrid}>

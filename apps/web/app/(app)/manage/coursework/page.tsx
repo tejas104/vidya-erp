@@ -240,6 +240,7 @@ export default function CourseworkPage() {
       <PageHeader
         eyebrow="Coursework"
         title="Assignments & study material"
+        lede="Create assignments, evaluate submissions, and share notes — scoped to the subject you teach."
         actions={
           <span className={styles.headerActions}>
             <Button variant="ghost" onClick={() => setUploading(true)}>Upload material</Button>
@@ -247,7 +248,6 @@ export default function CourseworkPage() {
           </span>
         }
       />
-      <p className={styles.lede}>Create assignments, evaluate submissions, and share notes — scoped to the subject you teach.</p>
 
       <div className={styles.targetPicker}>
         <Select

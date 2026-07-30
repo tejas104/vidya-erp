@@ -25,6 +25,10 @@
   font-weight: 700;
   margin: 0;
 }
+.lede {
+  color: var(--ink-2);
+  margin: var(--space-3) 0 0;
+}
 .actions {
   display: flex;
   gap: var(--space-3);

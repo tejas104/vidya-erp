@@ -118,12 +118,15 @@ export default function AttendancePage() {
 
   return (
     <>
-      <PageHeader eyebrow="Attendance" title="Record attendance" />
-      <p className={styles.lede}>
-        {subjectId !== ""
-          ? `Marking your subject's period (${slot}). Tap a card to mark; tap the name to see the student.`
-          : "Tap a card to mark present/absent; tap the student's name for their record. Subject teachers mark their own period; the class teacher any."}
-      </p>
+      <PageHeader
+        eyebrow="Attendance"
+        title="Record attendance"
+        lede={
+          subjectId !== ""
+            ? `Marking your subject's period (${slot}). Tap a card to mark; tap the name to see the student.`
+            : "Tap a card to mark present/absent; tap the student's name for their record. Subject teachers mark their own period; the class teacher any."
+        }
+      />
 
       {sections.length === 0 ? (
         <DeniedState title="No sections you can record for." message="Open a period from your Today card to mark its attendance." />

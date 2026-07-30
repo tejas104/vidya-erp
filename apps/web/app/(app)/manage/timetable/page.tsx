@@ -229,11 +229,9 @@ export default function TimetablePage() {
       <PageHeader
         eyebrow="Timetable"
         title="Weekly timetable"
+        lede="A fixed period grid per section. The database refuses double-bookings — a busy teacher, section or room answers with a clear message."
         actions={<Button variant="ghost" onClick={() => setEditingPeriods(true)}>Edit periods</Button>}
       />
-      <p className={styles.lede}>
-        A fixed period grid per section. The database refuses double-bookings — a busy teacher, section or room answers with a clear message.
-      </p>
 
       {periods.length === 0 ? (
         <EmptyState

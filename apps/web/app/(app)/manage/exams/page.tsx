@@ -184,11 +184,9 @@ export default function ExamsPage() {
       <PageHeader
         eyebrow="Exams"
         title="The exam timetable"
+        lede="Create a series, then schedule each paper — date, time, room. Room clashes with lessons warn but never block."
         actions={<Button onClick={() => setCreatingSeries(true)}>New series</Button>}
       />
-      <p className={styles.lede}>
-        Create a series, then schedule each paper — date, time, room. Room clashes with lessons warn but never block.
-      </p>
 
       <section className="section" aria-label="Exam series">
         <div className="section-head"><h2>Series · {year}</h2></div>

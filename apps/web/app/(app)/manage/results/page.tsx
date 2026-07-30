@@ -248,10 +248,11 @@ export default function ResultsPage() {
 
   return (
     <>
-      <PageHeader eyebrow="Results" title="The marksheet desk" />
-      <p className={styles.lede}>
-        Define the grade scale, set subject credits, compile a class, and publish — students see nothing until you do.
-      </p>
+      <PageHeader
+        eyebrow="Results"
+        title="The marksheet desk"
+        lede="Define the grade scale, set subject credits, compile a class, and publish — students see nothing until you do."
+      />
 
       <section className="section" aria-label="Grade scales">
         <div className="section-head">

@@ -154,9 +154,9 @@ export default function ReportsPage() {
       <PageHeader
         eyebrow="Reports"
         title="Reports"
+        lede="Generate a report, then download it — every download is re-checked against your scope."
         actions={<Button variant="ghost" onClick={() => void load()}>Refresh</Button>}
       />
-      <p className={styles.lede}>Generate a report, then download it — every download is re-checked against your scope.</p>
 
       <section className="section" aria-label="Generate a report">
         <div className="section-head"><h2>Generate a report</h2></div>

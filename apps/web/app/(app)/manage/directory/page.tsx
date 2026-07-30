@@ -117,10 +117,11 @@ export default function DirectoryPage() {
 
   return (
     <>
-      <PageHeader eyebrow="Records" title="Student directory" />
-      <p className={styles.lede}>
-        Browse rosters and student documents — read-only, for reconciling fees and records. Nothing here can be changed.
-      </p>
+      <PageHeader
+        eyebrow="Records"
+        title="Student directory"
+        lede="Browse rosters and student documents — read-only, for reconciling fees and records. Nothing here can be changed."
+      />
 
       {options.length === 0 ? (
         <EmptyState title="No sections yet." body="An administrator sets up departments, classes and sections first." />
