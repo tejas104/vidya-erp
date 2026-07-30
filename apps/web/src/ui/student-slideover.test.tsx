@@ -33,6 +33,9 @@ describe("StudentSlideOver's canManage PII gate", () => {
   it("hides guardian, phone, DOB, the fees figure and the documents tab when canManage is false", () => {
     render(<StudentSlideOver student={stuWithPii} canManage={false} onClose={() => {}} />);
     expect(screen.queryByText(/Priya Rao/)).not.toBeInTheDocument();
+    // Asserted independently of the guardian name: today both render in one <dd>,
+    // so a name-only check would stop catching a phone leak if they ever split.
+    expect(screen.queryByText(/9990001112/)).not.toBeInTheDocument();
     expect(screen.queryByText(/9998887776/)).not.toBeInTheDocument();
     expect(screen.queryByText("2005-04-12")).not.toBeInTheDocument();
 
@@ -46,6 +49,7 @@ describe("StudentSlideOver's canManage PII gate", () => {
   it("shows guardian, phone, DOB, the fees figure and the documents tab when canManage is true", () => {
     render(<StudentSlideOver student={stuWithPii} canManage onClose={() => {}} />);
     expect(screen.getByText(/Priya Rao/)).toBeInTheDocument();
+    expect(screen.getByText(/9990001112/)).toBeInTheDocument();
     expect(screen.getByText(/9998887776/)).toBeInTheDocument();
     expect(screen.getByText("2005-04-12")).toBeInTheDocument();
 
