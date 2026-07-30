@@ -113,7 +113,8 @@ export default function BacklogsPage() {
     return {
       studentId: row.student.studentId,
       initials: initials(row.student.studentName),
-      gradient: AVATARS[idx % AVATARS.length]!,
+      gradient: AVATARS[idx % AVATARS.length]!.gradient,
+      ink: AVATARS[idx % AVATARS.length]!.ink,
       rollNo: row.student.admissionNo,
       name: row.student.studentName,
       section: classLabel,

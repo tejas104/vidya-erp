@@ -208,7 +208,8 @@ export default function ClassWorkspacePage() {
     const base: DrawerStudent = {
       studentId: c.student.id,
       initials: initials(c.student.fullName),
-      gradient: AVATARS[c.idx % AVATARS.length]!,
+      gradient: AVATARS[c.idx % AVATARS.length]!.gradient,
+      ink: AVATARS[c.idx % AVATARS.length]!.ink,
       rollNo: c.student.admissionNo,
       name: c.student.fullName,
       section: `${opt?.className ?? ""} · ${opt?.sectionName ?? ""}`,
@@ -371,7 +372,8 @@ export default function ClassWorkspacePage() {
                     <StudentCard
                       key={c.student.id}
                       initials={initials(c.student.fullName)}
-                      gradient={AVATARS[c.idx % AVATARS.length]!}
+                      gradient={AVATARS[c.idx % AVATARS.length]!.gradient}
+                      ink={AVATARS[c.idx % AVATARS.length]!.ink}
                       rollNo={c.student.admissionNo}
                       name={c.student.fullName}
                       pct={c.att?.pct ?? null}

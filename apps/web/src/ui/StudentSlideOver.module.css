@@ -14,7 +14,9 @@
   place-items: center;
   font-size: var(--text-16);
   font-weight: 700;
-  color: var(--on-brand);
+  /* Overridden inline by the palette's own ink (see AVATARS). This value only
+     applies to the no-gradient fallback below, where the surface is --line-2. */
+  color: var(--ink);
   background: var(--line-2);
   overflow: hidden;
   flex: none;

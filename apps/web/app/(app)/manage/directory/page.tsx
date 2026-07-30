@@ -189,7 +189,8 @@ export default function DirectoryPage() {
             ? ({
                 studentId: peeking.id,
                 initials: initials(peeking.fullName),
-                gradient: AVATARS[(roster ?? []).indexOf(peeking) % AVATARS.length]!,
+                gradient: AVATARS[(roster ?? []).indexOf(peeking) % AVATARS.length]!.gradient,
+                ink: AVATARS[(roster ?? []).indexOf(peeking) % AVATARS.length]!.ink,
                 rollNo: peeking.admissionNo,
                 name: peeking.fullName,
                 section: sectionLabel,

@@ -29,6 +29,8 @@ export interface DrawerStudent {
   studentId: string;
   initials: string;
   gradient: string;
+  /** Ink the initials must use on `gradient` to clear AA — see AVATARS in avatar.ts. */
+  ink?: string;
   rollNo: string;
   name: string;
   section: string;
@@ -152,7 +154,10 @@ export function StudentSlideOver({
       {student ? (
         <>
           <div className={styles.hero}>
-            <div className={styles.avatar} style={{ background: student.gradient || undefined }}>
+            <div
+              className={styles.avatar}
+              style={{ background: student.gradient || undefined, color: student.ink }}
+            >
               {photo ? (
                 <img className={styles.avatarImg} src={api.docDownloadUrl(photo.id)} alt="" />
               ) : (

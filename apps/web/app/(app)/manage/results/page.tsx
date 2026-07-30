@@ -198,7 +198,8 @@ export default function ResultsPage() {
     return {
       studentId: row.studentId,
       initials: initials(row.studentName),
-      gradient: AVATARS[idx % AVATARS.length]!,
+      gradient: AVATARS[idx % AVATARS.length]!.gradient,
+      ink: AVATARS[idx % AVATARS.length]!.ink,
       rollNo: row.admissionNo,
       name: row.studentName,
       section: sectionLabel,

@@ -90,7 +90,8 @@ export default function AttendancePage() {
     setInfo({
       studentId: s.id,
       initials: initials(s.fullName),
-      gradient: AVATARS[idx % AVATARS.length]!,
+      gradient: AVATARS[idx % AVATARS.length]!.gradient,
+      ink: AVATARS[idx % AVATARS.length]!.ink,
       rollNo: s.admissionNo,
       name: s.fullName,
       section: sections.find((x) => x.sectionId === sectionId)
@@ -174,7 +175,14 @@ export default function AttendancePage() {
                 return (
                   <div key={s.id} className="att-card" data-status={cur}>
                     <button type="button" className="att-card-head" onClick={() => openInfo(s, idx)} aria-label={`${s.fullName} — view record`}>
-                      <span className="cw-photo" style={{ background: AVATARS[idx % AVATARS.length] }} aria-hidden="true">
+                      <span
+                        className="cw-photo"
+                        style={{
+                          background: AVATARS[idx % AVATARS.length]!.gradient,
+                          color: AVATARS[idx % AVATARS.length]!.ink,
+                        }}
+                        aria-hidden="true"
+                      >
                         {initials(s.fullName)}
                       </span>
                       <span style={{ minWidth: 0 }}>
