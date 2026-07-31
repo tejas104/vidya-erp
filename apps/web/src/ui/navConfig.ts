@@ -26,6 +26,11 @@ export const NAV: NavEntry[] = [
   { href: "/dashboard", label: "Dashboard", icon: "dashboard", group: "TOP", roles: ALL },
   { href: "/manage/calendar", label: "Calendar", icon: "attendance", group: "ACADEMICS", roles: ALL },
   { href: "/portal", label: "My register", icon: "students", group: "TOP", roles: ["student"] },
+  // The teacher mobile fast-path (A10 Part 4): current/next period + ONE
+  // "Mark attendance" button, nothing else. Deliberately ungrouped/TOP so
+  // it's one tap away from anywhere, same tier as Dashboard — this is the
+  // screen a teacher opens between classes, not a destination they dig for.
+  { href: "/manage/now", label: "Now", icon: "attendance", group: "TOP", roles: ["teacher", "class_teacher"] },
   // Teaching tools are teacher-owned. Admin is a non-teaching supervisor:
   // it oversees via Reports & Results but cannot change marks/attendance.
   { href: "/manage/classes", label: "My Classes", icon: "students", group: "ACADEMICS", roles: ["teacher", "class_teacher"] },

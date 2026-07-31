@@ -1,0 +1,81 @@
+/* The whole point of this screen: the current/next period and ONE primary
+ * action, reachable without scrolling on a 360px phone — see the plan's
+ * Task A3. Nothing here is a stat, chart or tile; resist adding one. */
+.hero {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-5);
+  border-radius: var(--radius);
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  box-shadow: var(--shadow);
+}
+.subject {
+  margin: 0;
+  font-size: var(--text-24);
+}
+.where {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--text-16);
+}
+.time {
+  margin: 0;
+  font-family: var(--font-figure);
+  color: var(--ink-3);
+  font-size: var(--text-14);
+}
+/* Full-width, generously padded, and the first interactive element on the
+ * page — a thumb reaches it without stretching, at any hand position. */
+.primary {
+  display: block;
+  margin-top: var(--space-2);
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius-sm);
+  background: var(--brand);
+  color: var(--on-brand);
+  font-weight: 600;
+  font-size: var(--text-16);
+  text-align: center;
+  text-decoration: none;
+}
+.primary:active {
+  transform: translateY(1px);
+}
+.rest {
+  margin-top: var(--space-5);
+}
+.restHead {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-14);
+  color: var(--ink-3);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.restList {
+  display: grid;
+  gap: var(--space-2);
+}
+.restRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-sm);
+  background: var(--paper-sunken);
+}
+.restTime {
+  font-family: var(--font-figure);
+  color: var(--ink-3);
+  font-size: var(--text-12);
+  min-width: 84px;
+}
+.restSubject {
+  font-weight: 600;
+  font-size: var(--text-14);
+}
+.restWhere {
+  color: var(--ink-2);
+  font-size: var(--text-14);
+}
