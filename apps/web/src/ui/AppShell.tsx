@@ -6,6 +6,7 @@ import { Sidebar } from "./Sidebar";
 import { Topbar } from "./Topbar";
 import { SearchPalette } from "./search/SearchPalette";
 import { Breadcrumbs } from "./Breadcrumbs";
+import { InstallPrompt } from "./InstallPrompt";
 
 export function AppShell({ session, year, children }: { session: Session; year?: string; children: ReactNode }) {
   const [drawer, setDrawer] = useState(false);
@@ -40,6 +41,7 @@ export function AppShell({ session, year, children }: { session: Session; year?:
           </main>
         </div>
         <SearchPalette open={searchOpen} onClose={() => setSearchOpen(false)} roles={session.roles} />
+        <InstallPrompt roles={session.roles} />
       </div>
     </ToastProvider>
   );

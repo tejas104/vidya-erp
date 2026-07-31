@@ -29,12 +29,25 @@ export const metadata: Metadata = {
 /** Applies the saved theme before paint so there is no flash of the wrong mode. */
 const themeScript = `(function(){try{var t=localStorage.getItem("vidya-theme");if(t==="light"||t==="dark"){document.documentElement.setAttribute("data-theme",t);}}catch(e){}})();`;
 
+// Registers the static-asset-only service worker (see public/sw.js). Runs
+// after load so it never competes with the first paint; failures are
+// swallowed — a missing/broken SW must never block the app from working,
+// it is a pure enhancement.
+const swScript = `if("serviceWorker" in navigator){window.addEventListener("load",function(){navigator.serviceWorker.register("/sw.js").catch(function(){});});}`;
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${inter.variable} ${plexMono.variable}`}>
       <head>
         <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <link rel="manifest" href="/manifest.json" />
+        <meta name="theme-color" content="#4a5bd8" />
+        <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+        {/* iOS ignores the manifest for A2HS; these are its own equivalent. */}
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-title" content="Vidya" />
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+        <script dangerouslySetInnerHTML={{ __html: swScript }} />
       </head>
       <body>
         <a href="#main" className="skip-link">
