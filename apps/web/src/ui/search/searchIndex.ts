@@ -3,12 +3,31 @@ import { NAV } from "../navConfig";
 import type { Role } from "../api";
 
 export type IndexEntry = {
-  kind: "student" | "page";
+  kind: "student" | "staff" | "page";
   label: string;
   sub?: string;
   href: string;
   roll?: string;
 };
+
+/**
+ * KNOWN GAP (Assignment #10 Part 2, owner-ruled 2026-07-31).
+ *
+ * The spec asks global search to jump to staff. Only the ADMIN slice is
+ * implementable today, and two things are missing to finish it:
+ *
+ *   1. No SCOPED staff-list endpoint. `identity.listUsers` is ADMIN_ONLY, so a
+ *      principal/hod/teacher gets no staff results at all — not a client-side
+ *      filter, just an endpoint they may not call. (This does mean the scoping
+ *      is automatic and correct as far as it goes: the authorization boundary
+ *      does the filtering, not us.)
+ *   2. No per-teacher route. There is no /staff/[id] page, so a result cannot
+ *      deep-link to an individual; every staff hit lands on /manage/teachers.
+ *
+ * Closing it needs a scoped staff-list endpoint plus a per-teacher screen —
+ * both backend/route work, which Assignment #10 forbids (presentation-only).
+ */
+const STAFF_HREF = "/manage/teachers";
 
 // Structural subset of `api` — kept loose so this unit test doesn't pull in
 // the fetch layer. Matches api.colleges/collegeTree/sectionRoster shapes.
@@ -25,6 +44,8 @@ type ApiLike = {
       enrollment: { sectionId: string } | null;
     }[];
   }>;
+  /** ADMIN_ONLY — only called when the caller holds `admin` (see STAFF_HREF note). */
+  listUsers: (collegeId: string) => Promise<{ users: { id: string; displayName: string; roles: string[] }[] }>;
 };
 
 // Session cache keyed on the caller's roles — a role change (defensive; a
@@ -86,17 +107,48 @@ export async function buildIndex(
     }),
   );
 
-  cache = { key, entries: [...students, ...pages] };
+  // Staff: admin-only, because listUsers is ADMIN_ONLY (see the STAFF_HREF note).
+  // Same per-request .catch discipline as the rosters — a failing user-list must
+  // not sink the students and pages that already resolved.
+  const staff: IndexEntry[] = roles.includes("admin")
+    ? (
+        await Promise.all(
+          colleges.map((c) =>
+            apiLike
+              .listUsers(c.id)
+              .then((r) => r.users)
+              .catch(() => []),
+          ),
+        )
+      ).flatMap((users) =>
+        // Project to label + roles only. UserView also carries `username` (a
+        // login identifier), `status`, `grants` and `createdAt` — none of that
+        // belongs in a session-cached client-memory index, same rule as the
+        // student projection above.
+        users.map((u) => ({
+          kind: "staff" as const,
+          label: u.displayName,
+          sub: u.roles.join(" · "),
+          href: STAFF_HREF,
+        })),
+      )
+    : [];
+
+  cache = { key, entries: [...students, ...staff, ...pages] };
   return cache.entries;
 }
 
-export function filterIndex(entries: IndexEntry[], q: string): { students: IndexEntry[]; pages: IndexEntry[] } {
+export function filterIndex(
+  entries: IndexEntry[],
+  q: string,
+): { students: IndexEntry[]; staff: IndexEntry[]; pages: IndexEntry[] } {
   const query = q.trim().toLowerCase();
-  if (!query) return { students: [], pages: entries.filter((e) => e.kind === "page") };
+  if (!query) return { students: [], staff: [], pages: entries.filter((e) => e.kind === "page") };
   return {
     students: entries.filter(
       (e) => e.kind === "student" && (e.label.toLowerCase().includes(query) || e.roll?.toLowerCase().includes(query)),
     ),
+    staff: entries.filter((e) => e.kind === "staff" && e.label.toLowerCase().includes(query)),
     pages: entries.filter((e) => e.kind === "page" && e.label.toLowerCase().includes(query)),
   };
 }

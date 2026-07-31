@@ -60,11 +60,14 @@ export function SearchPalette({
     return () => clearTimeout(t);
   }, [query]);
 
-  const { pages, students } = useMemo(
-    () => (index ? filterIndex(index, q) : { pages: [], students: [] }),
+  const { pages, students, staff } = useMemo(
+    () => (index ? filterIndex(index, q) : { pages: [], students: [], staff: [] }),
     [index, q],
   );
-  const flat = useMemo(() => [...pages, ...students], [pages, students]);
+  // Keep this order identical to the rendered groups below — `flat` is what
+  // arrow-key navigation indexes into, so a mismatch moves the highlight to
+  // the wrong row.
+  const flat = useMemo(() => [...pages, ...students, ...staff], [pages, students, staff]);
 
   useEffect(() => {
     setActiveIndex(0);
@@ -99,7 +102,9 @@ export function SearchPalette({
           const i = flat.indexOf(entry);
           return (
             <button
-              key={entry.href}
+              // Not href alone: every staff row shares /manage/teachers (no
+              // per-teacher route exists), so href collides across staff rows.
+              key={`${entry.kind}:${entry.label}:${entry.href}`}
               type="button"
               className={i === activeIndex ? `${styles.row} ${styles.active}` : styles.row}
               onClick={() => select(entry)}
@@ -147,6 +152,7 @@ export function SearchPalette({
         ) : null}
         {renderGroup("Pages", pages)}
         {renderGroup("Students", students)}
+        {renderGroup("Staff", staff)}
       </div>
     </Modal>
   );

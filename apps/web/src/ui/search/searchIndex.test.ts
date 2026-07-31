@@ -22,6 +22,16 @@ const apiLike = {
       },
     ],
   })),
+  // ADMIN_ONLY endpoint. `username`/`status`/`grants` are deliberately present
+  // in the fixture so the projection test below can prove they never leak.
+  listUsers: vi.fn(async () => ({
+    users: [
+      {
+        id: "u1", username: "vikram.rao", displayName: "Vikram Rao", roles: ["teacher"],
+        status: "active", collegeId: "c1", grants: [], createdAt: "2026-01-01",
+      },
+    ],
+  })),
 };
 
 beforeEach(() => {
@@ -29,6 +39,7 @@ beforeEach(() => {
   apiLike.colleges.mockClear();
   apiLike.collegeTree.mockClear();
   apiLike.sectionRoster.mockClear();
+  apiLike.listUsers.mockClear();
 });
 
 describe("buildIndex", () => {
@@ -39,6 +50,34 @@ describe("buildIndex", () => {
     expect(JSON.stringify(idx)).not.toMatch(/999|guardian|2005-01-01/); // no PII
     expect(idx.some((e) => e.kind === "page" && e.label === "Marks")).toBe(false); // Marks is teacher-only
     expect(idx.some((e) => e.kind === "page" && e.label === "Students")).toBe(true);
+  });
+
+  it("indexes staff for an admin, projected to label + roles only", async () => {
+    const idx = await buildIndex(apiLike as any, ["admin"]);
+    const staff = idx.find((e) => e.kind === "staff")!;
+    expect(staff).toEqual({
+      kind: "staff",
+      label: "Vikram Rao",
+      sub: "teacher",
+      href: "/manage/teachers", // no per-teacher route exists — documented gap
+    });
+    // username is a login identifier; status/grants/createdAt are not needed to
+    // render or navigate. None may reach a session-cached client-memory index.
+    expect(JSON.stringify(idx)).not.toMatch(/vikram\.rao|createdAt|"grants"/);
+  });
+
+  it("does NOT fetch staff for a non-admin (listUsers is ADMIN_ONLY)", async () => {
+    const idx = await buildIndex(apiLike as any, ["principal"]);
+    expect(apiLike.listUsers).not.toHaveBeenCalled();
+    expect(idx.some((e) => e.kind === "staff")).toBe(false);
+  });
+
+  it("still returns students and pages when the staff fetch fails", async () => {
+    apiLike.listUsers.mockRejectedValueOnce(new Error("boom"));
+    const idx = await buildIndex(apiLike as any, ["admin"]);
+    expect(idx.some((e) => e.kind === "student")).toBe(true);
+    expect(idx.some((e) => e.kind === "page")).toBe(true);
+    expect(idx.some((e) => e.kind === "staff")).toBe(false);
   });
 
   it("filterIndex matches by name and by roll", async () => {
@@ -104,6 +143,7 @@ describe("buildIndex", () => {
       colleges: async () => ({ colleges: [{ id: "c1" }] }),
       collegeTree: async () => tree2,
       sectionRoster: roster,
+      listUsers: async () => ({ users: [] }),
     };
     const idx = await buildIndex(api2 as any, ["admin"]);
     expect(idx.some((e) => e.kind === "student" && e.label === "Bina Roy")).toBe(true); // survivor

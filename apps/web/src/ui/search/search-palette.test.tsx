@@ -7,12 +7,14 @@ vi.mock("./searchIndex", () => ({
   buildIndex: vi.fn(async () => [
     { kind: "page", label: "Reports", href: "/manage/reports" },
     { kind: "student", label: "Asha Rao", roll: "23CS001", sub: "s1", href: "/students/st1" },
+    { kind: "staff", label: "Vikram Rao", sub: "teacher", href: "/manage/teachers" },
   ]),
   filterIndex: (e: any[], q: string) => ({
     pages: e.filter((x) => x.kind === "page" && x.label.toLowerCase().includes(q.toLowerCase())),
     students: e.filter(
       (x) => x.kind === "student" && (x.label + x.roll).toLowerCase().includes(q.toLowerCase()),
     ),
+    staff: e.filter((x) => x.kind === "staff" && x.label.toLowerCase().includes(q.toLowerCase())),
   }),
   getCachedIndex: () => null,
 }));
