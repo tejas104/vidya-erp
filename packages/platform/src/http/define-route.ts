@@ -6,9 +6,11 @@ import type { Metrics } from "../metrics/metrics";
 import {
   STATE_CHANGING_METHODS,
   type RouteHandler,
+  type RouteRateLimitIdentifier,
   type RouteResult,
   type RouteSpec,
 } from "../contracts/module";
+import type { RateLimiter } from "../ratelimit/limiter";
 import { problemResponse } from "./problem";
 import { REQUEST_ID_HEADER, resolveRequestId } from "./request-id";
 
@@ -36,6 +38,12 @@ export interface RouteDependencies {
   readonly metrics: Metrics;
   /** Omit to use DEFAULT_HTTP_GUARDS. */
   readonly http?: HttpGuardOptions;
+  /**
+   * Omit to disable rate limiting entirely (e.g. lightweight test harnesses).
+   * Production composition roots must supply a Redis-backed one —
+   * packages/platform/src/ratelimit.
+   */
+  readonly rateLimiter?: RateLimiter;
 }
 
 /** Second argument mirrors Next.js route-handler context (async params). */
@@ -96,16 +104,66 @@ function toResponse(result: RouteResult, requestId: string): Response {
 }
 
 /**
+ * Best-effort client address for rate-limit keying. Mirrors identity's own
+ * throttle-keying convention (docs/threat-model-identity.md#throttle-keying):
+ * behind the on-prem reverse proxy the first x-forwarded-for hop is
+ * proxy-controlled and trustworthy; direct connections share one bucket.
+ */
+function clientIp(headers: Headers): string {
+  const forwarded = headers.get("x-forwarded-for");
+  if (forwarded !== null) {
+    const first = forwarded.split(",")[0]?.trim();
+    if (first !== undefined && first !== "") {
+      return first;
+    }
+  }
+  return "direct";
+}
+
+/** Pulls the per-identifier rate-limit subject out of whichever place the RouteSpec says it lives. */
+function extractIdentifier(
+  identifier: RouteRateLimitIdentifier,
+  ctx: { readonly params: unknown; readonly body: unknown; readonly principal: Principal | null },
+): string | undefined {
+  switch (identifier.source) {
+    case "body": {
+      const value = (ctx.body as Record<string, unknown> | undefined)?.[identifier.field];
+      return typeof value === "string" ? value.toLowerCase() : undefined;
+    }
+    case "param": {
+      const value = (ctx.params as Record<string, unknown> | undefined)?.[identifier.field];
+      return typeof value === "string" ? value : undefined;
+    }
+    case "principal":
+      return ctx.principal?.id;
+  }
+}
+
+function rateLimitedResponse(requestId: string, retryAfterSeconds: number): Response {
+  return problemResponse({
+    status: 429,
+    title: "Too many requests",
+    requestId,
+    headers: { "retry-after": String(Math.max(1, Math.ceil(retryAfterSeconds))) },
+  });
+}
+
+/**
  * Builds the standard request pipeline around a module route handler:
  *
- *   request id → origin guard (state-changing) → authentication gate →
+ *   request id → origin guard (state-changing) → per-IP rate limit (scoped
+ *   routes) → authentication gate → global per-session rate limit →
  *   authorization (role requirement) → zod validation (params/query/body,
- *   size-capped) → handler → audit (state-changing) → metrics + access log
+ *   size-capped) → per-identifier rate limit (scoped routes) → handler →
+ *   audit (state-changing) → metrics + access log
  *
  * Security posture (Constitution rule 6): authentication runs unless the
  * RouteSpec explicitly declares itself public. Audit posture (rule 7):
  * state-changing specs must declare an audit action, and a failed audit
- * write fails the request (fail-closed).
+ * write fails the request (fail-closed). Rate-limit posture (#10.5 Part 1):
+ * ONE middleware, here, backed by Redis with TTL'd counters — no module
+ * hand-rolls its own limiting. The per-IP and per-identifier checks for a
+ * scope are independent counters; either tripping alone yields 429.
  */
 export function defineRoute(
   spec: RouteSpec,
@@ -166,6 +224,15 @@ export function defineRoute(
         }
       }
 
+      if (spec.rateLimit !== undefined && deps.rateLimiter !== undefined) {
+        const ip = clientIp(request.headers);
+        const ipDecision = await deps.rateLimiter.checkIp(spec.rateLimit.scope, ip);
+        if (ipDecision.limited) {
+          log.warn({ scope: spec.rateLimit.scope, ip }, "request rejected: rate limited (ip)");
+          return finish(rateLimitedResponse(requestId, ipDecision.retryAfterSeconds));
+        }
+      }
+
       if (!spec.auth.public) {
         const authn = await deps.authenticator.authenticate({
           headers: request.headers,
@@ -188,6 +255,13 @@ export function defineRoute(
           );
         }
         principal = authn.principal;
+        if (deps.rateLimiter !== undefined && principal.sessionId !== null) {
+          const sessionDecision = await deps.rateLimiter.checkSession(principal.sessionId);
+          if (sessionDecision.limited) {
+            log.warn({ actorId: principal.id }, "request rejected: rate limited (session)");
+            return finish(rateLimitedResponse(requestId, sessionDecision.retryAfterSeconds));
+          }
+        }
         const authz = await deps.accessPolicy.authorize(principal, spec.auth.requirement, {
           module: spec.module,
           routeId: spec.id,
@@ -287,6 +361,20 @@ export function defineRoute(
           );
         }
         body = outcome.value;
+      }
+
+      if (spec.rateLimit?.identifier !== undefined && deps.rateLimiter !== undefined) {
+        const identifierValue = extractIdentifier(spec.rateLimit.identifier, { params, body, principal });
+        if (identifierValue !== undefined) {
+          const identifierDecision = await deps.rateLimiter.checkIdentifier(
+            spec.rateLimit.scope,
+            identifierValue,
+          );
+          if (identifierDecision.limited) {
+            log.warn({ scope: spec.rateLimit.scope }, "request rejected: rate limited (identifier)");
+            return finish(rateLimitedResponse(requestId, identifierDecision.retryAfterSeconds));
+          }
+        }
       }
 
       const result = await handler({

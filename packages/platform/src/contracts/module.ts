@@ -33,6 +33,26 @@ export type RouteAuth =
   | { readonly public: true; readonly reason: string }
   | { readonly public: false; readonly requirement: AccessRequirement };
 
+/** Which independent rate-limit scope a route belongs to (packages/platform/src/ratelimit). */
+export type RateLimitScope = "login" | "password";
+
+/** Where the per-identifier rate-limit key comes from, beyond the always-on per-IP check. */
+export type RouteRateLimitIdentifier =
+  | { readonly source: "body"; readonly field: string }
+  | { readonly source: "param"; readonly field: string }
+  | { readonly source: "principal" };
+
+export interface RouteRateLimit {
+  readonly scope: RateLimitScope;
+  /**
+   * Extra per-identifier limiting beyond IP (e.g. per-username for login —
+   * the one that actually stops distributed credential guessing). Omit for
+   * IP-only routes where no safe pre-auth identifier exists (e.g. a
+   * token-based password-reset confirm).
+   */
+  readonly identifier?: RouteRateLimitIdentifier;
+}
+
 export interface RouteResponseSpec {
   readonly description: string;
   /** Defaults to application/json. */
@@ -63,6 +83,8 @@ export interface RouteSpec {
     readonly action: string;
     readonly resourceType: string;
   };
+  /** Opt into the login/password rate-limit scopes (packages/platform/src/ratelimit). Omit for none. */
+  readonly rateLimit?: RouteRateLimit;
   readonly responses: Readonly<Record<number, RouteResponseSpec>>;
 }
 

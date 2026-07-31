@@ -10,6 +10,8 @@ import type { AuditEvent, AuditLogger } from "../audit/types";
 import { DenyAllAccessPolicy, DenyAllAuthenticator } from "../auth/deny-all";
 import { createMetrics } from "../metrics/metrics";
 import type { RouteHandler, RouteSpec } from "../contracts/module";
+import { createRateLimiter } from "../ratelimit/limiter";
+import { MemoryRateLimitStore } from "../ratelimit/test-support";
 import { defineRoute, type RouteDependencies } from "./define-route";
 
 const silentLogger = pino({ level: "silent" });
@@ -432,5 +434,147 @@ describe("defineRoute — errors, content types, metrics", () => {
     const sample = counter.values.find((value) => value.labels.status === "401");
     expect(sample?.value).toBe(1);
     expect(sample?.labels).toMatchObject({ module: "demo", route: "demo.get", method: "GET" });
+  });
+});
+
+describe("defineRoute — rate limiting (#10.5 Part 1, single platform middleware)", () => {
+  function makeLimiter() {
+    return createRateLimiter(new MemoryRateLimitStore(), {
+      loginIp: { max: 2, windowSeconds: 60, baseBackoffSeconds: 60, maxBackoffSeconds: 600, penaltyMemorySeconds: 3600 },
+      loginUsername: { max: 2, windowSeconds: 60 },
+      password: { max: 2, windowSeconds: 60 },
+      session: { max: 3, windowSeconds: 60 },
+    });
+  }
+
+  function loginSpec(): RouteSpec {
+    return makeSpec({
+      id: "identity.login",
+      method: "POST",
+      audit: { action: "identity.login", resourceType: "session" },
+      auth: { public: true, reason: "credential establishment" },
+      request: { body: z.object({ username: z.string(), password: z.string() }) },
+      rateLimit: { scope: "login", identifier: { source: "body", field: "username" } },
+    });
+  }
+
+  function loginRequest(username: string, ip: string) {
+    return new Request("http://localhost/api/v1/demo", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-forwarded-for": ip },
+      body: JSON.stringify({ username, password: "irrelevant" }),
+    });
+  }
+
+  it("is a no-op when no rateLimiter dependency is supplied (existing suites keep working unmodified)", async () => {
+    const spec = loginSpec();
+    const bound = defineRoute(spec, okHandler, makeDeps());
+    for (let i = 0; i < 10; i += 1) {
+      const response = await bound(loginRequest("asha", "9.9.9.9"));
+      expect(response.status).toBe(200);
+    }
+  });
+
+  it("trips the per-IP limit and returns 429 with Retry-After", async () => {
+    const rateLimiter = makeLimiter();
+    const bound = defineRoute(loginSpec(), okHandler, makeDeps({ rateLimiter }));
+    expect((await bound(loginRequest("a", "1.2.3.4"))).status).toBe(200);
+    expect((await bound(loginRequest("b", "1.2.3.4"))).status).toBe(200);
+    const third = await bound(loginRequest("c", "1.2.3.4"));
+    expect(third.status).toBe(429);
+    expect(third.headers.get("retry-after")).toBe("60");
+    const body = (await third.json()) as { status: number };
+    expect(body.status).toBe(429);
+  });
+
+  it("trips the per-username limit even when every request comes from a different IP", async () => {
+    const rateLimiter = makeLimiter();
+    const bound = defineRoute(loginSpec(), okHandler, makeDeps({ rateLimiter }));
+    expect((await bound(loginRequest("asha", "1.1.1.1"))).status).toBe(200);
+    expect((await bound(loginRequest("asha", "2.2.2.2"))).status).toBe(200);
+    const third = await bound(loginRequest("asha", "3.3.3.3"));
+    expect(third.status).toBe(429);
+    expect(third.headers.get("retry-after")).toBeTruthy();
+  });
+
+  it("per-IP and per-username scopes are independent — tripping one does not mask the other", async () => {
+    const rateLimiter = makeLimiter();
+    const bound = defineRoute(loginSpec(), okHandler, makeDeps({ rateLimiter }));
+    // Same IP trips first (max 2), but each request uses a fresh username —
+    // the per-username counter for any one of them never gets close to its
+    // own limit. The block must still be reported.
+    await bound(loginRequest("user-a", "5.5.5.5"));
+    await bound(loginRequest("user-b", "5.5.5.5"));
+    const blockedByIp = await bound(loginRequest("user-c", "5.5.5.5"));
+    expect(blockedByIp.status).toBe(429);
+
+    // A brand-new IP, but the SAME username as a previous test above the
+    // fold would already be capped — demonstrated in isolation here with a
+    // fresh limiter so it is unambiguous which counter tripped.
+    const isolated = createRateLimiter(new MemoryRateLimitStore(), {
+      loginIp: { max: 10, windowSeconds: 60, baseBackoffSeconds: 60, maxBackoffSeconds: 600, penaltyMemorySeconds: 3600 },
+      loginUsername: { max: 2, windowSeconds: 60 },
+      password: { max: 2, windowSeconds: 60 },
+      session: { max: 100, windowSeconds: 60 },
+    });
+    const boundIsolated = defineRoute(loginSpec(), okHandler, makeDeps({ rateLimiter: isolated }));
+    await boundIsolated(loginRequest("shared-account", "10.0.0.1"));
+    await boundIsolated(loginRequest("shared-account", "10.0.0.2"));
+    const blockedByUsername = await boundIsolated(loginRequest("shared-account", "10.0.0.3"));
+    expect(blockedByUsername.status).toBe(429); // distributed across IPs, still caught
+  });
+
+  it("enforces the global per-session ceiling on any authenticated route, regardless of rateLimit scope", async () => {
+    const rateLimiter = makeLimiter();
+    const deps = makeDeps({ authenticator: allowAuthenticator, accessPolicy: allowPolicy, rateLimiter });
+    const bound = defineRoute(makeSpec(), okHandler, deps); // plain authenticated GET, no rateLimit field
+    expect((await bound(get())).status).toBe(200);
+    expect((await bound(get())).status).toBe(200);
+    expect((await bound(get())).status).toBe(200);
+    const fourth = await bound(get());
+    expect(fourth.status).toBe(429);
+    expect(fourth.headers.get("retry-after")).toBeTruthy();
+  });
+
+  it("password-scoped routes key the identifier off a path param, independent of the acting admin's IP", async () => {
+    // A dedicated limiter with a generous session ceiling: this test isolates
+    // the password/identifier scope, not the (separately tested) session one.
+    const rateLimiter = createRateLimiter(new MemoryRateLimitStore(), {
+      loginIp: { max: 10, windowSeconds: 60, baseBackoffSeconds: 60, maxBackoffSeconds: 600, penaltyMemorySeconds: 3600 },
+      loginUsername: { max: 10, windowSeconds: 60 },
+      password: { max: 2, windowSeconds: 60 },
+      session: { max: 1000, windowSeconds: 60 },
+    });
+    const spec = makeSpec({
+      id: "identity.password-set",
+      method: "POST",
+      audit: { action: "identity.password-set-by-admin", resourceType: "user" },
+      auth: { public: false, requirement: {} },
+      request: {
+        params: z.object({ userId: z.string() }),
+        body: z.object({ newPassword: z.string() }),
+      },
+      rateLimit: { scope: "password", identifier: { source: "param", field: "userId" } },
+    });
+    const deps = makeDeps({ authenticator: allowAuthenticator, accessPolicy: allowPolicy, rateLimiter });
+    const bound = defineRoute(spec, okHandler, deps);
+    // Distinct admin IPs per target isolates the identifier (param) counter
+    // from the always-on IP counter, so this test proves the identifier
+    // scoping specifically.
+    function req(userId: string, ip: string) {
+      return new Request("http://localhost/api/v1/demo", {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-forwarded-for": ip },
+        body: JSON.stringify({ newPassword: "irrelevant" }),
+      });
+    }
+    const ctx = (userId: string) => ({ params: Promise.resolve({ userId }) });
+    expect((await bound(req("target-1", "7.0.0.1"), ctx("target-1"))).status).toBe(200);
+    expect((await bound(req("target-1", "7.0.0.2"), ctx("target-1"))).status).toBe(200);
+    const third = await bound(req("target-1", "7.0.0.3"), ctx("target-1"));
+    expect(third.status).toBe(429);
+    // A different target account, from yet another IP, is untouched by
+    // target-1's identifier counter.
+    expect((await bound(req("target-2", "7.0.0.4"), ctx("target-2"))).status).toBe(200);
   });
 });

@@ -167,6 +167,7 @@ const routes: RouteSpec[] = [
       body: z.object({ username: usernameSchema, password: z.string().min(1).max(256) }),
     },
     audit: { action: "identity.login", resourceType: "session" },
+    rateLimit: { scope: "login", identifier: { source: "body", field: "username" } },
     responses: {
       200: {
         description: "Session issued; Set-Cookie header carries the session token",
@@ -216,6 +217,7 @@ const routes: RouteSpec[] = [
       body: z.object({ currentPassword: z.string().min(1).max(256), newPassword: passwordSchema }),
     },
     audit: { action: "identity.password-changed", resourceType: "user" },
+    rateLimit: { scope: "password", identifier: { source: "principal" } },
     responses: {
       200: { description: "Password changed; all sessions invalidated", schema: z.object({ ok: z.literal(true) }) },
       401: { description: "Current password incorrect", schema: problemSchema },
@@ -235,6 +237,9 @@ const routes: RouteSpec[] = [
       body: z.object({ token: z.string().min(32).max(256), newPassword: passwordSchema }),
     },
     audit: { action: "identity.password-reset-completed", resourceType: "user" },
+    // IP-only: no safe pre-verification identifier exists (the token itself
+    // is the credential, and it hasn't been checked yet at this point).
+    rateLimit: { scope: "password" },
     responses: {
       200: { description: "Password set; account active; sessions invalidated", schema: z.object({ ok: z.literal(true) }) },
       401: { description: "Token invalid, expired or already used", schema: problemSchema },
@@ -411,6 +416,7 @@ const routes: RouteSpec[] = [
     auth: ADMIN_ONLY,
     request: { params: userIdParams },
     audit: { action: "identity.password-reset-initiated", resourceType: "user" },
+    rateLimit: { scope: "password", identifier: { source: "param", field: "userId" } },
     responses: {
       201: {
         description: "One-time token (shown once)",
@@ -431,6 +437,7 @@ const routes: RouteSpec[] = [
     auth: ADMIN_ONLY,
     request: { params: userIdParams, body: z.object({ newPassword: passwordSchema }) },
     audit: { action: "identity.password-set-by-admin", resourceType: "user" },
+    rateLimit: { scope: "password", identifier: { source: "param", field: "userId" } },
     responses: {
       200: { description: "Password set; the user's sessions were invalidated", schema: z.object({ ok: z.literal(true) }) },
       404: { description: "No such user", schema: problemSchema },

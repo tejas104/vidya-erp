@@ -73,6 +73,36 @@ describe("loadConfig", () => {
     expect(config.identity.resetTokenTtlMinutes).toBe(30);
   });
 
+  it("parses rate-limit defaults (documented in RATE_LIMIT_* schema comments)", () => {
+    const config = loadConfig(validEnv);
+    expect(config.rateLimit).toEqual({
+      loginIp: {
+        max: 10,
+        windowSeconds: 60,
+        baseBackoffSeconds: 60,
+        maxBackoffSeconds: 1800,
+        penaltyMemorySeconds: 3600,
+      },
+      loginUsername: { max: 5, windowSeconds: 60 },
+      password: { max: 3, windowSeconds: 60 },
+      session: { max: 300, windowSeconds: 60 },
+    });
+  });
+
+  it("maps explicit RATE_LIMIT_* overrides through to the typed config", () => {
+    const config = loadConfig({
+      ...validEnv,
+      RATE_LIMIT_LOGIN_IP_MAX: "20",
+      RATE_LIMIT_LOGIN_USERNAME_MAX: "8",
+      RATE_LIMIT_PASSWORD_MAX: "1",
+      RATE_LIMIT_SESSION_MAX: "500",
+    });
+    expect(config.rateLimit.loginIp.max).toBe(20);
+    expect(config.rateLimit.loginUsername.max).toBe(8);
+    expect(config.rateLimit.password.max).toBe(1);
+    expect(config.rateLimit.session.max).toBe(500);
+  });
+
   it("parses TRUSTED_ORIGINS as a comma-separated origin list", () => {
     const config = loadConfig({
       ...validEnv,

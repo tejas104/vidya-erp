@@ -64,6 +64,43 @@ const envSchema = z.object({
   LOGIN_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(100).default(5),
   LOGIN_WINDOW_MINUTES: z.coerce.number().int().min(1).default(15),
 
+  // -- Redis-backed request-rate limiting (packages/platform/src/ratelimit;
+  // #10.5 Part 1). THREE independent scopes, distinct from LOGIN_MAX_ATTEMPTS
+  // above (that one counts credential FAILURES for account lockout; these
+  // count every REQUEST, successful or not, to bound request volume). --
+
+  /** Login attempts from one IP before the exponential backoff engages. */
+  RATE_LIMIT_LOGIN_IP_MAX: z.coerce.number().int().min(1).max(1000).default(10),
+  RATE_LIMIT_LOGIN_IP_WINDOW_SECONDS: z.coerce.number().int().min(1).default(60),
+  /** First backoff block once the IP limit trips; doubles each re-offense. */
+  RATE_LIMIT_LOGIN_IP_BACKOFF_BASE_SECONDS: z.coerce.number().int().min(1).default(60),
+  RATE_LIMIT_LOGIN_IP_BACKOFF_MAX_SECONDS: z.coerce.number().int().min(1).default(1800),
+  /** How long a run of re-offenses is remembered before backoff resets to base. */
+  RATE_LIMIT_LOGIN_IP_PENALTY_MEMORY_SECONDS: z.coerce.number().int().min(1).default(3600),
+
+  /**
+   * Login attempts for one USERNAME regardless of source IP — the limit
+   * that actually stops distributed credential guessing of a single
+   * account. Deliberately stricter than the per-IP allowance.
+   */
+  RATE_LIMIT_LOGIN_USERNAME_MAX: z.coerce.number().int().min(1).max(1000).default(5),
+  RATE_LIMIT_LOGIN_USERNAME_WINDOW_SECONDS: z.coerce.number().int().min(1).default(60),
+
+  /** Password set/change/reset family: stricter than login (IP + identifier, same cap for both). */
+  RATE_LIMIT_PASSWORD_MAX: z.coerce.number().int().min(1).max(1000).default(3),
+  RATE_LIMIT_PASSWORD_WINDOW_SECONDS: z.coerce.number().int().min(1).default(60),
+
+  /**
+   * Blanket ceiling on any one authenticated session, to blunt scripted
+   * abuse. Sized with margin over the app's burstiest legitimate flow: CSV
+   * import preview polls its status once a second (client-capped at 30s),
+   * a peak of ~60 req/min measured from the code
+   * (apps/web/app/(app)/manage/import/page.tsx); 300 leaves a ~5x margin.
+   * See the #10.5 B1 report for the full measurement.
+   */
+  RATE_LIMIT_SESSION_MAX: z.coerce.number().int().min(1).max(100_000).default(300),
+  RATE_LIMIT_SESSION_WINDOW_SECONDS: z.coerce.number().int().min(1).default(60),
+
   /** Aggregates over fewer distinct students are withheld (ADR-0018). */
   ANALYTICS_MIN_COHORT: z.coerce.number().int().min(1).max(100).default(5),
   /** At-risk when attendance %% falls below this. */
@@ -120,6 +157,19 @@ export interface AppConfig {
       readonly maxAttempts: number;
       readonly windowMinutes: number;
     };
+  };
+  /** Shape matches RateLimiterConfig (packages/platform/src/ratelimit) 1:1. */
+  readonly rateLimit: {
+    readonly loginIp: {
+      readonly max: number;
+      readonly windowSeconds: number;
+      readonly baseBackoffSeconds: number;
+      readonly maxBackoffSeconds: number;
+      readonly penaltyMemorySeconds: number;
+    };
+    readonly loginUsername: { readonly max: number; readonly windowSeconds: number };
+    readonly password: { readonly max: number; readonly windowSeconds: number };
+    readonly session: { readonly max: number; readonly windowSeconds: number };
   };
   readonly analytics: {
     readonly minCohort: number;
@@ -191,6 +241,27 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
       throttle: {
         maxAttempts: env.LOGIN_MAX_ATTEMPTS,
         windowMinutes: env.LOGIN_WINDOW_MINUTES,
+      },
+    },
+    rateLimit: {
+      loginIp: {
+        max: env.RATE_LIMIT_LOGIN_IP_MAX,
+        windowSeconds: env.RATE_LIMIT_LOGIN_IP_WINDOW_SECONDS,
+        baseBackoffSeconds: env.RATE_LIMIT_LOGIN_IP_BACKOFF_BASE_SECONDS,
+        maxBackoffSeconds: env.RATE_LIMIT_LOGIN_IP_BACKOFF_MAX_SECONDS,
+        penaltyMemorySeconds: env.RATE_LIMIT_LOGIN_IP_PENALTY_MEMORY_SECONDS,
+      },
+      loginUsername: {
+        max: env.RATE_LIMIT_LOGIN_USERNAME_MAX,
+        windowSeconds: env.RATE_LIMIT_LOGIN_USERNAME_WINDOW_SECONDS,
+      },
+      password: {
+        max: env.RATE_LIMIT_PASSWORD_MAX,
+        windowSeconds: env.RATE_LIMIT_PASSWORD_WINDOW_SECONDS,
+      },
+      session: {
+        max: env.RATE_LIMIT_SESSION_MAX,
+        windowSeconds: env.RATE_LIMIT_SESSION_WINDOW_SECONDS,
       },
     },
     analytics: {

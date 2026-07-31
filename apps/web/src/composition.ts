@@ -7,6 +7,7 @@ import {
   createMetrics,
   createModuleQueue,
   createObjectStorage,
+  createRateLimiter,
   createRedis,
   defineRoute,
   loadConfig,
@@ -307,6 +308,11 @@ function buildWebRuntime(): WebRuntime {
     portal,
   ];
 
+  // Redis-backed, shared across replicas (#10.5 Part 1) — the same redis
+  // client every module already uses, one middleware call site in
+  // defineRoute, no per-module hand-rolling.
+  const rateLimiter = createRateLimiter(redis, config.rateLimit);
+
   const routeDeps: RouteDependencies = {
     logger,
     authenticator: identity.service.authenticator,
@@ -314,6 +320,7 @@ function buildWebRuntime(): WebRuntime {
     auditLogger: system.service.audit,
     metrics,
     http: config.http,
+    rateLimiter,
   };
 
   const handlers: Record<string, BoundRouteHandler> = {};

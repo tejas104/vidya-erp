@@ -17,10 +17,13 @@ export {
   type JobProcessor,
   type JobSpec,
   type ModuleDefinition,
+  type RateLimitScope,
   type ReadinessCheck,
   type RouteAuth,
   type RouteContext,
   type RouteHandler,
+  type RouteRateLimit,
+  type RouteRateLimitIdentifier,
   type RouteRequest,
   type RouteResponseSpec,
   type RouteResult,
@@ -81,6 +84,18 @@ export {
 } from "./db/migrator";
 
 export { createRedis, pingRedis, type RedisClient, type RedisOptions } from "./redis/client";
+
+export {
+  BackoffLimiter,
+  FixedWindowLimiter,
+  createRateLimiter,
+  type BackoffPolicy,
+  type FixedWindowPolicy,
+  type RateLimitDecision,
+  type RateLimitStore,
+  type RateLimiter,
+  type RateLimiterConfig,
+} from "./ratelimit/limiter";
 
 export {
   createModuleQueue,
