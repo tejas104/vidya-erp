@@ -1,7 +1,16 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
+import { ToastProvider } from "@vidya/ui-system";
 import PortalPage from "../../app/(app)/portal/page";
 import { api } from "./api";
+
+function renderPage() {
+  return render(
+    <ToastProvider>
+      <PortalPage />
+    </ToastProvider>,
+  );
+}
 
 vi.mock("./api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./api")>();
@@ -88,13 +97,13 @@ beforeEach(() => {
 
 describe("/portal (student self-view)", () => {
   it("renders the student's own figures", async () => {
-    render(<PortalPage />);
+    renderPage();
     expect(await screen.findByText(/Hello, Aarav\./)).toBeInTheDocument();
     expect(screen.getAllByText("80%").length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText(/Data Structures/).length).toBeGreaterThanOrEqual(1);
   });
   it("shows my fees with dues headline and receipt history", async () => {
-    render(<PortalPage />);
+    renderPage();
     expect(await screen.findByText("My fees")).toBeInTheDocument();
     expect(screen.getByText("Dues: ₹250.00")).toBeInTheDocument();
     expect(screen.getByText("#12")).toBeInTheDocument();
@@ -102,12 +111,12 @@ describe("/portal (student self-view)", () => {
   });
   it("hides the fees section when the fees module doesn't answer", async () => {
     (api.feesMyFees as ReturnType<typeof vi.fn>).mockRejectedValue(new Error("not deployed"));
-    render(<PortalPage />);
+    renderPage();
     await screen.findByText(/Hello, Aarav\./);
     expect(screen.queryByText("My fees")).not.toBeInTheDocument();
   });
   it("shows a published term with big SGPA and grade chips", async () => {
-    render(<PortalPage />);
+    renderPage();
     expect(await screen.findByText("My results")).toBeInTheDocument();
     expect(screen.getAllByText("8.30").length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText("B+")).toBeInTheDocument();
@@ -115,29 +124,29 @@ describe("/portal (student self-view)", () => {
   });
   it("shows the withheld state when nothing is published", async () => {
     (api.resMyResults as ReturnType<typeof vi.fn>).mockResolvedValue({ terms: [], cgpa: null });
-    render(<PortalPage />);
+    renderPage();
     expect(await screen.findByText("Results aren't published yet.")).toBeInTheDocument();
   });
   it("hides the results section when the results module doesn't answer", async () => {
     (api.resMyResults as ReturnType<typeof vi.fn>).mockRejectedValue(new Error("not deployed"));
-    render(<PortalPage />);
+    renderPage();
     await screen.findByText(/Hello, Aarav\./);
     expect(screen.queryByText("My results")).not.toBeInTheDocument();
   });
   it("highlights the next exam and offers the hall ticket", async () => {
-    render(<PortalPage />);
+    renderPage();
     expect(await screen.findByText("My exams")).toBeInTheDocument();
     expect(screen.getByText(/Next: Data Structures/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /download hall ticket/i })).toBeInTheDocument();
   });
   it("shows the exams empty state when nothing is scheduled", async () => {
     (api.exmMySchedule as ReturnType<typeof vi.fn>).mockResolvedValue({ slots: [] });
-    render(<PortalPage />);
+    renderPage();
     expect(await screen.findByText("No exams scheduled.")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /download hall ticket/i })).not.toBeInTheDocument();
   });
   it("shows course coverage with a unit's taught/pending topics", async () => {
-    render(<PortalPage />);
+    renderPage();
     expect(await screen.findByText("Course coverage")).toBeInTheDocument();
     expect(screen.getAllByText("50%").length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText("Trees")).toBeInTheDocument();
@@ -146,14 +155,14 @@ describe("/portal (student self-view)", () => {
   });
   it("hides course coverage when the syllabus module doesn't answer", async () => {
     (api.mySyllabus as ReturnType<typeof vi.fn>).mockRejectedValue(new Error("not deployed"));
-    render(<PortalPage />);
+    renderPage();
     await screen.findByText(/Hello, Aarav\./);
     expect(screen.queryByText("Course coverage")).not.toBeInTheDocument();
   });
   it("shows the unlinked state on 404", async () => {
     const { ApiError } = await import("./api");
     (api.portalMe as ReturnType<typeof vi.fn>).mockRejectedValue(new ApiError(404, "not linked"));
-    render(<PortalPage />);
+    renderPage();
     expect(await screen.findByText(/isn't linked to a student record/)).toBeInTheDocument();
   });
 });

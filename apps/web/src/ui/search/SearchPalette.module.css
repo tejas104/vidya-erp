@@ -1,0 +1,72 @@
+.results {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+  max-height: 360px;
+  overflow-y: auto;
+}
+.group + .group {
+  margin-top: var(--space-3);
+}
+.groupHeader {
+  font-size: var(--text-12);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-3);
+  padding: var(--space-2) var(--space-2) var(--space-1);
+}
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  text-align: left;
+  padding: var(--space-3);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--ink);
+  font-size: var(--text-14);
+  cursor: pointer;
+}
+.row:hover {
+  background: var(--paper-sunken);
+}
+.active {
+  background: var(--brand-soft);
+}
+.roll {
+  color: var(--ink-3);
+  font-family: var(--font-figure);
+  font-size: var(--text-12);
+}
+.loadingRow {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+}
+.loadingLabel {
+  color: var(--ink-2);
+  font-size: var(--text-14);
+}
+.errorRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  color: var(--bad);
+}
+.retryBtn {
+  border: 1px solid var(--rule-strong);
+  background: var(--surface);
+  color: var(--ink);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+  cursor: pointer;
+}
+.retryBtn:hover {
+  background: var(--paper-sunken);
+}

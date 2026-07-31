@@ -1,0 +1,13 @@
+.skel {
+  border-radius: var(--radius-sm);
+  background: linear-gradient(90deg, var(--paper-sunken) 25%, var(--rule) 50%, var(--paper-sunken) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s infinite;
+}
+@keyframes shimmer {
+  to { background-position: -200% 0; }
+}
+/* Respect reduced-motion: hold a static placeholder instead of the shimmer. */
+@media (prefers-reduced-motion: reduce) {
+  .skel { animation: none; }
+}

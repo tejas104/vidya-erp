@@ -26,7 +26,7 @@ export default defineConfig({
         test: {
           name: "ui",
           environment: "jsdom",
-          include: ["apps/web/src/**/*.test.tsx"],
+          include: ["apps/web/src/**/*.test.tsx", "packages/ui-system/src/**/*.test.tsx"],
           setupFiles: ["./apps/web/test/setup-ui.ts"],
         },
       },

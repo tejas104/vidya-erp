@@ -15,7 +15,9 @@ function ctx(principal: Principal, input: { params?: unknown; query?: unknown; b
   return { requestId: "r", logger, principal, request: { params: input.params, query: input.query, body: input.body, headers: new Headers() } };
 }
 
-function makeDeps(opts: { clash?: "teacher" | "section" | "room"; teacherLinked?: boolean } = {}) {
+function makeDeps(
+  opts: { clash?: "teacher" | "section" | "room"; teacherLinked?: boolean; weekRows?: Record<string, unknown>[]; denyScope?: boolean } = {},
+) {
   const repo = {
     periodsFor: async () => [{ id: "p1", collegeId: "col_1", periodNo: 1, starts: "09:00", ends: "09:50", createdAt: new Date() }],
     setPeriods: async () => undefined,
@@ -26,7 +28,7 @@ function makeDeps(opts: { clash?: "teacher" | "section" | "room"; teacherLinked?
     getEntry: async () => null,
     deleteEntry: async () => true,
     entriesForSection: async () => [],
-    entriesForTeacher: async () => [],
+    entriesForTeacher: async () => opts.weekRows ?? [],
     entriesForTeacherDay: async () => [],
   } as unknown as TimetableRepo;
 
@@ -39,7 +41,9 @@ function makeDeps(opts: { clash?: "teacher" | "section" | "room"; teacherLinked?
     namesFor: async (ids: readonly string[]) => new Map(ids.map((id) => [id, `n:${id}`])),
   } as unknown as PeopleDirectory;
 
-  const scopeChecker = { check: () => ({ granted: true, reason: "test" }) } as unknown as ScopeChecker;
+  const scopeChecker = {
+    check: () => ({ granted: opts.denyScope !== true, reason: "test" }),
+  } as unknown as ScopeChecker;
   return { repo, directory, scopeChecker };
 }
 
@@ -66,9 +70,41 @@ describe("timetable handlers", () => {
     expect((result.body as { subjectName: string }).subjectName).toBe("n:sub_1");
   });
 
+  it("denies entry-create when the caller's scope does not cover the section (cross-college admin)", async () => {
+    const handlers = createTimetableHandlers(makeDeps({ denyScope: true }));
+    const result = await handlers["timetable.entry-create"]!(ctx(admin, { body }));
+    expect(result.status).toBe(403);
+  });
+
+  it("denies periods-set for a college outside the caller's scope", async () => {
+    const handlers = createTimetableHandlers(makeDeps({ denyScope: true }));
+    const result = await handlers["timetable.periods-set"]!(
+      ctx(admin, { params: { collegeId: "col_OTHER" }, body: { periods: [] } }),
+    );
+    expect(result.status).toBe(403);
+  });
+
   it("my-today 404s an unlinked teacher sign-in", async () => {
     const handlers = createTimetableHandlers(makeDeps({ teacherLinked: false }));
     const result = await handlers["timetable.my-today"]!(ctx(teacher, { query: { academicYear: YEAR } }));
+    expect(result.status).toBe(404);
+  });
+
+  it("my-week returns entries across multiple days", async () => {
+    const weekRows = [
+      { id: "tte_1", sectionId: "sec_1", classId: "cls_1", subjectId: "sub_1", teacherId: "tch_1", room: "204", dayOfWeek: 1, periodNo: 1 },
+      { id: "tte_2", sectionId: "sec_1", classId: "cls_1", subjectId: "sub_2", teacherId: "tch_1", room: "205", dayOfWeek: 3, periodNo: 2 },
+    ];
+    const handlers = createTimetableHandlers(makeDeps({ weekRows }));
+    const result = await handlers["timetable.my-week"]!(ctx(teacher, { query: { academicYear: YEAR } }));
+    expect(result.status).toBe(200);
+    const body = result.body as { entries: { dayOfWeek: number }[] };
+    expect(body.entries.map((e) => e.dayOfWeek).sort()).toEqual([1, 3]);
+  });
+
+  it("my-week 404s an unlinked teacher sign-in", async () => {
+    const handlers = createTimetableHandlers(makeDeps({ teacherLinked: false }));
+    const result = await handlers["timetable.my-week"]!(ctx(teacher, { query: { academicYear: YEAR } }));
     expect(result.status).toBe(404);
   });
 });

@@ -16,6 +16,8 @@ import { createSystemModule } from "@vidya/module-system";
 import { createIdentityCore, createIdentityModule } from "@vidya/module-identity";
 import { createPeopleModule } from "@vidya/module-people";
 import { createAcademicsModule } from "@vidya/module-academics";
+import { ROLLUP_JOB_NAME, createAnalyticsModule } from "@vidya/module-analytics";
+import { createCourseworkModule } from "@vidya/module-coursework";
 import { createTimetableModule } from "@vidya/module-timetable";
 import { INVOICE_GENERATE_JOB_NAME, createFeesModule } from "@vidya/module-fees";
 import { createNoticesModule } from "@vidya/module-notices";
@@ -364,7 +366,31 @@ function buildStack() {
     peopleDirectory: people.service.directory,
   });
 
-  for (const module of [identity, people, academics, timetable, fees, notices, results, exams, leave, syllabus]) {
+  // --- analytics --- (the seed has no worker: recompute runs its job inline,
+  // so the dashboard/at-risk/rollup tiles have real data right after seeding)
+  const analytics: ReturnType<typeof createAnalyticsModule> = createAnalyticsModule({
+    db,
+    metrics,
+    audit: system.service.audit,
+    scopeChecker: core.scopeChecker,
+    academicsRead: academics.service.readModel,
+    peopleDirectory: people.service.directory,
+    config: config.analytics,
+    enqueueRollup: async (payload) => {
+      await analytics.jobProcessors[ROLLUP_JOB_NAME]!(payload, { logger, jobId: "seed-inline", attempt: 1 });
+    },
+  });
+
+  // --- coursework --- (assignments + materials + submissions; files in storage)
+  const coursework = createCourseworkModule({
+    db,
+    audit: system.service.audit,
+    scopeChecker: core.scopeChecker,
+    peopleDirectory: people.service.directory,
+    storage: { client: objectStorage, bucket: config.s3.bucket },
+  });
+
+  for (const module of [identity, people, academics, timetable, fees, notices, results, exams, leave, syllabus, analytics, coursework]) {
     for (const route of module.definition.routes) {
       specs.set(route.id, route);
       handlers[route.id] = defineRoute(route, module.handlers[route.id]!, routeDeps);
@@ -440,6 +466,10 @@ async function main(): Promise<void> {
     let feesSectionId: string | null = null;
     let leaveTeacherCookie: string | null = null;
     let leaveHodCookie: string | null = null;
+    // The fees class's first subject + its teacher — captured in the loop so
+    // the end-of-seed coursework block can author as that subject's teacher.
+    let courseworkTeacherCookie: string | null = null;
+    let courseworkSubjectId: string | null = null;
 
     // 1) The demo college and its dedicated admin (idempotent by code).
     const college = await stack.people.service.bootstrapCollege({ name: COLLEGE.name, code: COLLEGE.code });
@@ -866,6 +896,105 @@ async function main(): Promise<void> {
       console.log("  leave: 1 pending + 1 approved for a CSE teacher");
     }
 
+    /** Coursework demo data (M8) — idempotent: skips when the subject already
+     * has assignments. The subject's own teacher posts 3 assignments + 2
+     * materials; the portal student submits to two; the teacher evaluates one.
+     * Drives /manage/coursework and the portal coursework section off empty. */
+    async function seedCourseworkBlock(
+      teacherCookie: string,
+      subjectId: string,
+      classId: string,
+      hasPortalStudent: boolean,
+    ): Promise<void> {
+      const existing = await expectJson<{ assignments: { id: string }[] }>(
+        await call("coursework.class-assignments", { cookie: teacherCookie, params: { classId }, query: { academicYear: YEAR } }),
+        [200],
+        "coursework existing assignments",
+      );
+      if (existing.assignments.length > 0) {
+        console.log("  coursework: assignments already present — skipping");
+        return;
+      }
+      const assignmentIds: string[] = [];
+      const titles = ["Worksheet 1 — Basics", "Lab 1 — Hands-on", "Quiz 1 — Revision"];
+      for (let i = 0; i < titles.length; i++) {
+        const created = await expectJson<{ id: string }>(
+          await call("coursework.assignment-create", {
+            cookie: teacherCookie,
+            body: {
+              classId,
+              subjectId,
+              title: titles[i]!,
+              instructions: "Complete and submit before the due date.",
+              dueOn: ["2026-08-05", "2026-08-12", "2026-08-19"][i]!,
+              maxScore: 20,
+              academicYear: YEAR,
+            },
+          }),
+          [201],
+          `coursework assignment ${titles[i]}`,
+        );
+        assignmentIds.push(created.id);
+      }
+      const materials = [
+        { title: "Lecture notes — Unit 1", text: "Unit 1 lecture notes (demo)." },
+        { title: "Reference sheet", text: "Formula reference sheet (demo)." },
+      ];
+      for (const material of materials) {
+        await expectJson(
+          await call("coursework.material-upload", {
+            cookie: teacherCookie,
+            body: {
+              classId,
+              subjectId,
+              title: material.title,
+              contentType: "text/plain",
+              dataBase64: Buffer.from(material.text, "utf8").toString("base64"),
+              academicYear: YEAR,
+            },
+          }),
+          [201],
+          `coursework material ${material.title}`,
+        );
+      }
+      if (!hasPortalStudent) {
+        console.log(`  coursework: ${titles.length} assignments + ${materials.length} materials (no portal student to submit)`);
+        return;
+      }
+      // The portal student submits to the first two assignments; the teacher
+      // then evaluates the first submission. Only the portal student holds a
+      // login in this seed, so submissions come from that one student.
+      const studentCookie = await login(stack, "demo-student", STUDENT_PASSWORD);
+      for (const assignmentId of assignmentIds.slice(0, 2)) {
+        await expectJson(
+          await call("coursework.submit", {
+            cookie: studentCookie,
+            params: { assignmentId },
+            body: { body: "My submitted answer (demo)." },
+          }),
+          [200],
+          `coursework submit ${assignmentId}`,
+        );
+      }
+      const subs = await expectJson<{ submissions: { id: string }[] }>(
+        await call("coursework.submissions", { cookie: teacherCookie, params: { assignmentId: assignmentIds[0]! } }),
+        [200],
+        "coursework submissions list",
+      );
+      if (subs.submissions[0] !== undefined) {
+        await expectJson(
+          await call("coursework.evaluate", {
+            cookie: teacherCookie,
+            params: { submissionId: subs.submissions[0].id },
+            body: { score: 17, feedback: "Good work — revise the last part." },
+          }),
+          [200],
+          "coursework evaluate",
+        );
+      }
+      console.log(`  coursework: ${titles.length} assignments + ${materials.length} materials + 2 submissions (1 evaluated)`);
+    }
+
     // 2) The principal — college-wide, sees every department. A 409 here means
     //    the demo tree already exists: run only the incremental blocks (fees)
     //    against the existing tree instead of failing.
@@ -1207,6 +1336,10 @@ async function main(): Promise<void> {
         if (sylSubject !== undefined) {
           const sylTeacherCookie = subjectTeacherCookies.get(sylSubject.code)!;
           const sylSubjectId = subjectIds.get(sylSubject.code)!;
+          if (classId === feesClassId) {
+            courseworkTeacherCookie = sylTeacherCookie;
+            courseworkSubjectId = sylSubjectId;
+          }
           const units = syllabusFor(sylSubject.code, sylSubject.name);
           const taughtDates = ["2026-07-01", "2026-07-04", "2026-07-08", "2026-07-11"];
           for (let u = 0; u < units.length; u++) {
@@ -1384,6 +1517,20 @@ async function main(): Promise<void> {
     if (leaveTeacherCookie !== null && leaveHodCookie !== null) {
       await seedLeaveBlock(leaveTeacherCookie, leaveHodCookie);
     }
+
+    // 6g) Coursework (M8): assignments + materials + student submissions.
+    if (courseworkTeacherCookie !== null && courseworkSubjectId !== null && feesClassId !== null) {
+      await seedCourseworkBlock(courseworkTeacherCookie, courseworkSubjectId, feesClassId, portalStudentId !== null);
+    }
+
+    // 6h) Analytics (M5): run the rollup rebuild inline so the dashboard,
+    //     at-risk and rollup tiles render real numbers right after seeding.
+    await expectJson(
+      await call("analytics.recompute", { cookie: adminCookie, body: { academicYear: YEAR } }),
+      [202],
+      "analytics recompute",
+    );
+    console.log("  analytics: rollups rebuilt inline (dashboard tiles populated)");
 
     // 7) Flip any resolvable manual grants (principal/HoD) to verified.
     await call("identity.grants-verify", { cookie: adminCookie });

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { IBM_Plex_Mono, Inter } from "next/font/google";
+import "@vidya/ui-system/tokens.css";
 import "./globals.css";
 
 /*

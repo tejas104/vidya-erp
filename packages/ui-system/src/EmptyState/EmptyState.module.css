@@ -1,0 +1,16 @@
+.state {
+  border: 1px dashed var(--rule-strong);
+  border-radius: var(--radius-sm);
+  padding: var(--space-5) var(--space-4);
+  color: var(--ink-2);
+  font-size: var(--text-14);
+  background: var(--paper-sunken);
+  text-align: center;
+}
+.title {
+  color: var(--ink);
+  font-weight: 600;
+}
+.action {
+  margin-top: var(--space-4);
+}

@@ -1,0 +1,61 @@
+.sectionPicker {
+  max-width: 340px;
+  margin-bottom: var(--space-4);
+}
+.tableWrap {
+  margin-top: var(--space-4);
+}
+.periodTime {
+  opacity: 0.6;
+  font-size: var(--text-12);
+}
+.entryBtn {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: var(--good-soft);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2);
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--text-12);
+}
+.entryMeta {
+  opacity: 0.75;
+}
+.entryRoom {
+  opacity: 0.6;
+}
+.emptyBtn {
+  width: 100%;
+  border: 1px dashed var(--rule-strong);
+  background: transparent;
+  color: var(--ink-3);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3) 0;
+  cursor: pointer;
+  font: inherit;
+}
+.periodEditor {
+  display: grid;
+  gap: var(--space-2);
+}
+.periodRow {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+}
+.periodNo {
+  width: 32px;
+}
+.timeInput {
+  width: 90px;
+}
+.formGrid {
+  display: grid;
+  gap: var(--space-3);
+}
+.confirmMessage {
+  margin: 0;
+}

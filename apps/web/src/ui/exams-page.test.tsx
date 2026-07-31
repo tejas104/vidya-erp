@@ -1,7 +1,16 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { ToastProvider } from "@vidya/ui-system";
 import ExamsPage from "../../app/(app)/manage/exams/page";
 import { api, type ExamSlotView } from "./api";
+
+function renderPage() {
+  return render(
+    <ToastProvider>
+      <ExamsPage />
+    </ToastProvider>,
+  );
+}
 
 vi.mock("./api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./api")>();
@@ -52,7 +61,7 @@ beforeEach(() => {
 describe("/manage/exams", () => {
   it("renders the schedule and the empty state without slots", async () => {
     mock("exmClassSchedule").mockResolvedValue({ slots: [] });
-    render(<ExamsPage />);
+    renderPage();
     await screen.findByText("Midterm");
     fireEvent.change(screen.getByLabelText("Class"), { target: { value: "cls_1" } });
     expect(await screen.findByText("No exams scheduled.")).toBeInTheDocument();
@@ -63,7 +72,7 @@ describe("/manage/exams", () => {
       ...slot({ id: "slt_2", subjectName: "Data Structures" }),
       clash: "Room 12 busy: FY CS Data Structures",
     });
-    render(<ExamsPage />);
+    renderPage();
     await screen.findByText("Midterm");
     fireEvent.click(screen.getByLabelText("Select Midterm"));
     fireEvent.change(screen.getByLabelText("Class"), { target: { value: "cls_1" } });

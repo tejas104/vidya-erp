@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   api,
   ApiError,
@@ -16,21 +16,25 @@ import {
   type TtEntry,
   type TtPeriod,
 } from "@/ui/api";
-import { useToast } from "@/ui/Toast";
-import { Button } from "@/ui/Button";
-import { Field } from "@/ui/Field";
-import { Modal } from "@/ui/Modal";
-import { PageHeader } from "@/ui/PageHeader";
-import { Card } from "@/ui/Card";
-import { Badge } from "@/ui/Badge";
-import { RingStat } from "@/ui/RingStat";
+import {
+  useToast,
+  Button,
+  Modal,
+  PageHeader,
+  Card,
+  StatusBadge,
+  StatCard,
+  Table,
+  EmptyState,
+  Skeleton,
+  type TableColumn,
+} from "@vidya/ui-system";
+import { AsyncState } from "@/ui/AsyncState";
 import { StatTile, Sparkline, SubjectBars, TrendLine } from "@/ui/charts";
-import { DataTable, type Column } from "@/ui/DataTable";
-import { EmptyState } from "@/ui/EmptyState";
-import { Skeleton } from "@/ui/Skeleton";
 import { formatPaise } from "@/ui/money";
 import { Noticeboard } from "@/ui/Noticeboard";
 import { ReportButton } from "@/ui/ReportButton";
+import styles from "./page.module.css";
 
 export const dynamic = "force-dynamic";
 
@@ -66,6 +70,8 @@ const STATUS_TONE: Record<string, "good" | "warn" | "danger"> = {
   excused: "warn",
 };
 
+type SessionRow = { heldOn: ReactNode; status: ReactNode };
+
 export default function PortalPage() {
   const toast = useToast();
   const year = useMemo(() => currentAcademicYear(), []);
@@ -80,12 +86,12 @@ export default function PortalPage() {
     setSubmitting(true);
     try {
       await api.cwkSubmit(submitFor.id, { body: submitText });
-      toast.show(`Submitted "${submitFor.title}".`, "good");
+      toast.push({ status: "good", message: `Submitted "${submitFor.title}".` });
       setSubmitFor(null);
       setSubmitText("");
       setReloadTick((t) => t + 1);
     } catch (caught) {
-      toast.show(caught instanceof ApiError ? caught.message : "Couldn't submit.", "danger");
+      toast.push({ status: "danger", message: caught instanceof ApiError ? caught.message : "Couldn't submit." });
     } finally {
       setSubmitting(false);
     }
@@ -134,26 +140,40 @@ export default function PortalPage() {
     };
   }, [year, reloadTick]);
 
-  if (load.state === "loading") return <Skeleton lines={5} />;
+  if (load.state === "loading") {
+    return (
+      <div className={styles.skeletonStack} aria-hidden="true">
+        <Skeleton height={16} />
+        <Skeleton height={16} />
+        <Skeleton height={16} />
+        <Skeleton height={16} />
+        <Skeleton height={16} />
+      </div>
+    );
+  }
   if (load.state === "unlinked") {
     return (
       <EmptyState
         title="Your sign-in isn't linked to a student record yet."
-        message="Ask the office to link your account — then your attendance and marks appear here."
+        body="Ask the office to link your account — then your attendance and marks appear here."
       />
     );
   }
-  if (load.state === "error") return <EmptyState title="Couldn't load your register." message="Try again shortly." />;
+  if (load.state === "error") return <EmptyState title="Couldn't load your register." body="Try again shortly." />;
 
   const { me, attendance, marks, timetable, today, assignments, materials, fees, results, exams, syllabus } = load;
   const todayIso = new Date().toISOString().slice(0, 10);
   const totalDues = fees === null ? 0 : fees.reduce((sum, invoice) => sum + invoice.duesPaise, 0);
   const gridCell = (day: number, periodNo: number) =>
     timetable.entries.find((entry) => entry.dayOfWeek === day && entry.periodNo === periodNo);
-  const sessionColumns: Column<PortalAttendance["sessions"][number]>[] = [
-    { key: "heldOn", header: "Date", render: (row) => <span className="num">{row.heldOn}</span> },
-    { key: "status", header: "Status", render: (row) => <Badge tone={STATUS_TONE[row.status] ?? "warn"}>{row.status}</Badge> },
+  const sessionColumns: TableColumn<SessionRow>[] = [
+    { key: "heldOn", header: "Date", figure: true },
+    { key: "status", header: "Status" },
   ];
+  const sessionRows: SessionRow[] = attendance.sessions.map((row) => ({
+    heldOn: <span className="num">{row.heldOn}</span>,
+    status: <StatusBadge status={STATUS_TONE[row.status] ?? "warn"}>{row.status}</StatusBadge>,
+  }));
 
   return (
     <>
@@ -255,7 +275,7 @@ export default function PortalPage() {
           <span className="stat-sub num">{assignments.length}</span>
         </div>
         {assignments.length === 0 ? (
-          <EmptyState title="No assignments yet." message="Work your teachers assign appears here." />
+          <EmptyState title="No assignments yet." body="Work your teachers assign appears here." />
         ) : (
           <Card>
             {assignments.map((assignment) => (
@@ -264,19 +284,19 @@ export default function PortalPage() {
                   <strong>{assignment.title}</strong>{" "}
                   <span style={{ opacity: 0.65, fontSize: 13 }}>{assignment.subjectName} · due <span className="num">{assignment.dueOn}</span></span>
                 </span>
-                <span style={{ display: "inline-flex", gap: 8, alignItems: "center" }}>
+                <span className={styles.chipRow}>
                   {assignment.mySubmission ? (
                     assignment.mySubmission.score !== null ? (
-                      <Badge tone="good">scored {assignment.mySubmission.score}{assignment.maxScore !== null ? `/${assignment.maxScore}` : ""}</Badge>
+                      <StatusBadge status="good">scored {assignment.mySubmission.score}{assignment.maxScore !== null ? `/${assignment.maxScore}` : ""}</StatusBadge>
                     ) : (
                       <>
-                        <Badge>submitted</Badge>
+                        <StatusBadge status="neutral">submitted</StatusBadge>
                         <Button variant="ghost" onClick={() => { setSubmitText(""); setSubmitFor(assignment); }}>Resubmit</Button>
                       </>
                     )
                   ) : (
                     <>
-                      <Badge tone="warn">pending</Badge>
+                      <StatusBadge status="warn">pending</StatusBadge>
                       <Button variant="ghost" onClick={() => { setSubmitText(""); setSubmitFor(assignment); }}>Submit</Button>
                     </>
                   )}
@@ -318,11 +338,12 @@ export default function PortalPage() {
         }
       >
         {submitFor?.instructions ? (
-          <p style={{ marginTop: 0, fontSize: 13.5, whiteSpace: "pre-wrap", opacity: 0.8 }}>{submitFor.instructions}</p>
+          <p className={styles.instructions}>{submitFor.instructions}</p>
         ) : null}
-        <Field label="Your answer" htmlFor="cwk-answer">
-          <textarea id="cwk-answer" rows={6} value={submitText} onChange={(event) => setSubmitText(event.target.value)} />
-        </Field>
+        <div className={styles.field}>
+          <label htmlFor="cwk-answer" className={styles.label}>Your answer</label>
+          <textarea id="cwk-answer" className={styles.textarea} rows={6} value={submitText} onChange={(event) => setSubmitText(event.target.value)} />
+        </div>
       </Modal>
 
       {attendance.monthly.length > 0 ? (
@@ -340,7 +361,7 @@ export default function PortalPage() {
           <span className="stat-sub num">{marks.subjects.length} subjects</span>
         </div>
         {marks.subjects.length === 0 ? (
-          <EmptyState title="No marks yet." message="Scores appear here as your teachers enter them." />
+          <EmptyState title="No marks yet." body="Scores appear here as your teachers enter them." />
         ) : (
           <>
             <Card>
@@ -382,7 +403,7 @@ export default function PortalPage() {
           {results.terms.length === 0 ? (
             <EmptyState
               title="Results aren't published yet."
-              message="Your grade card appears here the moment the principal publishes a term."
+              body="Your grade card appears here the moment the principal publishes a term."
             />
           ) : (
             <div className="grid">
@@ -394,9 +415,9 @@ export default function PortalPage() {
                   </div>
                   <div style={{ marginTop: "var(--space-2)", display: "grid", gap: 4, fontSize: 13.5 }}>
                     {termResult.subjects.map((subject) => (
-                      <div key={subject.subjectId} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                      <div key={subject.subjectId} className={styles.subjectRow}>
                         <span>{subject.subjectName} <span style={{ opacity: 0.55 }}>({subject.credits} cr)</span></span>
-                        <Badge tone={subject.points === 0 ? "danger" : "good"}>{subject.grade}</Badge>
+                        <StatusBadge status={subject.points === 0 ? "danger" : "good"}>{subject.grade}</StatusBadge>
                       </div>
                     ))}
                   </div>
@@ -428,7 +449,7 @@ export default function PortalPage() {
             ) : null}
           </div>
           {exams.length === 0 ? (
-            <EmptyState title="No exams scheduled." message="Your exam timetable appears here when the office publishes it." />
+            <EmptyState title="No exams scheduled." body="Your exam timetable appears here when the office publishes it." />
           ) : (
             <>
               {(() => {
@@ -438,7 +459,7 @@ export default function PortalPage() {
                     <div style={{ display: "flex", gap: 14, flexWrap: "wrap", alignItems: "baseline" }}>
                       <span className="num" style={{ fontSize: 22, fontWeight: 600 }}>{next.onDate}</span>
                       <span className="num">{next.starts}–{next.ends}</span>
-                      {next.room !== "" ? <Badge>{`Room ${next.room}`}</Badge> : null}
+                      {next.room !== "" ? <StatusBadge status="neutral">{`Room ${next.room}`}</StatusBadge> : null}
                       <span style={{ opacity: 0.65, fontSize: 13 }}>{next.seriesName}</span>
                     </div>
                   </Card>
@@ -476,7 +497,7 @@ export default function PortalPage() {
               const units = subject.units.slice().sort((a, b) => a.position - b.position);
               return (
                 <Card key={subject.subjectId} title={subject.subjectName}>
-                  <RingStat
+                  <StatCard
                     pct={subject.coveragePct}
                     display={`${Math.round(subject.coveragePct)}%`}
                     label="Coverage"
@@ -535,7 +556,7 @@ export default function PortalPage() {
             </span>
           </div>
           {fees.length === 0 ? (
-            <EmptyState title="No invoices yet." message="Fee invoices appear here once the office generates them." />
+            <EmptyState title="No invoices yet." body="Fee invoices appear here once the office generates them." />
           ) : (
             <div style={{ display: "grid", gap: "var(--space-2)" }}>
               {fees.map((invoice) => (
@@ -545,13 +566,13 @@ export default function PortalPage() {
                       <strong>{invoice.headName}</strong>{" "}
                       <span className="num" style={{ opacity: 0.6, fontSize: 12.5 }}>due {invoice.dueOn}</span>
                     </span>
-                    <span style={{ display: "inline-flex", gap: 8, alignItems: "center" }}>
+                    <span className={styles.chipRow}>
                       <span className="num">{formatPaise(invoice.duesPaise)} due</span>
-                      {invoice.status === "paid" ? <Badge tone="good">paid</Badge>
-                        : invoice.status === "waived" ? <Badge>waived</Badge>
-                        : invoice.status === "part" ? <Badge tone="warn">part</Badge>
-                        : invoice.dueOn < todayIso ? <Badge tone="danger">overdue</Badge>
-                        : <Badge>pending</Badge>}
+                      {invoice.status === "paid" ? <StatusBadge status="good">paid</StatusBadge>
+                        : invoice.status === "waived" ? <StatusBadge status="neutral">waived</StatusBadge>
+                        : invoice.status === "part" ? <StatusBadge status="warn">part</StatusBadge>
+                        : invoice.dueOn < todayIso ? <StatusBadge status="danger">overdue</StatusBadge>
+                        : <StatusBadge status="neutral">pending</StatusBadge>}
                     </span>
                   </summary>
                   <div style={{ marginTop: "var(--space-2)", display: "grid", gap: 4, fontSize: 13.5 }}>
@@ -584,12 +605,14 @@ export default function PortalPage() {
 
       <section className="section" aria-label="Recent sessions">
         <div className="section-head"><h2>Recent attendance</h2></div>
-        <DataTable
-          columns={sessionColumns}
-          rows={attendance.sessions}
-          rowKey={(row) => row.heldOn + row.status}
-          empty={{ title: "No sessions recorded yet." }}
-        />
+        <AsyncState
+          loading={false}
+          error={false}
+          isEmpty={attendance.sessions.length === 0}
+          empty={<EmptyState title="No sessions recorded yet." />}
+        >
+          <Table columns={sessionColumns} rows={sessionRows} />
+        </AsyncState>
       </section>
     </>
   );

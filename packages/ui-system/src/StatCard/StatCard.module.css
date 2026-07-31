@@ -1,0 +1,50 @@
+.card {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  padding: var(--space-4);
+  box-shadow: var(--shadow);
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+}
+.ring {
+  width: 56px;
+  height: 56px;
+  flex-shrink: 0;
+  position: relative;
+}
+.ring svg {
+  transform: rotate(-90deg);
+}
+.ringValue {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-figure);
+  font-size: var(--text-14);
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+.meta .label {
+  font-size: var(--text-12);
+  color: var(--ink-3);
+  font-weight: 500;
+  margin-bottom: var(--space-1);
+}
+.meta .value {
+  font-family: var(--font-figure);
+  font-size: var(--text-16);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+.meta .sub {
+  font-size: var(--text-12);
+  color: var(--ink-3);
+  font-family: var(--font-figure);
+  margin-top: var(--space-1);
+}

@@ -1,7 +1,16 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
+import { ToastProvider } from "@vidya/ui-system";
 import ClassWorkspacePage from "../../app/(app)/manage/classes/page";
 import { api } from "./api";
+
+function renderPage() {
+  return render(
+    <ToastProvider>
+      <ClassWorkspacePage />
+    </ToastProvider>,
+  );
+}
 
 vi.mock("./api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./api")>();
@@ -58,7 +67,7 @@ beforeEach(() => {
 
 describe("class workspace — flashcards", () => {
   it("renders a StudentCard per roster student with attendance %, subject-scoped", async () => {
-    render(<ClassWorkspacePage />);
+    renderPage();
     expect(await screen.findByText("Aarav Sharma")).toBeInTheDocument();
     expect(screen.getByText("Sanika Kulkarni")).toBeInTheDocument();
     expect(screen.getByText("90")).toBeInTheDocument(); // attendance ring reads the number
@@ -66,7 +75,7 @@ describe("class workspace — flashcards", () => {
   });
 
   it("flags a short-attendance student (below 75%) with the short badge", async () => {
-    render(<ClassWorkspacePage />);
+    renderPage();
     await screen.findByText("Sanika Kulkarni");
     // Sanika at 50% earns a 'short' badge; Aarav at 90% shows 'clear'.
     expect(screen.getByText("short", { exact: true })).toBeInTheDocument();
@@ -77,7 +86,7 @@ describe("class workspace — flashcards", () => {
     (api.feesSectionInvoices as ReturnType<typeof vi.fn>).mockResolvedValue({
       invoices: [{ studentId: "stu_2", duesPaise: 50_000 }],
     });
-    render(<ClassWorkspacePage />);
+    renderPage();
     await screen.findByText("Sanika Kulkarni");
     expect(await screen.findByText("Fees due")).toBeInTheDocument();
   });

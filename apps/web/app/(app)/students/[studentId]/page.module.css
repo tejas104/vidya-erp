@@ -1,0 +1,31 @@
+.stateRow {
+  margin-top: var(--space-5);
+}
+.pageEyebrow {
+  margin-top: var(--space-4);
+}
+.reportRow {
+  display: flex;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-5);
+}
+.statsCard {
+  margin-bottom: var(--space-6);
+}
+.trendWrap {
+  margin-top: var(--space-4);
+  max-width: 320px;
+}
+.trendLabel {
+  margin-bottom: var(--space-2);
+}
+.subjectsGrid {
+  margin-top: var(--space-5);
+}
+.subjectName {
+  font-size: var(--text-16);
+}
+.subjectPct {
+  font-size: var(--text-20);
+}

@@ -1,7 +1,16 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { ToastProvider } from "@vidya/ui-system";
 import SyllabusPage from "../../app/(app)/manage/syllabus/page";
 import { api } from "./api";
+
+function renderPage() {
+  return render(
+    <ToastProvider>
+      <SyllabusPage />
+    </ToastProvider>,
+  );
+}
 
 vi.mock("./api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./api")>();
@@ -50,7 +59,7 @@ beforeEach(() => {
 describe("/manage/syllabus", () => {
   it("shows the empty state for an editable subject with no units", async () => {
     mock("syllabusForClass").mockResolvedValue({ units: [] });
-    render(<SyllabusPage />);
+    renderPage();
     expect(await screen.findByText("No syllabus yet — add the first unit.")).toBeInTheDocument();
   });
 
@@ -67,7 +76,7 @@ describe("/manage/syllabus", () => {
         },
       ],
     });
-    render(<SyllabusPage />);
+    renderPage();
     expect(await screen.findByText("Trees")).toBeInTheDocument();
     expect(screen.getByText("Binary trees")).toBeInTheDocument();
     expect(screen.getByText("AVL trees")).toBeInTheDocument();
@@ -85,7 +94,7 @@ describe("/manage/syllabus", () => {
       ],
     });
     mock("setTopicCoverage").mockResolvedValue({ id: "top_2", title: "AVL trees", position: 0, taughtOn: "2026-07-10" });
-    render(<SyllabusPage />);
+    renderPage();
     const input = await screen.findByLabelText("Taught date for AVL trees");
     fireEvent.change(input, { target: { value: "2026-07-10" } });
     await waitFor(() => expect(api.setTopicCoverage).toHaveBeenCalledWith("top_2", "2026-07-10"));

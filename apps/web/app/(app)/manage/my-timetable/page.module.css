@@ -1,0 +1,10 @@
+.periodTime {
+  font-size: var(--text-12);
+  color: var(--ink-3);
+}
+.entryMeta {
+  color: var(--ink-2);
+}
+.blank {
+  color: var(--ink-3);
+}

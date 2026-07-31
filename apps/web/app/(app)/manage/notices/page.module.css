@@ -1,0 +1,17 @@
+.snippet {
+  display: block;
+  font-size: var(--text-12);
+  color: var(--ink-3);
+}
+.formGrid {
+  display: grid;
+  gap: var(--space-3);
+}
+.formRow {
+  display: flex;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+.confirmMessage {
+  margin: 0;
+}

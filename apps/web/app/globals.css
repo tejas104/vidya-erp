@@ -1,297 +1,6 @@
-/* ============================================================================
- * Vidya — "The Register" design system.
- *
- * Light mode is ruled ledger paper: a cool off-white, ink-navy text, and the
- * faint horizontal rules that structure every list the way a paper register
- * rules its rows. Dark mode is NOT an inversion — it is the blackboard: deep
- * slate-green with chalk-ivory ink, designed as its own mode.
- *
- * The signature is the register strip: a row of day-cells inked by each day's
- * attendance density. Boldness is spent there; everything else stays quiet.
- * ========================================================================== */
-
-:root {
-  color-scheme: light;
-
-  /* --- surfaces (ruled ledger paper) --- */
-  --paper: #faf9f4;
-  --paper-raised: #fffefb;
-  --paper-sunken: #f2efe6;
-  --rule: #e6e1d3;
-  --rule-strong: #d6cfbc;
-
-  /* --- ink --- */
-  --ink: #1a2233;
-  --ink-2: #565c68;
-  --ink-3: #8b8f98;
-
-  /* --- meaning --- */
-  --accent: #b23a2e;        /* examiner's red — at-risk underline, reserved */
-  --accent-soft: #f3e0dc;
-  --good: #1e7a4e;          /* present / healthy */
-  --good-soft: #dcefe3;
-  --warn: #b7791f;          /* watch */
-  --warn-soft: #f4e9d2;
-
-  /* --- register-strip sequential ink (present density, single hue) --- */
-  --strip-0: #edeade;       /* empty-but-recorded */
-  --strip-1: #cfe3d3;
-  --strip-2: #9fccab;
-  --strip-3: #5faa77;
-  --strip-4: #1e7a4e;
-
-  /* --- categorical subject hues, FIXED ORDER (validated; always direct-labelled) --- */
-  --series-1: #2a78d6;
-  --series-2: #1baf7a;
-  --series-3: #4a3aa7;
-  --series-4: #eb6834;
-  --series-5: #008300;
-  --series-6: #e87ba4;
-
-  /* --- single-series chart hue (sparklines) --- */
-  --line: #2a78d6;
-
-  /* --- geometry --- */
-  --radius: 10px;
-  --radius-sm: 6px;
-  --rule-width: 1px;
-  --focus: #2a78d6;
-
-  /* --- type --- */
-  --font-display: var(--font-bricolage), "Segoe UI", system-ui, sans-serif;
-  --font-body: var(--font-atkinson), "Segoe UI", system-ui, sans-serif;
-  --font-mono: var(--font-plex-mono), ui-monospace, "Cascadia Code", monospace;
-
-  --shadow: 0 1px 2px rgba(26, 34, 51, 0.06), 0 4px 16px rgba(26, 34, 51, 0.05);
-
-  /* --- scale & surfaces (app shell) --- */
-  --space-1: 4px;
-  --space-2: 8px;
-  --space-3: 12px;
-  --space-4: 16px;
-  --space-5: 24px;
-  --space-6: 32px;
-  --space-7: 48px;
-  --surface: var(--paper-raised);
-  --surface-2: var(--paper-sunken);
-  --scrim: rgba(26, 34, 51, 0.45);
-  --side-bg: #f4f1e8;
-  --side-active: #ece7d8;
-  --shadow-2: 0 4px 12px rgba(26, 34, 51, 0.10), 0 16px 40px rgba(26, 34, 51, 0.12);
-}
-
-/* The blackboard — its own mode, from the same ramps. */
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --paper: #18211d;
-    --paper-raised: #1f2a25;
-    --paper-sunken: #141c19;
-    --rule: #2c3a33;
-    --rule-strong: #3d5049;
-    --ink: #ece8da;
-    --ink-2: #b7bfb4;
-    --ink-3: #83908a;
-    --accent: #e8837a;
-    --accent-soft: #33221f;
-    --good: #6fcf97;
-    --good-soft: #1c2c23;
-    --warn: #e3b341;
-    --warn-soft: #2c2717;
-    --strip-0: #23302a;
-    --strip-1: #2c4536;
-    --strip-2: #3a6b4c;
-    --strip-3: #4f9268;
-    --strip-4: #6fcf97;
-    --series-1: #3987e5;
-    --series-2: #199e70;
-    --series-3: #9085e9;
-    --series-4: #d95926;
-    --series-5: #3ba55c;
-    --series-6: #d55181;
-    --line: #6da7ec;
-    --focus: #6da7ec;
-    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 28px rgba(0, 0, 0, 0.35);
-
-    --scrim: rgba(0, 0, 0, 0.55);
-    --side-bg: #141c19;
-    --side-active: #23302a;
-    --shadow-2: 0 4px 12px rgba(0, 0, 0, 0.45), 0 20px 48px rgba(0, 0, 0, 0.4);
-  }
-}
-
-:root[data-theme="dark"] {
-  --paper: #18211d;
-  --paper-raised: #1f2a25;
-  --paper-sunken: #141c19;
-  --rule: #2c3a33;
-  --rule-strong: #3d5049;
-  --ink: #ece8da;
-  --ink-2: #b7bfb4;
-  --ink-3: #83908a;
-  --accent: #e8837a;
-  --accent-soft: #33221f;
-  --good: #6fcf97;
-  --good-soft: #1c2c23;
-  --warn: #e3b341;
-  --warn-soft: #2c2717;
-  --strip-0: #23302a;
-  --strip-1: #2c4536;
-  --strip-2: #3a6b4c;
-  --strip-3: #4f9268;
-  --strip-4: #6fcf97;
-  --series-1: #3987e5;
-  --series-2: #199e70;
-  --series-3: #9085e9;
-  --series-4: #d95926;
-  --series-5: #3ba55c;
-  --series-6: #d55181;
-  --line: #6da7ec;
-  --focus: #6da7ec;
-  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 28px rgba(0, 0, 0, 0.35);
-
-  --scrim: rgba(0, 0, 0, 0.55);
-  --side-bg: #141c19;
-  --side-active: #23302a;
-  --shadow-2: 0 4px 12px rgba(0, 0, 0, 0.45), 0 20px 48px rgba(0, 0, 0, 0.4);
-}
-
-/* ============================================================================
- * APP-WIDE DIRECTION — reference design system (docs/design ref), promoted to
- * :root so every page adopts it. A cooler, denser system than the old
- * Register: flat white panels on a flat cool-grey field, a dark navy rail, one
- * brand blue, semantic good/warn/bad pairs whose meaning must survive — so
- * GRADIENTS ARE STRUCTURAL ONLY (hero, active nav, avatars, "now" marker, ring
- * arcs), NEVER a surface fill. These override the Register values above by
- * source order; existing pages restyle through the same token names. Dark is
- * DERIVED (the reference ships light only), same cool-navy family.
- * ========================================================================== */
-:root {
-  /* surfaces */
-  --paper: #f7f7f9;
-  --paper-raised: #ffffff;
-  --paper-sunken: #f1f2f6;
-  --surface: #ffffff;
-  --surface-2: #f1f2f6;
-  --rule: #e8e9ef;
-  --rule-strong: #d8dae4;
-  --line-2: #f1f2f6;
-  /* ink */
-  --ink: #171a26;
-  --ink-2: #5a6076;
-  --ink-3: #9096a8;
-  /* brand + semantic (danger/warn/good each carry a -soft) */
-  --brand: #4a5bd8;
-  --brand-soft: #eef0fe;
-  --line: #4a5bd8; /* chart/link hue = brand blue */
-  --focus: #4a5bd8;
-  --good: #1f9268;
-  --good-soft: #e9f7f1;
-  --warn: #c97a11;
-  --warn-soft: #fdf3e5;
-  --bad: #d6455d;
-  --bad-soft: #fdecef;
-  --accent: #d6455d; /* was the examiner's red; now the danger red */
-  --accent-soft: #fdecef;
-  /* the dark navy rail */
-  --rail: #2a2f45;
-  --rail-2: #232739;
-  --rail-ink: #a8aec4;
-  --side-bg: #2a2f45;
-  --side-active: #3a4062;
-  --scrim: rgba(20, 22, 34, 0.42);
-  /* geometry */
-  --radius: 12px;
-  --radius-sm: 8px;
-  --r: 12px;
-  --shadow: 0 1px 2px rgba(23, 26, 38, 0.04), 0 4px 12px rgba(23, 26, 38, 0.05);
-  --shadow-2: 0 2px 4px rgba(23, 26, 38, 0.05), 0 12px 32px rgba(23, 26, 38, 0.09);
-  --sh: var(--shadow);
-  --sh-lg: var(--shadow-2);
-  /* type — Inter interface, IBM Plex Mono figures */
-  --font-display: var(--font-inter), system-ui, sans-serif;
-  --font-body: var(--font-inter), system-ui, sans-serif;
-  --font-sans: var(--font-inter), system-ui, sans-serif;
-  --font-figure: var(--font-plex-mono), ui-monospace, monospace;
-  /* structural gradients only */
-  --grad-hero: linear-gradient(120deg, #3d4bc4 0%, #5a6be8 58%, #7c63e8 100%);
-  --grad-brand: linear-gradient(140deg, #6b7bff, #4a5bd8);
-  --grad-now: linear-gradient(120deg, #4a5bd8, #6b7bff);
-  /* ring arc stops (SVG linearGradient per status) */
-  --ring-good-a: #4a5bd8;
-  --ring-good-b: #6b7bff;
-  --ring-warn-a: #c97a11;
-  --ring-warn-b: #e0a23a;
-  --ring-bad-a: #d6455d;
-  --ring-bad-b: #f0708a;
-}
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --paper: #14161f;
-    --paper-raised: #1c1f2b;
-    --paper-sunken: #22252f;
-    --surface: #1c1f2b;
-    --surface-2: #22252f;
-    --rule: #2a2e3c;
-    --rule-strong: #3a3f50;
-    --line-2: #22252f;
-    --ink: #e7e9f2;
-    --ink-2: #a6abbe;
-    --ink-3: #6e7488;
-    --brand: #6b7bff;
-    --brand-soft: #23273b;
-    --line: #6b7bff;
-    --focus: #6b7bff;
-    --good: #4fb88a;
-    --good-soft: #15271f;
-    --warn: #e0a23a;
-    --warn-soft: #2b2312;
-    --bad: #e8677d;
-    --bad-soft: #2e1820;
-    --accent: #e8677d;
-    --accent-soft: #2e1820;
-    --rail: #101219;
-    --rail-2: #0c0e14;
-    --rail-ink: #8a90a6;
-    --side-bg: #101219;
-    --side-active: #23273b;
-    --scrim: rgba(0, 0, 0, 0.55);
-    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.35);
-    --shadow-2: 0 2px 6px rgba(0, 0, 0, 0.5), 0 18px 44px rgba(0, 0, 0, 0.45);
-  }
-}
-:root[data-theme="dark"] {
-  --paper: #14161f;
-  --paper-raised: #1c1f2b;
-  --paper-sunken: #22252f;
-  --surface: #1c1f2b;
-  --surface-2: #22252f;
-  --rule: #2a2e3c;
-  --rule-strong: #3a3f50;
-  --line-2: #22252f;
-  --ink: #e7e9f2;
-  --ink-2: #a6abbe;
-  --ink-3: #6e7488;
-  --brand: #6b7bff;
-  --brand-soft: #23273b;
-  --line: #6b7bff;
-  --focus: #6b7bff;
-  --good: #4fb88a;
-  --good-soft: #15271f;
-  --warn: #e0a23a;
-  --warn-soft: #2b2312;
-  --bad: #e8677d;
-  --bad-soft: #2e1820;
-  --accent: #e8677d;
-  --accent-soft: #2e1820;
-  --rail: #101219;
-  --rail-2: #0c0e14;
-  --rail-ink: #8a90a6;
-  --side-bg: #101219;
-  --side-active: #23273b;
-  --scrim: rgba(0, 0, 0, 0.55);
-  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.35);
-  --shadow-2: 0 2px 6px rgba(0, 0, 0, 0.5), 0 18px 44px rgba(0, 0, 0, 0.45);
-}
+/* Design tokens live in @vidya/ui-system/tokens.css, imported before this
+ * file in apps/web/app/layout.tsx. Every var referenced below (--paper,
+ * --ink, --brand, --rule, --font-figure, --space-*, etc.) comes from there. */
 
 * {
   box-sizing: border-box;
@@ -495,6 +204,16 @@ a {
   color: var(--ink);
   font-weight: 600;
 }
+
+.state-denied {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  border-style: solid;
+  border-color: var(--warn);
+  background: var(--warn-soft);
+}
+.state-denied svg { flex: none; margin-top: 1px; color: var(--warn); }
 
 /* --- the register strip (the signature) --- */
 .strip {
@@ -768,144 +487,6 @@ a {
   border-color: var(--focus);
 }
 
-/* --- sign-in (split screen: gradient hero + form) --- */
-.login {
-  min-height: 100vh;
-  min-height: 100dvh;
-  display: grid;
-  grid-template-columns: 1.05fr 1fr;
-}
-.login-hero {
-  position: relative;
-  background: var(--grad-hero);
-  color: #fff;
-  overflow: hidden;
-  display: flex;
-  align-items: center;
-}
-.login-hero::after {
-  /* soft light bloom, structural only */
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(120% 80% at 15% 10%, rgba(255, 255, 255, 0.18), transparent 55%);
-  pointer-events: none;
-}
-.login-hero-inner { position: relative; padding: clamp(32px, 6vw, 72px); max-width: 460px; }
-.login-word {
-  font-family: var(--font-display);
-  font-weight: 800;
-  font-size: clamp(34px, 5vw, 48px);
-  letter-spacing: -0.03em;
-  line-height: 1;
-}
-.login-word span { opacity: 0.7; }
-.login-tagline { margin: 20px 0 0; font-size: 17px; line-height: 1.5; color: rgba(255, 255, 255, 0.86); }
-.login-points {
-  list-style: none;
-  margin: 28px 0 0;
-  padding: 0;
-  display: grid;
-  gap: 10px;
-  font-family: var(--font-figure);
-  font-size: 13px;
-  letter-spacing: 0.02em;
-  color: rgba(255, 255, 255, 0.82);
-}
-.login-points li { display: flex; align-items: center; gap: 10px; }
-.login-points li::before {
-  content: "";
-  width: 6px;
-  height: 6px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.85);
-}
-
-.login-main {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 32px 24px;
-  background: var(--paper);
-}
-.login-theme {
-  position: absolute;
-  top: 18px;
-  right: 22px;
-  border: 1px solid var(--rule-strong);
-  background: transparent;
-  color: var(--ink-3);
-  font-family: var(--font-figure);
-  font-size: 12px;
-  padding: 5px 11px;
-  border-radius: 999px;
-  cursor: pointer;
-}
-.login-theme:hover { color: var(--ink); }
-.login-card {
-  width: 100%;
-  max-width: 380px;
-  background: var(--surface);
-  border: 1px solid var(--rule);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-2);
-  padding: clamp(24px, 4vw, 34px);
-}
-/* fields sit inside the raised card — use the sunken surface so they read in
-   both themes (on --paper they'd vanish into the dark panel behind). */
-.login-card .field input { background: var(--paper-sunken); border-color: var(--rule-strong); }
-.login-card .field input:focus-visible { border-color: var(--focus); background: var(--surface); }
-
-.login-seg {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 4px;
-  padding: 4px;
-  background: var(--surface-2);
-  border: 1px solid var(--rule);
-  border-radius: 999px;
-  margin-bottom: 26px;
-}
-.login-seg button {
-  border: none;
-  background: transparent;
-  color: var(--ink-2);
-  font-family: var(--font-figure);
-  font-size: 12.5px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  padding: 9px 0;
-  border-radius: 999px;
-  cursor: pointer;
-}
-.login-seg button[data-on] { background: var(--surface); color: var(--ink); box-shadow: var(--shadow); }
-
-.login-eyebrow { margin-bottom: 6px; }
-.login-title { font-size: 28px; letter-spacing: -0.02em; margin: 0 0 6px; }
-.login-lede { color: var(--ink-2); margin: 0 0 26px; font-size: 14.5px; line-height: 1.5; min-height: 44px; }
-.login-submit { width: 100%; background: var(--brand); border-color: var(--brand); color: #fff; }
-.login-demo {
-  display: block;
-  margin: 16px auto 0;
-  border: none;
-  background: transparent;
-  color: var(--ink-3);
-  font-family: var(--font-figure);
-  font-size: 12px;
-  cursor: pointer;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-.login-demo:hover { color: var(--brand); }
-
-@media (max-width: 820px) {
-  .login { grid-template-columns: 1fr; }
-  .login-hero { align-items: flex-start; }
-  .login-hero-inner { padding: 28px 24px; max-width: none; }
-  .login-tagline, .login-points { display: none; }
-}
-
 /* --- teacher dashboard: next-class command card + a teacher's day --- */
 /* --td-depth: a touch deeper than --shadow-2 for the lift the owner asked for */
 .td-depth { --td-shadow: 0 3px 8px rgba(23,26,38,.07), 0 18px 42px rgba(23,26,38,.13); }
@@ -1067,39 +648,6 @@ a {
 .ui-badge.danger { color: var(--accent); background: var(--accent-soft); border-color: transparent; }
 
 /* --- kit: overlays --- */
-.ui-scrim {
-  position: fixed;
-  inset: 0;
-  background: var(--scrim);
-  display: grid;
-  place-items: center;
-  padding: var(--space-5);
-  z-index: 100;
-}
-.ui-modal {
-  width: min(520px, 100%);
-  background: var(--surface);
-  border: 1px solid var(--rule);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-2);
-  outline: none;
-}
-.ui-modal-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: var(--space-4) var(--space-5);
-  border-bottom: 1px solid var(--rule);
-}
-.ui-modal-head h2 { font-size: 19px; }
-.ui-modal-body { padding: var(--space-5); }
-.ui-modal-foot {
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--space-3);
-  padding: var(--space-4) var(--space-5);
-  border-top: 1px solid var(--rule);
-}
 .ui-iconbtn {
   display: inline-grid;
   place-items: center;
@@ -1255,28 +803,6 @@ a {
 @keyframes ui-shimmer {
   to { background-position: -200% 0; }
 }
-.ui-tabs {
-  display: flex;
-  gap: var(--space-2);
-  border-bottom: 1px solid var(--rule-strong);
-  margin-bottom: var(--space-5);
-}
-.ui-tab {
-  border: none;
-  background: transparent;
-  color: var(--ink-2);
-  font: inherit;
-  font-size: 15px;
-  padding: 10px 14px;
-  cursor: pointer;
-  border-bottom: 2.5px solid transparent;
-  margin-bottom: -1px;
-}
-.ui-tab.active {
-  color: var(--ink);
-  font-weight: 700;
-  border-bottom-color: var(--accent);
-}
 
 /* --- flashcards: the teacher's visual roster, composed from Register primitives.
  *     The signature carries down to the student: each card's anchor is a mini
@@ -1368,13 +894,6 @@ a {
 
 /* rings */
 .cw-rings { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
-.cw-ring-card { background: var(--surface); border: 1px solid var(--rule); border-radius: var(--radius); padding: 15px; box-shadow: var(--shadow); display: flex; gap: 13px; align-items: center; }
-.cw-ring { width: 56px; height: 56px; flex-shrink: 0; position: relative; }
-.cw-ring svg { transform: rotate(-90deg); }
-.cw-ring-v { position: absolute; inset: 0; display: grid; place-items: center; font-family: var(--font-mono); font-size: 13px; font-weight: 600; letter-spacing: -0.03em; }
-.cw-ring-meta .rk { font-size: 11px; color: var(--ink-3); font-weight: 500; margin-bottom: 2px; }
-.cw-ring-meta .rv { font-size: 15px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.2; }
-.cw-ring-meta .rs { font-size: 11px; color: var(--ink-3); font-family: var(--font-mono); margin-top: 1px; }
 
 /* panel */
 .cw-panel { background: var(--surface); border: 1px solid var(--rule); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
@@ -1450,15 +969,7 @@ a {
 .cw-nowline .l { flex: 1; height: 1px; background: var(--bad); opacity: 0.45; }
 .cw-nowline .t { font-family: var(--font-mono); font-size: 9.5px; color: var(--bad); font-weight: 600; }
 
-/* slide-over drawer */
-.cw-scrim { position: fixed; inset: 0; background: var(--scrim); opacity: 0; pointer-events: none; transition: opacity 0.18s; z-index: 100; }
-.cw-scrim.open { opacity: 1; pointer-events: auto; }
-.cw-drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(400px, 100%); background: var(--paper); transform: translateX(100%); transition: transform 0.22s cubic-bezier(0.32, 0.72, 0, 1); z-index: 101; overflow-y: auto; box-shadow: var(--shadow-2); }
-.cw-drawer.open { transform: none; }
-.cw-dr-hero { background: var(--grad-hero); padding: 20px; color: #fff; position: relative; }
-.cw-dr-photo { width: 54px; height: 54px; border-radius: 14px; background: rgba(255, 255, 255, 0.2); display: grid; place-items: center; font-size: 18px; font-weight: 700; margin-bottom: 10px; border: 1.5px solid rgba(255, 255, 255, 0.3); }
-.cw-dr-close { position: absolute; right: 14px; top: 14px; background: rgba(255, 255, 255, 0.16); border: 0; width: 26px; height: 26px; border-radius: 7px; color: #fff; font-size: 15px; cursor: pointer; }
-.cw-dr-close:hover { background: rgba(255, 255, 255, 0.28); }
+/* slide-over drawer content (chrome now provided by @vidya/ui-system SlideOver) */
 .cw-dr-sec { background: var(--surface); margin: 12px; border-radius: var(--radius); border: 1px solid var(--rule); padding: 14px; box-shadow: var(--shadow); }
 .cw-dr-sec h4 { font-size: 10.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 10px; font-weight: 700; }
 .cw-dl { display: grid; grid-template-columns: 96px 1fr; gap: 7px 10px; font-size: 12.5px; }
@@ -1481,7 +992,7 @@ a {
   .cw-rings { grid-template-columns: repeat(2, 1fr); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .cw-card, .cw-drawer, .cw-scrim { transition: none; }
+  .cw-card { transition: none; }
 }
 
 /* ============================================================================
@@ -1626,7 +1137,6 @@ a {
   body * { visibility: hidden !important; }
   .receipt-print, .receipt-print * { visibility: visible !important; }
   .receipt-print { position: absolute; inset: 0; margin: 24px; box-shadow: none !important; }
-  .ui-scrim { background: none !important; backdrop-filter: none !important; }
 }
 
 /* --- the shell --- */
@@ -1655,16 +1165,34 @@ a {
 .shell-side .wordmark { color: #fff; }
 .shell-nav { flex: 1; padding: 0 var(--space-3); display: grid; gap: var(--space-5); align-content: start; }
 .shell-nav-group { display: grid; gap: 2px; }
+.shell-nav-context {
+  margin: 0;
+  padding: 0 var(--space-3);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--brand);
+}
 .shell-nav-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
   margin: 0 0 4px;
   padding: 0 var(--space-3);
+  background: none;
+  border: 0;
   font-family: var(--font-mono);
   font-size: 11px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--rail-ink);
   opacity: 0.62;
+  cursor: pointer;
 }
+.shell-nav-title svg { transition: transform 0.15s ease; }
+.shell-nav-title[aria-expanded="false"] svg { transform: rotate(-90deg); }
 .shell-nav-link {
   display: flex;
   align-items: center;
@@ -1703,7 +1231,22 @@ a {
   backdrop-filter: blur(8px);
   border-bottom: 1px solid var(--rule);
 }
-.shell-top-spacer { flex: 1; }
+.shell-search-btn {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 320px;
+  margin-left: 8px;
+  padding: 6px 10px;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  background: none;
+  color: var(--ink-2);
+  font-size: 13px;
+  cursor: pointer;
+}
+.shell-search-btn:hover { background: var(--paper-sunken); color: var(--ink); }
 .shell-top-year { font-size: 13px; color: var(--ink-2); }
 .shell-hamburger { display: none; }
 .shell-page { width: 100%; }

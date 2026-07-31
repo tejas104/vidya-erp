@@ -1,26 +1,29 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { api, ApiError, type NoticeView } from "@/ui/api";
-import { useToast } from "@/ui/Toast";
-import { PageHeader } from "@/ui/PageHeader";
-import { Button } from "@/ui/Button";
-import { Field } from "@/ui/Field";
-import { Modal } from "@/ui/Modal";
-import { ConfirmDialog } from "@/ui/ConfirmDialog";
-import { DataTable, type Column } from "@/ui/DataTable";
-import { Badge } from "@/ui/Badge";
-import { Skeleton } from "@/ui/Skeleton";
+import { ago } from "@/ui/time";
+import { AsyncState } from "@/ui/AsyncState";
+import {
+  useToast, Button, Input, Select, Modal, Table, StatusBadge, EmptyState, Skeleton, PageHeader,
+  type TableColumn,
+} from "@vidya/ui-system";
+import styles from "./page.module.css";
 
 export const dynamic = "force-dynamic";
 
 type AudienceOption = { value: string; label: string };
 
 /** scheduled → live → expired, derived client-side from the publish window. */
-function StatusBadge({ notice, now }: { notice: NoticeView; now: string }) {
-  if (notice.publishAt > now) return <Badge tone="warn">scheduled</Badge>;
-  if (notice.expiresAt !== null && notice.expiresAt <= now) return <Badge>expired</Badge>;
-  return <Badge tone="good">live</Badge>;
+function noticeBadge(notice: NoticeView, now: string): ReactNode {
+  if (notice.publishAt > now) return <StatusBadge status="warn">scheduled</StatusBadge>;
+  if (notice.expiresAt !== null && notice.expiresAt <= now) return <StatusBadge status="neutral">expired</StatusBadge>;
+  return <StatusBadge status="good">live</StatusBadge>;
 }
+
+type NoticeRow = {
+  title: ReactNode; aud: ReactNode; created: ReactNode; from: ReactNode; to: ReactNode;
+  status: ReactNode; actions: ReactNode;
+};
 
 export default function NoticesPage() {
   const toast = useToast();
@@ -28,6 +31,8 @@ export default function NoticesPage() {
   const [collegeId, setCollegeId] = useState<string | null>(null);
   const [audiences, setAudiences] = useState<AudienceOption[] | null>(null);
   const [notices, setNotices] = useState<NoticeView[]>([]);
+  const [noticesLoading, setNoticesLoading] = useState(false);
+  const [noticesError, setNoticesError] = useState(false);
   const [saving, setSaving] = useState(false);
   // compose modal
   const [composing, setComposing] = useState(false);
@@ -37,6 +42,18 @@ export default function NoticesPage() {
   const [publishOn, setPublishOn] = useState("");
   const [expiresOn, setExpiresOn] = useState("");
   const [doomed, setDoomed] = useState<NoticeView | null>(null);
+
+  const loadNotices = useCallback(async (id: string) => {
+    setNoticesLoading(true);
+    setNoticesError(false);
+    try {
+      setNotices((await api.ntcList(id)).notices);
+    } catch {
+      setNoticesError(true);
+    } finally {
+      setNoticesLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     api.colleges()
@@ -55,10 +72,10 @@ export default function NoticesPage() {
           for (const cls of dep.classes) options.push({ value: `class:${cls.id}`, label: `Class — ${cls.name}` });
         }
         setAudiences(options);
-        api.ntcList(college.id).then((r) => setNotices(r.notices)).catch(() => setNotices([]));
+        void loadNotices(college.id);
       })
       .catch(() => setAudiences([]));
-  }, []);
+  }, [loadNotices]);
 
   async function publish() {
     if (collegeId === null || title.trim() === "" || body.trim() === "") return;
@@ -75,9 +92,9 @@ export default function NoticesPage() {
       setBody("");
       setPublishOn("");
       setExpiresOn("");
-      toast.show(created.publishAt > now ? "Notice scheduled." : "Notice published.", "good");
+      toast.push({ status: "good", message: created.publishAt > now ? "Notice scheduled." : "Notice published." });
     } catch (caught) {
-      toast.show(caught instanceof ApiError ? caught.message : "Couldn't publish.", "danger");
+      toast.push({ status: "danger", message: caught instanceof ApiError ? caught.message : "Couldn't publish." });
     } finally {
       setSaving(false);
     }
@@ -88,37 +105,39 @@ export default function NoticesPage() {
     try {
       await api.ntcDelete(doomed.id);
       setNotices((rows) => rows.filter((row) => row.id !== doomed.id));
-      toast.show("Notice taken off the board.", "good");
+      toast.push({ status: "good", message: "Notice taken off the board." });
     } catch (caught) {
-      toast.show(caught instanceof ApiError ? caught.message : "Couldn't delete.", "danger");
+      toast.push({ status: "danger", message: caught instanceof ApiError ? caught.message : "Couldn't delete." });
     } finally {
       setDoomed(null);
     }
   }
 
-  if (audiences === null) return <Skeleton lines={5} />;
+  if (audiences === null) return <Skeleton height={16} />;
 
-  const columns: Column<NoticeView>[] = [
-    {
-      key: "title", header: "Notice",
-      render: (row) => (
-        <span>
-          <strong>{row.title}</strong>
-          <span style={{ display: "block", fontSize: 12.5, color: "var(--ink-3)" }}>
-            {row.body.length > 90 ? `${row.body.slice(0, 90)}…` : row.body}
-          </span>
-        </span>
-      ),
-    },
-    { key: "aud", header: "Audience", render: (row) => <Badge>{row.audienceLabel}</Badge> },
-    { key: "from", header: "Publish", render: (row) => <span className="num">{row.publishAt.slice(0, 10)}</span> },
-    { key: "to", header: "Expires", render: (row) => <span className="num">{row.expiresAt?.slice(0, 10) ?? "—"}</span> },
-    { key: "status", header: "Status", render: (row) => <StatusBadge notice={row} now={now} /> },
-    {
-      key: "actions", header: "", align: "right",
-      render: (row) => <Button variant="danger" onClick={() => setDoomed(row)}>Delete</Button>,
-    },
+  const columns: TableColumn<NoticeRow>[] = [
+    { key: "title", header: "Notice" },
+    { key: "aud", header: "Audience" },
+    { key: "created", header: "Created", figure: true },
+    { key: "from", header: "Publish", figure: true },
+    { key: "to", header: "Expires", figure: true },
+    { key: "status", header: "Status" },
+    { key: "actions", header: "", align: "right" },
   ];
+  const rows: NoticeRow[] = notices.map((row) => ({
+    title: (
+      <span>
+        <strong>{row.title}</strong>
+        <span className={styles.snippet}>{row.body.length > 90 ? `${row.body.slice(0, 90)}…` : row.body}</span>
+      </span>
+    ),
+    aud: <StatusBadge status="neutral">{row.audienceLabel}</StatusBadge>,
+    created: <span className="num">{ago(row.createdAt)}</span>,
+    from: <span className="num">{row.publishAt.slice(0, 10)}</span>,
+    to: <span className="num">{row.expiresAt?.slice(0, 10) ?? "—"}</span>,
+    status: noticeBadge(row, now),
+    actions: <Button variant="danger" onClick={() => setDoomed(row)}>Delete</Button>,
+  }));
 
   return (
     <>
@@ -130,10 +149,15 @@ export default function NoticesPage() {
       />
 
       <section className="section" aria-label="All notices">
-        <DataTable
-          columns={columns} rows={notices} rowKey={(row) => row.id}
-          empty={{ title: "Nothing on the board.", message: "Publish the first notice with the button above." }}
-        />
+        <AsyncState
+          loading={noticesLoading}
+          error={noticesError}
+          onRetry={() => { if (collegeId !== null) void loadNotices(collegeId); }}
+          isEmpty={notices.length === 0}
+          empty={<EmptyState title="Nothing on the board." body="Publish the first notice with the button above." />}
+        >
+          <Table columns={columns} rows={rows} />
+        </AsyncState>
       </section>
 
       <Modal
@@ -149,40 +173,38 @@ export default function NoticesPage() {
           </>
         }
       >
-        <div style={{ display: "grid", gap: "var(--space-3)" }}>
-          <Field label="Title" htmlFor="ntc-title">
-            <input id="ntc-title" value={title} onChange={(event) => setTitle(event.target.value)} />
-          </Field>
-          <Field label="Body" htmlFor="ntc-body">
+        <div className={styles.formGrid}>
+          <Input id="ntc-title" label="Title" value={title} onChange={(event) => setTitle(event.target.value)} />
+          <div className="field">
+            <label htmlFor="ntc-body">Body</label>
             <textarea id="ntc-body" rows={5} value={body} onChange={(event) => setBody(event.target.value)} />
-          </Field>
-          <Field label="Audience" htmlFor="ntc-aud">
-            <select id="ntc-aud" value={audience} onChange={(event) => setAudience(event.target.value)}>
-              {audiences.map((option) => (
-                <option key={option.value} value={option.value}>{option.label}</option>
-              ))}
-            </select>
-          </Field>
-          <div style={{ display: "flex", gap: "var(--space-4)", flexWrap: "wrap" }}>
-            <Field label="Publish on (blank = now)" htmlFor="ntc-from">
-              <input id="ntc-from" type="date" value={publishOn} onChange={(event) => setPublishOn(event.target.value)} />
-            </Field>
-            <Field label="Expires on (optional)" htmlFor="ntc-to">
-              <input id="ntc-to" type="date" value={expiresOn} onChange={(event) => setExpiresOn(event.target.value)} />
-            </Field>
+          </div>
+          <Select
+            id="ntc-aud" label="Audience" value={audience} onChange={(event) => setAudience(event.target.value)}
+            options={audiences.map((option) => ({ value: option.value, label: option.label }))}
+          />
+          <div className={styles.formRow}>
+            <Input id="ntc-from" label="Publish on (blank = now)" type="date" value={publishOn} onChange={(event) => setPublishOn(event.target.value)} />
+            <Input id="ntc-to" label="Expires on (optional)" type="date" value={expiresOn} onChange={(event) => setExpiresOn(event.target.value)} />
           </div>
         </div>
       </Modal>
 
-      <ConfirmDialog
+      <Modal
         open={doomed !== null}
+        onClose={() => setDoomed(null)}
         title="Take this notice down"
-        message={`Delete "${doomed?.title ?? ""}"? Readers stop seeing it immediately.`}
-        confirmLabel="Delete"
-        danger
-        onConfirm={() => void removeNotice()}
-        onCancel={() => setDoomed(null)}
-      />
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setDoomed(null)}>Cancel</Button>
+            <Button variant="danger" onClick={() => void removeNotice()}>Delete</Button>
+          </>
+        }
+      >
+        <p className={styles.confirmMessage}>
+          Delete &quot;{doomed?.title ?? ""}&quot;? Readers stop seeing it immediately.
+        </p>
+      </Modal>
     </>
   );
 }

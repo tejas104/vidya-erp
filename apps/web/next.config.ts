@@ -1,18 +1,42 @@
+import { execSync } from "node:child_process";
+import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { NextConfig } from "next";
 
 const repoRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
+// Deployed-version stamp shown on the admin System page (license register's
+// "deployed version" column). Version comes from the root package.json; the
+// git SHA is passed in as GIT_SHA at build time (Docker), or read from git for
+// local dev, or "unknown" if neither is available.
+const require = createRequire(import.meta.url);
+const appVersion = (require(path.join(repoRoot, "package.json")) as { version: string }).version;
+function resolveGitSha(): string {
+  if (process.env.GIT_SHA && process.env.GIT_SHA !== "unknown") return process.env.GIT_SHA;
+  try {
+    return execSync("git rev-parse --short HEAD", { cwd: repoRoot }).toString().trim();
+  } catch {
+    return "unknown";
+  }
+}
+const gitSha = resolveGitSha();
+
 const nextConfig: NextConfig = {
   output: "standalone",
   poweredByHeader: false,
+  // Inlined into the client bundle at build time (version is not a secret).
+  env: {
+    NEXT_PUBLIC_APP_VERSION: appVersion,
+    NEXT_PUBLIC_GIT_SHA: gitSha,
+  },
   // Monorepo: trace files from the workspace root so the standalone output
   // includes the workspace packages.
   outputFileTracingRoot: repoRoot,
   // Workspace packages ship TypeScript source; Next transpiles them.
   transpilePackages: [
     "@vidya/platform",
+    "@vidya/ui-system",
     "@vidya/module-system",
     "@vidya/module-identity",
     "@vidya/module-people",

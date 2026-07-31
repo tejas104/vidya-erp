@@ -292,6 +292,10 @@ export interface TtToday {
   periods: TtPeriod[];
   entries: (TtEntry & { sectionName: string; className: string })[];
 }
+export interface TtWeek {
+  periods: TtPeriod[];
+  entries: (TtEntry & { sectionName: string; className: string })[];
+}
 
 // --- coursework ---
 export interface CwkAssignment {
@@ -624,6 +628,8 @@ export const api = {
     get<ComparisonReport>(`/api/v1/analytics/compare/${level}/${encodeURIComponent(nodeId)}?academicYear=${year}`),
   distribution: (level: string, nodeId: string, year: string) =>
     get<DistributionResponse>(`/api/v1/analytics/distribution/${level}/${encodeURIComponent(nodeId)}?academicYear=${year}`),
+  recomputeAnalytics: (year: string) =>
+    post<{ enqueued: true }>("/api/v1/analytics/recompute", { academicYear: year }),
   // people
   sectionRoster: (sectionId: string) =>
     get<{ students: StudentView[] }>(`/api/v1/people/sections/${encodeURIComponent(sectionId)}/roster`),
@@ -781,6 +787,7 @@ export const api = {
       `/api/v1/timetable/sections/${encodeURIComponent(sectionId)}/grid?academicYear=${year}`,
     ),
   ttMyToday: (year: string) => get<TtToday>(`/api/v1/timetable/my/today?academicYear=${year}`),
+  ttMyWeek: (year: string) => get<TtWeek>(`/api/v1/timetable/my/week?academicYear=${year}`),
   // --- coursework ---
   cwkCreateAssignment: (body: {
     classId: string; subjectId: string; title: string; instructions?: string;

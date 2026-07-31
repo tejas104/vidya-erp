@@ -1,7 +1,16 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { ToastProvider } from "@vidya/ui-system";
 import ResultsPage from "../../app/(app)/manage/results/page";
 import { api, ApiError, type StudentResult } from "./api";
+
+function renderPage() {
+  return render(
+    <ToastProvider>
+      <ResultsPage />
+    </ToastProvider>,
+  );
+}
 
 vi.mock("./api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./api")>();
@@ -63,7 +72,7 @@ beforeEach(() => {
 
 describe("/manage/results", () => {
   it("flags overlapping bands inline and blocks the save", async () => {
-    render(<ResultsPage />);
+    renderPage();
     fireEvent.click(await screen.findByRole("button", { name: /new scale/i }));
     // Default bands are valid → no error, save enabled.
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
@@ -78,7 +87,7 @@ describe("/manage/results", () => {
   });
 
   it("compiles a preview and publishes after the confirm dialog", async () => {
-    render(<ResultsPage />);
+    renderPage();
     await screen.findAllByText("10-point");
     const classPickers = screen.getAllByLabelText("Class");
     fireEvent.change(classPickers[classPickers.length - 1]!, { target: { value: "cls_1" } });
@@ -101,7 +110,7 @@ describe("/manage/results", () => {
 
   it("shows the set-credits-first state on 422", async () => {
     mock("resClassResults").mockRejectedValue(new ApiError(422, "no credits"));
-    render(<ResultsPage />);
+    renderPage();
     await screen.findAllByText("10-point");
     const classPickers = screen.getAllByLabelText("Class");
     fireEvent.change(classPickers[classPickers.length - 1]!, { target: { value: "cls_1" } });
@@ -113,7 +122,7 @@ describe("/manage/results", () => {
   it("loads and saves the credits grid for a class", async () => {
     mock("resCredits").mockResolvedValue({ credits: [{ subjectId: "sub_1", subjectName: "Data Structures", credits: 4 }] });
     mock("resSetCredits").mockResolvedValue({ credits: [] });
-    render(<ResultsPage />);
+    renderPage();
     await screen.findAllByText("10-point");
     fireEvent.change(screen.getAllByLabelText("Class")[0]!, { target: { value: "cls_1" } });
     // Existing credits prefill; the unset subject shows 0.

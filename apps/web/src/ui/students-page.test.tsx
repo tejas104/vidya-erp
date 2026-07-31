@@ -1,7 +1,16 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { ToastProvider } from "@vidya/ui-system";
 import StudentsPage from "../../app/(app)/manage/students/page";
 import { api } from "./api";
+
+function renderPage() {
+  return render(
+    <ToastProvider>
+      <StudentsPage />
+    </ToastProvider>,
+  );
+}
 
 vi.mock("./api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./api")>();
@@ -39,12 +48,12 @@ beforeEach(() => {
 
 describe("/manage/students", () => {
   it("lists the selected section's roster", async () => {
-    render(<StudentsPage />);
+    renderPage();
     expect(await screen.findByText("Aarav Sharma")).toBeInTheDocument();
     expect(screen.getByText("FYCS-001")).toBeInTheDocument();
   });
   it("creates then enrolls a student into the selected section", async () => {
-    render(<StudentsPage />);
+    renderPage();
     fireEvent.click(await screen.findByRole("button", { name: /add student/i }));
     fireEvent.change(screen.getByLabelText("Admission no."), { target: { value: "FYCS-099" } });
     fireEvent.change(screen.getByLabelText("Full name"), { target: { value: "New Kid" } });

@@ -21,7 +21,7 @@ export function StatTile({
 }) {
   return (
     <div className="stat">
-      <div className={`stat-value${muted ? " muted" : ""}`}>{value}</div>
+      <div className={`stat-value num${muted ? " muted" : ""}`}>{value}</div>
       <div className="stat-label">{label}</div>
       {sub !== undefined ? <div className="stat-sub num">{sub}</div> : null}
     </div>
@@ -243,7 +243,8 @@ export function TrendLine({
       <path d={area} fill="var(--line)" opacity="0.1" />
       <path d={line} fill="none" stroke="var(--line)" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
       {points.map((p, i) => (
-        <circle key={`pt-${i}`} cx={xFor(i)} cy={yFor(p.y)} r="2.6" fill="var(--line)" />
+        // last point matches Sparkline's emphasized-endpoint convention (r 3.2 vs 2.6)
+        <circle key={`pt-${i}`} cx={xFor(i)} cy={yFor(p.y)} r={i === n - 1 ? "3.2" : "2.6"} fill="var(--line)" />
       ))}
       {points.map((p, i) =>
         i === 0 || i === n - 1 || n <= 6 ? (

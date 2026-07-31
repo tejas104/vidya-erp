@@ -1,0 +1,15 @@
+.formRow {
+  display: flex;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+.wide {
+  min-width: 240px;
+}
+.mid {
+  min-width: 200px;
+}
+.hint {
+  margin-top: var(--space-3);
+}

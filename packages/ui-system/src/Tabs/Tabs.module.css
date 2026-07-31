@@ -1,0 +1,25 @@
+.tablist {
+  display: flex;
+  gap: var(--space-2);
+  border-bottom: 1px solid var(--rule-strong);
+  margin-bottom: var(--space-5);
+}
+.tab {
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--ink-2);
+  font: inherit;
+  font-size: var(--text-16);
+  padding: var(--space-3) var(--space-4);
+  cursor: pointer;
+}
+.tab:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+.active {
+  color: var(--ink);
+  font-weight: 700;
+  border-bottom-color: var(--brand);
+}

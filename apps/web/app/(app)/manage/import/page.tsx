@@ -1,14 +1,19 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api, ApiError, currentAcademicYear, type ImportView } from "@/ui/api";
-import { useToast } from "@/ui/Toast";
-import { PageHeader } from "@/ui/PageHeader";
-import { Card } from "@/ui/Card";
-import { Button } from "@/ui/Button";
-import { Field } from "@/ui/Field";
-import { DataTable, type Column } from "@/ui/DataTable";
-import { Badge } from "@/ui/Badge";
-import { EmptyState } from "@/ui/EmptyState";
+import {
+  useToast,
+  Button,
+  Input,
+  Select,
+  Table,
+  StatusBadge,
+  Card,
+  EmptyState,
+  PageHeader,
+  type TableColumn,
+} from "@vidya/ui-system";
+import styles from "./page.module.css";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +22,8 @@ const HINTS: Record<"students" | "teachers", string> = {
     "Columns: admission_no, full_name — optionally department_code, class_code, section_name to enroll (needs the academic year).",
   teachers: "Columns: staff_no, full_name.",
 };
+
+type ErrorRow = { row: number; message: string };
 
 export default function ImportPage() {
   const toast = useToast();
@@ -59,29 +66,30 @@ export default function ImportPage() {
           if (view.status === "completed" || view.status === "failed") {
             setResult(view);
             setRunning(false);
-            toast.show(
-              view.status === "completed"
-                ? `${view.dryRun ? "Dry-run" : "Import"} completed — ${view.okRows} ok, ${view.errorRows} error(s).`
-                : "Import failed.",
-              view.status === "completed" && view.errorRows === 0 ? "good" : "danger",
-            );
+            toast.push({
+              status: view.status === "completed" && view.errorRows === 0 ? "good" : "danger",
+              message:
+                view.status === "completed"
+                  ? `${view.dryRun ? "Dry-run" : "Import"} completed — ${view.okRows} ok, ${view.errorRows} error(s).`
+                  : "Import failed.",
+            });
             return;
           }
           if (Date.now() - started > 30_000) {
             setRunning(false);
-            toast.show("The import is taking too long — check back on this page.", "info");
+            toast.push({ status: "info", message: "The import is taking too long — check back on this page." });
             return;
           }
           pollRef.current = setTimeout(() => void poll(), 1000);
         } catch {
           setRunning(false);
-          toast.show("Lost contact while the import ran.", "danger");
+          toast.push({ status: "danger", message: "Lost contact while the import ran." });
         }
       };
       await poll();
     } catch (caught) {
       setRunning(false);
-      toast.show(caught instanceof ApiError ? caught.message : "Couldn't start the import.", "danger");
+      toast.push({ status: "danger", message: caught instanceof ApiError ? caught.message : "Couldn't start the import." });
     }
   }
 
@@ -93,12 +101,16 @@ export default function ImportPage() {
     reader.readAsText(file);
   }
 
-  if (failed) return <EmptyState title="Couldn't load the college." message="Try again shortly." />;
+  if (failed) return <EmptyState title="Couldn't load the college." body="Try again shortly." />;
 
-  const errorColumns: Column<{ row: number; message: string }>[] = [
-    { key: "row", header: "Row", align: "right", render: (row) => <span className="num">{row.row}</span> },
-    { key: "message", header: "Problem", render: (row) => row.message },
+  const errorColumns: TableColumn<{ row: React.ReactNode; message: React.ReactNode }>[] = [
+    { key: "row", header: "Row", figure: true, align: "right" },
+    { key: "message", header: "Problem" },
   ];
+  const errorRows = (result?.errors ?? []).map((row: ErrorRow) => ({
+    row: <span className="num">{row.row}</span>,
+    message: row.message,
+  }));
 
   return (
     <>
@@ -109,37 +121,49 @@ export default function ImportPage() {
       />
 
       <Card>
-        <div style={{ display: "grid", gap: "var(--space-3)" }}>
-          <div style={{ display: "flex", gap: "var(--space-4)", flexWrap: "wrap" }}>
-            <Field label="Kind" htmlFor="imp-kind" hint={HINTS[kind]}>
-              <select id="imp-kind" value={kind} onChange={(event) => setKind(event.target.value as typeof kind)}>
-                <option value="students">students</option>
-                <option value="teachers">teachers</option>
-              </select>
-            </Field>
+        <div className={styles.formGrid}>
+          <div className={styles.formRow}>
+            <Select
+              id="imp-kind"
+              label="Kind"
+              hint={HINTS[kind]}
+              value={kind}
+              onChange={(event) => setKind(event.target.value as typeof kind)}
+              options={[
+                { value: "students", label: "students" },
+                { value: "teachers", label: "teachers" },
+              ]}
+            />
             {kind === "students" ? (
-              <Field label="Academic year" htmlFor="imp-year" hint="Used when enroll columns are present.">
-                <input id="imp-year" value={academicYear} onChange={(event) => setAcademicYear(event.target.value)} style={{ width: 120 }} />
-              </Field>
+              <Input
+                id="imp-year"
+                label="Academic year"
+                hint="Used when enroll columns are present."
+                value={academicYear}
+                onChange={(event) => setAcademicYear(event.target.value)}
+                className={styles.narrow}
+              />
             ) : null}
-            <Field label="Mode" htmlFor="imp-dry">
-              <label style={{ display: "inline-flex", gap: 8, alignItems: "center", fontSize: 14, paddingTop: 10 }}>
+            <div className={styles.field}>
+              <label htmlFor="imp-dry" className={styles.label}>Mode</label>
+              <label className={styles.checkboxLabel}>
                 <input id="imp-dry" type="checkbox" checked={dryRun} onChange={(event) => setDryRun(event.target.checked)} />
                 Dry-run (validate only)
               </label>
-            </Field>
+            </div>
           </div>
-          <Field label="CSV content" htmlFor="imp-csv">
+          <div className={styles.field}>
+            <label htmlFor="imp-csv" className={styles.label}>CSV content</label>
             <textarea
               id="imp-csv"
               rows={8}
               value={csv}
               onChange={(event) => setCsv(event.target.value)}
               placeholder={kind === "students" ? "admission_no,full_name\nFYCS-101,Asha Iyer" : "staff_no,full_name\nS-201,Ravi Menon"}
-              style={{ fontFamily: "var(--font-mono)", fontSize: 13 }}
+              className={styles.textarea}
             />
-          </Field>
-          <div style={{ display: "flex", gap: "var(--space-4)", alignItems: "center", flexWrap: "wrap" }}>
+          </div>
+          <div className={styles.formRow}>
             <input type="file" accept=".csv,text/csv" onChange={onFile} aria-label="Upload CSV file" />
             <Button onClick={() => void run()} loading={running} disabled={csv.trim() === "" || collegeId === null}>
               Run import
@@ -152,18 +176,16 @@ export default function ImportPage() {
         <section className="section" aria-label="Import result">
           <div className="section-head">
             <h2>Result</h2>
-            <Badge tone={result.status === "completed" ? (result.errorRows === 0 ? "good" : "warn") : "danger"}>
+            <StatusBadge status={result.status === "completed" ? (result.errorRows === 0 ? "good" : "warn") : "danger"}>
               {result.status}{result.dryRun ? " · dry-run" : ""}
-            </Badge>
+            </StatusBadge>
           </div>
-          <div className="stats" style={{ marginBottom: "var(--space-4)" }}>
+          <div className={`stats ${styles.stats}`}>
             <div className="stat"><div className="stat-value">{result.totalRows}</div><div className="stat-label">rows</div></div>
             <div className="stat"><div className="stat-value">{result.okRows} ok</div><div className="stat-label">valid{result.dryRun ? "" : " · written"}</div></div>
             <div className="stat"><div className="stat-value">{result.errorRows}</div><div className="stat-label">errors</div></div>
           </div>
-          {result.errorRows > 0 ? (
-            <DataTable columns={errorColumns} rows={result.errors} rowKey={(row) => String(row.row)} />
-          ) : null}
+          {result.errorRows > 0 ? <Table columns={errorColumns} rows={errorRows} /> : null}
         </section>
       ) : null}
     </>

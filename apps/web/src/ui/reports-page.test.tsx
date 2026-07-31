@@ -1,7 +1,16 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
+import { ToastProvider } from "@vidya/ui-system";
 import ReportsPage from "../../app/(app)/manage/reports/page";
 import { api } from "./api";
+
+function renderPage() {
+  return render(
+    <ToastProvider>
+      <ReportsPage />
+    </ToastProvider>,
+  );
+}
 
 vi.mock("./api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./api")>();
@@ -23,7 +32,7 @@ beforeEach(() => {
 
 describe("/manage/reports", () => {
   it("lists reports; completed rows get a download link", async () => {
-    render(<ReportsPage />);
+    renderPage();
     expect(await screen.findByText("student-performance")).toBeInTheDocument();
     const download = screen.getByRole("link", { name: /download/i });
     expect(download).toHaveAttribute("href", "/api/v1/reports/rpt_1/download");

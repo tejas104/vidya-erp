@@ -1,0 +1,92 @@
+.monthSection {
+  margin-top: var(--space-5);
+}
+.eventList {
+  display: grid;
+  gap: var(--space-3);
+}
+.eventCard {
+  display: flex;
+  gap: var(--space-4);
+  align-items: flex-start;
+  padding: var(--space-4);
+}
+.dateBadge {
+  flex: 0 0 auto;
+  width: 52px;
+  text-align: center;
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) 0;
+  border: 1px solid var(--ink-2);
+  background: var(--line-2);
+  color: var(--ink-2);
+}
+.dateBadge[data-kind="holiday"] {
+  border-color: var(--good);
+  background: var(--good-soft);
+  color: var(--good);
+}
+.dateBadge[data-kind="exam"] {
+  border-color: var(--bad);
+  background: var(--bad-soft);
+  color: var(--bad);
+}
+.dateBadge[data-kind="event"] {
+  border-color: var(--brand);
+  background: var(--brand-soft);
+  color: var(--brand);
+}
+.dateNum {
+  font-size: var(--text-20);
+  font-weight: 700;
+  line-height: 1;
+}
+.dateMonth {
+  font-size: var(--text-12);
+}
+.eventBody {
+  flex: 1;
+  min-width: 0;
+}
+.eventHead {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  flex-wrap: wrap;
+}
+.kindChip {
+  font-family: var(--font-mono);
+  font-size: var(--text-12);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--rule-strong);
+  white-space: nowrap;
+  text-transform: capitalize;
+  color: var(--ink-2);
+}
+.kindChip[data-kind="holiday"] {
+  color: var(--good);
+  border-color: var(--good);
+  background: var(--good-soft);
+}
+.kindChip[data-kind="exam"] {
+  color: var(--bad);
+  border-color: var(--bad);
+  background: var(--bad-soft);
+}
+.kindChip[data-kind="event"] {
+  color: var(--brand);
+  border-color: var(--brand);
+  background: var(--brand-soft);
+}
+.eventTitle {
+  font-size: var(--text-16);
+}
+.audience {
+  margin-left: auto;
+}
+.eventText {
+  margin: var(--space-2) 0 0;
+  color: var(--ink-2);
+  font-size: var(--text-14);
+}

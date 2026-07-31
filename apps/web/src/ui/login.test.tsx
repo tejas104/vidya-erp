@@ -34,17 +34,22 @@ describe("login page", () => {
     expect(await screen.findByText(/username and password don't match/i)).toBeInTheDocument();
   });
 
-  it("the role toggle tailors the copy and demo prefill", () => {
+  it("the role toggle tailors the copy", () => {
     render(<LoginPage />);
     // defaults to student
     expect(screen.getByText("Student portal")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Use demo student login" }));
-    expect(screen.getByLabelText("Username")).toHaveValue("demo-student");
+    expect(screen.getByText(/sign-in your college linked to your record/i)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("tab", { name: "Staff" }));
     expect(screen.getByText("Staff sign-in")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Use demo staff login" }));
-    expect(screen.getByLabelText("Username")).toHaveValue("demo-admin");
+    expect(screen.getByText(/use your staff username/i)).toBeInTheDocument();
+  });
+
+  it("a demo chip fills the credentials (dev only)", () => {
+    render(<LoginPage />);
+    fireEvent.click(screen.getByRole("button", { name: "Student" }));
+    expect(screen.getByLabelText("Username")).toHaveValue("demo-student");
+    expect(screen.getByLabelText("Password")).toHaveValue("demo-student-pass-2026!");
   });
 
   it("explains a reset-required account (403)", async () => {

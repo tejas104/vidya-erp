@@ -27,6 +27,7 @@ const RC = 2 * Math.PI * RR; // ~106.8
 export function StudentCard({
   initials,
   gradient,
+  ink,
   rollNo,
   name,
   pct,
@@ -35,6 +36,8 @@ export function StudentCard({
 }: {
   initials: string;
   gradient: string;
+  /** Ink the initials need on `gradient` to clear AA — see AVATARS in avatar.ts. */
+  ink?: string;
   rollNo: string;
   name: string;
   pct: number | null;
@@ -53,7 +56,7 @@ export function StudentCard({
   return (
     <button type="button" className={`cw-card cw-card--v2 ${tone}`} onClick={onOpen} aria-label={`${name} — open record`}>
       <div className="cw-card-top">
-        <span className="cw-photo" style={{ background: gradient }} aria-hidden="true">
+        <span className="cw-photo" style={{ background: gradient, color: ink }} aria-hidden="true">
           {initials}
         </span>
         <div className="cw-card-idwrap">
