@@ -51,6 +51,7 @@ function makeHarness(
     hasher,
     sessions,
     audit,
+    logger,
     loginThrottle: new FailureThrottle(store, { maxAttempts: 3, windowMinutes: 15 }, "login"),
     resetThrottle: new FailureThrottle(store, { maxAttempts: 3, windowMinutes: 15 }, "reset"),
     resetTokenTtlMinutes: 30,
@@ -67,9 +68,10 @@ function makeHarness(
       labelNames: ["outcome"],
       registers: [new Registry()],
     }),
-    throttleWindowMinutes: 15,
+    loginLockoutWindowMinutes: 15,
+    resetThrottleWindowMinutes: 15,
   };
-  return { handlers: createIdentityHandlers(deps), repo, scopeChecker, audit, sessions };
+  return { handlers: createIdentityHandlers(deps), repo, scopeChecker, audit, sessions, auth };
 }
 
 const adminPrincipal: Principal = {
@@ -129,6 +131,18 @@ describe("identity.login handler", () => {
     const locked = await handlers["identity.login"]!(ctx({ body: { username: "x", password: "3" } }));
     expect(locked.status).toBe(429);
     expect(locked.headers?.["retry-after"]).toBe(String(15 * 60));
+  });
+
+  it("passes the client IP and user-agent through to the audited failure (#10.5 B2)", async () => {
+    const { handlers, audit } = makeHarness();
+    await handlers["identity.login"]!(
+      ctx({
+        body: { username: "no-such-user", password: "whatever" },
+        headers: { "x-forwarded-for": "203.0.113.9", "user-agent": "curl/8.4.0" },
+      }),
+    );
+    expect(audit.actions()).toContain("identity.login-failed");
+    expect(audit.events[0]?.details).toMatchObject({ ip: "203.0.113.9", userAgent: "curl/8.4.0" });
   });
 });
 
@@ -365,5 +379,53 @@ describe("admin management handlers", () => {
     expect(token.length).toBeGreaterThanOrEqual(32);
     expect(JSON.stringify(result.audit)).not.toContain(token);
     expect(result.headers?.["cache-control"]).toBe("no-store");
+  });
+});
+
+describe("identity.account-unlock handler (#10.5 B2)", () => {
+  it("clears the lock and audits the unlock with ip and user-agent", async () => {
+    const { handlers, repo } = makeHarness();
+    const user = repo.seed({ username: "asha", passwordHash: "fake-hash::right-password::s" });
+    await handlers["identity.login"]!(ctx({ body: { username: "asha", password: "no1" } }));
+    await handlers["identity.login"]!(ctx({ body: { username: "asha", password: "no2" } }));
+    const locked = await handlers["identity.login"]!(ctx({ body: { username: "asha", password: "no3" } }));
+    expect(locked.status).toBe(429);
+
+    const unlock = await handlers["identity.account-unlock"]!(
+      ctx({
+        principal: adminPrincipal,
+        params: { userId: user.id },
+        headers: { "x-forwarded-for": "198.51.100.7", "user-agent": "admin-console/1.0" },
+      }),
+    );
+    expect(unlock.status).toBe(200);
+    expect(unlock.audit).toMatchObject({
+      resourceId: user.id,
+      details: { username: "asha", ip: "198.51.100.7", userAgent: "admin-console/1.0" },
+    });
+
+    const retry = await handlers["identity.login"]!(
+      ctx({ body: { username: "asha", password: "right-password" } }),
+    );
+    expect(retry.status).toBe(200);
+  });
+
+  it("404s for an unknown user without consulting the scope checker", async () => {
+    const { handlers, scopeChecker } = makeHarness();
+    const result = await handlers["identity.account-unlock"]!(
+      ctx({ principal: adminPrincipal, params: { userId: "ghost" } }),
+    );
+    expect(result.status).toBe(404);
+    expect(scopeChecker.lastArgs).toHaveLength(0);
+  });
+
+  it("denies with 403 when the scope check rejects, before touching the throttle", async () => {
+    const { handlers, repo, scopeChecker } = makeHarness();
+    const user = repo.seed({ username: "asha", passwordHash: "h" });
+    scopeChecker.decision = { granted: false, reason: "outside admin scope" };
+    const result = await handlers["identity.account-unlock"]!(
+      ctx({ principal: adminPrincipal, params: { userId: user.id } }),
+    );
+    expect(result.status).toBe(403);
   });
 });

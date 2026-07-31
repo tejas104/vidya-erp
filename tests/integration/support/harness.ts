@@ -71,12 +71,19 @@ export function buildStack() {
     db,
     redis,
     metrics,
+    logger,
     audit: system.service.audit,
     core,
     config: {
       session: { cookieName: "vidya_session", cookieSecure: false, ttlHours: 12, idleMinutes: 30 },
       resetTokenTtlMinutes: 30,
       throttle: { maxAttempts: 5, windowMinutes: 15 },
+      // Account lockout (#10.5 Part 2) — consecutive credential failures for one
+      // account. Distinct from `throttle` above, which bounds reset-token
+      // redemption. Production defaults are 10/15 (see env.ts); kept identical
+      // here so an integration test that walks the lockout path sees real
+      // behaviour rather than a harness-only threshold.
+      lockout: { maxAttempts: 10, windowMinutes: 15 },
     },
     orgDirectory: () => orgDirectoryRef.current,
   });

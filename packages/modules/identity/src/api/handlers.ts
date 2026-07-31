@@ -25,7 +25,10 @@ export interface IdentityHandlerDeps {
   readonly scopeChecker: ScopeChecker;
   readonly cookiePolicy: CookiePolicy;
   readonly loginsTotal: Counter<"outcome">;
-  readonly throttleWindowMinutes: number;
+  /** Retry-After for the reset-token throttle's 429 (IP-keyed; see AuthService.confirmReset). */
+  readonly resetThrottleWindowMinutes: number;
+  /** Retry-After for the account-lockout 429 (#10.5 Part 2; see AuthService.login). */
+  readonly loginLockoutWindowMinutes: number;
 }
 
 /**
@@ -43,6 +46,11 @@ function clientIp(headers: Headers): string {
     }
   }
   return "direct";
+}
+
+/** Best-effort UA for the audit trail (#10.5 Part 2) — never trusted for security decisions. */
+function userAgent(headers: Headers): string {
+  return headers.get("user-agent") ?? "unknown";
 }
 
 function denied(ctx: RouteContext, reason: string): RouteResult {
@@ -72,14 +80,19 @@ function checkScope(
 export function createIdentityHandlers(deps: IdentityHandlerDeps): Record<string, RouteHandler> {
   const login: RouteHandler = async (ctx): Promise<RouteResult> => {
     const body = ctx.request.body as { username: string; password: string };
-    const result = await deps.auth.login(body.username, body.password, clientIp(ctx.request.headers));
+    const result = await deps.auth.login(
+      body.username,
+      body.password,
+      clientIp(ctx.request.headers),
+      userAgent(ctx.request.headers),
+    );
     deps.loginsTotal.inc({ outcome: result.outcome });
     switch (result.outcome) {
       case "locked":
         return {
           status: 429,
-          body: { message: "too many failed attempts; try again later" },
-          headers: { "retry-after": String(deps.throttleWindowMinutes * 60) },
+          body: { message: "too many failed attempts; account locked, try again later" },
+          headers: { "retry-after": String(deps.loginLockoutWindowMinutes * 60) },
         };
       case "invalid-credentials":
         return { status: 401, body: { message: "invalid credentials" } };
@@ -161,13 +174,14 @@ export function createIdentityHandlers(deps: IdentityHandlerDeps): Record<string
       body.token,
       body.newPassword,
       clientIp(ctx.request.headers),
+      userAgent(ctx.request.headers),
     );
     switch (result.outcome) {
       case "locked":
         return {
           status: 429,
           body: { message: "too many attempts; try again later" },
-          headers: { "retry-after": String(deps.throttleWindowMinutes * 60) },
+          headers: { "retry-after": String(deps.resetThrottleWindowMinutes * 60) },
         };
       case "invalid-token":
         return { status: 401, body: { message: "token invalid, expired or already used" } };
@@ -491,6 +505,48 @@ export function createIdentityHandlers(deps: IdentityHandlerDeps): Record<string
     };
   };
 
+  /**
+   * Admin early-unlock (#10.5 Part 2): clears the account-lockout counter so
+   * the user can sign in again before the 15-minute window lapses on its
+   * own. Unlike the auth-failure audits AuthService writes itself
+   * (best-effort — see its auditBestEffort doc), THIS audit goes through the
+   * normal RouteResult path, which fails the request if the write fails —
+   * a deliberate asymmetry: bypassing a lockout is sensitive enough that
+   * losing its audit trail should block the action.
+   */
+  const accountUnlock: RouteHandler = async (ctx) => {
+    const principal = ctx.principal as Principal;
+    const params = ctx.request.params as { userId: string };
+    const existing = await deps.users.getUserRecord(params.userId);
+    if (existing === null) {
+      return notFound();
+    }
+    const scope = checkScope(deps.scopeChecker, ctx, principal, "update", {
+      module: "identity",
+      resourceType: "user",
+      org: { collegeId: existing.collegeId },
+    });
+    if (!scope.ok) {
+      return scope.result;
+    }
+    const unlocked = await deps.auth.unlockAccount(params.userId);
+    if (unlocked === null) {
+      return notFound();
+    }
+    return {
+      status: 200,
+      body: { ok: true as const },
+      audit: {
+        resourceId: params.userId,
+        details: {
+          username: unlocked.username,
+          ip: clientIp(ctx.request.headers),
+          userAgent: userAgent(ctx.request.headers),
+        },
+      },
+    };
+  };
+
   return {
     "identity.login": login,
     "identity.logout": logout,
@@ -507,5 +563,6 @@ export function createIdentityHandlers(deps: IdentityHandlerDeps): Record<string
     "identity.grants-verify": grantsVerify,
     "identity.password-reset-init": passwordResetInit,
     "identity.password-set": passwordSet,
+    "identity.account-unlock": accountUnlock,
   };
 }

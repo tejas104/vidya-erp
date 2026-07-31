@@ -1,16 +1,23 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { FailureThrottle } from "./throttle";
 import { MemoryThrottleStore } from "../../test-support/fakes";
 
-function makeThrottle(maxAttempts = 3) {
+function makeThrottle(maxAttempts = 3, windowMinutes = 15) {
   const store = new MemoryThrottleStore();
-  return { store, throttle: new FailureThrottle(store, { maxAttempts, windowMinutes: 15 }, "login") };
+  return { store, throttle: new FailureThrottle(store, { maxAttempts, windowMinutes }, "login") };
 }
+
+beforeEach(() => {
+  vi.useFakeTimers();
+});
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 describe("FailureThrottle", () => {
   it("is unlocked for a clean subject", async () => {
     const { throttle } = makeThrottle();
-    expect(await throttle.isLocked("asha|1.1.1.1")).toBe(false);
+    expect(await throttle.isLocked("asha")).toBe(false);
   });
 
   it("locks at the configured attempt count", async () => {
@@ -37,5 +44,19 @@ describe("FailureThrottle", () => {
     expect(await throttle.isLocked("b")).toBe(false);
     await throttle.clear("a");
     expect(await throttle.isLocked("a")).toBe(false);
+  });
+
+  it("auto-expires the lock once the window lapses — no clear(), no sweep job", async () => {
+    const { throttle } = makeThrottle(2, 1); // 1-minute window
+    await throttle.recordFailure("a");
+    expect((await throttle.recordFailure("a")).locked).toBe(true);
+    expect(await throttle.isLocked("a")).toBe(true);
+
+    vi.advanceTimersByTime(60_001); // window lapses on its own (Redis TTL)
+    expect(await throttle.isLocked("a")).toBe(false);
+
+    // The counter genuinely reset — it takes a fresh maxAttempts to re-lock.
+    expect((await throttle.recordFailure("a")).locked).toBe(false);
+    expect((await throttle.recordFailure("a")).locked).toBe(true);
   });
 });

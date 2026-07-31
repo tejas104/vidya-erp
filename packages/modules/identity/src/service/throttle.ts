@@ -1,8 +1,10 @@
 /**
  * Fixed-window failure throttle backed by Redis (Fable-owned; ADR-0011).
- * Used for login attempts (keyed user+IP) and reset-token redemption
- * (keyed IP). Windows are enforced with Redis TTLs, so the state is shared
- * across replicas (Constitution rule 10).
+ * Used for account lockout on login (keyed by account/username alone —
+ * #10.5 Part 2) and reset-token redemption (keyed IP). Windows are enforced
+ * with Redis TTLs, so the state is shared across replicas (Constitution rule
+ * 10) and locks auto-expire without a sweep job. `clear()` also backs the
+ * admin early-unlock action (identity.account-unlock).
  */
 
 /** The Redis subset the throttle needs — ioredis satisfies it structurally. */

@@ -70,6 +70,7 @@ describe("loadConfig", () => {
       idleMinutes: 30,
     });
     expect(config.identity.throttle).toEqual({ maxAttempts: 5, windowMinutes: 15 });
+    expect(config.identity.lockout).toEqual({ maxAttempts: 10, windowMinutes: 15 });
     expect(config.identity.resetTokenTtlMinutes).toBe(30);
   });
 

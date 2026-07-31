@@ -61,8 +61,19 @@ const envSchema = z.object({
   SESSION_TTL_HOURS: z.coerce.number().int().min(1).max(168).default(12),
   SESSION_IDLE_MINUTES: z.coerce.number().int().min(1).default(30),
   RESET_TOKEN_TTL_MINUTES: z.coerce.number().int().min(5).max(1440).default(30),
+  /** Reset-token redemption throttle only (#10.5 B2 split this from login lockout below). */
   LOGIN_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(100).default(5),
   LOGIN_WINDOW_MINUTES: z.coerce.number().int().min(1).default(15),
+
+  /**
+   * Account lockout (#10.5 Part 2): consecutive credential-FAILURE lockout,
+   * keyed per account (username), distinct from both LOGIN_MAX_ATTEMPTS
+   * above (reset-token guessing, IP-keyed) and RATE_LIMIT_LOGIN_* below
+   * (request-volume, IP/username-keyed but never blocks a clean login).
+   * Auto-expires via Redis TTL; admin can clear it early (identity.account-unlock).
+   */
+  LOGIN_LOCKOUT_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(100).default(10),
+  LOGIN_LOCKOUT_WINDOW_MINUTES: z.coerce.number().int().min(1).default(15),
 
   // -- Redis-backed request-rate limiting (packages/platform/src/ratelimit;
   // #10.5 Part 1). THREE independent scopes, distinct from LOGIN_MAX_ATTEMPTS
@@ -153,7 +164,13 @@ export interface AppConfig {
       readonly idleMinutes: number;
     };
     readonly resetTokenTtlMinutes: number;
+    /** Reset-token redemption throttle (IP-keyed). */
     readonly throttle: {
+      readonly maxAttempts: number;
+      readonly windowMinutes: number;
+    };
+    /** Account lockout (username-keyed consecutive credential failures). */
+    readonly lockout: {
       readonly maxAttempts: number;
       readonly windowMinutes: number;
     };
@@ -241,6 +258,10 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
       throttle: {
         maxAttempts: env.LOGIN_MAX_ATTEMPTS,
         windowMinutes: env.LOGIN_WINDOW_MINUTES,
+      },
+      lockout: {
+        maxAttempts: env.LOGIN_LOCKOUT_MAX_ATTEMPTS,
+        windowMinutes: env.LOGIN_LOCKOUT_WINDOW_MINUTES,
       },
     },
     rateLimit: {

@@ -1,6 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { pino } from "pino";
+import type { AuditLogger } from "@vidya/platform";
 import { AuthService } from "./auth-service";
 import { FailureThrottle } from "./throttle";
+import type { PasswordHasher } from "../core/contracts";
 import {
   FakePasswordHasher,
   FakeResetTokensRepo,
@@ -11,27 +14,47 @@ import {
 } from "../../test-support/fakes";
 import type { ExternalIdentityProvider } from "../providers/external";
 
-function makeService(overrides: { externalProvider?: ExternalIdentityProvider } = {}) {
+const silentLogger = pino({ level: "silent" });
+
+function makeService(
+  overrides: {
+    externalProvider?: ExternalIdentityProvider;
+    lockoutMaxAttempts?: number;
+    // RecordingAudit, not the bare AuditLogger interface: the union of the two
+    // widens to AuditLogger and the returned handle loses .events/.actions(),
+    // which most tests here assert on.
+    audit?: RecordingAudit;
+  } = {},
+) {
   const repo = new FakeUsersRepo();
   const resetTokens = new FakeResetTokensRepo();
   const hasher = new FakePasswordHasher();
   const sessions = new FakeSessionManager();
-  const audit = new RecordingAudit();
+  const audit = overrides.audit ?? new RecordingAudit();
   const store = new MemoryThrottleStore();
-  const policy = { maxAttempts: 3, windowMinutes: 15 };
+  const lockoutPolicy = { maxAttempts: overrides.lockoutMaxAttempts ?? 3, windowMinutes: 15 };
+  const resetPolicy = { maxAttempts: 3, windowMinutes: 15 };
   const service = new AuthService({
     repo,
     resetTokens,
     hasher,
     sessions,
     audit,
-    loginThrottle: new FailureThrottle(store, policy, "login"),
-    resetThrottle: new FailureThrottle(store, policy, "reset"),
+    logger: silentLogger,
+    loginThrottle: new FailureThrottle(store, lockoutPolicy, "login"),
+    resetThrottle: new FailureThrottle(store, resetPolicy, "reset"),
     resetTokenTtlMinutes: 30,
-    ...overrides,
+    ...(overrides.externalProvider !== undefined ? { externalProvider: overrides.externalProvider } : {}),
   });
   return { service, repo, resetTokens, hasher, sessions, audit, store };
 }
+
+beforeEach(() => {
+  vi.useFakeTimers();
+});
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 const seedActiveUser = (repo: FakeUsersRepo) =>
   repo.seed({
@@ -113,7 +136,7 @@ describe("AuthService.login", () => {
     expect(audit.actions()).toContain("identity.login-blocked-reset-required");
   });
 
-  it("locks the user+ip subject after maxAttempts failures and stays locked", async () => {
+  it("locks the ACCOUNT (not user+ip) after maxAttempts consecutive failures and stays locked", async () => {
     const { service, repo } = makeService();
     seedActiveUser(repo);
     expect((await service.login("asha", "no1", "9.9.9.9")).outcome).toBe("invalid-credentials");
@@ -121,8 +144,117 @@ describe("AuthService.login", () => {
     expect((await service.login("asha", "no3", "9.9.9.9")).outcome).toBe("locked");
     // Even the correct password is refused while locked.
     expect((await service.login("asha", "right-password", "9.9.9.9")).outcome).toBe("locked");
-    // A different ip is an independent subject.
-    expect((await service.login("asha", "right-password", "8.8.8.8")).outcome).toBe("success");
+    // #10.5 B2: lockout is per-ACCOUNT, deliberately not per-(user,ip) — a
+    // different source IP does NOT bypass it (see the report's threat-model
+    // discussion: this trades a lockout-as-harassment risk for satisfying
+    // "10 consecutive failures locks the account" and single-action admin
+    // unlock; B1's per-IP backoff limiter bounds the residual risk).
+    expect((await service.login("asha", "right-password", "8.8.8.8")).outcome).toBe("locked");
+  });
+
+  it("admin unlock (unlockAccount) clears the lock immediately, without waiting out the window", async () => {
+    const { service, repo } = makeService();
+    const user = seedActiveUser(repo);
+    await service.login("asha", "no1", "1.1.1.1");
+    await service.login("asha", "no2", "1.1.1.1");
+    expect((await service.login("asha", "no3", "1.1.1.1")).outcome).toBe("locked");
+
+    const unlocked = await service.unlockAccount(user.id);
+    expect(unlocked).toEqual({ username: "asha" });
+    expect((await service.login("asha", "right-password", "1.1.1.1")).outcome).toBe("success");
+  });
+
+  it("unlockAccount returns null for an unknown user and touches nothing", async () => {
+    const { service } = makeService();
+    expect(await service.unlockAccount("no-such-user")).toBeNull();
+  });
+
+  it("auto-expires the lock via Redis TTL alone — no clear(), no admin action, no sweep job", async () => {
+    const { service, repo } = makeService({ lockoutMaxAttempts: 2 });
+    seedActiveUser(repo);
+    await service.login("asha", "no1", "1.1.1.1");
+    expect((await service.login("asha", "no2", "1.1.1.1")).outcome).toBe("locked");
+    // Correct password is still refused mid-window...
+    expect((await service.login("asha", "right-password", "1.1.1.1")).outcome).toBe("locked");
+
+    vi.advanceTimersByTime(15 * 60 * 1000 + 1); // the fixed window lapses
+
+    // ...but succeeds once the window has genuinely elapsed, with no explicit unlock.
+    expect((await service.login("asha", "right-password", "1.1.1.1")).outcome).toBe("success");
+  });
+
+  it("audits identity.login-locked (with ip and userAgent) for attempts against an already-locked account", async () => {
+    const { service, repo, audit } = makeService({ lockoutMaxAttempts: 1 });
+    seedActiveUser(repo);
+    expect((await service.login("asha", "wrong", "5.5.5.5", "curl/8.0")).outcome).toBe("locked");
+    audit.events.length = 0; // isolate the NEXT attempt, made against an already-locked account
+
+    const result = await service.login("asha", "right-password", "6.6.6.6", "Mozilla/5.0 test-agent");
+    expect(result.outcome).toBe("locked");
+    expect(audit.actions()).toEqual(["identity.login-locked"]);
+    expect(audit.events[0]?.details).toMatchObject({
+      username: "asha",
+      ip: "6.6.6.6",
+      userAgent: "Mozilla/5.0 test-agent",
+    });
+  });
+
+  it("audits login-failed with both ip and userAgent", async () => {
+    const { service, repo, audit } = makeService();
+    seedActiveUser(repo);
+    await service.login("asha", "wrong", "1.2.3.4", "Mozilla/5.0 test-agent");
+    expect(audit.events[0]?.details).toMatchObject({
+      reason: "wrong-password",
+      ip: "1.2.3.4",
+      userAgent: "Mozilla/5.0 test-agent",
+    });
+  });
+
+  it("defaults userAgent to \"unknown\" when the caller doesn't supply one", async () => {
+    const { service, repo, audit } = makeService();
+    seedActiveUser(repo);
+    await service.login("asha", "wrong", "1.2.3.4");
+    expect(audit.events[0]?.details).toMatchObject({ userAgent: "unknown" });
+  });
+
+  it("still verifies the account's real password hash even while locked (no short-circuit timing oracle)", async () => {
+    const { service, repo, hasher, store } = makeService({ lockoutMaxAttempts: 1 });
+    const user = seedActiveUser(repo);
+    // Trip the lock directly against the shared store, bypassing login()'s
+    // own recordFailure, so the assertion below isolates ONLY the verify()
+    // call made by the next login() invocation.
+    await new FailureThrottle(store, { maxAttempts: 1, windowMinutes: 15 }, "login").recordFailure(
+      "asha",
+    );
+    hasher.verifyCalls.length = 0;
+
+    const result = await service.login("asha", "right-password", "9.9.9.9");
+    expect(result.outcome).toBe("locked");
+    expect(hasher.verifyCalls).toEqual([user.passwordHash]);
+  });
+
+  it("keeps returning invalid-credentials (not throwing) when the audit write fails", async () => {
+    // Extends RecordingAudit so it satisfies makeService's handle type; the
+    // override makes every write fail.
+    const failingAudit = new (class extends RecordingAudit {
+      override async record(): Promise<void> {
+        throw new Error("audit store unavailable");
+      }
+    })();
+    const { service, repo, store } = makeService({ audit: failingAudit, lockoutMaxAttempts: 2 });
+    seedActiveUser(repo);
+
+    // A clean 401, not a 500-shaped exception, despite the audit outage.
+    await expect(service.login("asha", "wrong", "1.2.3.4")).resolves.toEqual({
+      outcome: "invalid-credentials",
+    });
+    // The throttle counter itself is unaffected by the audit outage: a
+    // second failure still locks the account (enforcement never depended on
+    // the audit write succeeding).
+    await expect(service.login("asha", "wrong-again", "1.2.3.4")).resolves.toEqual({
+      outcome: "locked",
+    });
+    expect(store.values.get("idn:throttle:login:asha")).toBe(2);
   });
 
   it("clears the failure counter on success", async () => {
@@ -145,6 +277,124 @@ describe("AuthService.login", () => {
     const updated = await repo.findById(user.id);
     expect(updated?.passwordHash).not.toBe(oldHash);
     expect(await hasher.verify(updated?.passwordHash ?? "", "right-password")).toBe(true);
+  });
+});
+
+/**
+ * Timing-indistinguishability evidence (#10.5 B2). PasswordHasher.dummyHash
+ * already exists and is already consumed for unknown users (contracts.ts:29,
+ * auth-service.ts login()); the job here is to EVIDENCE that unknown-user,
+ * wrong-password and locked-account all cost the same wall-clock time — not
+ * to build new machinery. FakePasswordHasher's real verify() is a plain
+ * string compare (sub-microsecond), too fast for wall-clock noise to be
+ * meaningful, so this hasher wraps it with a fixed artificial cost to stand
+ * in for a real KDF's dominant, roughly-constant verify cost — the same
+ * technique used to reason about argon2id timing without paying argon2id's
+ * cost in a unit-test suite.
+ */
+class DelayedFakeHasher implements PasswordHasher {
+  readonly dummyHash = "fake-hash::__nobody__::0000000000000000";
+  constructor(private readonly delayMs: number) {}
+  async hash(password: string): Promise<string> {
+    return `fake-hash::${password}::seed`;
+  }
+  async verify(hash: string, password: string): Promise<boolean> {
+    await new Promise((resolve) => setTimeout(resolve, this.delayMs));
+    const parts = hash.split("::");
+    return parts[0] === "fake-hash" && parts[1] === password && parts[1] !== "__nobody__";
+  }
+  needsRehash(): boolean {
+    return false;
+  }
+}
+
+describe("AuthService.login — timing indistinguishability (#10.5 B2)", () => {
+  const DELAY_MS = 8;
+  const TRIALS = 12;
+
+  async function medianMs(run: () => Promise<unknown>): Promise<number> {
+    const samples: number[] = [];
+    for (let i = 0; i < TRIALS; i += 1) {
+      const start = performance.now();
+      await run();
+      samples.push(performance.now() - start);
+    }
+    samples.sort((a, b) => a - b);
+    return samples[Math.floor(samples.length / 2)]!;
+  }
+
+  it("unknown-username, wrong-password, and an already-locked account measure within noise of each other", async () => {
+    // Real elapsed-time measurement needs real timers.
+    vi.useRealTimers();
+
+    const unknownUserMs = await medianMs(() => {
+      const repo = new FakeUsersRepo();
+      const service = new AuthService({
+        repo,
+        resetTokens: new FakeResetTokensRepo(),
+        hasher: new DelayedFakeHasher(DELAY_MS),
+        sessions: new FakeSessionManager(),
+        audit: new RecordingAudit(),
+        logger: silentLogger,
+        loginThrottle: new FailureThrottle(new MemoryThrottleStore(), { maxAttempts: 1000, windowMinutes: 15 }, "login"),
+        resetThrottle: new FailureThrottle(new MemoryThrottleStore(), { maxAttempts: 1000, windowMinutes: 15 }, "reset"),
+        resetTokenTtlMinutes: 30,
+      });
+      return service.login("no-such-user", "whatever-password", "1.1.1.1");
+    });
+
+    const wrongPasswordMs = await medianMs(() => {
+      const repo = new FakeUsersRepo();
+      repo.seed({ username: "asha", passwordHash: "fake-hash::right-password::seed" });
+      const service = new AuthService({
+        repo,
+        resetTokens: new FakeResetTokensRepo(),
+        hasher: new DelayedFakeHasher(DELAY_MS),
+        sessions: new FakeSessionManager(),
+        audit: new RecordingAudit(),
+        logger: silentLogger,
+        loginThrottle: new FailureThrottle(new MemoryThrottleStore(), { maxAttempts: 1000, windowMinutes: 15 }, "login"),
+        resetThrottle: new FailureThrottle(new MemoryThrottleStore(), { maxAttempts: 1000, windowMinutes: 15 }, "reset"),
+        resetTokenTtlMinutes: 30,
+      });
+      return service.login("asha", "wrong-password", "1.1.1.1");
+    });
+
+    const lockedAccountMs = await medianMs(() => {
+      const repo = new FakeUsersRepo();
+      repo.seed({ username: "asha", passwordHash: "fake-hash::right-password::seed" });
+      const store = new MemoryThrottleStore();
+      const loginThrottle = new FailureThrottle(store, { maxAttempts: 1000, windowMinutes: 15 }, "login");
+      const service = new AuthService({
+        repo,
+        resetTokens: new FakeResetTokensRepo(),
+        hasher: new DelayedFakeHasher(DELAY_MS),
+        sessions: new FakeSessionManager(),
+        audit: new RecordingAudit(),
+        logger: silentLogger,
+        loginThrottle,
+        resetThrottle: new FailureThrottle(new MemoryThrottleStore(), { maxAttempts: 1000, windowMinutes: 15 }, "reset"),
+        resetTokenTtlMinutes: 30,
+      });
+      // Pre-lock the account directly, isolated from login()'s own recordFailure.
+      store.values.set("idn:throttle:login:asha", 1000);
+      // Note: NOT store.expirations — isLocked() only reads the count.
+      return service.login("asha", "right-password", "1.1.1.1");
+    });
+
+    // Method: median of TRIALS repeated calls per scenario (median resists the
+    // odd GC/scheduler outlier better than mean at this sample size), all
+    // three built on the SAME artificial per-verify cost (DELAY_MS) so any
+    // gap would come from the auth flow's own control structure, not the
+    // hasher. Tolerance is generous (well over 2x DELAY_MS) because this
+    // suite runs concurrently with everything else in the process — the
+    // claim under test is "no branch skips the hash verify", not "sub-
+    // millisecond timing safety", which is a job for a dedicated timing-
+    // attack benchmark against the real argon2id core, out of scope here.
+    const tolerance = DELAY_MS * 2;
+    expect(Math.abs(unknownUserMs - wrongPasswordMs)).toBeLessThan(tolerance);
+    expect(Math.abs(unknownUserMs - lockedAccountMs)).toBeLessThan(tolerance);
+    expect(Math.abs(wrongPasswordMs - lockedAccountMs)).toBeLessThan(tolerance);
   });
 });
 

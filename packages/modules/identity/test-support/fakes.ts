@@ -128,25 +128,46 @@ export class RecordingAudit implements AuditLogger {
 
 // ---------------------------------------------------------------------------
 
+/**
+ * Faithful in-memory fake of the Redis subset ThrottleStore needs: real TTL
+ * semantics (a key reaps itself once its expiry passes), not just a call
+ * recorder — mirrors packages/platform/src/ratelimit/test-support.ts so both
+ * lockout and rate-limit tests exercise the same TTL behaviour the real
+ * ioredis client would give.
+ */
 export class MemoryThrottleStore implements ThrottleStore {
   readonly values = new Map<string, number>();
+  /** Raw seconds most recently passed to expire() per key (existing assertions rely on this). */
   readonly expirations = new Map<string, number>();
+  private readonly expiresAt = new Map<string, number>();
+
+  private reapIfExpired(key: string): void {
+    const expiry = this.expiresAt.get(key);
+    if (expiry !== undefined && Date.now() >= expiry) {
+      this.values.delete(key);
+      this.expiresAt.delete(key);
+    }
+  }
 
   async get(key: string): Promise<string | null> {
+    this.reapIfExpired(key);
     const value = this.values.get(key);
     return value === undefined ? null : String(value);
   }
   async incr(key: string): Promise<number> {
+    this.reapIfExpired(key);
     const next = (this.values.get(key) ?? 0) + 1;
     this.values.set(key, next);
     return next;
   }
   async expire(key: string, seconds: number): Promise<void> {
     this.expirations.set(key, seconds);
+    this.expiresAt.set(key, Date.now() + seconds * 1000);
   }
   async del(...keys: string[]): Promise<void> {
     for (const key of keys) {
       this.values.delete(key);
+      this.expiresAt.delete(key);
     }
   }
 }

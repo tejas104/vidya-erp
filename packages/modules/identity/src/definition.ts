@@ -160,7 +160,7 @@ const routes: RouteSpec[] = [
     path: "/api/v1/identity/auth/login",
     summary: "Log in with username and password",
     description:
-      "Issues a Redis-backed session (HttpOnly cookie). Throttled per user+IP; repeated failures lock the account window. Successful logins audit with the authenticated user as actor; failures are audited by the service.",
+      "Issues a Redis-backed session (HttpOnly cookie). Request VOLUME is bounded per-IP and per-username at the platform rate-limit layer (#10.5 Part 1). Independently, 10 consecutive credential FAILURES for one account lock that account for 15 minutes (#10.5 Part 2, account-keyed — see docs/threat-model-identity.md); the window auto-expires via Redis TTL, a success resets the counter, and an admin can clear it early via identity.account-unlock. Successful logins audit with the authenticated user as actor; failures, lockouts and unlocks are audited (with IP and user agent) by the service.",
     tags: ["identity"],
     auth: { public: true, reason: "credential establishment — the caller has no session yet" },
     request: {
@@ -440,6 +440,26 @@ const routes: RouteSpec[] = [
     rateLimit: { scope: "password", identifier: { source: "param", field: "userId" } },
     responses: {
       200: { description: "Password set; the user's sessions were invalidated", schema: z.object({ ok: z.literal(true) }) },
+      404: { description: "No such user", schema: problemSchema },
+    },
+  },
+  {
+    id: "identity.account-unlock",
+    module: MODULE_NAME,
+    method: "POST",
+    path: "/api/v1/identity/users/{userId}/unlock",
+    summary: "Clear an account's login lockout early (admin)",
+    description:
+      "Admin early-unlock (#10.5 Part 2): clears the consecutive-failure counter driving " +
+      "login lockout so the account can sign in again immediately, instead of waiting out " +
+      "the 15-minute window. Orthogonal to password reset/change — the account's password " +
+      "and existing sessions are untouched.",
+    tags: ["identity"],
+    auth: ADMIN_ONLY,
+    request: { params: userIdParams },
+    audit: { action: "identity.account-unlocked", resourceType: "user" },
+    responses: {
+      200: { description: "Lockout cleared", schema: z.object({ ok: z.literal(true) }) },
       404: { description: "No such user", schema: problemSchema },
     },
   },

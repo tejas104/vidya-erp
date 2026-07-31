@@ -14,6 +14,7 @@ import {
   type AuditLogger,
   type Authenticator,
   type Db,
+  type Logger,
   type Metrics,
   type OrgDirectory,
   type RedisClient,
@@ -71,7 +72,13 @@ export interface IdentitySessionConfig {
 export interface IdentityModuleConfig {
   readonly session: IdentitySessionConfig;
   readonly resetTokenTtlMinutes: number;
+  /** Reset-token redemption throttle (IP-keyed). */
   readonly throttle: {
+    readonly maxAttempts: number;
+    readonly windowMinutes: number;
+  };
+  /** Account lockout (#10.5 Part 2): consecutive login failures, keyed by account alone. */
+  readonly lockout: {
     readonly maxAttempts: number;
     readonly windowMinutes: number;
   };
@@ -81,6 +88,7 @@ export interface IdentityModuleDeps {
   readonly db: Db;
   readonly redis: RedisClient;
   readonly metrics: Metrics;
+  readonly logger: Logger;
   /** The audit seam (system module's implementation, injected by composition). */
   readonly audit: AuditLogger;
   /** HUMAN-OWNED security core; the module cannot exist without it. */
@@ -142,7 +150,8 @@ export function createIdentityModule(deps: IdentityModuleDeps): RuntimeModule<Id
     hasher: deps.core.passwordHasher,
     sessions: deps.core.sessionManager,
     audit: deps.audit,
-    loginThrottle: new FailureThrottle(deps.redis, deps.config.throttle, "login"),
+    logger: deps.logger,
+    loginThrottle: new FailureThrottle(deps.redis, deps.config.lockout, "login"),
     resetThrottle: new FailureThrottle(deps.redis, deps.config.throttle, "reset"),
     resetTokenTtlMinutes: deps.config.resetTokenTtlMinutes,
     ...(deps.externalProvider !== undefined ? { externalProvider: deps.externalProvider } : {}),
@@ -169,7 +178,8 @@ export function createIdentityModule(deps: IdentityModuleDeps): RuntimeModule<Id
       scopeChecker: deps.core.scopeChecker,
       cookiePolicy,
       loginsTotal,
-      throttleWindowMinutes: deps.config.throttle.windowMinutes,
+      resetThrottleWindowMinutes: deps.config.throttle.windowMinutes,
+      loginLockoutWindowMinutes: deps.config.lockout.windowMinutes,
     }),
     jobProcessors: {
       [RESET_CLEANUP_JOB_NAME]: createResetCleanupProcessor(resetTokensRepo, deps.audit),
