@@ -6,55 +6,18 @@ import {
   ApiError,
   currentAcademicYear,
   type AtRiskEntry,
-  type ComparisonReport,
   type Dashboard,
-  type DistributionResponse,
-  type NodeRollup,
   type NoticeKind,
   type NoticeView,
   type Session,
-  type Tile,
   type TtToday,
 } from "@/ui/api";
 import { Card, PageHeader } from "@vidya/ui-system";
 import { Noticeboard } from "@/ui/Noticeboard";
-import {
-  AttendanceSlot,
-  CompareBars,
-  Histogram,
-  MarksSlot,
-  RegisterStrip,
-  RiskDonut,
-  StatTile,
-  SubjectBars,
-  TrendLine,
-} from "@/ui/charts";
+import { AttendanceSlot, MarksSlot, RiskDonut, StatTile } from "@/ui/charts";
+import { focusOf, type Focus } from "@/ui/oversightFocus";
 
 export const dynamic = "force-dynamic";
-
-type Focus = { level: "college" | "department" | "class"; nodeId: string; classId?: string; tile: Tile };
-
-const PRECEDENCE: Record<Tile["type"], number> = {
-  college: 4,
-  department: 3,
-  class: 2,
-  "teacher-class": 1,
-};
-
-function focusOf(tiles: Tile[]): Focus | null {
-  if (tiles.length === 0) return null;
-  const tile = [...tiles].sort((a, b) => PRECEDENCE[b.type] - PRECEDENCE[a.type])[0]!;
-  switch (tile.type) {
-    case "college":
-      return { level: "college", nodeId: tile.collegeId, tile };
-    case "department":
-      return { level: "department", nodeId: tile.departmentId, tile };
-    case "class":
-      return { level: "class", nodeId: tile.classId, classId: tile.classId, tile };
-    case "teacher-class":
-      return { level: "class", nodeId: tile.classId, classId: tile.classId, tile };
-  }
-}
 
 function riskSegments(entries: AtRiskEntry[]): { label: string; value: number; tone: string }[] {
   let attOnly = 0;
@@ -125,24 +88,7 @@ export default function DashboardPage() {
   const [today, setToday] = useState<TtToday | null>(null);
   const [notices, setNotices] = useState<NoticeView[] | null>(null);
   const [leaveWaiting, setLeaveWaiting] = useState<number | null>(null);
-  const [rollup, setRollup] = useState<NodeRollup | null>(null);
-  const [compare, setCompare] = useState<ComparisonReport | null>(null);
-  const [distribution, setDistribution] = useState<DistributionResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [reloadKey, setReloadKey] = useState(0);
-  const [recomputing, setRecomputing] = useState(false);
-
-  async function handleRecompute() {
-    setRecomputing(true);
-    try {
-      await api.recomputeAnalytics(year);
-      setReloadKey((k) => k + 1);
-    } catch {
-      setError("Couldn't start the analytics rebuild. Try again shortly.");
-    } finally {
-      setRecomputing(false);
-    }
-  }
 
   useEffect(() => {
     let alive = true;
@@ -197,27 +143,7 @@ export default function DashboardPage() {
           setAtRisk([...seen.values()].sort((a, b) => (a.attendancePct ?? 100) - (b.attendancePct ?? 100)));
         }
 
-        const f = focusOf(dash.tiles);
-        if (alive) setFocus(f);
-        if (f) {
-          try {
-            if (alive) setRollup(await api.rollup(f.level, f.nodeId, year));
-          } catch {
-            /* rollup optional */
-          }
-          try {
-            if (alive) setCompare(await api.compare(f.level, f.nodeId, year));
-          } catch {
-            /* comparison optional */
-          }
-          if (f.classId) {
-            try {
-              if (alive) setDistribution(await api.distribution("class", f.classId, year));
-            } catch {
-              /* distribution optional */
-            }
-          }
-        }
+        if (alive) setFocus(focusOf(dash.tiles));
       } catch (caught) {
         if (caught instanceof ApiError && caught.status === 401) {
           window.location.href = "/login";
@@ -229,7 +155,7 @@ export default function DashboardPage() {
     return () => {
       alive = false;
     };
-  }, [year, reloadKey]);
+  }, [year]);
 
   if (error !== null) {
     return <div className="state">{error}</div>;
@@ -409,16 +335,6 @@ export default function DashboardPage() {
         lede="Every figure here is drawn only from records you're allowed to read. Rooms outside your scope simply don't appear."
       />
 
-      {/* --- analytics rebuild (admin only): rollups are precomputed, so an
-              admin can force a rebuild after a bulk data change --- */}
-      {session.roles.includes("admin") ? (
-        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
-          <button type="button" className="btn ghost" onClick={handleRecompute} disabled={recomputing}>
-            {recomputing ? "Rebuilding analytics…" : "Recompute analytics"}
-          </button>
-        </div>
-      ) : null}
-
       {/* --- notices --- */}
       <Noticeboard />
 
@@ -490,90 +406,14 @@ export default function DashboardPage() {
               <StatTile value={cohort === null ? "—" : String(cohort)} label="Students in scope" muted={cohort === null} />
             </section>
 
-            {/* ATTENDANCE TREND */}
-            {kpiAttendance && kpiAttendance.state === "ok" && kpiAttendance.value.monthly.length > 0 ? (
-              <section className="section" aria-label="Attendance trend">
-                <div className="section-head"><h2>Attendance trend</h2></div>
-                <div className="card">
-                  <TrendLine
-                    label="Monthly attendance"
-                    points={kpiAttendance.value.monthly.map((m) => ({ x: m.month, y: m.pct }))}
-                  />
-                </div>
-              </section>
-            ) : null}
-
-            {/* MARKS BY SUBJECT */}
-            {rollup && rollup.marks.bySubject.length > 0 ? (
-              <section className="section" aria-label="Marks by subject">
-                <div className="section-head">
-                  <h2>Marks by subject</h2>
-                  <span className="stat-sub num">{rollup.marks.bySubject.length} visible</span>
-                </div>
-                <div className="card">
-                  <SubjectBars
-                    rows={rollup.marks.bySubject.map((s, index) => ({
-                      label: s.name,
-                      value: s.summary.state === "ok" ? s.summary.value.avgPct : 0,
-                      index,
-                    }))}
-                  />
-                </div>
-              </section>
-            ) : null}
-
-            {/* COMPARISON */}
-            {compare && compare.children.length > 0 ? (
-              <section className="section" aria-label="Comparison">
-                <div className="section-head">
-                  <h2>Comparison — {compare.childLevel === "department" ? "departments" : compare.childLevel === "class" ? "classes" : "sections"}</h2>
-                </div>
-                <div className="card">
-                  <CompareBars
-                    rows={compare.children.map((child) => ({
-                      label: child.name,
-                      attendancePct: child.attendance.state === "ok" ? child.attendance.value.pct : null,
-                      marksPct: child.marks.state === "ok" ? child.marks.value.avgPct : null,
-                      atRisk: child.atRisk,
-                    }))}
-                  />
-                </div>
-              </section>
-            ) : null}
-
-            {/* MARKS DISTRIBUTION */}
-            {distribution ? (
-              <section className="section" aria-label="Marks distribution">
-                <div className="section-head"><h2>Marks distribution</h2></div>
-                <div className="card">
-                  {distribution.marks.state === "ok" ? (
-                    <Histogram label="Overall marks distribution" bands={distribution.marks.value.bands} />
-                  ) : (
-                    <div className="strip-empty">
-                      {distribution.marks.state === "insufficient-cohort"
-                        ? `Cohort too small to summarise (under ${distribution.marks.minCohort}).`
-                        : "No distribution yet."}
-                    </div>
-                  )}
-                </div>
-              </section>
-            ) : null}
-
-            {/* AT-RISK DONUT */}
+            {/* AT-RISK DONUT (composition only — trend/subject/comparison/
+                distribution/register charts live on /manage/analytics now) */}
             {atRisk.length > 0 ? (
               <section className="section" aria-label="At-risk composition">
                 <div className="section-head"><h2>Risk composition</h2></div>
                 <div className="card">
                   <RiskDonut label="At-risk composition" total={atRisk.length} segments={riskSegments(atRisk)} />
                 </div>
-              </section>
-            ) : null}
-
-            {/* REGISTER STRIP */}
-            {focusTile && (focusTile.type === "class" || focusTile.type === "teacher-class") && focusTile.strip.length > 0 ? (
-              <section className="section" aria-label="Register">
-                <div className="section-head"><h2>The register</h2></div>
-                <div className="card"><RegisterStrip sections={focusTile.strip} /></div>
               </section>
             ) : null}
           </>

@@ -7,7 +7,7 @@ vi.mock("./api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./api")>();
   return {
     ...actual,
-    api: { ...actual.api, session: vi.fn(), dashboard: vi.fn(), atRisk: vi.fn(), logout: vi.fn(), rollup: vi.fn(), compare: vi.fn(), distribution: vi.fn() },
+    api: { ...actual.api, session: vi.fn(), dashboard: vi.fn(), atRisk: vi.fn(), logout: vi.fn() },
   };
 });
 
@@ -58,38 +58,16 @@ beforeEach(() => {
       },
     ],
   });
-  (api.rollup as ReturnType<typeof vi.fn>).mockResolvedValue({
-    node: { level: "class", nodeId: "class-se-a", name: "SE-A" },
-    attendance: { state: "ok", value: { pct: 88, sessions: 40, distinctStudents: 30, monthly: [] } },
-    marks: {
-      bySubject: [
-        { subjectId: "sub-ds", name: "Data Structures", summary: { state: "ok", value: { avgPct: 72, nMarks: 10, distinctStudents: 30, monthly: [] } } },
-      ],
-      overall: { state: "no-data" },
-    },
-  });
-  (api.compare as ReturnType<typeof vi.fn>).mockResolvedValue({
-    parent: { level: "class", nodeId: "class-se-a", name: "SE-A" },
-    childLevel: "section",
-    children: [
-      { nodeId: "sec-a", name: "A", attendance: { state: "ok", value: { pct: 88, sessions: 40, distinctStudents: 30, monthly: [] } }, marks: { state: "no-data" }, atRisk: 1 },
-    ],
-  });
-  (api.distribution as ReturnType<typeof vi.fn>).mockResolvedValue({
-    node: { level: "class", nodeId: "class-se-a", name: "SE-A" },
-    marks: { state: "insufficient-cohort", minCohort: 5 },
-    attendance: { state: "ok", value: { total: 30, bands: [{ label: "75–90", count: 20 }, { label: "≥90", count: 10 }] } },
-  });
 });
 
 describe("dashboard (permission mirror)", () => {
-  it("renders the caller's scoped KPIs and marks-by-subject — nothing outside scope", async () => {
+  it("renders the caller's scoped KPIs and at-risk composition — nothing outside scope", async () => {
     render(<DashboardPage />);
 
-    // The focus node's real attendance figure appears (KPI row + comparison bar).
+    // The focus node's real attendance figure appears (KPI row).
     expect((await screen.findAllByText("88%")).length).toBeGreaterThanOrEqual(1);
-    // …and the marks-by-subject graph is built from the scoped rollup.
-    expect(screen.getByText("Data Structures")).toBeInTheDocument();
+    // The at-risk composition donut (still on /dashboard) renders.
+    expect(await screen.findByText("Risk composition")).toBeInTheDocument();
     // No out-of-scope room labels leak in (server never sent them).
     expect(screen.queryByText("Department")).not.toBeInTheDocument();
     expect(screen.queryByText("College")).not.toBeInTheDocument();
@@ -97,16 +75,19 @@ describe("dashboard (permission mirror)", () => {
 
   it("shows the withheld-cohort state instead of a marks figure when the cohort is under K", async () => {
     render(<DashboardPage />);
-    // Appears in the KPI marks slot AND the distribution section — both withheld.
-    const withheld = await screen.findAllByText(/cohort too small to summarise \(under 5\)/i);
-    expect(withheld.length).toBeGreaterThanOrEqual(1);
+    expect(await screen.findByText(/cohort too small to summarise \(under 5\)/i)).toBeInTheDocument();
     // Attendance, which was sufficient, still shows its real figure.
     expect(screen.getAllByText("88%").length).toBeGreaterThanOrEqual(1);
   });
 
-  it("renders the comparison section built from api.compare", async () => {
+  it("no longer fetches or renders the deeper analytics — that content moved to /manage/analytics", async () => {
     render(<DashboardPage />);
-    expect(await screen.findByText(/Comparison —/)).toBeInTheDocument();
+    await screen.findAllByText("88%");
+    // Marks-by-subject, comparison and the recompute action all require the
+    // rollup/compare fetches, which now happen only on the Analytics screen.
+    expect(screen.queryByText("Data Structures")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Comparison —/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /recompute analytics/i })).not.toBeInTheDocument();
   });
 
   it("merges at-risk students across the caller's visible nodes", async () => {
