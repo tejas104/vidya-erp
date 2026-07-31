@@ -59,15 +59,26 @@ export const NAV: NavEntry[] = [
   { href: "/manage/users", label: "Users", icon: "key", group: "ADMINISTRATION", roles: ["admin"] },
   { href: "/manage/import", label: "Import", icon: "upload", group: "ADMINISTRATION", roles: ["admin"] },
   { href: "/manage/reports", label: "Reports", icon: "file", group: "REPORTS", roles: ALL },
+  // --- analytics ---
+  // No dedicated analytics route exists — the charts/KPIs/at-risk views live
+  // inline on /dashboard for the oversight roles (admin/principal/hod; see
+  // dashboard/page.tsx's `teachingOnly` split). /manage/analytics is a thin
+  // redirect alias (apps/web/app/(app)/manage/analytics/page.tsx) so this can
+  // be a distinct nav entry with its own breadcrumb, instead of a second
+  // link to "/dashboard" — that would collide with the Dashboard(TOP) entry's
+  // href and break crumbsFor("/dashboard") === [] for every role, including
+  // teaching-only staff who don't see analytics at all.
+  { href: "/manage/analytics", label: "Analytics", icon: "dashboard", group: "ANALYTICS", roles: ["admin", "principal", "hod"] },
 ];
 
-export const DOMAIN_ORDER = ["TOP", "PEOPLE", "ACADEMICS", "FEES", "COMMUNICATION", "REPORTS", "ADMINISTRATION"] as const;
+export const DOMAIN_ORDER = ["TOP", "PEOPLE", "ACADEMICS", "FEES", "COMMUNICATION", "REPORTS", "ANALYTICS", "ADMINISTRATION"] as const;
 const LABEL: Record<string, string> = {
   PEOPLE: "People",
   ACADEMICS: "Academics",
   FEES: "Fees",
   COMMUNICATION: "Communication",
   REPORTS: "Reports",
+  ANALYTICS: "Analytics",
   ADMINISTRATION: "Administration",
 };
 
