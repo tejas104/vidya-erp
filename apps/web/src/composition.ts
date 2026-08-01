@@ -128,6 +128,7 @@ function buildWebRuntime(): WebRuntime {
     db,
     redis,
     metrics,
+    logger,
     audit: system.service.audit,
     core: identityCore,
     config: config.identity,

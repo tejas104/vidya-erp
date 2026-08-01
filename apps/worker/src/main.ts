@@ -134,6 +134,7 @@ async function main(): Promise<void> {
     db,
     redis,
     metrics,
+    logger,
     audit: system.service.audit,
     core: identityCore,
     config: config.identity,
