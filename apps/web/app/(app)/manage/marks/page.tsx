@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { api, currentAcademicYear, type AssessmentKind, type AssessmentView } from "@/ui/api";
 import { useMutation } from "@/ui/useMutation";
 import { DeniedState } from "@/ui/DeniedState";
@@ -23,6 +23,16 @@ type Target = { classId: string; subjectId: string; label: string; sectionId?: s
 type Student = { id: string; fullName: string; admissionNo: string };
 type Row = { name: ReactNode; kind: ReactNode; max: ReactNode; actions: ReactNode };
 
+/** Empty is "not yet entered" (no error, excluded from progress + save).
+ * Non-empty must be a finite number within [0, max] — surfaced inline per row. */
+function validateScore(raw: string, max: number): string | null {
+  if (raw.trim() === "") return null;
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return "Enter a number.";
+  if (n < 0 || n > max) return `0–${max} only.`;
+  return null;
+}
+
 export default function MarksPage() {
   const year = useMemo(() => currentAcademicYear(), []);
   const toast = useToast();
@@ -38,6 +48,7 @@ export default function MarksPage() {
   const [scores, setScores] = useState<Record<string, string>>({});
   const create = useMutation(api.createAssessment);
   const enter = useMutation((assessmentId: string, entries: { studentId: string; score: number }[]) => api.enterMarks(assessmentId, entries));
+  const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   useEffect(() => {
     api.dashboard(year).then((dash) => {
@@ -75,6 +86,28 @@ export default function MarksPage() {
     void loadAssessments();
   }, [loadAssessments, create.phase.name]);
 
+  const rowErrors = useMemo(() => {
+    const out: Record<string, string | null> = {};
+    if (active) for (const s of roster) out[s.id] = validateScore(scores[s.id] ?? "", active.maxScore);
+    return out;
+  }, [roster, scores, active]);
+  const hasErrors = Object.values(rowErrors).some((e) => e !== null);
+  const enteredCount = roster.filter((s) => (scores[s.id] ?? "").trim() !== "" && rowErrors[s.id] === null).length;
+
+  function onRowKeyDown(event: KeyboardEvent<HTMLInputElement>, i: number) {
+    // Enter/Next (mobile numeric keypads show "next"/"done" via enterKeyHint)
+    // and the desktop arrow keys both advance — auto-advance is "on entry",
+    // not a separate tap on a Next control. Out-of-range indices are a no-op:
+    // ref lookup returns undefined, optional chaining skips the focus() call.
+    if (event.key === "Enter" || event.key === "ArrowDown") {
+      event.preventDefault();
+      inputRefs.current[i + 1]?.focus();
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
+      inputRefs.current[i - 1]?.focus();
+    }
+  }
+
   async function onCreate() {
     if (!target) return;
     const created = await create.run({ classId: target.classId, subjectId: target.subjectId, kind, name, academicYear: year, maxScore: Number(maxScore) });
@@ -86,7 +119,7 @@ export default function MarksPage() {
     }
   }
   async function onEnter() {
-    if (!active) return;
+    if (!active || hasErrors) return;
     const entries = roster.filter((s) => scores[s.id] !== undefined && scores[s.id] !== "").map((s) => ({ studentId: s.id, score: Number(scores[s.id]) }));
     if (entries.length > 0) {
       const result = await enter.run(active.id, entries);
@@ -162,25 +195,39 @@ export default function MarksPage() {
       </Card>
 
       {active ? (
-        <Card title={`${active.name} · out of ${active.maxScore}`}>
+        <Card
+          title={`${active.name} · out of ${active.maxScore}`}
+          actions={<span className={`num ${styles.progress}`} aria-live="polite">{enteredCount}/{roster.length}</span>}
+        >
           <div className={styles.scoreList}>
-            {roster.map((s) => (
-              <div key={s.id} className={styles.scoreRow}>
-                <span><strong>{s.fullName}</strong> <span className="num">{s.admissionNo}</span></span>
-                <input
-                  type="number"
-                  min={0}
-                  max={active.maxScore}
-                  value={scores[s.id] ?? ""}
-                  className={styles.scoreInput}
-                  onChange={(event) => setScores((sc) => ({ ...sc, [s.id]: event.target.value }))}
-                  aria-label={`score for ${s.fullName}`}
-                />
-              </div>
-            ))}
+            {roster.map((s, i) => {
+              const error = rowErrors[s.id] ?? null;
+              return (
+                <div key={s.id} className={styles.scoreRow}>
+                  <span><strong>{s.fullName}</strong> <span className="num">{s.admissionNo}</span></span>
+                  <span className={styles.scoreInputWrap}>
+                    <input
+                      ref={(el) => { inputRefs.current[i] = el; }}
+                      type="number"
+                      inputMode="numeric"
+                      enterKeyHint={i < roster.length - 1 ? "next" : "done"}
+                      min={0}
+                      max={active.maxScore}
+                      value={scores[s.id] ?? ""}
+                      className={styles.scoreInput}
+                      onChange={(event) => setScores((sc) => ({ ...sc, [s.id]: event.target.value }))}
+                      onKeyDown={(event) => onRowKeyDown(event, i)}
+                      aria-label={`score for ${s.fullName}`}
+                      aria-invalid={error !== null}
+                    />
+                    {error !== null ? <span className="formerror" role="alert">{error}</span> : null}
+                  </span>
+                </div>
+              );
+            })}
           </div>
           <div className={styles.formActions}>
-            <Button onClick={() => void onEnter()} loading={enter.phase.name === "saving"}>Save marks</Button>
+            <Button onClick={() => void onEnter()} loading={enter.phase.name === "saving"} disabled={hasErrors}>Save marks</Button>
             {enter.phase.name === "error" ? <span className="formerror" role="alert">{enter.phase.message}</span> : null}
           </div>
         </Card>
