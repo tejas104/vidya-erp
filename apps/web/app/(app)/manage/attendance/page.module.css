@@ -7,3 +7,122 @@
 .sectionField {
   min-width: 220px;
 }
+
+.summary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-4);
+}
+.allPresent {
+  margin-left: auto;
+}
+
+/* Roll-number grid: thumb-sized cells (width/height are exempt from the
+ * spacing-scale gate — they're geometry, not spacing). One tap toggles
+ * present<->absent; the <select> underneath is the secondary late/excused
+ * control so it never costs the primary flow a tap. */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+  gap: var(--space-2);
+  margin-bottom: var(--space-5);
+}
+.cell {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.cellBtn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  width: 100%;
+  min-height: 64px;
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--rule-strong);
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+  font: inherit;
+  -webkit-tap-highlight-color: transparent;
+}
+.cellBtn:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+/* present (default): quiet outline, no fill — the exceptions should stand out. */
+.cellBtn[data-status="present"] {
+  border-color: var(--good);
+}
+/* absent: filled, never colour-alone — background changes shape (filled vs
+ * outline) AND carries the close icon. */
+.cellBtn[data-status="absent"] {
+  background: var(--bad);
+  border-color: var(--bad);
+  color: var(--on-brand);
+}
+.cellBtn[data-status="late"] {
+  background: var(--warn-soft);
+  border-color: var(--warn);
+  color: var(--warn);
+}
+.cellBtn[data-status="excused"] {
+  background: var(--line-2);
+  border-color: var(--ink-3);
+  color: var(--ink-2);
+}
+
+.avatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: var(--text-12);
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.roll {
+  font-family: var(--font-mono);
+  font-size: var(--text-12);
+  font-weight: 700;
+}
+.statusMark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 14px;
+  font-size: var(--text-12);
+  font-weight: 700;
+}
+
+.secondary {
+  width: 100%;
+  font-size: var(--text-12);
+  padding: var(--space-1);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--ink-3);
+  text-align: center;
+}
+.secondary:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 1px;
+}
+
+.saveBar {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+  background: var(--paper);
+  border-top: 1px solid var(--rule);
+}

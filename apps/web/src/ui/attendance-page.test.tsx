@@ -24,35 +24,78 @@ beforeEach(() => {
     names: { cls_1: "FY CS", sec_a: "A" },
     tiles: [{ type: "class", classId: "cls_1", attendance: { state: "no-data" }, marks: { state: "no-data" }, atRisk: 0, strip: [{ sectionId: "sec_a", name: "A", days: [] }] }],
   });
-  (api.sectionRoster as ReturnType<typeof vi.fn>).mockResolvedValue({ students: [{ id: "stu_1", fullName: "Aarav Sharma", admissionNo: "FYCS-001", status: "active" }] });
+  (api.sectionRoster as ReturnType<typeof vi.fn>).mockResolvedValue({
+    students: [
+      { id: "stu_1", fullName: "Aarav Sharma", admissionNo: "FYCS-001", status: "active" },
+      { id: "stu_2", fullName: "Bhavna Rao", admissionNo: "FYCS-002", status: "active" },
+    ],
+  });
   (api.sessionAttendance as ReturnType<typeof vi.fn>).mockResolvedValue({ sessions: [] });
   (api.rosterAttendance as ReturnType<typeof vi.fn>).mockResolvedValue({ cards: [] });
   (api.recordAttendance as ReturnType<typeof vi.fn>).mockResolvedValue({ id: "ses_1", sectionId: "sec_a", heldOn: "2026-06-01", slot: "day", academicYear: "2026-27", takenBy: "u", entries: [] });
 });
 
-describe("attendance entry", () => {
-  it("loads the roster for the caller's section and submits present-by-default entries", async () => {
+describe("attendance entry — thumb-grid fast path", () => {
+  it("loads the roster present-by-default and Save submits every student as present", async () => {
     renderPage();
-    // roster appears
-    expect(await screen.findByText("Aarav Sharma")).toBeInTheDocument();
-    // submit
-    fireEvent.click(screen.getByRole("button", { name: /^save ·/i }));
+    expect(await screen.findByRole("button", { name: /Aarav Sharma, roll FYCS-001 — present/ })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /^save attendance$/i }));
     await waitFor(() => expect(api.recordAttendance).toHaveBeenCalledTimes(1));
     const body = (api.recordAttendance as ReturnType<typeof vi.fn>).mock.calls[0]![0];
     expect(body.sectionId).toBe("sec_a");
-    expect(body.entries).toEqual([{ studentId: "stu_1", status: "present" }]);
+    expect(body.entries).toEqual([
+      { studentId: "stu_1", status: "present" },
+      { studentId: "stu_2", status: "present" },
+    ]);
+  });
+
+  it("one tap marks a student absent — aria-pressed flips and the running count updates — a second tap restores present", async () => {
+    renderPage();
+    const cell = await screen.findByRole("button", { name: /Aarav Sharma, roll FYCS-001 — present/ });
+    expect(cell).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByText(/2 present/)).toBeInTheDocument();
+    expect(screen.getByText(/0 absent/)).toBeInTheDocument();
+
+    fireEvent.click(cell);
+    const absentCell = screen.getByRole("button", { name: /Aarav Sharma, roll FYCS-001 — absent/ });
+    expect(absentCell).toHaveAttribute("aria-pressed", "true");
+    // running absentee count is now 1
+    expect(screen.getByText(/1 present/)).toBeInTheDocument();
+    expect(screen.getByText(/1 absent/)).toBeInTheDocument();
+
+    fireEvent.click(absentCell);
+    expect(screen.getByRole("button", { name: /Aarav Sharma, roll FYCS-001 — present/ })).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByText(/2 present/)).toBeInTheDocument();
   });
 
   it("touch fast path: mark an absentee, then 'All present' resets before save", async () => {
     renderPage();
-    await screen.findByText("Aarav Sharma");
-    // one tap on the 'absent' target for the row
-    fireEvent.click(screen.getByRole("button", { name: "absent" }));
-    // the fast path: reset everyone to present in one tap
+    await screen.findByRole("button", { name: /Aarav Sharma/ });
+    fireEvent.click(screen.getByRole("button", { name: /Aarav Sharma, roll FYCS-001 — present/ }));
     fireEvent.click(screen.getByRole("button", { name: /all present/i }));
-    fireEvent.click(screen.getByRole("button", { name: /^save ·/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^save attendance$/i }));
     await waitFor(() => expect(api.recordAttendance).toHaveBeenCalledTimes(1));
     const body = (api.recordAttendance as ReturnType<typeof vi.fn>).mock.calls[0]![0];
-    expect(body.entries).toEqual([{ studentId: "stu_1", status: "present" }]);
+    expect(body.entries).toEqual([
+      { studentId: "stu_1", status: "present" },
+      { studentId: "stu_2", status: "present" },
+    ]);
+  });
+
+  it("the secondary control marks a student late without touching the primary toggle, and Save carries it through", async () => {
+    renderPage();
+    await screen.findByRole("button", { name: /Aarav Sharma/ });
+    const secondary = screen.getByRole("combobox", { name: /mark aarav sharma late or excused/i });
+    fireEvent.change(secondary, { target: { value: "late" } });
+
+    expect(screen.getByRole("button", { name: /Aarav Sharma, roll FYCS-001 — late/ })).toHaveAttribute("aria-pressed", "mixed");
+
+    fireEvent.click(screen.getByRole("button", { name: /^save attendance$/i }));
+    await waitFor(() => expect(api.recordAttendance).toHaveBeenCalledTimes(1));
+    const body = (api.recordAttendance as ReturnType<typeof vi.fn>).mock.calls[0]![0];
+    expect(body.entries).toEqual([
+      { studentId: "stu_1", status: "late" },
+      { studentId: "stu_2", status: "present" },
+    ]);
   });
 });

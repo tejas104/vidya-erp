@@ -1,21 +1,26 @@
 "use client";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { api, currentAcademicYear, type AttendanceStatus, type RosterCard } from "@/ui/api";
+import { api, currentAcademicYear, type AttendanceStatus } from "@/ui/api";
 import { useMutation } from "@/ui/useMutation";
-import { StudentSlideOver, type DrawerStudent } from "@/ui/StudentSlideOver";
 import { DeniedState } from "@/ui/DeniedState";
 import { AsyncState } from "@/ui/AsyncState";
+import { Icon } from "@/ui/Icon";
 import { AVATARS, initials } from "@/ui/avatar";
-import { useToast, EmptyState, Input, PageHeader, Select } from "@vidya/ui-system";
+import { useToast, Button, EmptyState, Input, PageHeader, Select, StatusBadge } from "@vidya/ui-system";
 import styles from "./page.module.css";
 
 export const dynamic = "force-dynamic";
-const STATUSES: AttendanceStatus[] = ["present", "absent", "excused"];
 type SectionOpt = { sectionId: string; name: string; className: string };
-type Student = {
-  id: string; fullName: string; admissionNo: string; status: string;
-  phone: string | null; guardianName: string | null; guardianPhone: string | null; dob: string | null;
-};
+type Student = { id: string; fullName: string; admissionNo: string };
+
+/** Tap toggles present<->absent (the fast path); late/excused are a secondary
+ * control (the per-cell <select>) so they never cost the primary flow a tap. */
+function toggleAbsent(cur: AttendanceStatus): AttendanceStatus {
+  return cur === "present" ? "absent" : "present";
+}
+function fromSecondary(value: string): AttendanceStatus {
+  return value === "late" || value === "excused" ? value : "present";
+}
 
 export default function AttendancePage() {
   const year = useMemo(() => currentAcademicYear(), []);
@@ -27,9 +32,7 @@ export default function AttendancePage() {
   const [slot, setSlot] = useState("day");
   const [roster, setRoster] = useState<Student[] | null>(null);
   const [rosterError, setRosterError] = useState(false);
-  const [att, setAtt] = useState<Map<string, RosterCard>>(new Map());
   const [marks, setMarks] = useState<Record<string, AttendanceStatus>>({});
-  const [info, setInfo] = useState<DrawerStudent | null>(null);
   const save = useMutation(api.recordAttendance);
   const toast = useToast();
 
@@ -67,11 +70,7 @@ export default function AttendancePage() {
       setRoster(null);
       setRosterError(true);
     });
-    // attendance % per student enriches the cards + the info drawer
-    api.rosterAttendance(sectionId, { academicYear: year, ...(subjectId ? { subjectId } : {}) })
-      .then((r) => setAtt(new Map(r.cards.map((c) => [c.studentId, c]))))
-      .catch(() => setAtt(new Map()));
-  }, [sectionId, year, subjectId]);
+  }, [sectionId]);
   useEffect(() => {
     loadRoster();
   }, [loadRoster]);
@@ -85,37 +84,12 @@ export default function AttendancePage() {
     if (saved) toast.push({ status: "good", message: "Attendance saved — recompute analytics to see it on the dashboard." });
   }
 
-  function openInfo(s: Student, idx: number) {
-    const a = att.get(s.id);
-    setInfo({
-      studentId: s.id,
-      initials: initials(s.fullName),
-      gradient: AVATARS[idx % AVATARS.length]!.gradient,
-      ink: AVATARS[idx % AVATARS.length]!.ink,
-      rollNo: s.admissionNo,
-      name: s.fullName,
-      section: sections.find((x) => x.sectionId === sectionId)
-        ? `${sections.find((x) => x.sectionId === sectionId)!.className} · ${sections.find((x) => x.sectionId === sectionId)!.name}`
-        : "",
-      status: s.status,
-      pct: a?.pct ?? null,
-      attended: a?.attended ?? 0,
-      total: a?.total ?? 0,
-      lastMark: null,
-      backlogs: s.status === "backlog" ? 1 : 0,
-      flags: { short: (a?.pct ?? 100) < 75, backlog: s.status === "backlog", yb: s.status === "year_back" },
-      phone: s.phone,
-      guardianName: s.guardianName,
-      guardianPhone: s.guardianPhone,
-      dob: s.dob,
-    });
-  }
-
   const rosterList = roster ?? [];
   const tally = (st: AttendanceStatus) => rosterList.filter((s) => (marks[s.id] ?? "present") === st).length;
   const presentN = tally("present");
   const absentN = tally("absent");
-  const otherN = rosterList.length - presentN - absentN;
+  const lateN = tally("late");
+  const excusedN = tally("excused");
 
   return (
     <>
@@ -124,8 +98,8 @@ export default function AttendancePage() {
         title="Record attendance"
         lede={
           subjectId !== ""
-            ? `Marking your subject's period (${slot}). Tap a card to mark; tap the name to see the student.`
-            : "Tap a card to mark present/absent; tap the student's name for their record. Subject teachers mark their own period; the class teacher any."
+            ? `Marking your subject's period (${slot}). Tap a student to mark absent.`
+            : "Tap a student to mark absent — everyone starts present. Subject teachers mark their own period; the class teacher any."
         }
       />
 
@@ -153,83 +127,71 @@ export default function AttendancePage() {
             isEmpty={roster !== null && roster.length === 0}
             empty={<EmptyState title="No students enrolled in this section." />}
           >
-            <div className="att-head">
-              <div className="att-counts">
-                <span><b>{presentN}</b> present</span>
-                <span className="a"><b>{absentN}</b> absent</span>
-                {otherN > 0 ? <span><b>{otherN}</b> excused</span> : null}
-              </div>
-              <button
-                type="button"
-                className="att-allpresent"
+            <div className={styles.summary} aria-live="polite">
+              <StatusBadge status="good">{presentN} present</StatusBadge>
+              <StatusBadge status="danger" icon={<Icon name="close" size={12} />}>{absentN} absent</StatusBadge>
+              {lateN > 0 ? <StatusBadge status="warn">{lateN} late</StatusBadge> : null}
+              {excusedN > 0 ? <StatusBadge status="neutral">{excusedN} excused</StatusBadge> : null}
+              <Button
+                variant="secondary"
+                size="sm"
+                className={styles.allPresent}
                 onClick={() => setMarks(Object.fromEntries(rosterList.map((s) => [s.id, "present" as AttendanceStatus])))}
               >
                 All present
-              </button>
+              </Button>
             </div>
 
-            <div className="att-cards">
+            <div className={styles.grid} role="group" aria-label={`Attendance grid, ${rosterList.length} students`}>
               {rosterList.map((s, idx) => {
                 const cur = marks[s.id] ?? "present";
-                const pct = att.get(s.id)?.pct ?? null;
+                const av = AVATARS[idx % AVATARS.length]!;
+                const pressed: boolean | "mixed" = cur === "present" ? false : cur === "absent" ? true : "mixed";
                 return (
-                  <div key={s.id} className="att-card" data-status={cur}>
-                    <button type="button" className="att-card-head" onClick={() => openInfo(s, idx)} aria-label={`${s.fullName} — view record`}>
-                      <span
-                        className="cw-photo"
-                        style={{
-                          background: AVATARS[idx % AVATARS.length]!.gradient,
-                          color: AVATARS[idx % AVATARS.length]!.ink,
-                        }}
-                        aria-hidden="true"
-                      >
+                  <div key={s.id} className={styles.cell}>
+                    <button
+                      type="button"
+                      className={styles.cellBtn}
+                      data-status={cur}
+                      aria-pressed={pressed}
+                      aria-label={`${s.fullName}, roll ${s.admissionNo} — ${cur}`}
+                      onClick={() => setMarks((m) => ({ ...m, [s.id]: toggleAbsent(m[s.id] ?? "present") }))}
+                    >
+                      <span className={styles.avatar} style={{ background: av.gradient, color: av.ink }} aria-hidden="true">
                         {initials(s.fullName)}
                       </span>
-                      <span style={{ minWidth: 0 }}>
-                        <span className="cw-card-name" style={{ display: "block" }}>{s.fullName}</span>
-                        <span className="cw-card-id">{s.admissionNo} · view ›</span>
+                      <span className={styles.roll}>{s.admissionNo}</span>
+                      <span className={styles.statusMark} aria-hidden="true">
+                        {cur === "present" ? <Icon name="check" size={14} /> : null}
+                        {cur === "absent" ? <Icon name="close" size={14} /> : null}
+                        {cur === "late" ? "L" : null}
+                        {cur === "excused" ? "E" : null}
                       </span>
-                      {pct !== null ? (
-                        <span className="att-card-mini">
-                          <span className={`cw-mini-v ${pct < 75 ? "low" : "ok"}`} style={{ fontSize: 14 }}>{pct}%</span>
-                          <span className="cw-mini-k">ATTEND</span>
-                        </span>
-                      ) : null}
                     </button>
-                    <div className="att-seg" role="group" aria-label={`Attendance for ${s.fullName}`}>
-                      {STATUSES.map((st) => (
-                        <button
-                          key={st}
-                          type="button"
-                          data-on={cur === st ? st : undefined}
-                          aria-pressed={cur === st}
-                          aria-label={st}
-                          title={st}
-                          onClick={() => setMarks((m) => ({ ...m, [s.id]: st }))}
-                          style={{ textTransform: "capitalize" }}
-                        >
-                          {st}
-                        </button>
-                      ))}
-                    </div>
+                    <select
+                      className={styles.secondary}
+                      aria-label={`Mark ${s.fullName} late or excused`}
+                      value={cur === "late" || cur === "excused" ? cur : ""}
+                      onChange={(e) => setMarks((m) => ({ ...m, [s.id]: fromSecondary(e.target.value) }))}
+                    >
+                      <option value="">—</option>
+                      <option value="late">Late</option>
+                      <option value="excused">Excused</option>
+                    </select>
                   </div>
                 );
               })}
             </div>
 
-            <div className="att-save">
-              <button className="btn" type="button" disabled={save.phase.name === "saving"} onClick={submit}>
-                {save.phase.name === "saving" ? "Saving…" : `Save · ${presentN}/${rosterList.length} present`}
-              </button>
-              {save.phase.name === "error" ? (
-                <span className="formerror" role="alert" style={{ margin: 0 }}>{save.phase.message}</span>
-              ) : null}
+            <div className={styles.saveBar}>
+              <Button disabled={save.phase.name === "saving"} onClick={submit}>
+                {save.phase.name === "saving" ? "Saving…" : "Save attendance"}
+              </Button>
+              {save.phase.name === "error" ? <span className="formerror" role="alert">{save.phase.message}</span> : null}
             </div>
           </AsyncState>
         </>
       )}
-
-      <StudentSlideOver student={info} canManage={false} onClose={() => setInfo(null)} />
     </>
   );
 }
