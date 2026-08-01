@@ -1,0 +1,73 @@
+# Production overlay. Use ON TOP of the base file:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+#
+# What it changes vs. the base dev stack:
+#   - Adds Caddy as the only internet-facing service (TLS termination, 80/443).
+#   - Stops publishing every backing service to the host — Postgres, Redis,
+#     MinIO, the web app and the worker are reachable only on the internal
+#     compose network. (!reset drops the base file's `ports`.)
+#   - Turns on the production session/CSRF posture: SESSION_COOKIE_SECURE=true
+#     and TRUSTED_ORIGINS pinned to the real browser origin.
+#   - Bakes the git SHA into the web image so the admin System page can show it.
+#
+# Secrets (POSTGRES_PASSWORD, MINIO_ROOT_USER/PASSWORD, TRUSTED_ORIGINS,
+# SITE_ADDRESS, ACME_EMAIL, TLS_DIRECTIVE, GIT_SHA) come from the environment
+# / a .env file next to this compose file. See docs/deployment-checklist.md.
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp" # HTTP/3
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:-localhost}
+      ACME_EMAIL: ${ACME_EMAIL:-admin@example.com}
+      # Empty => automatic ACME. "tls internal" => self-signed (default).
+      # "tls /certs/fullchain.pem /certs/privkey.pem" => provisioned cert.
+      TLS_DIRECTIVE: ${TLS_DIRECTIVE:-tls internal}
+      # HSTS (#10.5 Part 3): OFF by default — matches the TLS_DIRECTIVE
+      # default above (self-signed/local-eval), so running this overlay with
+      # no further config can never poison a browser with "always HTTPS" for
+      # an origin that isn't really, durably HTTPS. Set this ONLY once
+      # SITE_ADDRESS/TLS_DIRECTIVE point at a real, publicly-trusted
+      # certificate (ACME or a manually provisioned one), e.g.:
+      #   HSTS_DIRECTIVE=Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
+      HSTS_DIRECTIVE: ${HSTS_DIRECTIVE:-}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./certs:/certs:ro # only used in manual-cert mode; harmless otherwise
+      - caddy-data:/data # persisted certs / ACME account — do NOT lose this
+      - caddy-config:/config
+    depends_on:
+      - web
+
+  web:
+    build:
+      args:
+        GIT_SHA: ${GIT_SHA:-unknown}
+    environment:
+      SESSION_COOKIE_SECURE: "true"
+      TRUSTED_ORIGINS: ${TRUSTED_ORIGINS:-}
+    ports: !reset [] # fronted by Caddy; not published to the host
+
+  worker:
+    environment:
+      SESSION_COOKIE_SECURE: "true"
+    ports: !reset []
+
+  postgres:
+    ports: !reset []
+
+  redis:
+    ports: !reset []
+
+  minio:
+    ports: !reset []
+
+volumes:
+  caddy-data:
+  caddy-config:

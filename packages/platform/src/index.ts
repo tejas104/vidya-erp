@@ -59,6 +59,7 @@ export { type ActorType, type AuditEvent, type AuditLogger } from "./audit/types
 
 export {
   DEFAULT_HTTP_GUARDS,
+  UPLOAD_BODY_MAX_BYTES,
   defineRoute,
   type BoundRouteHandler,
   type HttpGuardOptions,

@@ -85,6 +85,14 @@ export interface RouteSpec {
   };
   /** Opt into the login/password rate-limit scopes (packages/platform/src/ratelimit). Omit for none. */
   readonly rateLimit?: RouteRateLimit;
+  /**
+   * Per-route override of the platform's default request-body-size cap
+   * (HttpGuardOptions.bodyMaxBytes / env BODY_MAX_BYTES) — #10.5 Part 3.
+   * Omit for the ordinary JSON-body ceiling; set for routes whose payload is
+   * inherently larger (e.g. a base64-encoded file/CSV upload) — see
+   * UPLOAD_BODY_MAX_BYTES in ../http/define-route.
+   */
+  readonly bodyMaxBytes?: number;
   readonly responses: Readonly<Record<number, RouteResponseSpec>>;
 }
 

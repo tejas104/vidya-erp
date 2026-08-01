@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { JobSpec, ModuleDefinition, RouteSpec } from "@vidya/platform";
+import { UPLOAD_BODY_MAX_BYTES, type JobSpec, type ModuleDefinition, type RouteSpec } from "@vidya/platform";
 
 export const MODULE_NAME = "people";
 export const TABLE_PREFIX = "ppl_";
@@ -433,6 +433,9 @@ const routes: RouteSpec[] = [
         dataBase64: documentBase64Schema,
       }),
     },
+    // Upload route class (#10.5 Part 3): the base64 field alone can reach
+    // ~7 MB, far past the platform's 1 MB JSON-endpoint default.
+    bodyMaxBytes: UPLOAD_BODY_MAX_BYTES,
     audit: { action: "people.document-uploaded", resourceType: "student-document" },
     responses: {
       201: { description: "Uploaded", schema: documentViewSchema },
@@ -651,6 +654,10 @@ const routes: RouteSpec[] = [
         csv: z.string().min(1).max(1_000_000),
       }),
     },
+    // Upload route class (#10.5 Part 3): a 1,000,000-char CSV can nearly
+    // double in JSON-escaped bytes (embedded newlines/quotes), so this needs
+    // more than the platform's 1 MB JSON-endpoint default.
+    bodyMaxBytes: UPLOAD_BODY_MAX_BYTES,
     audit: { action: "people.import-requested", resourceType: "import" },
     responses: {
       202: { description: "Import accepted and enqueued", schema: z.object({ importId: z.string() }) },

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { ModuleDefinition, RouteSpec } from "@vidya/platform";
+import { UPLOAD_BODY_MAX_BYTES, type ModuleDefinition, type RouteSpec } from "@vidya/platform";
 
 export const MODULE_NAME = "coursework";
 export const TABLE_PREFIX = "cwk_";
@@ -164,6 +164,8 @@ const routes: RouteSpec[] = [
         academicYear: academicYearSchema,
       }),
     },
+    // Upload route class (#10.5 Part 3): base64 field alone can reach ~1.4 MB.
+    bodyMaxBytes: UPLOAD_BODY_MAX_BYTES,
     audit: { action: "coursework.material-uploaded", resourceType: "material" },
     responses: {
       201: { description: "Uploaded", schema: materialViewSchema },
@@ -243,6 +245,9 @@ const routes: RouteSpec[] = [
         dataBase64: base64Schema.optional(),
       }),
     },
+    // Upload route class (#10.5 Part 3): optional base64 attachment, same cap
+    // as material-upload above.
+    bodyMaxBytes: UPLOAD_BODY_MAX_BYTES,
     audit: { action: "coursework.submitted", resourceType: "submission" },
     responses: {
       200: { description: "Saved", schema: z.object({ ok: z.literal(true), submittedAt: z.string() }) },

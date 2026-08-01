@@ -30,6 +30,15 @@ export const DEFAULT_HTTP_GUARDS: HttpGuardOptions = {
   bodyMaxBytes: 1_048_576,
 };
 
+/**
+ * Ceiling for routes that declare RouteSpec.bodyMaxBytes because their body
+ * is an upload rather than an ordinary JSON call (#10.5 Part 3). Sized above
+ * the largest real payload found in the schemas — people.document-upload's
+ * base64 field caps at 7,000,000 chars (~7 MB; the handler separately
+ * enforces the true 5 MB file-size limit) — with headroom to spare.
+ */
+export const UPLOAD_BODY_MAX_BYTES = 8 * 1024 * 1024;
+
 export interface RouteDependencies {
   readonly logger: Logger;
   readonly authenticator: Authenticator;
@@ -154,7 +163,8 @@ function rateLimitedResponse(requestId: string, retryAfterSeconds: number): Resp
  *   request id → origin guard (state-changing) → per-IP rate limit (scoped
  *   routes) → authentication gate → global per-session rate limit →
  *   authorization (role requirement) → zod validation (params/query/body,
- *   size-capped) → per-identifier rate limit (scoped routes) → handler →
+ *   size-capped to RouteSpec.bodyMaxBytes or the global default) →
+ *   per-identifier rate limit (scoped routes) → handler →
  *   audit (state-changing) → metrics + access log
  *
  * Security posture (Constitution rule 6): authentication runs unless the
@@ -312,8 +322,9 @@ export function defineRoute(
 
       let body: unknown;
       if (spec.request?.body !== undefined) {
+        const bodyMaxBytes = spec.bodyMaxBytes ?? guards.bodyMaxBytes;
         const declaredLength = Number(request.headers.get("content-length") ?? "0");
-        if (Number.isFinite(declaredLength) && declaredLength > guards.bodyMaxBytes) {
+        if (Number.isFinite(declaredLength) && declaredLength > bodyMaxBytes) {
           return finish(
             problemResponse({
               status: 413,
@@ -328,7 +339,7 @@ export function defineRoute(
         } catch {
           text = "";
         }
-        if (text.length > guards.bodyMaxBytes) {
+        if (text.length > bodyMaxBytes) {
           return finish(
             problemResponse({
               status: 413,

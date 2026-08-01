@@ -1,0 +1,59 @@
+# Vidya production reverse proxy. Terminates TLS and forwards to the web
+# service over the internal compose network. Configured entirely by env vars
+# (docker-compose.prod.yml / .env) — no edits needed to switch cert modes.
+#
+# Caddy substitutes {$VAR} from the environment BEFORE parsing, so TLS_DIRECTIVE
+# can expand to a whole `tls ...` line — one file covers all three modes:
+#
+#   1. Automatic HTTPS (public domain, internet-reachable for ACME):
+#        SITE_ADDRESS=erp.example.edu   TLS_DIRECTIVE=      (empty)
+#      Caddy provisions + renews a Let's Encrypt cert using ACME_EMAIL.
+#
+#   2. Manually provisioned cert (air-gapped / intranet install):
+#        SITE_ADDRESS=erp.college.local
+#        TLS_DIRECTIVE=tls /certs/fullchain.pem /certs/privkey.pem
+#      Drop the PEM files in ./certs (mounted read-only at /certs).
+#
+#   3. Self-signed (default — local test / evaluation):
+#        SITE_ADDRESS=localhost   TLS_DIRECTIVE=tls internal
+#      Caddy mints its own CA. Browsers warn; acceptable for the restore/TLS
+#      verification drill.
+#
+# HTTP->HTTPS redirect is automatic: any request to :80 for an HTTPS site is
+# 308-redirected to https. The plain-HTTP web service is never published.
+{
+	email {$ACME_EMAIL:admin@example.com}
+}
+
+{$SITE_ADDRESS:localhost} {
+	{$TLS_DIRECTIVE:tls internal}
+
+	encode gzip
+	# reverse_proxy sets X-Forwarded-For / X-Forwarded-Proto automatically —
+	# the app keys login throttling off X-Forwarded-For (docs/runbook.md #2).
+
+	# Security headers (#10.5 Part 3).
+	#
+	# CSP / X-Frame-Options / nosniff / Referrer-Policy are already set by the
+	# app itself (apps/web/next.config.ts headers()), which covers both pages
+	# and API responses (Caddy only reverse-proxies to `web`, nothing else is
+	# served here) — not duplicated in this file so there is one place that
+	# declares them, not two that can drift apart.
+	#
+	# HSTS is the one header that belongs HERE and only here: it must never
+	# appear while TLS_DIRECTIVE above is still the self-signed/local-eval
+	# default (mode 3 in the header comment) or on a plain "localhost" install
+	# — telling a browser to remember "always HTTPS for this origin" is very
+	# hard to undo and actively harmful for a throwaway/dev install. So it is
+	# opt-in and empty (i.e. absent) unless HSTS_DIRECTIVE is explicitly set —
+	# see docker-compose.prod.yml, which documents exactly when that's safe
+	# (real ACME or manually-provisioned TLS, never `tls internal`).
+	header {
+		{$HSTS_DIRECTIVE:}
+		# Caddy's default Server header already carries no version string,
+		# but drop it outright rather than rely on that not changing.
+		-Server
+	}
+
+	reverse_proxy web:3000
+}

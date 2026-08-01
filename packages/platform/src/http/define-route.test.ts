@@ -12,7 +12,7 @@ import { createMetrics } from "../metrics/metrics";
 import type { RouteHandler, RouteSpec } from "../contracts/module";
 import { createRateLimiter } from "../ratelimit/limiter";
 import { MemoryRateLimitStore } from "../ratelimit/test-support";
-import { defineRoute, type RouteDependencies } from "./define-route";
+import { UPLOAD_BODY_MAX_BYTES, defineRoute, type RouteDependencies } from "./define-route";
 
 const silentLogger = pino({ level: "silent" });
 
@@ -376,6 +376,48 @@ describe("defineRoute — body size cap", () => {
       }),
     );
     expect(response.status).toBe(413);
+  });
+
+  it("honors a per-route bodyMaxBytes override smaller than the global default (#10.5 Part 3)", async () => {
+    const spec = makeSpec({
+      method: "POST",
+      audit: { action: "demo.create", resourceType: "demo" },
+      auth: { public: true, reason: "test" },
+      request: { body: z.object({ name: z.string() }) },
+      bodyMaxBytes: 64,
+    });
+    // Global default (1 MB) would allow this body through; the tighter
+    // per-route cap must still reject it.
+    const deps = makeDeps({ http: { trustedOrigins: [], bodyMaxBytes: 1_048_576 } });
+    const response = await defineRoute(spec, okHandler, deps)(
+      new Request("http://localhost/api/v1/demo", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name: "x".repeat(500) }),
+      }),
+    );
+    expect(response.status).toBe(413);
+  });
+
+  it("honors a per-route bodyMaxBytes override larger than the global default, for uploads (#10.5 Part 3)", async () => {
+    const spec = makeSpec({
+      method: "POST",
+      audit: { action: "demo.create", resourceType: "demo" },
+      auth: { public: true, reason: "test" },
+      request: { body: z.object({ name: z.string() }) },
+      bodyMaxBytes: UPLOAD_BODY_MAX_BYTES,
+    });
+    // A ~2 KB body would 413 under a tiny global default; the route's own
+    // upload-sized override must let it through.
+    const deps = makeDeps({ http: { trustedOrigins: [], bodyMaxBytes: 64 } });
+    const response = await defineRoute(spec, okHandler, deps)(
+      new Request("http://localhost/api/v1/demo", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name: "x".repeat(2000) }),
+      }),
+    );
+    expect(response.status).toBe(200);
   });
 });
 
