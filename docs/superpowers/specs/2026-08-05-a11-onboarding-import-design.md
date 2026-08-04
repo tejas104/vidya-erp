@@ -36,8 +36,14 @@ Established by pre-flight against the real tree, before any design choice.
    numbers (`:314-319`). In-file duplicates are caught separately (`:202`).
 5. **No edition concept exists.** Confirmed repo-wide; S2a already hit this and recorded
    "Editions are N/A until introduced (not invented in S2a)". #11 introduces it.
-6. **No page-header component exists.** 28 pages under `app/(app)` hand-roll headings
-   with page-local CSS modules; `Masthead`/`Topbar` are global chrome, not per-page.
+6. **`PageHeader` already exists and is already adopted on 26 of 28 pages.**
+   `packages/ui-system/src/PageHeader/PageHeader.tsx` — props `title`, `breadcrumb`,
+   `eyebrow`, `lede`, `actions`. **This corrects an earlier pre-flight error**: the first
+   search covered only `apps/web/src` and missed the `packages/ui-system` package
+   entirely, which made D4 look like a 28-page refactor. It is not. The real work is a
+   help affordance on the existing component plus adoption on the only two holdouts,
+   `app/(app)/manage/classes/page.tsx` and `app/(app)/students/[studentId]/page.tsx`.
+   `SlideOver` also already exists in the same package — Part 3 reuses it, not builds it.
 7. **No user-preferences mechanism.** The system module is health/ready/metrics only and
    has **no `migrations/` directory** — Part 4 adds its first.
 8. **No markdown renderer, and ADR-0009 forbids new runtime deps.**
@@ -49,7 +55,7 @@ Established by pre-flight against the real tree, before any design choice.
 | D1 | Temp passwords come from a **new platform utility** using `node:crypto`, outside identity `core/` | Unblocks Part 2 now. Recorded as an owner-ratified deviation: generating a random string is not hashing and has no tunable parameter that can be subtly wrong |
 | D2 | **Ship credentials active now, plan the login-flow change separately** | Students can log in (guard (b) passes); no force-change flag. The choreography change is carved out as its own owner-signed-off assignment, not smuggled into #11 |
 | D3 | **Introduce a real edition config** (`college` \| `school`) | Template headers and help paths key off it. #11 is its first and only consumer |
-| D4 | **New `PageHeader`, adopted across all 28 pages** | Kills the hand-rolled-heading duplication; largest diff in #11 |
+| D4 | **`PageHeader` everywhere, with the help affordance on it** | Chosen as "new component, all 28 screens", but finding 6 shows the component exists and 26 pages already use it. The decision's *intent* — one header everywhere, help reachable from it — is honoured at a fraction of the cost: add the affordance to the existing component, convert the two holdouts |
 
 ## Goal
 
@@ -63,8 +69,9 @@ Three phases. Phase 1 is sequential and alone because D4 touches all 28 pages an
 collide with every concurrent screen change.
 
 **Phase 1 — foundations (one track, no parallelism).**
-Edition config · `PageHeader` + adoption across 28 pages · help SlideOver plumbing and
-its "no help yet" state · the build-time help compiler.
+Edition config · `helpSlug` on the existing `PageHeader` + the two holdout conversions ·
+help SlideOver plumbing (reusing the existing `SlideOver`) and its "no help yet" state ·
+the build-time help compiler.
 
 **Phase 2 — two tracks, disjoint trees, safe in parallel.**
 
@@ -98,8 +105,9 @@ never logged, never audited. Consumes `PasswordHasher` through its interface onl
   block a row; warnings do not.
 - Progress counters (`processed` / `total`) on the import record, updated by the job.
 
-**`ui/PageHeader.tsx`** — title, optional subtitle, actions slot, breadcrumbs slot, and
-the help "?" button. The only place a page heading is declared after Phase 1.
+**`ui-system/PageHeader`** (existing, extended) — gains one optional `helpSlug` prop that
+renders the "?" button. When omitted the header renders exactly as it does today, so all
+26 current call sites are untouched by the change. The two holdout pages convert to it.
 
 **Help compiler (build step)** — walks `content/help/{edition}/*.md`, emits a typed
 module the app imports, and **warns listing every route slug with no doc**. One mechanism
@@ -171,9 +179,10 @@ multipart streaming upload (see Risks) · a second edition's content.
    working credentials. Mitigation: admin-only generation, audited, documented in
    `SECURITY.md` as a known-sensitive artifact with short retention recommended. Raised
    with the owner; stronger options (never persisting it) remain open.
-2. **PageHeader across 28 pages churns markup the 26 existing e2e journeys select
-   against.** Mitigation: heading text and any test-visible attributes stay byte-stable;
-   the regression net must be green at every task boundary, as in #10.
+2. **Largely retired by finding 6.** Only two pages change structurally, plus one new
+   button inside the shared `PageHeader`. Mitigation still stands where it applies:
+   heading text and test-visible attributes stay byte-stable on those two pages, and the
+   26 existing journeys must be green at every task boundary, as in #10.
 3. **"Streaming parse for 5,000 rows" is solving a load that does not exist.** 5,000 rows
    is roughly 400KB against an existing 1,000,000-char limit. Plan: measure and report
    the true ceiling rather than build multipart streaming. If the measured ceiling falls
