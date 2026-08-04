@@ -237,27 +237,80 @@ The following are captured by the controller running the full e2e suite
 (`tests/e2e/security.spec.ts`, guards a–d) plus the Docker compose stack —
 not fabricated here.
 
-**PLACEHOLDER — e2e run output** (guards a–d, pass/fail + timing):
+**e2e run output** (guards a–d, from the full suite — `PLAYWRIGHT_BASE_URL=http://localhost:3001 pnpm test:e2e`, prod build + compose stack + worker):
 ```
-<controller: paste `pnpm test:e2e -- security.spec.ts` output here>
+  ✓  23 tests\e2e\security.spec.ts:79  (a) 11 rapid failed logins trip the RATE LIMITER, not the account lockout (652ms)
+  ✓  24 tests\e2e\security.spec.ts:129 (b) a locked account rejects the correct password until admin unlock (2.1m)
+  ✓  25 tests\e2e\security.spec.ts:235 (c) hardening headers present on a sampled page and an API response (Next layer, local run) (20ms)
+  ✓  26 tests\e2e\security.spec.ts:272 (d) an oversized request body is rejected (413) before it reaches any handler (28ms)
+
+  26 passed (2.5m)
+```
+(All four security guards pass, alongside the 18 pre-existing regression journeys
+and the 4 assignment-#10 fast-path journeys. Guard (b) takes ~2 min because it
+spaces two batches of failed logins across the limiter's real 60s window to reach
+genuine lockout — see the doc comment in `tests/e2e/security.spec.ts`.)
+
+**header sample, page** (`curl -sI http://localhost:3001/login` against the
+running prod `next start`; non-security lines omitted):
+```
+HTTP/1.1 200 OK
+X-Content-Type-Options: nosniff
+X-Frame-Options: DENY
+Referrer-Policy: no-referrer
+Content-Security-Policy-Report-Only: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'; font-src 'self'; connect-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'
+Content-Type: text/html; charset=utf-8
 ```
 
-**PLACEHOLDER — header sample, page** (`curl -I` against a running
-`next start`, e.g. `GET /login`):
+**header sample, API** (`curl -sI http://localhost:3001/api/v1/system/health`;
+non-security lines omitted). Same four headers as the page — they are set for
+`source: "/:path*"`, API routes included; and there is **no `Server` header**
+(next start emits none, and the prod Caddyfile strips it):
 ```
-<controller: paste curl -I output here>
+HTTP/1.1 200 OK
+X-Content-Type-Options: nosniff
+X-Frame-Options: DENY
+Referrer-Policy: no-referrer
+Content-Security-Policy-Report-Only: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self'; font-src 'self'; connect-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'
+content-type: application/json
+x-request-id: b4e888ed-1e44-4162-8996-35f8b6f725ab
 ```
 
-**PLACEHOLDER — header sample, API** (`curl -I` against, e.g.,
-`GET /api/v1/system/health`):
+**Redis lockout-key TTL demonstration** — a throwaway account driven to genuine
+lockout (10 consecutive credential failures reaching `AuthService.login`; the
+rate-limiter keys were cleared between attempts so every failure reached the
+lockout counter rather than being deflected by the 5/60s limiter). Shows the
+`idn:throttle:login:<account>` key's TTL counting down from ~900s, the correct
+password refused while locked, and admin unlock deleting the key (`TTL -2`):
 ```
-<controller: paste curl -I output here>
+### 3. 10 consecutive wrong-password logins
+  attempt 1  -> HTTP 401
+  ...
+  attempt 9  -> HTTP 401
+  attempt 10 -> HTTP 429      # 10th failure locks the account
+### 4. the lockout key and its TTL (starts near 900 = 15 min, counting down)
+  key: idn:throttle:login:evtest-lockout-1785839137
+  TTL now:      892
+  TTL after 3s: 888
+### 5. correct password is refused while locked
+  correct-password login while locked: 429 (expect 429)
+### 6. admin early-unlock deletes the key
+  unlock: 200
+  TTL after unlock: -2   (-2 = key does not exist)
 ```
+(`retry-after` on the lockout 429 is the fixed `LOGIN_LOCKOUT_WINDOW_MINUTES*60`
+= 900, distinct from the rate limiter's variable window-derived `retry-after`.)
 
-**PLACEHOLDER — Redis lockout-key TTL demonstration** (e.g. `redis-cli TTL
-idn:throttle:login:<account>` immediately after the 10th consecutive
-failure, showing it starts near 900 and counts down; a second check after
-`identity.account-unlock` showing the key is gone):
+**Lighthouse PWA installability** (`lighthouse@11.7.1 http://localhost:3001/login
+--only-categories=pwa`, headless Chrome; full report at
+`docs/assignment-10/a10-lighthouse-pwa.report.html`). PWA category **1.0 / 100%**:
 ```
-<controller: paste redis-cli output here>
+installable-manifest  PASS   manifest + service worker meet installability requirements
+maskable-icon         PASS   manifest has a maskable icon
+splash-screen         PASS   configured for a custom splash screen
+themed-omnibox        PASS   sets a theme color for the address bar
+viewport / content-width  PASS
 ```
+(Lighthouse removed the PWA category in v12, so v11.7.1 was pinned to produce a
+categorised installability report; the underlying signals are also asserted
+black-box by e2e guard A4 in `tests/e2e/fast-path.spec.ts`.)
