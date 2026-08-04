@@ -123,6 +123,13 @@ const envSchema = z.object({
   SHUTDOWN_TIMEOUT_MS: z.coerce.number().int().min(1000).default(15000),
 
   SERVICE_VERSION: z.string().min(1).default("0.1.0"),
+
+  /**
+   * Product edition. Drives CSV template headers and the help-content path.
+   * #11 is the first and only consumer (spec finding 5) — nothing else in the
+   * app is edition-aware yet.
+   */
+  VIDYA_EDITION: z.enum(["college", "school"]).default("college"),
 });
 
 export interface AppConfig {
@@ -193,6 +200,7 @@ export interface AppConfig {
     readonly attendanceThreshold: number;
     readonly marksThreshold: number;
   };
+  readonly edition: "college" | "school";
 }
 
 export class ConfigError extends Error {
@@ -290,5 +298,6 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
       attendanceThreshold: env.ANALYTICS_ATTENDANCE_THRESHOLD,
       marksThreshold: env.ANALYTICS_MARKS_THRESHOLD,
     },
+    edition: env.VIDYA_EDITION,
   };
 }

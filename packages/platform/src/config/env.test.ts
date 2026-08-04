@@ -139,4 +139,15 @@ describe("loadConfig", () => {
       expect(String((error as Error).message)).not.toContain("leaky-secret");
     }
   });
+
+  it("defaults edition to college and accepts school", () => {
+    expect(loadConfig(validEnv).edition).toBe("college");
+    expect(loadConfig({ ...validEnv, VIDYA_EDITION: "school" }).edition).toBe("school");
+  });
+
+  it("rejects an unknown edition", () => {
+    expect(() => loadConfig({ ...validEnv, VIDYA_EDITION: "university" })).toThrowError(
+      ConfigError,
+    );
+  });
 });
