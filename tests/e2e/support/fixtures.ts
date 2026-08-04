@@ -1,4 +1,8 @@
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { type APIRequestContext, type Page, expect, request } from "@playwright/test";
+
+const execFileAsync = promisify(execFile);
 
 /**
  * Demo-seed credentials (scripts/seed-demo.ts). Every journey logs in for
@@ -22,10 +26,39 @@ export const CREDS = {
 export type RoleKey = keyof typeof CREDS;
 export const YEAR = "2026-27";
 
+/** Every login in this suite gets its own synthetic source IP so the per-IP
+ *  login rate limiter never sees more than one login per bucket. Range is
+ *  10.77.x.x — distinct from security.spec's dedicated 10.99.10.* buckets. */
+let xffCounter = 0;
+function nextXff(): string {
+  xffCounter += 1;
+  return `10.77.${(xffCounter >> 8) & 0xff}.${xffCounter & 0xff}`;
+}
+
+/**
+ * Secondary fallback: unique-per-login XFF isolates the per-IP bucket, but
+ * the per-username limiter (5/60s, no backoff — RATE_LIMIT_LOGIN_USERNAME_*)
+ * is keyed on the account alone, so a busy suite logging into the same demo
+ * account (e.g. "admin") repeatedly within a minute can still trip it. This
+ * suite always logs in with the correct password, so clearing these keys
+ * before each attempt cannot mask a real auth failure — it only stops the
+ * account's own request volume from rate-limiting itself. Best-effort: if
+ * docker/redis isn't reachable this way, the login below still proceeds.
+ */
+async function resetLoginThrottle(username: string): Promise<void> {
+  const keys = [`ratelimit:login-user:${username}`, `idn:throttle:login:${username}`];
+  try {
+    await execFileAsync("docker", ["compose", "exec", "-T", "redis", "redis-cli", "DEL", ...keys]);
+  } catch {
+    // best-effort only — see comment above.
+  }
+}
+
 /** Real HTTP login: returns an APIRequestContext carrying the session cookie.
  *  No in-process shortcut — this is the same endpoint the browser form calls. */
 export async function apiSession(baseURL: string, role: RoleKey): Promise<APIRequestContext> {
-  const ctx = await request.newContext({ baseURL });
+  await resetLoginThrottle(CREDS[role].username);
+  const ctx = await request.newContext({ baseURL, extraHTTPHeaders: { "x-forwarded-for": nextXff() } });
   const res = await ctx.post("/api/v1/identity/auth/login", { data: CREDS[role] });
   expect(res.status(), `login as ${role}`).toBe(200);
   return ctx;
@@ -35,6 +68,8 @@ export async function apiSession(baseURL: string, role: RoleKey): Promise<APIReq
  *  app has navigated away from /login (dashboard / portal / fees). */
 export async function browserLogin(page: Page, role: RoleKey): Promise<void> {
   const { username, password } = CREDS[role];
+  await resetLoginThrottle(username);
+  await page.setExtraHTTPHeaders({ "x-forwarded-for": nextXff() });
   await page.goto("/login");
   await page.fill("#username", username);
   await page.fill("#password", password);

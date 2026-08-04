@@ -62,7 +62,7 @@ test("A1 teacher marks a register on a 360px viewport and the student's portal s
   // entries themselves come from the server's idea of today.
   await page.goto("/manage/now");
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
-  const nowBody = page.locator("main, body");
+  const nowBody = page.locator("#main");
   await expect(nowBody).toContainText(
     /Mark attendance|no classes|nothing scheduled|day is done|no timetable|not a teaching day/i,
   );
@@ -122,10 +122,13 @@ test("A2 teacher enters marks with auto-advance and a running progress count", a
   // real path a teacher takes, then enter scores against it.
   await expect(page.getByRole("heading", { name: /enter marks/i })).toBeVisible();
   const title = `E2E fast-entry ${RUN_SLOT}`;
-  await page.getByLabel(/title/i).first().fill(title);
+  await page.getByLabel(/assessment name/i).first().fill(title);
+  // Default max score is 10; the scores entered below (41, 37) need headroom
+  // or they fail validation and never count toward progress.
+  await page.getByLabel(/max score/i).fill("100");
   await page.getByRole("button", { name: /create assessment/i }).click();
 
-  const firstScore = page.getByRole("textbox", { name: /^score for /i }).first();
+  const firstScore = page.getByRole("spinbutton", { name: /^score for /i }).first();
   await expect(firstScore).toBeVisible({ timeout: 15_000 });
   // Numeric-keypad-first is the spec's wording — assert the affordance exists.
   await expect(firstScore).toHaveAttribute("inputmode", "numeric");
@@ -137,7 +140,7 @@ test("A2 teacher enters marks with auto-advance and a running progress count", a
   // no tap. Enter two and assert progress tracked both.
   await firstScore.fill("41");
   await firstScore.press("Enter");
-  const secondScore = page.getByRole("textbox", { name: /^score for /i }).nth(1);
+  const secondScore = page.getByRole("spinbutton", { name: /^score for /i }).nth(1);
   await secondScore.fill("37");
   await expect(progress).toContainText(/^2\//);
 
