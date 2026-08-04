@@ -11,7 +11,8 @@
   "scripts": {
     "dev": "pnpm --filter @vidya/web dev",
     "dev:worker": "pnpm --filter @vidya/worker dev",
-    "build": "pnpm --filter @vidya/web build",
+    "build": "pnpm compile:help && pnpm --filter @vidya/web build",
+    "compile:help": "tsx scripts/compile-help.ts",
     "start": "pnpm --filter @vidya/web start",
     "worker": "pnpm --filter @vidya/worker start",
     "typecheck": "pnpm -r typecheck && tsc --noEmit -p tsconfig.json",
