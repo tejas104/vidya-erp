@@ -29,8 +29,6 @@
 	{$TLS_DIRECTIVE:tls internal}
 
 	encode gzip
-	# reverse_proxy sets X-Forwarded-For / X-Forwarded-Proto automatically —
-	# the app keys login throttling off X-Forwarded-For (docs/runbook.md #2).
 
 	# Security headers (#10.5 Part 3).
 	#
@@ -55,5 +53,27 @@
 		-Server
 	}
 
+	# DO NOT add `trusted_proxies` here. Read this before touching the block.
+	#
+	# The app keys per-IP login rate limiting (and the IP in the auth audit
+	# trail) off the FIRST hop of X-Forwarded-For — see the matching notes on
+	# clientIp in packages/platform/src/http/define-route.ts and
+	# packages/modules/identity/src/api/handlers.ts. That is only safe because
+	# Caddy does not trust a client-supplied XFF by default: with no
+	# trusted_proxies configured, the immediate peer is untrusted, so Caddy
+	# REPLACES the header with the real remote address rather than appending
+	# to it. Verified on caddy:2-alpine v2.11.4 — a request carrying a forged
+	# `X-Forwarded-For: 1.2.3.4` reaches the upstream as the real client IP.
+	#
+	# Declaring trusted_proxies flips that: Caddy then preserves the client's
+	# value and appends, so the forged hop arrives FIRST and every per-IP
+	# limiter gets a fresh bucket per forged value — i.e. silently switched
+	# off. If a real deployment ever needs this (an institution proxy in front
+	# of Caddy), clientIp must be changed to read the correct hop at the same
+	# time. See docs/threat-model-identity.md#throttle-keying.
+	#
+	# The other half of the same assumption lives in docker-compose.prod.yml,
+	# which `!reset`s the web service's ports so Caddy is the only ingress.
+	# Publish the app port directly and clients can forge XFF unmediated.
 	reverse_proxy web:3000
 }

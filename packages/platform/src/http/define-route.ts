@@ -117,6 +117,13 @@ function toResponse(result: RouteResult, requestId: string): Response {
  * throttle-keying convention (docs/threat-model-identity.md#throttle-keying):
  * behind the on-prem reverse proxy the first x-forwarded-for hop is
  * proxy-controlled and trustworthy; direct connections share one bucket.
+ *
+ * The first-hop assumption rests on the Caddyfile declaring NO
+ * `trusted_proxies`: an untrusted peer makes Caddy replace a client-supplied
+ * XFF with the real remote address rather than append to it. Declare
+ * trusted_proxies (or expose the app without the proxy) and a client-forged
+ * value lands in first position, handing every per-IP limiter a fresh bucket
+ * per request. Change which hop this reads at the same time, or not at all.
  */
 function clientIp(headers: Headers): string {
   const forwarded = headers.get("x-forwarded-for");

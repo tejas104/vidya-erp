@@ -224,12 +224,25 @@ reconciliation is outside this task's scope.
    doesn't know the password can still lock a legitimate user out), traded
    against being able to satisfy "10 consecutive failures locks the
    account" and a single-action admin unlock. The per-IP backoff limiter
-   and admin early-unlock bound the residual risk.
-6. **Rate-limit/lockout keying trusts the first `X-Forwarded-For` hop.**
-   Correct only behind a reverse proxy that overwrites/sets it (the
-   provided `Caddyfile` does). A direct-exposed deployment (no proxy)
-   degrades every unheadered caller to a shared "direct" bucket — coarser,
-   but still functioning throttling, not a bypass.
+   and admin early-unlock bound the residual risk. Note this is a *live*
+   vector, not a theoretical one: anyone who knows a username can lock it
+   for 15 minutes, and usernames are guessable. It is bounded, not closed —
+   and the per-IP half of that bound depends entirely on item 6.
+6. **Rate-limit keying trusts the first `X-Forwarded-For` hop**, so every
+   per-IP control is only as good as the proxy in front. The shipped stack
+   holds: the provided `Caddyfile` declares no `trusted_proxies`, so Caddy
+   treats the peer as untrusted and **replaces** a client-supplied
+   `X-Forwarded-For` with the real remote address (verified on
+   `caddy:2-alpine` v2.11.4), and `docker-compose.prod.yml` doesn't publish
+   the web port. Both are load-bearing and neither is covered by a test —
+   adding `trusted_proxies`, publishing the app port, or a future Caddy
+   default change would each silently switch per-IP limiting off. Deploy
+   **direct-exposed** (no proxy) and it is a genuine bypass, not merely
+   coarser throttling: a caller sending its own `X-Forwarded-For` gets a
+   fresh limiter bucket per forged value, so the per-IP login cap and its
+   backoff stop applying at all. Per-username limiting and account lockout
+   are unaffected (keyed on the account).
+   See `docs/threat-model-identity.md#throttle-keying`.
 
 ## Evidence
 

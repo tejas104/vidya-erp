@@ -36,6 +36,12 @@ export interface IdentityHandlerDeps {
  * reverse proxy the first x-forwarded-for hop is proxy-controlled and
  * trustworthy; direct connections fall back to a shared bucket
  * (docs/threat-model-identity.md#throttle-keying).
+ *
+ * "Proxy-controlled" holds only because the Caddyfile declares no
+ * `trusted_proxies`, so Caddy replaces a client-supplied XFF rather than
+ * appending to it — see the matching note on platform's clientIp. Here the
+ * value also lands in the auth audit trail, so a forged hop would poison
+ * the record of who attempted a login, not just the rate-limit bucket.
  */
 function clientIp(headers: Headers): string {
   const forwarded = headers.get("x-forwarded-for");
