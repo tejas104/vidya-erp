@@ -256,7 +256,9 @@ export interface ImportView {
   id: string; kind: "students" | "teachers"; collegeId: string;
   status: "pending" | "running" | "completed" | "failed";
   dryRun: boolean; totalRows: number; okRows: number; errorRows: number;
+  warningRows: number; processedRows: number;
   errors: { row: number; message: string }[];
+  warnings: { row: number; message: string }[];
 }
 export type OrgUnitType = "college" | "department" | "class" | "section" | "subject";
 
@@ -756,6 +758,10 @@ export const api = {
   createImport: (body: { kind: "students" | "teachers"; collegeId: string; academicYear?: string; dryRun: boolean; csv: string }) =>
     post<{ importId: string }>("/api/v1/people/imports", body),
   getImport: (importId: string) => get<ImportView>(`/api/v1/people/imports/${encodeURIComponent(importId)}`),
+  /** Header-only CSV template; downloaded via a plain <a href download>, same pattern as docDownloadUrl/downloadUrl. */
+  importTemplateUrl: (kind: "students" | "teachers") => `/api/v1/people/imports/template?kind=${kind}`,
+  /** Rejected-row CSV — re-scope-checked server-side on click. */
+  importErrorsUrl: (importId: string) => `/api/v1/people/imports/${encodeURIComponent(importId)}/errors`,
   // reporting
   listReports: (limit = 25) => get<{ reports: ReportView[] }>(`/api/v1/reports?limit=${limit}`),
   // people — student identity link (W1)

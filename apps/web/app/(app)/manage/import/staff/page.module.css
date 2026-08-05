@@ -21,13 +21,6 @@
 .narrow {
   width: 120px;
 }
-.checkboxLabel {
-  display: inline-flex;
-  gap: var(--space-2);
-  align-items: center;
-  font-size: var(--text-14);
-  padding-top: var(--space-3);
-}
 .textarea {
   width: 100%;
   font-family: var(--font-mono);
@@ -41,6 +34,12 @@
 .textarea:focus-visible {
   border-color: var(--focus);
 }
-.stats {
-  margin-bottom: var(--space-4);
+.formHint {
+  margin: 0;
+  font-size: var(--text-12);
+  color: var(--ink-2);
+}
+.skeletonStack {
+  display: grid;
+  gap: var(--space-2);
 }

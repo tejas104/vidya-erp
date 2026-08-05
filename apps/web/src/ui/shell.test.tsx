@@ -41,15 +41,19 @@ describe("Sidebar (role-gated)", () => {
     render(<Sidebar roles={["principal"]} open={false} onClose={() => {}} />);
     expect(screen.getByRole("link", { name: /dashboard/i })).toHaveAttribute("aria-current", "page");
   });
-  it("an admin sees People (org/students/teachers) and Administration (users/import)", () => {
+  it("an admin sees People (org/students/teachers/import) and Administration (users)", () => {
     render(<Sidebar roles={["admin"]} open={false} onClose={() => {}} />);
     expect(screen.getByRole("button", { name: "People" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Administration" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /organisation/i })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /students/i })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /teachers/i })).toBeInTheDocument();
+    // exact names — "Students"/"Teachers" would otherwise also match the
+    // Import Students/Import Staff links added below
+    expect(screen.getByRole("link", { name: "Students" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Teachers" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /users/i })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /import/i })).toBeInTheDocument();
+    // the old single "Import" entry is now two dedicated PEOPLE screens
+    expect(screen.getByRole("link", { name: "Import Students" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Import Staff" })).toBeInTheDocument();
   });
   it("every staff role sees Reports", () => {
     render(<Sidebar roles={["teacher"]} open={false} onClose={() => {}} />);

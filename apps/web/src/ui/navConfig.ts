@@ -62,7 +62,11 @@ export const NAV: NavEntry[] = [
   { href: "/manage/students", label: "Students", icon: "students", group: "PEOPLE", roles: ["admin"] },
   { href: "/manage/teachers", label: "Teachers", icon: "teachers", group: "PEOPLE", roles: ["admin"] },
   { href: "/manage/users", label: "Users", icon: "key", group: "ADMINISTRATION", roles: ["admin"] },
-  { href: "/manage/import", label: "Import", icon: "upload", group: "ADMINISTRATION", roles: ["admin"] },
+  // --- onboarding import (task A4): split off the old single /manage/import
+  // form into dedicated students/staff screens, both PEOPLE (that's what
+  // they populate), not ADMINISTRATION (which is accounts/access).
+  { href: "/manage/import/students", label: "Import Students", icon: "upload", group: "PEOPLE", roles: ["admin"] },
+  { href: "/manage/import/staff", label: "Import Staff", icon: "upload", group: "PEOPLE", roles: ["admin"] },
   { href: "/manage/reports", label: "Reports", icon: "file", group: "REPORTS", roles: ALL },
   // --- analytics ---
   // Real screen at apps/web/app/(app)/manage/analytics/page.tsx: the deeper

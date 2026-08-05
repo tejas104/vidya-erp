@@ -11,7 +11,7 @@ describe("Sidebar collapsible groups", () => {
     render(<Sidebar roles={["admin"]} open onClose={() => {}} />);
     const people = screen.getByRole("button", { name: /People/i });
     expect(people).toHaveAttribute("aria-expanded", "true");
-    expect(screen.getByRole("link", { name: /Students/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Students" })).toBeInTheDocument();
     fireEvent.click(people);
     expect(people).toHaveAttribute("aria-expanded", "false");
     expect(localStorage.getItem("vidya-nav-collapsed")).toContain("PEOPLE");

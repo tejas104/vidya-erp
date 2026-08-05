@@ -22,4 +22,13 @@ describe("navConfig 8-domain regroup", () => {
     expect(crumbsFor("/manage/analytics")).toEqual([{ label: "Analytics" }, { label: "Analytics" }]);
     expect(crumbsFor("/dashboard")).toEqual([]);
   });
+  it("PEOPLE carries the two onboarding-import screens for admin, not a merged 'Import'", () => {
+    const people = visibleNav(["admin"]).find((g) => g.group === "PEOPLE")!.entries;
+    expect(people.map((e) => e.label)).toEqual(
+      expect.arrayContaining(["Import Students", "Import Staff"]),
+    );
+    expect(people.find((e) => e.href === "/manage/import/students")).toBeDefined();
+    expect(people.find((e) => e.href === "/manage/import/staff")).toBeDefined();
+    expect(crumbsFor("/manage/import/students")).toEqual([{ label: "People" }, { label: "Import Students" }]);
+  });
 });
