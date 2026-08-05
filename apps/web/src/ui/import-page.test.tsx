@@ -128,6 +128,27 @@ describe("/manage/import/students", () => {
     expect(download).toHaveAttribute("href", "/api/v1/people/imports/imp_final/errors");
   });
 
+  it("stops polling once the screen unmounts mid dry-run — no further getImport calls", async () => {
+    (api.createImport as ReturnType<typeof vi.fn>).mockResolvedValue({ importId: "imp_1" });
+    // "running" forever — if the poll loop isn't stopped on unmount it keeps
+    // calling getImport every second regardless (this is what regressed).
+    (api.getImport as ReturnType<typeof vi.fn>).mockResolvedValue(
+      importView({ status: "running", processedRows: 1, totalRows: 5 }),
+    );
+
+    const { unmount } = renderStudents();
+    fireEvent.change(await screen.findByLabelText(/csv content/i), { target: { value: "admission_no,full_name\nA-1,One" } });
+    fireEvent.click(screen.getByRole("button", { name: /preview.*dry-run/i }));
+
+    await waitFor(() => expect(api.getImport).toHaveBeenCalledTimes(1));
+    unmount();
+    const callsAtUnmount = (api.getImport as ReturnType<typeof vi.fn>).mock.calls.length;
+
+    // longer than the 1s poll interval — the next tick would have fired by now
+    await new Promise((resolve) => setTimeout(resolve, 1200));
+    expect(api.getImport).toHaveBeenCalledTimes(callsAtUnmount);
+  }, 10_000);
+
   it("loading: renders neither the empty, error, denied nor ready content while colleges() is in flight", () => {
     (api.colleges as ReturnType<typeof vi.fn>).mockReturnValue(new Promise(() => {}));
     renderStudents();
