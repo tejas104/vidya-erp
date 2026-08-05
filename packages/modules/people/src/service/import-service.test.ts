@@ -183,6 +183,42 @@ describe("student imports", () => {
     expect(finished).toEqual(["students:failed"]);
   });
 
+  it("warns but still imports a student with no enrollment columns", async () => {
+    const { service, people, imports, org } = await makeHarness();
+    const csv = "admission_no,full_name\nA-1,Asha Rao\n";
+    const row = await service.createImport({
+      kind: "students",
+      collegeId: org.college.id,
+      academicYear: "2026-27",
+      csv,
+      dryRun: false,
+      requestedBy: "admin-1",
+    });
+    await service.run(row.id, log);
+    const state = await imports.get(row.id);
+    expect(state).toMatchObject({ okRows: 1, errorRows: 0, warningRows: 1 });
+    expect(state?.warnings).toMatchObject([{ row: 2, message: expect.stringMatching(/unassigned/i) }]);
+    const asha = await people.findStudentByAdmissionNo(org.college.id, "A-1");
+    expect(asha).not.toBeNull();
+  });
+
+  it("keeps a duplicate admission number an ERROR, not a warning", async () => {
+    const { service, people, imports, org } = await makeHarness();
+    await people.createStudent({ collegeId: org.college.id, admissionNo: "A010", fullName: "Existing" });
+    const csv = "admission_no,full_name\nA010,Already In Db\n";
+    const row = await service.createImport({
+      kind: "students",
+      collegeId: org.college.id,
+      academicYear: "2026-27",
+      csv,
+      dryRun: false,
+      requestedBy: "admin-1",
+    });
+    await service.run(row.id, log);
+    const state = await imports.get(row.id);
+    expect(state).toMatchObject({ errorRows: 1, warningRows: 0 });
+  });
+
   it("skips an already-completed import (idempotent re-delivery)", async () => {
     const { service, people, org } = await makeHarness();
     const row = await service.createImport({

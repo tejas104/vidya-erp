@@ -138,7 +138,10 @@ export const importViewSchema = z.object({
   totalRows: z.number(),
   okRows: z.number(),
   errorRows: z.number(),
+  warningRows: z.number(),
+  processedRows: z.number(),
   errors: z.array(z.object({ row: z.number(), message: z.string() })),
+  warnings: z.array(z.object({ row: z.number(), message: z.string() })),
 });
 
 const problemSchema = z.object({

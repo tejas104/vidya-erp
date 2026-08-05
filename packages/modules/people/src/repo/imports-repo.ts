@@ -22,6 +22,8 @@ export interface ImportsRepo {
   }): Promise<PplImportRow>;
   get(id: string): Promise<PplImportRow | null>;
   markRunning(id: string): Promise<void>;
+  /** Called by the job as it works through rows, so a poller can show live progress. */
+  updateProgress(id: string, processedRows: number): Promise<void>;
   finish(
     id: string,
     outcome: {
@@ -29,7 +31,10 @@ export interface ImportsRepo {
       totalRows: number;
       okRows: number;
       errorRows: number;
+      warningRows: number;
+      processedRows: number;
       errors: readonly RowError[];
+      warnings: readonly RowError[];
     },
   ): Promise<void>;
 }
@@ -61,6 +66,10 @@ export function createImportsRepo(db: Db): ImportsRepo {
       await db.update(pplImports).set({ status: "running" }).where(eq(pplImports.id, id));
     },
 
+    async updateProgress(id, processedRows) {
+      await db.update(pplImports).set({ processedRows }).where(eq(pplImports.id, id));
+    },
+
     async finish(id, outcome) {
       await db
         .update(pplImports)
@@ -69,7 +78,10 @@ export function createImportsRepo(db: Db): ImportsRepo {
           totalRows: outcome.totalRows,
           okRows: outcome.okRows,
           errorRows: outcome.errorRows,
+          warningRows: outcome.warningRows,
+          processedRows: outcome.processedRows,
           errors: outcome.errors,
+          warnings: outcome.warnings,
           finishedAt: new Date(),
         })
         .where(eq(pplImports.id, id));

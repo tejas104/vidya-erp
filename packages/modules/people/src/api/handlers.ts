@@ -107,7 +107,10 @@ function importView(row: PplImportRow) {
     totalRows: row.totalRows,
     okRows: row.okRows,
     errorRows: row.errorRows,
+    warningRows: row.warningRows,
+    processedRows: row.processedRows,
     errors: row.errors,
+    warnings: row.warnings,
   };
 }
 

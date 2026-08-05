@@ -6346,7 +6346,31 @@
                     "errorRows": {
                       "type": "number"
                     },
+                    "warningRows": {
+                      "type": "number"
+                    },
+                    "processedRows": {
+                      "type": "number"
+                    },
                     "errors": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "row": {
+                            "type": "number"
+                          },
+                          "message": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "row",
+                          "message"
+                        ]
+                      }
+                    },
+                    "warnings": {
                       "type": "array",
                       "items": {
                         "type": "object",
@@ -6374,7 +6398,10 @@
                     "totalRows",
                     "okRows",
                     "errorRows",
-                    "errors"
+                    "warningRows",
+                    "processedRows",
+                    "errors",
+                    "warnings"
                   ]
                 }
               }

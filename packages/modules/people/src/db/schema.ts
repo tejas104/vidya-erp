@@ -161,8 +161,14 @@ export const pplImports = pgTable("ppl_imports", {
   totalRows: integer("total_rows").notNull().default(0),
   okRows: integer("ok_rows").notNull().default(0),
   errorRows: integer("error_rows").notNull().default(0),
+  /** Rows imported successfully but with a caveat (v1: created unassigned). */
+  warningRows: integer("warning_rows").notNull().default(0),
+  /** Rows processed so far — updated as the job runs, not only at the end. */
+  processedRows: integer("processed_rows").notNull().default(0),
   /** First N row errors, [{row, message}] — capped by the import service. */
   errors: jsonb("errors").notNull().default([]),
+  /** Same shape as errors, but for rows that imported successfully with a caveat. */
+  warnings: jsonb("warnings").notNull().default([]),
   requestedBy: text("requested_by").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   finishedAt: timestamp("finished_at", { withTimezone: true }),

@@ -115,7 +115,10 @@ export class ImportService {
         totalRows: records.length,
         okRows: outcome.ok,
         errorRows: outcome.errors.length,
+        warningRows: outcome.warnings.length,
+        processedRows: records.length,
         errors: outcome.errors.slice(0, MAX_ROW_ERRORS),
+        warnings: outcome.warnings.slice(0, MAX_ROW_ERRORS),
       });
       await this.deps.audit.record({
         module: "people",
@@ -132,6 +135,7 @@ export class ImportService {
           totalRows: records.length,
           okRows: outcome.ok,
           errorRows: outcome.errors.length,
+          warningRows: outcome.warnings.length,
         },
       });
       this.deps.onFinished?.(imp.kind as ImportKind, "completed");
@@ -145,7 +149,10 @@ export class ImportService {
         totalRows: 0,
         okRows: 0,
         errorRows: 0,
+        warningRows: 0,
+        processedRows: 0,
         errors: [{ row: 0, message: error instanceof Error ? error.message : "import failed" }],
+        warnings: [],
       });
       await this.deps.audit.record({
         module: "people",
@@ -165,7 +172,7 @@ export class ImportService {
   private async processStudents(
     imp: PplImportRow,
     records: Record<string, string>[],
-  ): Promise<{ ok: number; errors: RowError[] }> {
+  ): Promise<{ ok: number; errors: RowError[]; warnings: RowError[] }> {
     const errors: RowError[] = [];
     // Section lookup by (department_code, class_code, section_name) — one
     // tree read instead of per-row queries.
@@ -184,6 +191,8 @@ export class ImportService {
       admissionNo: string;
       fullName: string;
       sectionId?: string;
+      /** No enrollment trio provided — imports fine, but lands unassigned (warning, not error). */
+      unassigned: boolean;
     }
     const valid: ValidStudentRow[] = [];
     const seenInFile = new Set<string>();
@@ -226,7 +235,13 @@ export class ImportService {
           return;
         }
       }
-      valid.push({ row: rowNumber, admissionNo: row.admission_no, fullName: row.full_name, sectionId });
+      valid.push({
+        row: rowNumber,
+        admissionNo: row.admission_no,
+        fullName: row.full_name,
+        sectionId,
+        unassigned: provided === 0,
+      });
     });
 
     const existing = await this.deps.people.findExistingAdmissionNos(
@@ -242,11 +257,20 @@ export class ImportService {
     });
 
     if (imp.dryRun) {
-      return { ok: applicable.length, errors };
+      const warnings = applicable
+        .filter((row) => row.unassigned)
+        .map((row) => ({ row: row.row, message: "student would be created unassigned — no enrollment columns provided" }));
+      return { ok: applicable.length, errors, warnings };
     }
 
+    // Rows already classified as errors above are "processed"; the rest get
+    // processed one by one below, so the running total stays accurate.
+    const processedBeforeWrites = errors.length;
+
     let ok = 0;
-    for (const row of applicable) {
+    const warnings: RowError[] = [];
+    for (let i = 0; i < applicable.length; i += 1) {
+      const row = applicable[i]!;
       try {
         const student = await this.deps.people.createStudent({
           collegeId: imp.collegeId,
@@ -266,24 +290,31 @@ export class ImportService {
               row: row.row,
               message: `student created but enrollment failed: ${error instanceof Error ? error.message : "unknown error"}`,
             });
+            await this.deps.imports.updateProgress(imp.id, processedBeforeWrites + i + 1);
             continue;
           }
         }
         ok += 1;
+        if (row.unassigned) {
+          warnings.push({ row: row.row, message: "student created unassigned — no enrollment columns provided" });
+        }
       } catch (error) {
         errors.push({
           row: row.row,
           message: error instanceof Error ? error.message : "insert failed",
         });
       }
+      // ponytail: one UPDATE per row — batch every N rows if a very large
+      // import measurably slows down the worker.
+      await this.deps.imports.updateProgress(imp.id, processedBeforeWrites + i + 1);
     }
-    return { ok, errors };
+    return { ok, errors, warnings };
   }
 
   private async processTeachers(
     imp: PplImportRow,
     records: Record<string, string>[],
-  ): Promise<{ ok: number; errors: RowError[] }> {
+  ): Promise<{ ok: number; errors: RowError[]; warnings: RowError[] }> {
     const errors: RowError[] = [];
     interface ValidTeacherRow {
       row: number;
@@ -324,11 +355,15 @@ export class ImportService {
     });
 
     if (imp.dryRun) {
-      return { ok: applicable.length, errors };
+      return { ok: applicable.length, errors, warnings: [] };
     }
 
+    // Teachers have no v1 warning tier — every row is either ok or error.
+    const processedBeforeWrites = errors.length;
+
     let ok = 0;
-    for (const row of applicable) {
+    for (let i = 0; i < applicable.length; i += 1) {
+      const row = applicable[i]!;
       try {
         await this.deps.people.createTeacher({
           collegeId: imp.collegeId,
@@ -343,7 +378,8 @@ export class ImportService {
           message: error instanceof Error ? error.message : "insert failed",
         });
       }
+      await this.deps.imports.updateProgress(imp.id, processedBeforeWrites + i + 1);
     }
-    return { ok, errors };
+    return { ok, errors, warnings: [] };
   }
 }

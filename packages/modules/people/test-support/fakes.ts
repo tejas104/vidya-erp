@@ -605,7 +605,10 @@ export class InMemoryImportsRepo implements ImportsRepo {
       totalRows: 0,
       okRows: 0,
       errorRows: 0,
+      warningRows: 0,
+      processedRows: 0,
       errors: [],
+      warnings: [],
       requestedBy: input.requestedBy,
       createdAt: now(),
       finishedAt: null,
@@ -625,6 +628,13 @@ export class InMemoryImportsRepo implements ImportsRepo {
     }
   }
 
+  async updateProgress(id: string, processedRows: number): Promise<void> {
+    const row = this.rows.get(id);
+    if (row !== undefined) {
+      this.rows.set(id, { ...row, processedRows });
+    }
+  }
+
   async finish(
     id: string,
     outcome: {
@@ -632,12 +642,21 @@ export class InMemoryImportsRepo implements ImportsRepo {
       totalRows: number;
       okRows: number;
       errorRows: number;
+      warningRows: number;
+      processedRows: number;
       errors: readonly RowError[];
+      warnings: readonly RowError[];
     },
   ): Promise<void> {
     const row = this.rows.get(id);
     if (row !== undefined) {
-      this.rows.set(id, { ...row, ...outcome, errors: [...outcome.errors], finishedAt: now() });
+      this.rows.set(id, {
+        ...row,
+        ...outcome,
+        errors: [...outcome.errors],
+        warnings: [...outcome.warnings],
+        finishedAt: now(),
+      });
     }
   }
 }
