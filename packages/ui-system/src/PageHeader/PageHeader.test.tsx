@@ -39,4 +39,21 @@ describe("PageHeader", () => {
     rerender(<PageHeader title="Attendance" />);
     expect(screen.queryByText("Track daily attendance.", { selector: "p" })).not.toBeInTheDocument();
   });
+
+  it("renders no help slot when help is absent", () => {
+    render(<PageHeader title="Attendance" />);
+    expect(screen.queryByRole("button", { name: /help/i })).toBeNull();
+  });
+
+  it("renders the help slot beside actions when given", () => {
+    render(
+      <PageHeader
+        title="Attendance"
+        actions={<button>Export</button>}
+        help={<button aria-label="Help">?</button>}
+      />,
+    );
+    expect(screen.getByRole("button", { name: /help/i })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Export" })).toBeVisible();
+  });
 });

@@ -7,12 +7,16 @@ export function PageHeader({
   eyebrow,
   lede,
   actions,
+  help,
 }: {
   title: ReactNode;
   breadcrumb?: ReactNode;
   eyebrow?: ReactNode;
   lede?: ReactNode;
   actions?: ReactNode;
+  /** Presentational slot rendered beside `actions`, e.g. a help button. Purely
+   * dumb — PageHeader knows nothing about what it renders. */
+  help?: ReactNode;
 }) {
   return (
     <header className={styles.head}>
@@ -22,7 +26,12 @@ export function PageHeader({
         <h1 className={styles.title}>{title}</h1>
         {lede !== undefined ? <p className={styles.lede}>{lede}</p> : null}
       </div>
-      {actions !== undefined ? <div className={styles.actions}>{actions}</div> : null}
+      {actions !== undefined || help !== undefined ? (
+        <div className={styles.actions}>
+          {actions}
+          {help}
+        </div>
+      ) : null}
     </header>
   );
 }
