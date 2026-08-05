@@ -679,6 +679,21 @@ const routes: RouteSpec[] = [
       404: { description: "No such import", schema: problemSchema },
     },
   },
+  {
+    id: "people.import-template",
+    module: MODULE_NAME,
+    method: "GET",
+    path: "/api/v1/people/imports/template",
+    summary: "Downloadable CSV column template for bulk import (admin)",
+    description:
+      "Header row only, no data. Students: admission_no, full_name and the optional enrollment trio department_code+class_code+section_name (must be filled in together or left blank — see people.import-create). Teachers: staff_no, full_name. No college/section resource is read, so there is nothing to scope-check beyond the ADMIN_ONLY role gate.",
+    tags: ["people-imports"],
+    auth: ADMIN_ONLY,
+    request: { query: z.object({ kind: z.enum(["students", "teachers"]) }) },
+    responses: {
+      200: { description: "CSV header row", contentType: "text/csv" },
+    },
+  },
 ];
 
 // ---------------------------------------------------------------------------

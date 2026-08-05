@@ -1,4 +1,4 @@
-import { csvDocument } from "../escape-csv";
+import { csvDocument } from "@vidya/platform";
 import type { ReportData } from "../report-data";
 
 /**

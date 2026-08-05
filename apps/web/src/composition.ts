@@ -150,6 +150,7 @@ function buildWebRuntime(): WebRuntime {
     enqueueImport: async (payload) => {
       await peopleQueue.queue.add(IMPORT_JOB_NAME, payload);
     },
+    edition: config.edition,
   });
   orgDirectoryRef.current = people.service.orgDirectory;
 

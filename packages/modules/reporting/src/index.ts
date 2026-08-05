@@ -5,15 +5,20 @@
  * #4's read model), so a report inherits constituent-closure, the
  * minimum-cohort rule and at-risk field-gating — a report is a disclosure
  * surface, no exemption because it is "a document" (ADR-0020). CSV cells are
- * formula-injection-escaped (escape-csv.ts); downloads are scope-checked
- * (never URL-secret). Generation runs in the worker.
+ * formula-injection-escaped (@vidya/platform's csv/escape-csv.ts, shared with
+ * people's import-template endpoint); downloads are scope-checked (never
+ * URL-secret). Generation runs in the worker.
  */
 
 import { Counter } from "prom-client";
 import {
   assertModuleWiring,
+  csvDocument,
+  csvRow,
   ensureBucket,
+  escapeCsvCell,
   getObjectBytes,
+  isFormulaInjection,
   putObjectBytes,
   type AuditLogger,
   type Db,
@@ -35,12 +40,11 @@ export {
   MODULE_NAME as REPORTING_MODULE_NAME,
   reportingModuleDefinition,
 } from "./definition";
-export {
-  csvDocument,
-  csvRow,
-  escapeCsvCell,
-  isFormulaInjection,
-} from "./escape-csv";
+// Re-exported for backward compatibility — the CSV formula-injection escaper
+// moved to @vidya/platform (packages/platform/src/csv/escape-csv.ts) so
+// packages/modules/people can reuse it without a people <- reporting <-
+// {academics,analytics,exams,results} <- people import cycle.
+export { csvDocument, csvRow, escapeCsvCell, isFormulaInjection };
 export type { ReportSources } from "./report-data";
 
 export interface ReportingModuleDeps {

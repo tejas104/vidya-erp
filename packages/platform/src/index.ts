@@ -130,3 +130,10 @@ export {
   type ShutdownHook,
   type ShutdownSummary,
 } from "./lifecycle/shutdown";
+
+export {
+  csvDocument,
+  csvRow,
+  escapeCsvCell,
+  isFormulaInjection,
+} from "./csv/escape-csv";

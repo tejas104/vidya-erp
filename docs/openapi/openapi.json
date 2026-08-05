@@ -185,7 +185,7 @@
     "/api/v1/identity/auth/login": {
       "post": {
         "summary": "Log in with username and password",
-        "description": "Issues a Redis-backed session (HttpOnly cookie). Throttled per user+IP; repeated failures lock the account window. Successful logins audit with the authenticated user as actor; failures are audited by the service.\n\n**Public route** (no authentication): credential establishment — the caller has no session yet",
+        "description": "Issues a Redis-backed session (HttpOnly cookie). Request VOLUME is bounded per-IP and per-username at the platform rate-limit layer (#10.5 Part 1). Independently, 10 consecutive credential FAILURES for one account lock that account for 15 minutes (#10.5 Part 2, account-keyed — see docs/threat-model-identity.md); the window auto-expires via Redis TTL, a success resets the counter, and an admin can clear it early via identity.account-unlock. Successful logins audit with the authenticated user as actor; failures, lockouts and unlocks are audited (with IP and user agent) by the service.\n\n**Public route** (no authentication): credential establishment — the caller has no session yet",
         "tags": [
           "identity"
         ],
@@ -2244,6 +2244,91 @@
         "responses": {
           "200": {
             "description": "Password set; the user's sessions were invalidated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Access denied by the role/scope policy (problem+json)"
+          },
+          "404": {
+            "description": "No such user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/identity/users/{userId}/unlock": {
+      "post": {
+        "summary": "Clear an account's login lockout early (admin)",
+        "description": "Admin early-unlock (#10.5 Part 2): clears the consecutive-failure counter driving login lockout so the account can sign in again immediately, instead of waiting out the 15-minute window. Orthogonal to password reset/change — the account's password and existing sessions are untouched.\n\n**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "identity"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "userId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Lockout cleared",
             "content": {
               "application/json": {
                 "schema": {
@@ -6357,6 +6442,52 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/api/v1/people/imports/template": {
+      "get": {
+        "summary": "Downloadable CSV column template for bulk import (admin)",
+        "description": "Header row only, no data. Students: admission_no, full_name and the optional enrollment trio department_code+class_code+section_name (must be filled in together or left blank — see people.import-create). Teachers: staff_no, full_name. No college/section resource is read, so there is nothing to scope-check beyond the ADMIN_ONLY role gate.\n\n**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "people-imports"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "students",
+                "teachers"
+              ]
+            },
+            "required": true,
+            "name": "kind",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "CSV header row",
+            "content": {
+              "text/csv": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Access denied by the role/scope policy (problem+json)"
           }
         }
       }

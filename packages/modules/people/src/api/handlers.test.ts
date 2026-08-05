@@ -58,6 +58,7 @@ async function makeHarness() {
     enqueueImport: async (payload) => {
       enqueued.push(payload);
     },
+    edition: "college",
   };
   return {
     handlers: createPeopleHandlers(deps),
@@ -573,5 +574,23 @@ describe("imports", () => {
     const state = await handlers["people.import-get"]!(ctx({ params: { importId } }));
     expect(state.status).toBe(200);
     expect(state.body).toMatchObject({ id: importId, status: "pending", dryRun: true });
+  });
+
+  it("returns student template headers for the college edition", async () => {
+    const { handlers } = await makeHarness();
+    const res = await handlers["people.import-template"]!(ctx({ query: { kind: "students" } }));
+    expect(res.status).toBe(200);
+    expect(res.contentType).toBe("text/csv");
+    expect(String(res.body).split("\r\n")[0]).toBe(
+      "admission_no,full_name,department_code,class_code,section_name",
+    );
+  });
+
+  it("returns teacher template headers", async () => {
+    const { handlers } = await makeHarness();
+    const res = await handlers["people.import-template"]!(ctx({ query: { kind: "teachers" } }));
+    expect(res.status).toBe(200);
+    expect(res.contentType).toBe("text/csv");
+    expect(String(res.body)).toBe("staff_no,full_name");
   });
 });

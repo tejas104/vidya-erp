@@ -14,6 +14,7 @@ import {
   ensureBucket,
   getObjectText,
   putObjectText,
+  type AppConfig,
   type AuditLogger,
   type Db,
   type Metrics,
@@ -63,6 +64,8 @@ export interface PeopleModuleDeps {
   readonly storage: { readonly client: ObjectStorageClient; readonly bucket: string };
   /** Enqueues the bulk-import job on the people queue (composition provides it). */
   readonly enqueueImport: (payload: z.infer<typeof importJobPayloadSchema>) => Promise<void>;
+  /** Drives the import-template CSV headers (#11 Task 1). Defaults to "college" like env.ts. */
+  readonly edition?: AppConfig["edition"];
 }
 
 /**
@@ -173,6 +176,7 @@ export function createPeopleModule(deps: PeopleModuleDeps): RuntimeModule<People
       scopeChecker: deps.scopeChecker,
       storage: deps.storage,
       enqueueImport: deps.enqueueImport,
+      edition: deps.edition ?? "college",
     }),
     jobProcessors: {
       [IMPORT_JOB_NAME]: createImportProcessor(imports),

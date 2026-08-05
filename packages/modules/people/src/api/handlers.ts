@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import {
   type AccessAction,
+  type AppConfig,
   type ObjectStorageClient,
   type Principal,
   type ResourceRef,
@@ -8,6 +9,7 @@ import {
   type RouteHandler,
   type RouteResult,
   type ScopeChecker,
+  csvRow,
   ensureBucket,
   getObjectBytes,
   putObjectBytes,
@@ -37,6 +39,8 @@ export interface PeopleHandlerDeps {
   readonly scopeChecker: ScopeChecker;
   readonly storage: { readonly client: ObjectStorageClient; readonly bucket: string };
   readonly enqueueImport: (payload: z.infer<typeof importJobPayloadSchema>) => Promise<void>;
+  /** Drives the import-template CSV headers (#11 Task 1's first consumer). */
+  readonly edition: AppConfig["edition"];
 }
 
 function denied(ctx: RouteContext, reason: string): RouteResult {
@@ -105,6 +109,35 @@ function importView(row: PplImportRow) {
     errorRows: row.errorRows,
     errors: row.errors,
   };
+}
+
+/**
+ * people.import-template columns. Mirror the zod row schemas in
+ * import-service.ts exactly (studentRowSchema / teacherRowSchema) — that
+ * file is out of this task's scope, so kept in sync by hand; a change to
+ * one must change the other.
+ *
+ * The academic-structure columns (department_code/class_code/section_name)
+ * are ONE constant reused for every edition, not two hardcoded strings
+ * switched by edition: today "college" and "school" share the same org-tree
+ * shape (college -> department -> class -> section), so there is nothing to
+ * diverge yet (design finding 5 — edition has exactly one consumer here,
+ * unproven until a school install exists). The exhaustive switch is the
+ * seam a real per-edition structure would extend later.
+ */
+function academicStructureColumns(edition: AppConfig["edition"]): readonly string[] {
+  switch (edition) {
+    case "college":
+    case "school":
+      return ["department_code", "class_code", "section_name"];
+  }
+}
+
+function importTemplateColumns(kind: "students" | "teachers", edition: AppConfig["edition"]): readonly string[] {
+  if (kind === "teachers") {
+    return ["staff_no", "full_name"];
+  }
+  return ["admission_no", "full_name", ...academicStructureColumns(edition)];
 }
 
 function mapKnownErrors(error: unknown): RouteResult | null {
@@ -901,6 +934,12 @@ export function createPeopleHandlers(deps: PeopleHandlerDeps): Record<string, Ro
     };
   };
 
+  const importTemplate: RouteHandler = async (ctx) => {
+    const query = ctx.request.query as { kind: "students" | "teachers" };
+    const columns = importTemplateColumns(query.kind, deps.edition);
+    return { status: 200, body: csvRow(columns), contentType: "text/csv" };
+  };
+
   const importGet: RouteHandler = async (ctx) => {
     const principal = ctx.principal as Principal;
     const params = ctx.request.params as { importId: string };
@@ -1076,5 +1115,6 @@ export function createPeopleHandlers(deps: PeopleHandlerDeps): Record<string, Ro
     "people.class-assignments": classAssignments,
     "people.import-create": importCreate,
     "people.import-get": importGet,
+    "people.import-template": importTemplate,
   };
 }

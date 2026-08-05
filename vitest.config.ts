@@ -138,7 +138,10 @@ export default defineConfig({
           statements: 95,
         },
         // #6: the CSV-injection escape is a security control — 100% bar.
-        "packages/modules/reporting/src/escape-csv.ts": {
+        // Moved to @vidya/platform in #11 Task A1 so people's CSV import
+        // template can reuse it without a module-dependency cycle
+        // (reporting -> academics/analytics/exams/results -> people).
+        "packages/platform/src/csv/escape-csv.ts": {
           lines: 100,
           functions: 100,
           branches: 100,
