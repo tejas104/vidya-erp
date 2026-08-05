@@ -10,7 +10,7 @@ export default defineConfig({
         test: {
           name: "unit",
           environment: "node",
-          include: ["packages/**/src/**/*.test.ts", "apps/**/src/**/*.test.ts"],
+          include: ["packages/**/src/**/*.test.ts", "apps/**/src/**/*.test.ts", "scripts/**/*.test.ts"],
           // The argon2 conformance tests hash with production cost
           // parameters (64 MiB, t=3) — deliberately slow.
           testTimeout: 30_000,

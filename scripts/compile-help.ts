@@ -1,6 +1,6 @@
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { helpSlugFor } from "../apps/web/src/ui/help/helpSlug";
 
 /**
@@ -42,7 +42,7 @@ const OUTPUT_PATH = path.join(
 // it's the only way to detect `> ` at all, since escaping turns it into
 // `&gt; ` before any prefix check could see it.
 
-function escapeHtml(text: string): string {
+export function escapeHtml(text: string): string {
   return text
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
@@ -68,7 +68,7 @@ const ORDERED_ITEM = /^\d+\. /;
 const BLOCK_START = /^(#{1,2} |> |[-*] |\d+\. )/;
 
 /** `lines` are raw source lines — nothing here is escaped yet (see above). */
-function parseBlocks(lines: string[]): Block[] {
+export function parseBlocks(lines: string[]): Block[] {
   const blocks: Block[] = [];
   let i = 0;
   while (i < lines.length) {
@@ -122,7 +122,7 @@ function parseBlocks(lines: string[]): Block[] {
   return blocks;
 }
 
-function renderBlocks(blocks: Block[]): string {
+export function renderBlocks(blocks: Block[]): string {
   return blocks
     .map((block) => {
       switch (block.kind) {
@@ -144,7 +144,7 @@ function renderBlocks(blocks: Block[]): string {
     .join("\n");
 }
 
-function compileDoc(raw: string): { title: string; html: string } {
+export function compileDoc(raw: string): { title: string; html: string } {
   const blocks = parseBlocks(raw.split(/\r?\n/));
   const heading = blocks.find((block) => block.kind === "h1");
   // Title is a plain string (used outside the rendered HTML, e.g. as an
@@ -227,7 +227,12 @@ async function main(): Promise<void> {
   );
 }
 
-main().catch((error: unknown) => {
-  console.error("help compilation failed:", error);
-  process.exit(1);
-});
+// Only run when executed directly (`tsx scripts/compile-help.ts`), not when
+// imported — the pure functions above are imported by
+// scripts/compile-help.test.ts, which must not trigger a real compile pass.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch((error: unknown) => {
+    console.error("help compilation failed:", error);
+    process.exit(1);
+  });
+}
