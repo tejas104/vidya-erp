@@ -9,6 +9,7 @@ import {
   type RouteHandler,
   type RouteResult,
   type ScopeChecker,
+  csvDocument,
   csvRow,
   ensureBucket,
   getObjectBytes,
@@ -21,6 +22,7 @@ import type { AssignmentsService } from "../service/assignments-service";
 import type { ImportService } from "../service/import-service";
 import { DuplicateCodeError, UnitInUseError, type OrgUnitType } from "../repo/org-repo";
 import { DuplicateAssignmentError, DuplicatePersonError, type StudentStatus } from "../repo/people-repo";
+import type { RowError } from "../repo/imports-repo";
 import type {
   PplEnrollmentRow,
   PplImportRow,
@@ -961,6 +963,27 @@ export function createPeopleHandlers(deps: PeopleHandlerDeps): Record<string, Ro
     return { status: 200, body: importView(row) };
   };
 
+  const importErrors: RouteHandler = async (ctx) => {
+    const principal = ctx.principal as Principal;
+    const params = ctx.request.params as { importId: string };
+    const row = await deps.imports.getImport(params.importId);
+    if (row === null) {
+      return notFound();
+    }
+    const scope = checkScope(deps.scopeChecker, ctx, principal, "read", {
+      module: "people",
+      resourceType: "import",
+      org: { collegeId: row.collegeId },
+    });
+    if (!scope.ok) {
+      return scope.result;
+    }
+    // Errors only — a warning row was imported successfully, not rejected.
+    const errors = row.errors as readonly RowError[];
+    const body = csvDocument([["row", "reason"], ...errors.map((e) => [e.row, e.message])]);
+    return { status: 200, body, contentType: "text/csv" };
+  };
+
   // --- student documents (2.5) ---
   function documentView(row: PplStudentDocumentRow) {
     return {
@@ -1118,6 +1141,7 @@ export function createPeopleHandlers(deps: PeopleHandlerDeps): Record<string, Ro
     "people.class-assignments": classAssignments,
     "people.import-create": importCreate,
     "people.import-get": importGet,
+    "people.import-errors": importErrors,
     "people.import-template": importTemplate,
   };
 }

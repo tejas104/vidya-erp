@@ -64,6 +64,7 @@ async function makeHarness() {
     handlers: createPeopleHandlers(deps),
     orgRepo,
     peopleRepo,
+    importsRepo,
     scopeChecker,
     org,
     enqueued,
@@ -592,5 +593,53 @@ describe("imports", () => {
     expect(res.status).toBe(200);
     expect(res.contentType).toBe("text/csv");
     expect(String(res.body)).toBe("staff_no,full_name");
+  });
+
+  it("downloads only the rejected rows as CSV, with formula injection defused", async () => {
+    const { handlers, importsRepo, org } = await makeHarness();
+    const accepted = await handlers["people.import-create"]!(
+      ctx({
+        body: {
+          kind: "teachers",
+          collegeId: org.college.id,
+          dryRun: true,
+          csv: "staff_no,full_name\nT1,Asha",
+        },
+      }),
+    );
+    const importId = (accepted.body as { importId: string }).importId;
+    // A warning row was imported successfully — it must NOT appear here.
+    await importsRepo.finish(importId, {
+      status: "completed",
+      totalRows: 3,
+      okRows: 2,
+      errorRows: 2,
+      warningRows: 1,
+      processedRows: 3,
+      errors: [
+        { row: 2, message: "duplicate staff number" },
+        { row: 3, message: "=cmd|'/c calc'!A1" },
+      ],
+      warnings: [{ row: 4, message: "blank department code, left unassigned" }],
+    });
+
+    const res = await handlers["people.import-errors"]!(ctx({ params: { importId } }));
+    expect(res.status).toBe(200);
+    expect(res.contentType).toBe("text/csv");
+    const lines = String(res.body).split("\r\n");
+    expect(lines[0]).toBe("row,reason");
+    expect(lines).toHaveLength(3);
+    expect(lines).toContain("2,duplicate staff number");
+    // Formula-injection leader neutralised: a leading single quote defuses it
+    // for the spreadsheet (no comma/quote/CRLF here, so no RFC-4180 wrapping).
+    expect(lines).toContain(`3,'=cmd|'/c calc'!A1`);
+    expect(String(res.body)).not.toContain("blank department code");
+  });
+
+  it("404s an errors download for an unknown import", async () => {
+    const { handlers } = await makeHarness();
+    expect(
+      (await handlers["people.import-errors"]!(ctx({ params: { importId: "imp_ghost" } }))).status,
+    ).toBe(404);
   });
 });

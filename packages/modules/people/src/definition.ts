@@ -683,6 +683,23 @@ const routes: RouteSpec[] = [
     },
   },
   {
+    id: "people.import-errors",
+    module: MODULE_NAME,
+    method: "GET",
+    path: "/api/v1/people/imports/{importId}/errors",
+    summary: "Download the rejected rows of an import as CSV (admin)",
+    description:
+      "Only rejected rows (errors) appear here — a warning row was imported successfully and is excluded. Columns: row,reason.",
+    tags: ["people-imports"],
+    auth: ADMIN_ONLY,
+    request: { params: z.object({ importId: idSchema }) },
+    responses: {
+      200: { description: "CSV of rejected rows", contentType: "text/csv" },
+      403: { description: "Scope check denied", schema: problemSchema },
+      404: { description: "No such import", schema: problemSchema },
+    },
+  },
+  {
     id: "people.import-template",
     module: MODULE_NAME,
     method: "GET",
