@@ -1,9 +1,6 @@
 .stateRow {
   margin-top: var(--space-5);
 }
-.pageEyebrow {
-  margin-top: var(--space-4);
-}
 .reportRow {
   display: flex;
   gap: var(--space-3);

@@ -12,11 +12,12 @@ import {
   type StudentView,
   type TtToday,
 } from "@/ui/api";
-import { StatCard, EmptyState, Modal, Input, Select, Button, Skeleton, useToast } from "@vidya/ui-system";
+import { StatCard, EmptyState, Modal, Input, Select, Button, Skeleton, useToast, PageHeader } from "@vidya/ui-system";
 import { AsyncState } from "@/ui/AsyncState";
 import { StudentCard, type StudentFlags } from "@/ui/StudentCard";
 import { TodayTimeline } from "@/ui/TodayTimeline";
 import { StudentSlideOver, type DrawerStudent } from "@/ui/StudentSlideOver";
+import { HelpButton } from "@/ui/help/HelpButton";
 import { ago } from "@/ui/time";
 import { AVATARS, initials } from "@/ui/avatar";
 import styles from "./page.module.css";
@@ -276,9 +277,14 @@ export default function ClassWorkspacePage() {
               <div className="cw-hero-eyebrow">
                 Class workspace{total ? ` · ${total} students` : ""}
               </div>
-              <h1>
-                {opt?.className} · {opt?.sectionName}
-              </h1>
+              <PageHeader
+                title={
+                  <>
+                    {opt?.className} · {opt?.sectionName}
+                  </>
+                }
+                help={<HelpButton slug="classes" />}
+              />
               <p>
                 {opt?.subjectName ? `You teach ${opt.subjectName} here. ` : ""}
                 {cards === null

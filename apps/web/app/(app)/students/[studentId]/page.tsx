@@ -11,6 +11,8 @@ import { Sparkline, StatTile, SubjectBars } from "@/ui/charts";
 import { ReportButton } from "@/ui/ReportButton";
 import { DeniedState } from "@/ui/DeniedState";
 import { AsyncState } from "@/ui/AsyncState";
+import { HelpButton } from "@/ui/help/HelpButton";
+import { PageHeader } from "@vidya/ui-system";
 import styles from "./page.module.css";
 
 export const dynamic = "force-dynamic";
@@ -86,14 +88,12 @@ export default function StudentPage({ params }: { params: Promise<{ studentId: s
 function StudentBody({ data, year }: { data: StudentPerformance; year: string }) {
   return (
     <>
-      <p className={`eyebrow ${styles.pageEyebrow}`}>
-        Student performance
-      </p>
-      <h1 className="page-title">{data.name}</h1>
-      <p className="page-lede">
-        Computed from exactly the attendance and marks you're permitted to read. The overall figure
-        appears only when you can see every subject.
-      </p>
+      <PageHeader
+        eyebrow="Student performance"
+        title={data.name}
+        lede="Computed from exactly the attendance and marks you're permitted to read. The overall figure appears only when you can see every subject."
+        help={<HelpButton slug="students" />}
+      />
       <div className={styles.reportRow}>
         <ReportButton
           params={{ kind: "student-performance", studentId: data.studentId }}

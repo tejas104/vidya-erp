@@ -95,11 +95,6 @@ a {
   padding: 28px 24px 80px;
 }
 
-.page-title {
-  font-size: clamp(26px, 4vw, 38px);
-  margin-bottom: 4px;
-}
-
 .page-lede {
   color: var(--ink-2);
   margin: 0 0 28px;
