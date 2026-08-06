@@ -28,6 +28,7 @@ import { createUsersRepo } from "./repo/users-repo";
 import { createResetTokensRepo } from "./repo/reset-tokens-repo";
 import { UsersService } from "./service/users-service";
 import { AuthService } from "./service/auth-service";
+import { CredentialService } from "./service/credential-service";
 import { DerivedGrantsService, type DerivedGrantsApi } from "./service/derived-grants";
 import { GrantVerificationService } from "./service/grant-verification";
 import { SessionAuthenticator } from "./service/authenticator";
@@ -124,6 +125,19 @@ export interface IdentityService {
     password: string;
     collegeId: string;
   }): Promise<{ userId: string }>;
+  /**
+   * Issues an ACTIVE login for a person who doesn't have one yet (#11 B2:
+   * onboarding import, per-class/staff "issue login" actions). Returns the
+   * plaintext temporary password exactly once — the caller must hand it off
+   * (e.g. the credential sheet, #11 B3) and never persist it.
+   */
+  issueCredential(input: {
+    personName: string;
+    username: string;
+    collegeId: string;
+    roles: readonly Role[];
+    createdBy: string;
+  }): Promise<{ username: string; temporaryPassword: string }>;
 }
 
 export function createIdentityModule(deps: IdentityModuleDeps): RuntimeModule<IdentityService> {
@@ -156,6 +170,7 @@ export function createIdentityModule(deps: IdentityModuleDeps): RuntimeModule<Id
     resetTokenTtlMinutes: deps.config.resetTokenTtlMinutes,
     ...(deps.externalProvider !== undefined ? { externalProvider: deps.externalProvider } : {}),
   });
+  const credentials = new CredentialService({ users, auth });
 
   const cookiePolicy = {
     name: deps.config.session.cookieName,
@@ -190,6 +205,7 @@ export function createIdentityModule(deps: IdentityModuleDeps): RuntimeModule<Id
       scopeChecker: deps.core.scopeChecker,
       derivedGrants,
       bootstrapAdmin: (input) => users.bootstrapAdmin(input),
+      issueCredential: (input) => credentials.issueCredential(input),
     },
   };
   assertModuleWiring(module);
