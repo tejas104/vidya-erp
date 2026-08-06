@@ -2,6 +2,7 @@ import type { AuditLogger, Logger, Principal } from "@vidya/platform";
 import type { AnalyticsReadModel } from "@vidya/module-analytics";
 import { renderCsv } from "../render/csv";
 import { renderPdf } from "../render/pdf";
+import { renderCredentialSheet } from "../render/credential-sheet";
 import {
   canProduce,
   collectReport,
@@ -119,8 +120,14 @@ export class ReportService {
         this.deps.onFinished?.(row.kind, format, "failed");
         return;
       }
+      // class-credentials has its own page-per-class/cut-line PDF layout —
+      // does not fit pdf.ts's generic continuous-flow renderer.
       const bytes =
-        format === "csv" ? new TextEncoder().encode(renderCsv(data)) : new Uint8Array(await renderPdf(data));
+        format === "csv"
+          ? new TextEncoder().encode(renderCsv(data))
+          : new Uint8Array(
+              await (params.kind === "class-credentials" ? renderCredentialSheet(data) : renderPdf(data)),
+            );
       const objectKey = `reports/${reportId}.${format}`;
       await this.deps.store.put(objectKey, bytes, CONTENT_TYPE[format]);
       await this.deps.repo.finish(reportId, { status: "completed", objectKey, rows: data.rowCount });

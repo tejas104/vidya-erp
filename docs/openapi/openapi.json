@@ -12108,6 +12108,26 @@
                           "kind",
                           "studentId"
                         ]
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "class-credentials"
+                            ]
+                          },
+                          "classId": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 64
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "classId"
+                        ]
                       }
                     ]
                   }
@@ -12253,7 +12273,8 @@
                               "marks-summary",
                               "at-risk",
                               "grade-card",
-                              "hall-ticket"
+                              "hall-ticket",
+                              "class-credentials"
                             ]
                           },
                           "format": {
@@ -12358,7 +12379,8 @@
                         "marks-summary",
                         "at-risk",
                         "grade-card",
-                        "hall-ticket"
+                        "hall-ticket",
+                        "class-credentials"
                       ]
                     },
                     "format": {

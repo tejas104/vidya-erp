@@ -35,6 +35,7 @@ describe("reportParamsSchema", () => {
     expect(reportParamsSchema.safeParse({ kind: "section-attendance", sectionId: "sec" }).success).toBe(true);
     expect(reportParamsSchema.safeParse({ kind: "marks-summary", classId: "cls" }).success).toBe(true);
     expect(reportParamsSchema.safeParse({ kind: "at-risk", level: "department", nodeId: "dep" }).success).toBe(true);
+    expect(reportParamsSchema.safeParse({ kind: "class-credentials", classId: "cls" }).success).toBe(true);
   });
 
   it("rejects wrong shapes and unknown kinds", () => {

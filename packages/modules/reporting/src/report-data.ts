@@ -17,7 +17,8 @@ export type ReportKind =
   | "marks-summary"
   | "at-risk"
   | "grade-card"
-  | "hall-ticket";
+  | "hall-ticket"
+  | "class-credentials";
 
 export type ScopeLevel = "section" | "class" | "department" | "college";
 
@@ -27,12 +28,46 @@ export type ReportParams =
   | { readonly kind: "marks-summary"; readonly classId: string }
   | { readonly kind: "at-risk"; readonly level: ScopeLevel; readonly nodeId: string }
   | { readonly kind: "grade-card"; readonly studentId: string }
-  | { readonly kind: "hall-ticket"; readonly studentId: string };
+  | { readonly kind: "hall-ticket"; readonly studentId: string }
+  | { readonly kind: "class-credentials"; readonly classId: string };
+
+/** One issued login, as printed on the credential sheet (#11 B3). */
+export interface ClassCredentialRow {
+  readonly rollNo: string;
+  readonly studentName: string;
+  readonly username: string;
+  readonly temporaryPassword: string;
+}
+
+export interface ClassCredentialsData {
+  readonly classId: string;
+  readonly className: string;
+  readonly rows: readonly ClassCredentialRow[];
+}
+
+export type ClassCredentialsResult =
+  | { readonly access: "ok"; readonly data: ClassCredentialsData }
+  | { readonly access: "forbidden" }
+  | { readonly access: "not-found" };
+
+/**
+ * Unlike GradeCardSource/HallTicketSource, this seam is owned by reporting
+ * (not the producing module) because it cannot use the usual
+ * fetch-again-at-generation-time contract: a temporary password is NEVER
+ * persisted past the moment identity's CredentialService.issueCredential
+ * returns it (see packages/modules/identity/src/service/credential-service.ts).
+ * Whoever supplies this source (#11 B4, wiring issuance into the import
+ * flow) owns staging the plaintext for the short window between issuance and
+ * render, and owns the admin-only access decision below — reporting only
+ * shapes and renders whatever it is handed.
+ */
+export type ClassCredentialsSource = (principal: Principal, classId: string) => Promise<ClassCredentialsResult>;
 
 /** Non-analytics content sources, injected by composition (absent = kind unavailable). */
 export interface ReportSources {
   readonly gradeCard?: GradeCardSource;
   readonly hallTicket?: HallTicketSource;
+  readonly classCredentials?: ClassCredentialsSource;
 }
 
 export interface ReportTable {
@@ -89,6 +124,11 @@ export async function canProduce(
     case "hall-ticket": {
       if (sources.hallTicket === undefined) return "not-found";
       const result = await sources.hallTicket(principal, params.studentId);
+      return result.access === "ok" ? "ok" : result.access === "forbidden" ? "forbidden" : "not-found";
+    }
+    case "class-credentials": {
+      if (sources.classCredentials === undefined) return "not-found";
+      const result = await sources.classCredentials(principal, params.classId);
       return result.access === "ok" ? "ok" : result.access === "forbidden" ? "forbidden" : "not-found";
     }
     case "student-performance": {
@@ -197,6 +237,33 @@ export async function collectReport(
         rowCount: rows.length,
       };
     }
+
+    case "class-credentials": {
+      if (sources.classCredentials === undefined) return null;
+      const result = await sources.classCredentials(principal, params.classId);
+      if (result.access !== "ok") return null;
+      const cls = result.data;
+      const rows = cls.rows.map((row) => [row.rollNo, row.studentName, row.username, row.temporaryPassword]);
+      return {
+        ...base,
+        kind: params.kind,
+        title: "Class credential sheet",
+        subtitle: cls.className,
+        stats: [{ label: "Accounts issued", value: String(rows.length) }],
+        tables: [
+          {
+            caption: cls.className,
+            columns: ["Roll no", "Name", "Username", "Temporary password"],
+            rows,
+          },
+        ],
+        notes: [
+          "Contains plaintext temporary passwords — hand each row's slip to its student and discard this sheet promptly.",
+        ],
+        rowCount: rows.length,
+      };
+    }
+
     case "student-performance": {
       const perf = await readModel.studentPerformance(principal, params.studentId, academicYear);
       if (perf.state !== "ok") return null;

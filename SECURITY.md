@@ -243,6 +243,33 @@ reconciliation is outside this task's scope.
    backoff stop applying at all. Per-username limiting and account lockout
    are unaffected (keyed on the account).
    See `docs/threat-model-identity.md#throttle-keying`.
+7. **The class-credential-sheet report kind is a durable, plaintext-password
+   artifact once generated.** `class-credentials`
+   (`packages/modules/reporting/src/report-data.ts`,
+   `render/credential-sheet.ts`, #11 B3) renders a whole class's freshly
+   issued logins — roll no, name, username, and temporary password, in the
+   clear — onto a printable PDF. Like every report it is then uploaded to
+   object storage (`ReportService.run`, `reports/<reportId>.pdf`) and stays
+   there until something deletes it: no bucket lifecycle/expiry rule is
+   configured anywhere in this codebase. Access follows the same rules as
+   every other report kind — requesting and downloading both go through the
+   standard scope check and are both audited
+   (`reporting.report-requested` / `reporting.report-generated` /
+   `reporting.report-downloaded`) — and `canProduce`/`collectReport` for
+   this kind fully delegate the access decision to an injected
+   `classCredentials` source, the same admin-only-by-construction shape
+   grade-card/hall-ticket already use. As of #11 B3 no such source is wired
+   in, so the kind is inert (every request 404s); #11 B4 wires the real
+   source and inherits everything below. Once a sheet exists, none of this
+   limits exposure to it: the admin who generated it, anyone who
+   compromises MinIO, or anyone who gets hold of the printed sheet
+   (emailed, backed up, left on a printer) has every password on it — and
+   nothing forces a student to change theirs before someone else could use
+   it first (force-change-on-first-login is a separate, already recorded
+   gap — see `credential-service.ts`'s doc comment). Short
+   retention — deleting the report object, and the printed sheet, once
+   credentials have been handed out — is recommended operationally; nothing
+   in this codebase currently enforces it or reminds an admin to do it.
 
 ## Evidence
 
