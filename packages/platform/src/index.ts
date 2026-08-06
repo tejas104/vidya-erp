@@ -137,3 +137,5 @@ export {
   escapeCsvCell,
   isFormulaInjection,
 } from "./csv/escape-csv";
+
+export { generateTemporaryPassword, TEMP_PASSWORD_ALPHABET } from "./credentials/temp-password";
