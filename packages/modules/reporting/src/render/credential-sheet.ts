@@ -12,10 +12,14 @@ import type { ReportData } from "../report-data";
  * multi-table-per-page flow.
  *
  * SECURITY: this is the one rendering of a whole class's plaintext temporary
- * passwords (SECURITY.md "known limitations" — durable artifact in object
- * storage). This file draws whatever `data` it is handed; it does not decide
- * who may request or download it — that is report-data.ts's canProduce and
- * the standard reporting scope/audit chokepoint.
+ * passwords (SECURITY.md "known limitations" item 7). This file draws
+ * whatever `data` it is handed; it does not decide who may request it, and
+ * it is NOT reached through report-data.ts's canProduce/collectReport (that
+ * chokepoint is for the queued ReportKind flow only — class-credentials is
+ * not one). Access is decided synchronously in
+ * reporting/src/api/handlers.ts's classCredentials route (admin-only scope
+ * check before this function is ever called), and the PDF this returns is
+ * streamed straight back in the response — never written to object storage.
  *
  * ponytail: assumes one class's roster fits one page (~25-30 rows at this
  * type size before it runs past the bottom margin) — matches the brief's

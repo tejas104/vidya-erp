@@ -73,6 +73,7 @@ describe("CredentialService.issueCredential", () => {
     const issued = await service.issueCredential(input);
     const user = await repo.findByUsername(issued.username);
     expect(user?.status).toBe("active"); // NOT must_reset — login rejects that
+    expect(issued.userId).toBe(user?.id); // #11 B4: callers link this back onto their own record
     const login = await auth.login(issued.username, issued.temporaryPassword, "1.2.3.4");
     expect(login.outcome).toBe("success");
   });

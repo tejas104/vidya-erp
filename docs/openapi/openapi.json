@@ -5745,6 +5745,175 @@
         }
       }
     },
+    "/api/v1/people/teachers/{teacherId}/credential": {
+      "post": {
+        "summary": "Issue a login for a staff member who doesn't have one yet (admin)",
+        "description": "The individual-staff counterpart of the per-class student credential sheet (#11 B4): creates an ACTIVE identity account (identity.issueCredential) and links it onto the teacher record, deriving grants for any existing assignments (same choreography as people.teacher-link-identity). 409 if the teacher already has a login — use the password-reset flow to replace an existing one instead. The temporary password is returned exactly once, in this response body; it is never logged or audited.\n\n**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "people-teachers"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "teacherId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Login issued",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "teacher": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "collegeId": {
+                          "type": "string"
+                        },
+                        "staffNo": {
+                          "type": "string"
+                        },
+                        "fullName": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "active",
+                            "inactive"
+                          ]
+                        },
+                        "identityUserId": {
+                          "type": "string",
+                          "nullable": true
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "collegeId",
+                        "staffNo",
+                        "fullName",
+                        "status",
+                        "identityUserId"
+                      ]
+                    },
+                    "username": {
+                      "type": "string"
+                    },
+                    "temporaryPassword": {
+                      "type": "string"
+                    },
+                    "grants": {
+                      "type": "object",
+                      "properties": {
+                        "upserted": {
+                          "type": "number"
+                        },
+                        "removed": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "upserted",
+                        "removed"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "teacher",
+                    "username",
+                    "temporaryPassword",
+                    "grants"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Access denied by the role/scope policy (problem+json)"
+          },
+          "404": {
+            "description": "No such teacher",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Teacher already has a login, or the derived username collided",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/people/teachers/{teacherId}/assignments": {
       "post": {
         "summary": "Assign a teacher to a class (admin) — derives the identity grant",
@@ -11948,6 +12117,107 @@
         }
       }
     },
+    "/api/v1/reports/class-credentials/{classId}": {
+      "post": {
+        "summary": "Issue logins for a class's students who lack one and return a printable credential sheet (admin)",
+        "description": "SYNCHRONOUS, not the queued request/poll/download flow above: the sheet is generated in this request handler and streamed straight back as the response body. It is never written to object storage or any other durable store — there is no reportId, nothing to poll, and no download route for it (#11 D-ruling: a temporary password cannot be re-fetched at job time, so the queued flow structurally cannot produce it, and not persisting it is strictly better security besides). Every student in the class who does not already have a login gets one (identity.issueCredential, active, no force-change — #11 D2); students who already have a login are skipped (their password was never stored, so it cannot be reprinted) and simply do not appear on the sheet. Admin-only, scope-checked against the class's college, audited with the issued count — never the plaintext.\n\n**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "reporting"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "classId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The credential sheet, one page",
+            "content": {
+              "application/pdf": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Scope check denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such class",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/reports": {
       "post": {
         "summary": "Request a report (202 + poll)",
@@ -12108,26 +12378,6 @@
                           "kind",
                           "studentId"
                         ]
-                      },
-                      {
-                        "type": "object",
-                        "properties": {
-                          "kind": {
-                            "type": "string",
-                            "enum": [
-                              "class-credentials"
-                            ]
-                          },
-                          "classId": {
-                            "type": "string",
-                            "minLength": 1,
-                            "maxLength": 64
-                          }
-                        },
-                        "required": [
-                          "kind",
-                          "classId"
-                        ]
                       }
                     ]
                   }
@@ -12273,8 +12523,7 @@
                               "marks-summary",
                               "at-risk",
                               "grade-card",
-                              "hall-ticket",
-                              "class-credentials"
+                              "hall-ticket"
                             ]
                           },
                           "format": {
@@ -12379,8 +12628,7 @@
                         "marks-summary",
                         "at-risk",
                         "grade-card",
-                        "hall-ticket",
-                        "class-credentials"
+                        "hall-ticket"
                       ]
                     },
                     "format": {

@@ -175,6 +175,17 @@ export class FakePeopleDirectory implements PeopleDirectory {
     return [];
   }
 
+  async classRoster(
+    classId: string,
+  ): Promise<{ studentId: string; admissionNo: string; fullName: string; identityUserId: string | null }[]> {
+    if (classId !== ORG.classId) return [];
+    return [
+      { studentId: ORG.studentA1, admissionNo: ORG.studentA1, fullName: "Meera Nair", identityUserId: null },
+      { studentId: ORG.studentA2, admissionNo: ORG.studentA2, fullName: "Ravi Kumar", identityUserId: null },
+      { studentId: ORG.studentB1, admissionNo: ORG.studentB1, fullName: "Asha Verma", identityUserId: null },
+    ];
+  }
+
   async departmentsOfCollege(): Promise<{ departmentId: string; name: string }[]> {
     return [];
   }

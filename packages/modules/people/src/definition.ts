@@ -117,6 +117,15 @@ export const teacherViewSchema = z.object({
   identityUserId: z.string().nullable(),
 });
 
+/** #11 B4: the individual staff "issue login" action's response — the
+ *  temporary password appears exactly once, here. */
+export const teacherCredentialViewSchema = z.object({
+  teacher: teacherViewSchema,
+  username: z.string(),
+  temporaryPassword: z.string(),
+  grants: z.object({ upserted: z.number(), removed: z.number() }),
+});
+
 export const assignmentViewSchema = z.object({
   id: z.string(),
   teacherId: z.string(),
@@ -571,6 +580,28 @@ const routes: RouteSpec[] = [
         }),
       },
       404: { description: "No such teacher", schema: problemSchema },
+    },
+  },
+  {
+    id: "people.teacher-issue-credential",
+    module: MODULE_NAME,
+    method: "POST",
+    path: "/api/v1/people/teachers/{teacherId}/credential",
+    summary: "Issue a login for a staff member who doesn't have one yet (admin)",
+    description:
+      "The individual-staff counterpart of the per-class student credential sheet (#11 B4): creates an ACTIVE " +
+      "identity account (identity.issueCredential) and links it onto the teacher record, deriving grants for any " +
+      "existing assignments (same choreography as people.teacher-link-identity). 409 if the teacher already has a " +
+      "login — use the password-reset flow to replace an existing one instead. The temporary password is returned " +
+      "exactly once, in this response body; it is never logged or audited.",
+    tags: ["people-teachers"],
+    auth: ADMIN_ONLY,
+    request: { params: z.object({ teacherId: idSchema }) },
+    audit: { action: "people.teacher-credential-issued", resourceType: "teacher" },
+    responses: {
+      201: { description: "Login issued", schema: teacherCredentialViewSchema },
+      404: { description: "No such teacher", schema: problemSchema },
+      409: { description: "Teacher already has a login, or the derived username collided", schema: problemSchema },
     },
   },
   {

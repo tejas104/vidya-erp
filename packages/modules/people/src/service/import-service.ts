@@ -1,11 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { parse } from "csv-parse/sync";
 import { z } from "zod";
-import type { AuditLogger, Logger } from "@vidya/platform";
+import type { AuditLogger, Logger, Role } from "@vidya/platform";
 import type { OrgRepo } from "../repo/org-repo";
 import type { PeopleRepo } from "../repo/people-repo";
 import type { ImportKind, ImportsRepo, RowError } from "../repo/imports-repo";
 import type { PplImportRow } from "../db/schema";
+import { usernameFromCode } from "../ids";
 import { UnknownReferenceError } from "./people-service";
 
 /**
@@ -43,12 +44,25 @@ export interface ImportObjectStore {
   getText(key: string): Promise<string>;
 }
 
+/** Narrow seam onto identity's CredentialService.issueCredential (#11 B4). */
+export interface CredentialIssuer {
+  issueCredential(input: {
+    personName: string;
+    username: string;
+    collegeId: string;
+    roles: readonly Role[];
+    createdBy: string;
+  }): Promise<{ userId: string; username: string; temporaryPassword: string }>;
+}
+
 export interface ImportServiceDeps {
   readonly imports: ImportsRepo;
   readonly people: PeopleRepo;
   readonly orgRepo: OrgRepo;
   readonly store: ImportObjectStore;
   readonly audit: AuditLogger;
+  /** Issues a login for every student the confirm run actually creates (#11 B4). */
+  readonly identity: CredentialIssuer;
   readonly onFinished?: (kind: ImportKind, status: "completed" | "failed") => void;
 }
 
@@ -136,6 +150,8 @@ export class ImportService {
           okRows: outcome.ok,
           errorRows: outcome.errors.length,
           warningRows: outcome.warnings.length,
+          // Students only (#11 B4) — processTeachers never sets this.
+          credentialsIssued: "credentialsIssued" in outcome ? outcome.credentialsIssued : 0,
         },
       });
       this.deps.onFinished?.(imp.kind as ImportKind, "completed");
@@ -172,7 +188,7 @@ export class ImportService {
   private async processStudents(
     imp: PplImportRow,
     records: Record<string, string>[],
-  ): Promise<{ ok: number; errors: RowError[]; warnings: RowError[] }> {
+  ): Promise<{ ok: number; errors: RowError[]; warnings: RowError[]; credentialsIssued: number }> {
     const errors: RowError[] = [];
     // Section lookup by (department_code, class_code, section_name) — one
     // tree read instead of per-row queries.
@@ -260,7 +276,7 @@ export class ImportService {
       const warnings = applicable
         .filter((row) => row.unassigned)
         .map((row) => ({ row: row.row, message: "student would be created unassigned — no enrollment columns provided" }));
-      return { ok: applicable.length, errors, warnings };
+      return { ok: applicable.length, errors, warnings, credentialsIssued: 0 };
     }
 
     // Rows already classified as errors above are "processed"; the rest get
@@ -268,6 +284,7 @@ export class ImportService {
     const processedBeforeWrites = errors.length;
 
     let ok = 0;
+    let credentialsIssued = 0;
     const warnings: RowError[] = [];
     for (let i = 0; i < applicable.length; i += 1) {
       const row = applicable[i]!;
@@ -298,6 +315,25 @@ export class ImportService {
         if (row.unassigned) {
           warnings.push({ row: row.row, message: "student created unassigned — no enrollment columns provided" });
         }
+        // Issue a login for the student we just created (#11 B4). Never
+        // rolls the row back to an error — the student record is good
+        // either way, a login is a bonus this row can live without.
+        try {
+          const issued = await this.deps.identity.issueCredential({
+            personName: row.fullName,
+            username: usernameFromCode(row.admissionNo),
+            collegeId: imp.collegeId,
+            roles: ["student"],
+            createdBy: imp.requestedBy,
+          });
+          await this.deps.people.updateStudent(student.id, { identityUserId: issued.userId });
+          credentialsIssued += 1;
+        } catch (error) {
+          warnings.push({
+            row: row.row,
+            message: `student created but credential issuance failed: ${error instanceof Error ? error.message : "unknown error"}`,
+          });
+        }
       } catch (error) {
         errors.push({
           row: row.row,
@@ -308,7 +344,7 @@ export class ImportService {
       // import measurably slows down the worker.
       await this.deps.imports.updateProgress(imp.id, processedBeforeWrites + i + 1);
     }
-    return { ok, errors, warnings };
+    return { ok, errors, warnings, credentialsIssued };
   }
 
   private async processTeachers(

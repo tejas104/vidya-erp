@@ -38,7 +38,7 @@ import { createImportsRepo } from "./repo/imports-repo";
 import { OrgService } from "./service/org-service";
 import { PeopleService } from "./service/people-service";
 import { AssignmentsService } from "./service/assignments-service";
-import { ImportService } from "./service/import-service";
+import { ImportService, type CredentialIssuer } from "./service/import-service";
 import { createPeopleHandlers } from "./api/handlers";
 import { createImportProcessor } from "./jobs/import-job";
 import { createReconcileProcessor } from "./jobs/reconcile-job";
@@ -51,6 +51,10 @@ export {
   peopleModuleDefinition,
 } from "./definition";
 export { ASSIGNMENT_SOURCE_PREFIX } from "./service/assignments-service";
+export type { CredentialIssuer } from "./service/import-service";
+/** Shared username derivation (#11 B4) — the reporting module's per-class
+ *  credential sheet reuses this so the scheme is identical everywhere. */
+export { usernameFromCode } from "./ids";
 
 export interface PeopleModuleDeps {
   readonly db: Db;
@@ -61,6 +65,8 @@ export interface PeopleModuleDeps {
   readonly scopeChecker: ScopeChecker;
   /** Identity's derived-grant surface (ADR-0015). */
   readonly identityGrants: DerivedGrantsApi;
+  /** Identity's credential issuance (#11 B4: import-confirm auto-issue, per-staff action). */
+  readonly identity: CredentialIssuer;
   readonly storage: { readonly client: ObjectStorageClient; readonly bucket: string };
   /** Enqueues the bulk-import job on the people queue (composition provides it). */
   readonly enqueueImport: (payload: z.infer<typeof importJobPayloadSchema>) => Promise<void>;
@@ -107,6 +113,15 @@ export interface PeopleDirectory {
   /** A department's classes (id + name), for cross-node comparison (analytics). */
   classesOfDepartment(departmentId: string): Promise<{ classId: string; name: string }[]>;
   /**
+   * A class's full student roster — every section, flattened (#11 B4: the
+   * per-class credential sheet). `admissionNo` doubles as the roll number;
+   * there is no separate roll-number field. `identityUserId` is null for a
+   * student who has no login yet — the caller decides what to do with that.
+   */
+  classRoster(
+    classId: string,
+  ): Promise<{ studentId: string; admissionNo: string; fullName: string; identityUserId: string | null }[]>;
+  /**
    * Display names for opaque org/people ids (routed by id prefix across
    * colleges, departments, classes, sections, subjects and students).
    * Unknown ids are simply absent from the result.
@@ -122,6 +137,14 @@ export interface PeopleModuleService {
   readonly directory: PeopleDirectory;
   /** One-time operator bootstrap (scripts/create-admin.ts). Idempotent by code. */
   bootstrapCollege(input: { name: string; code: string }): Promise<{ collegeId: string; created: boolean }>;
+  /**
+   * Links a freshly identity-issued account back onto its student record
+   * (#11 B4: the per-class credential sheet, owned by the reporting module —
+   * reporting depends on people, never the reverse, so this write is
+   * exposed here rather than reporting reaching into people's tables).
+   * False when the student id does not exist.
+   */
+  linkStudentIdentity(studentId: string, identityUserId: string): Promise<boolean>;
 }
 
 export function createPeopleModule(deps: PeopleModuleDeps): RuntimeModule<PeopleModuleService> {
@@ -163,6 +186,7 @@ export function createPeopleModule(deps: PeopleModuleDeps): RuntimeModule<People
       getText: (key) => getObjectText(deps.storage.client, deps.storage.bucket, key),
     },
     audit: deps.audit,
+    identity: deps.identity,
     onFinished: (kind, status) => importsTotal.inc({ kind, status }),
   });
 
@@ -177,6 +201,7 @@ export function createPeopleModule(deps: PeopleModuleDeps): RuntimeModule<People
       storage: deps.storage,
       enqueueImport: deps.enqueueImport,
       edition: deps.edition ?? "college",
+      identity: deps.identity,
     }),
     jobProcessors: {
       [IMPORT_JOB_NAME]: createImportProcessor(imports),
@@ -245,6 +270,21 @@ export function createPeopleModule(deps: PeopleModuleDeps): RuntimeModule<People
             classId: klass.id,
             name: klass.name,
           })),
+        classRoster: async (classId) => {
+          const sections = await orgRepo.listSectionsOfClass(classId);
+          const rows: { studentId: string; admissionNo: string; fullName: string; identityUserId: string | null }[] = [];
+          for (const section of sections) {
+            for (const entry of await peopleRepo.roster(section.id)) {
+              rows.push({
+                studentId: entry.student.id,
+                admissionNo: entry.student.admissionNo,
+                fullName: entry.student.fullName,
+                identityUserId: entry.student.identityUserId,
+              });
+            }
+          }
+          return rows;
+        },
         namesFor: async (ids) => {
           const names = new Map<string, string>();
           for (const id of ids) {
@@ -275,6 +315,8 @@ export function createPeopleModule(deps: PeopleModuleDeps): RuntimeModule<People
         },
       },
       bootstrapCollege: (input) => org.bootstrapCollege(input),
+      linkStudentIdentity: async (studentId, identityUserId) =>
+        (await people.linkStudentIdentity(studentId, identityUserId)) !== null,
     },
   };
   assertModuleWiring(module);

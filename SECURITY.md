@@ -243,33 +243,66 @@ reconciliation is outside this task's scope.
    backoff stop applying at all. Per-username limiting and account lockout
    are unaffected (keyed on the account).
    See `docs/threat-model-identity.md#throttle-keying`.
-7. **The class-credential-sheet report kind is a durable, plaintext-password
-   artifact once generated.** `class-credentials`
-   (`packages/modules/reporting/src/report-data.ts`,
-   `render/credential-sheet.ts`, #11 B3) renders a whole class's freshly
-   issued logins — roll no, name, username, and temporary password, in the
-   clear — onto a printable PDF. Like every report it is then uploaded to
-   object storage (`ReportService.run`, `reports/<reportId>.pdf`) and stays
-   there until something deletes it: no bucket lifecycle/expiry rule is
-   configured anywhere in this codebase. Access follows the same rules as
-   every other report kind — requesting and downloading both go through the
-   standard scope check and are both audited
-   (`reporting.report-requested` / `reporting.report-generated` /
-   `reporting.report-downloaded`) — and `canProduce`/`collectReport` for
-   this kind fully delegate the access decision to an injected
-   `classCredentials` source, the same admin-only-by-construction shape
-   grade-card/hall-ticket already use. As of #11 B3 no such source is wired
-   in, so the kind is inert (every request 404s); #11 B4 wires the real
-   source and inherits everything below. Once a sheet exists, none of this
-   limits exposure to it: the admin who generated it, anyone who
-   compromises MinIO, or anyone who gets hold of the printed sheet
-   (emailed, backed up, left on a printer) has every password on it — and
-   nothing forces a student to change theirs before someone else could use
-   it first (force-change-on-first-login is a separate, already recorded
-   gap — see `credential-service.ts`'s doc comment). Short
-   retention — deleting the report object, and the printed sheet, once
-   credentials have been handed out — is recommended operationally; nothing
-   in this codebase currently enforces it or reminds an admin to do it.
+7. **The per-class credential sheet is generated and streamed
+   synchronously — it is never written to durable storage.**
+   `reporting.class-credentials` (`POST
+   /api/v1/reports/class-credentials/{classId}`, the `classCredentials`
+   handler in `packages/modules/reporting/src/api/handlers.ts`, #11 B4)
+   issues a login for every student in the class who doesn't already have
+   one (`identity.issueCredential` — active, no force-change, same as
+   every other issuance path in this codebase) and renders the roll
+   no/name/username/temporary-password sheet with `render/credential-sheet.ts`
+   directly inside the request handler, returning the PDF bytes as the
+   response body (`contentType: "application/pdf"`,
+   `cache-control: no-store`). This route never calls `ReportService`,
+   never enqueues a job, gets no `reportId`, and the sheet is never put into
+   object storage — there is nothing to poll, nothing to re-download, and no
+   bucket object for a later MinIO compromise, backup, or missed
+   lifecycle-rule to expose. This is a direct consequence of the temporary
+   password itself never being persisted (`credential-service.ts`): the
+   queued request/generate/download flow structurally cannot regenerate a
+   credential sheet at job time, so this kind was never routed through it,
+   and the earlier `class-credentials` `ReportKind`/`canProduce`/
+   `collectReport` wiring from #11 B3 has been removed rather than left
+   half-wired.
+
+   `csv` is not reachable for this kind: the route takes no `format` field
+   at all (`request: { params: z.object({ classId: idSchema }) }`) and
+   always responds `application/pdf` — there is no code path by which a
+   class's plaintext passwords could come back as a flat, machine-parseable
+   CSV instead of a printed sheet, the way every other report kind's format
+   is caller-chosen.
+
+   Access is admin-only through two layers, and it is **not** the
+   self-or-org-overlapping-staff shape grade-card and hall-ticket use
+   (`results/src/compute.ts:150-153`, `exams/src/handlers.ts:270-273`) —
+   this route has no self-access case at all, because the caller is never
+   the student receiving the credential. First, the route declares
+   `auth: { rolesAnyOf: ["admin"] }`, the coarse role gate
+   (`RoleRequirementPolicy`) evaluated before the handler runs. Second, the
+   handler itself additionally calls the shared `ScopeChecker` against the
+   class's college org path (`checkScope(...)` in `classCredentials`) before
+   issuing anything, so an admin whose grants don't cover that college is
+   still refused. Both layers are new for this kind — there was no existing
+   admin-only-by-construction shape to reuse here. The route is audited
+   (`reporting.class-credentials-issued`) with the issued count and roster
+   size — never the plaintext.
+
+   None of this closes the exposure that actually matters. While the
+   request is being handled, every issued student's plaintext temporary
+   password exists in server process memory (the row data assembled in the
+   handler) for as long as generation takes. Once the PDF leaves the
+   response it is subject to whatever the client does with it — saved to
+   disk, printed, emailed onward, cached by the browser — exactly as before,
+   just without a second durable copy sitting in MinIO. Exposure now rests
+   on TLS in transit (see the items above) and on post-download handling,
+   neither of which this codebase controls. Nothing forces a student to
+   change their password before someone else could use it first
+   (force-change-on-first-login is a separate, already recorded gap — see
+   `credential-service.ts`'s doc comment). Short retention of the
+   downloaded/printed sheet — discarding it once credentials have been
+   handed out — remains the operational recommendation; nothing in this
+   codebase enforces it or reminds an admin to do it.
 
 ## Evidence
 

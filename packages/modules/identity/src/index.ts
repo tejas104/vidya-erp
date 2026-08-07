@@ -56,6 +56,7 @@ export {
 } from "./core/index";
 export type { ExternalIdentityProvider } from "./providers/external";
 export type { UserView } from "./service/users-service";
+export { UsernameTakenError } from "./repo/users-repo";
 export type {
   DerivableRole,
   DerivedGrantInput,
@@ -129,7 +130,9 @@ export interface IdentityService {
    * Issues an ACTIVE login for a person who doesn't have one yet (#11 B2:
    * onboarding import, per-class/staff "issue login" actions). Returns the
    * plaintext temporary password exactly once — the caller must hand it off
-   * (e.g. the credential sheet, #11 B3) and never persist it.
+   * (e.g. the credential sheet, #11 B4) and never persist it. `userId` is the
+   * created account's identity id, for the caller to link back onto its own
+   * record (e.g. people's student/teacher `identityUserId`).
    */
   issueCredential(input: {
     personName: string;
@@ -137,7 +140,7 @@ export interface IdentityService {
     collegeId: string;
     roles: readonly Role[];
     createdBy: string;
-  }): Promise<{ username: string; temporaryPassword: string }>;
+  }): Promise<{ userId: string; username: string; temporaryPassword: string }>;
 }
 
 export function createIdentityModule(deps: IdentityModuleDeps): RuntimeModule<IdentityService> {

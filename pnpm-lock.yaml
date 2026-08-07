@@ -566,6 +566,12 @@ importers:
       '@vidya/module-exams':
         specifier: workspace:*
         version: link:../exams
+      '@vidya/module-identity':
+        specifier: workspace:*
+        version: link:../identity
+      '@vidya/module-people':
+        specifier: workspace:*
+        version: link:../people
       '@vidya/module-results':
         specifier: workspace:*
         version: link:../results
@@ -591,9 +597,6 @@ importers:
       '@types/pdfkit':
         specifier: ^0.13.4
         version: 0.13.9
-      '@vidya/module-identity':
-        specifier: workspace:*
-        version: link:../identity
       pino:
         specifier: ^9.7.0
         version: 9.14.0

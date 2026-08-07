@@ -25,14 +25,16 @@ import {
   type Metrics,
   type ObjectStorageClient,
   type RuntimeModule,
+  type ScopeChecker,
 } from "@vidya/platform";
 import type { AnalyticsReadModel } from "@vidya/module-analytics";
+import type { PeopleDirectory } from "@vidya/module-people";
 import { z } from "zod";
 import { REPORT_JOB_NAME, reportJobPayloadSchema, reportingModuleDefinition } from "./definition";
 import type { ReportSources } from "./report-data";
 import { createReportsRepo } from "./repo/reports-repo";
 import { ReportService } from "./service/report-service";
-import { createReportingHandlers } from "./api/handlers";
+import { createReportingHandlers, type CredentialIssuer } from "./api/handlers";
 import { createReportProcessor } from "./jobs/report-generate";
 
 export {
@@ -57,6 +59,12 @@ export interface ReportingModuleDeps {
   readonly sources?: ReportSources;
   readonly storage: { readonly client: ObjectStorageClient; readonly bucket: string };
   readonly enqueueReport: (payload: z.infer<typeof reportJobPayloadSchema>) => Promise<void>;
+  /** #11 B4's synchronous per-class credential sheet — its own dependencies,
+   *  wired independently of the queued report flow above. */
+  readonly scopeChecker: ScopeChecker;
+  readonly peopleDirectory: PeopleDirectory;
+  readonly linkStudentIdentity: (studentId: string, identityUserId: string) => Promise<boolean>;
+  readonly identity: CredentialIssuer;
 }
 
 export type ReportingService = Record<string, never>;
@@ -95,7 +103,14 @@ export function createReportingModule(deps: ReportingModuleDeps): RuntimeModule<
 
   const module: RuntimeModule<ReportingService> = {
     definition: reportingModuleDefinition,
-    handlers: createReportingHandlers({ service, enqueue: deps.enqueueReport }),
+    handlers: createReportingHandlers({
+      service,
+      enqueue: deps.enqueueReport,
+      scopeChecker: deps.scopeChecker,
+      peopleDirectory: deps.peopleDirectory,
+      linkStudentIdentity: deps.linkStudentIdentity,
+      identity: deps.identity,
+    }),
     jobProcessors: {
       [REPORT_JOB_NAME]: createReportProcessor(service),
     },

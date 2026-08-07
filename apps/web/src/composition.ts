@@ -146,6 +146,7 @@ function buildWebRuntime(): WebRuntime {
     audit: system.service.audit,
     scopeChecker: identityCore.scopeChecker,
     identityGrants: identity.service.derivedGrants,
+    identity: { issueCredential: identity.service.issueCredential },
     storage: { client: objectStorage, bucket: config.s3.bucket },
     enqueueImport: async (payload) => {
       await peopleQueue.queue.add(IMPORT_JOB_NAME, payload);
@@ -242,6 +243,12 @@ function buildWebRuntime(): WebRuntime {
     enqueueReport: async (payload) => {
       await reportingQueue.queue.add(REPORT_JOB_NAME, payload);
     },
+    // #11 B4: the synchronous per-class credential sheet — identity +
+    // people, wired independently of the queued flow above.
+    scopeChecker: identityCore.scopeChecker,
+    peopleDirectory: people.service.directory,
+    linkStudentIdentity: people.service.linkStudentIdentity,
+    identity: { issueCredential: identity.service.issueCredential },
   });
 
   // Portal (W1): no tables, no jobs — self-scoped student views composed

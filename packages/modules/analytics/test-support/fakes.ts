@@ -181,6 +181,17 @@ export class FakeDirectory implements PeopleDirectory {
         ]
       : [];
   }
+  async classRoster(
+    classId: string,
+  ): Promise<{ studentId: string; admissionNo: string; fullName: string; identityUserId: string | null }[]> {
+    if (classId !== ORG.classId) return [];
+    return [...this.positions.keys()].map((studentId) => ({
+      studentId,
+      admissionNo: studentId,
+      fullName: this.names.get(studentId) ?? `Student ${studentId}`,
+      identityUserId: null,
+    }));
+  }
   async departmentsOfCollege(collegeId: string) {
     return collegeId === ORG.collegeId ? [{ departmentId: ORG.departmentId, name: "Science" }] : [];
   }

@@ -10,7 +10,7 @@ import { createPeopleHandlers, type PeopleHandlerDeps } from "./handlers";
 import { OrgService } from "../service/org-service";
 import { PeopleService } from "../service/people-service";
 import { AssignmentsService } from "../service/assignments-service";
-import { ImportService } from "../service/import-service";
+import { ImportService, type CredentialIssuer } from "../service/import-service";
 import {
   FakeDerivedGrants,
   InMemoryImportsRepo,
@@ -33,6 +33,17 @@ class StubScopeChecker implements ScopeChecker {
   }
 }
 
+/** Deterministic — assigns a fresh, unique fake identity user id per call. */
+function fakeIdentity(): CredentialIssuer {
+  let n = 0;
+  return {
+    issueCredential: async (input) => {
+      n += 1;
+      return { userId: `idn_fake_${n}`, username: input.username, temporaryPassword: "Fak3Pass!123" };
+    },
+  };
+}
+
 async function makeHarness() {
   const orgRepo = new InMemoryOrgRepo();
   const peopleRepo = new InMemoryPeopleRepo();
@@ -40,6 +51,7 @@ async function makeHarness() {
   const audit = new RecordingAudit();
   const scopeChecker = new StubScopeChecker();
   const identityGrants = new FakeDerivedGrants();
+  const identity = fakeIdentity();
   const org = await seedOrg(orgRepo);
   const enqueued: unknown[] = [];
   const deps: PeopleHandlerDeps = {
@@ -52,6 +64,7 @@ async function makeHarness() {
       orgRepo,
       store: new MemoryObjectStore(),
       audit,
+      identity,
     }),
     scopeChecker,
     storage: { client: {} as PeopleHandlerDeps["storage"]["client"], bucket: "test-bucket" },
@@ -59,6 +72,7 @@ async function makeHarness() {
       enqueued.push(payload);
     },
     edition: "college",
+    identity,
   };
   return {
     handlers: createPeopleHandlers(deps),

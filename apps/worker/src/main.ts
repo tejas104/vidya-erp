@@ -156,6 +156,7 @@ async function main(): Promise<void> {
     audit: system.service.audit,
     scopeChecker: identityCore.scopeChecker,
     identityGrants: identity.service.derivedGrants,
+    identity: { issueCredential: identity.service.issueCredential },
     storage: { client: objectStorage, bucket: config.s3.bucket },
     enqueueImport: async (payload) => {
       await peopleQueue.queue.add(IMPORT_JOB_NAME, payload);
@@ -251,6 +252,10 @@ async function main(): Promise<void> {
     enqueueReport: async (payload) => {
       await reportingQueue.queue.add(REPORT_JOB_NAME, payload);
     },
+    scopeChecker: identityCore.scopeChecker,
+    peopleDirectory: people.service.directory,
+    linkStudentIdentity: people.service.linkStudentIdentity,
+    identity: { issueCredential: identity.service.issueCredential },
   });
 
   // Portal (W1): no jobs — included so the module inventory stays uniform

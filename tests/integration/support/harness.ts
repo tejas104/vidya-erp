@@ -102,6 +102,7 @@ export function buildStack() {
     audit: system.service.audit,
     scopeChecker: core.scopeChecker,
     identityGrants: identity.service.derivedGrants,
+    identity: { issueCredential: identity.service.issueCredential },
     storage: { client: objectStorage, bucket: process.env.S3_BUCKET ?? "vidya-int" },
     enqueueImport: async (payload) => {
       enqueuedImports.push(payload);
@@ -157,6 +158,10 @@ export function buildStack() {
     enqueueReport: async (payload) => {
       enqueuedReports.push(payload);
     },
+    scopeChecker: core.scopeChecker,
+    peopleDirectory: people.service.directory,
+    linkStudentIdentity: people.service.linkStudentIdentity,
+    identity: { issueCredential: identity.service.issueCredential },
   });
 
   const syllabus = createSyllabusModule({

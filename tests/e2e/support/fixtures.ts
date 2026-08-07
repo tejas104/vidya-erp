@@ -64,10 +64,12 @@ export async function apiSession(baseURL: string, role: RoleKey): Promise<APIReq
   return ctx;
 }
 
-/** Log in as `role` through the real browser login form. Resolves once the
- *  app has navigated away from /login (dashboard / portal / fees). */
-export async function browserLogin(page: Page, role: RoleKey): Promise<void> {
-  const { username, password } = CREDS[role];
+/** Log in as `role` (or a raw {username, password} — e.g. a freshly issued
+ *  credential no RoleKey exists for) through the real browser login form.
+ *  Resolves once the app has navigated away from /login (dashboard / portal
+ *  / fees). Same throttle-reset + unique-XFF machinery either way. */
+export async function browserLogin(page: Page, role: RoleKey | { username: string; password: string }): Promise<void> {
+  const { username, password } = typeof role === "string" ? CREDS[role] : role;
   await resetLoginThrottle(username);
   await page.setExtraHTTPHeaders({ "x-forwarded-for": nextXff() });
   await page.goto("/login");

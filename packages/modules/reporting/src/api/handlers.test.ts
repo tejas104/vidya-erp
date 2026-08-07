@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { pino } from "pino";
-import type { Principal, RouteContext } from "@vidya/platform";
-import { createReportingHandlers } from "./handlers";
+import type { OrgPath, Principal, RouteContext, ScopeChecker, ScopeDecision } from "@vidya/platform";
+import type { PeopleDirectory } from "@vidya/module-people";
+import { createReportingHandlers, type CredentialIssuer } from "./handlers";
 import { ReportService } from "../service/report-service";
 import type { StudentPerformanceReport } from "@vidya/module-analytics";
 import {
@@ -14,6 +15,67 @@ import {
 
 const logger = pino({ level: "silent" });
 const YEAR = "2026-27";
+
+/** TEST DOUBLE — the real matrix is the human core; here we script decisions. */
+class StubScopeChecker implements ScopeChecker {
+  decision: ScopeDecision = { granted: true, reason: "stub-allow" };
+  readonly calls: { action: string; resource: unknown }[] = [];
+  check(_principal: Principal, action: string, resource: unknown): ScopeDecision {
+    this.calls.push({ action, resource });
+    return this.decision;
+  }
+}
+
+const CLASS_ID = "cls_1";
+const CLASS_PATH: OrgPath = { collegeId: "col_1", departmentId: "dep_1", classId: CLASS_ID };
+
+/** Minimal PeopleDirectory double: only classPath/classRoster/namesFor are
+ *  reached by the class-credentials handler; every other member is unused
+ *  filler so this satisfies the interface. */
+class FakePeopleDirectory implements PeopleDirectory {
+  roster: { studentId: string; admissionNo: string; fullName: string; identityUserId: string | null }[] = [
+    { studentId: "stu_1", admissionNo: "A001", fullName: "Meera Nair", identityUserId: null },
+    { studentId: "stu_2", admissionNo: "A002", fullName: "Ravi Kumar", identityUserId: "idn_existing" },
+  ];
+  async classPath(classId: string): Promise<OrgPath | null> {
+    return classId === CLASS_ID ? CLASS_PATH : null;
+  }
+  async classRoster(classId: string) {
+    return classId === CLASS_ID ? this.roster : [];
+  }
+  async namesFor(ids: readonly string[]): Promise<Map<string, string>> {
+    return new Map(ids.filter((id) => id === CLASS_ID).map((id) => [id, "FY BSc CS"]));
+  }
+  async sectionPath(): Promise<OrgPath | null> { return null; }
+  async departmentPath(): Promise<OrgPath | null> { return null; }
+  async collegeExists(): Promise<boolean> { return false; }
+  async sectionRoster(): Promise<{ studentId: string; academicYear: string }[]> { return []; }
+  async studentPosition(): Promise<OrgPath | null> { return null; }
+  async studentByIdentityUser() { return null; }
+  async teacherByIdentityUser() { return null; }
+  async teacherDepartments(): Promise<string[]> { return []; }
+  async studentsExist(): Promise<Set<string>> { return new Set(); }
+  async studentsBrief(): Promise<Map<string, { fullName: string; admissionNo: string }>> { return new Map(); }
+  async subjectDepartment(): Promise<string | null> { return null; }
+  async sectionsWithLiveEnrollment(): Promise<string[]> { return []; }
+  async sectionsOfClass(): Promise<{ sectionId: string; name: string }[]> { return []; }
+  async departmentsOfCollege(): Promise<{ departmentId: string; name: string }[]> { return []; }
+  async classesOfDepartment(): Promise<{ classId: string; name: string }[]> { return []; }
+}
+
+/** Deterministic — assigns a fresh, unique fake identity user id per call. */
+function fakeIdentity(): CredentialIssuer & { calls: unknown[] } {
+  let n = 0;
+  const calls: unknown[] = [];
+  return {
+    calls,
+    issueCredential: async (input) => {
+      calls.push(input);
+      n += 1;
+      return { userId: `idn_fake_${n}`, username: input.username, temporaryPassword: `Fak3Pass!${n}` };
+    },
+  };
+}
 
 const okStudent: StudentPerformanceReport = {
   state: "ok",
@@ -32,13 +94,24 @@ function makeHarness(read: FakeAnalyticsReadModel) {
     audit: new RecordingAudit(),
   });
   const enqueued: unknown[] = [];
+  const scopeChecker = new StubScopeChecker();
+  const peopleDirectory = new FakePeopleDirectory();
+  const identity = fakeIdentity();
+  const linked: { studentId: string; identityUserId: string }[] = [];
   const handlers = createReportingHandlers({
     service,
     enqueue: async (payload) => {
       enqueued.push(payload);
     },
+    scopeChecker,
+    peopleDirectory,
+    linkStudentIdentity: async (studentId, identityUserId) => {
+      linked.push({ studentId, identityUserId });
+      return true;
+    },
+    identity,
   });
-  return { handlers, service, enqueued };
+  return { handlers, service, enqueued, scopeChecker, peopleDirectory, identity, linked };
 }
 
 function ctx(p: Principal | null, input: { body?: unknown; params?: unknown; query?: unknown } = {}): RouteContext {
@@ -128,5 +201,54 @@ describe("download handler streams bytes with a disposition header", () => {
     const { handlers, service } = makeHarness(read);
     const row = await service.createRequest(principal("owner"), { kind: "student-performance", studentId: "stu_1" }, "csv", YEAR);
     expect((await handlers["reporting.download"]!(ctx(principal("owner"), { params: { reportId: row.id } }))).status).toBe(409);
+  });
+});
+
+describe("class-credentials handler (#11 B4, synchronous)", () => {
+  it("issues logins only for students who lack one, streams a PDF, and audits the count — never the plaintext", async () => {
+    const read = new FakeAnalyticsReadModel();
+    const { handlers, identity, linked } = makeHarness(read);
+    const result = await handlers["reporting.class-credentials"]!(
+      ctx(principal("admin-1", { roles: ["admin"] }), { params: { classId: CLASS_ID } }),
+    );
+
+    expect(result.status).toBe(200);
+    expect(result.contentType).toBe("application/pdf");
+    expect(result.body).toBeInstanceOf(Uint8Array);
+    // %PDF- magic bytes — a real rendered document, not a stub.
+    expect(new TextDecoder().decode((result.body as Uint8Array).slice(0, 5))).toBe("%PDF-");
+    expect(result.headers?.["content-disposition"]).toContain("attachment");
+
+    // Roster has one student with a login already (idn_existing) and one
+    // without — only the one without gets issued and linked.
+    expect(identity.calls).toEqual([
+      expect.objectContaining({ username: "a001", roles: ["student"] }),
+    ]);
+    expect(linked).toEqual([{ studentId: "stu_1", identityUserId: "idn_fake_1" }]);
+
+    // Never the plaintext temporary password in the audit trail.
+    const details = JSON.stringify(result.audit?.details ?? {});
+    expect(details).not.toContain("Fak3Pass");
+    expect(result.audit?.details).toMatchObject({ issuedCount: 1, rosterSize: 2 });
+  });
+
+  it("403s when the scope check denies", async () => {
+    const read = new FakeAnalyticsReadModel();
+    const { handlers, scopeChecker, identity } = makeHarness(read);
+    scopeChecker.decision = { granted: false, reason: "out of scope" };
+    const result = await handlers["reporting.class-credentials"]!(
+      ctx(principal("teacher-1"), { params: { classId: CLASS_ID } }),
+    );
+    expect(result.status).toBe(403);
+    expect(identity.calls).toHaveLength(0);
+  });
+
+  it("404s for an unknown class", async () => {
+    const read = new FakeAnalyticsReadModel();
+    const { handlers } = makeHarness(read);
+    const result = await handlers["reporting.class-credentials"]!(
+      ctx(principal("admin-1", { roles: ["admin"] }), { params: { classId: "cls_ghost" } }),
+    );
+    expect(result.status).toBe(404);
   });
 });

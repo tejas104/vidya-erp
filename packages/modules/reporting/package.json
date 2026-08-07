@@ -16,6 +16,8 @@
     "@vidya/module-results": "workspace:*",
     "@vidya/module-exams": "workspace:*",
     "@vidya/module-academics": "workspace:*",
+    "@vidya/module-people": "workspace:*",
+    "@vidya/module-identity": "workspace:*",
     "@vidya/platform": "workspace:*",
     "drizzle-orm": "^0.44.2",
     "pdfkit": "^0.15.0",
@@ -25,7 +27,6 @@
   "devDependencies": {
     "@types/node": "^22.15.0",
     "@types/pdfkit": "^0.13.4",
-    "@vidya/module-identity": "workspace:*",
     "pino": "^9.7.0",
     "typescript": "^5.8.3",
     "vitest": "^3.2.0"

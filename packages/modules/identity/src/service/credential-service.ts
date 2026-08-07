@@ -40,7 +40,7 @@ export class CredentialService {
     collegeId: string;
     roles: readonly Role[];
     createdBy: string;
-  }): Promise<{ username: string; temporaryPassword: string }> {
+  }): Promise<{ userId: string; username: string; temporaryPassword: string }> {
     const temporaryPassword = generateTemporaryPassword();
     const created = await this.deps.users.createUser({
       username: input.username,
@@ -51,6 +51,6 @@ export class CredentialService {
       createdBy: input.createdBy,
     });
     await this.deps.auth.adminSetPassword(created.id, temporaryPassword);
-    return { username: created.username, temporaryPassword };
+    return { userId: created.id, username: created.username, temporaryPassword };
   }
 }

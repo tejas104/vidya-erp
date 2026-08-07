@@ -15,11 +15,13 @@ import {
   getObjectBytes,
   putObjectBytes,
 } from "@vidya/platform";
+import { UsernameTakenError } from "@vidya/module-identity";
 import { DOCUMENT_MAX_BYTES } from "../definition";
+import { usernameFromCode } from "../ids";
 import type { OrgService } from "../service/org-service";
 import { PeopleService, UnknownReferenceError } from "../service/people-service";
 import type { AssignmentsService } from "../service/assignments-service";
-import type { ImportService } from "../service/import-service";
+import type { CredentialIssuer, ImportService } from "../service/import-service";
 import { DuplicateCodeError, UnitInUseError, type OrgUnitType } from "../repo/org-repo";
 import { DuplicateAssignmentError, DuplicatePersonError, type StudentStatus } from "../repo/people-repo";
 import type { RowError } from "../repo/imports-repo";
@@ -43,6 +45,8 @@ export interface PeopleHandlerDeps {
   readonly enqueueImport: (payload: z.infer<typeof importJobPayloadSchema>) => Promise<void>;
   /** Drives the import-template CSV headers (#11 Task 1's first consumer). */
   readonly edition: AppConfig["edition"];
+  /** Identity's credential issuance (#11 B4: the individual staff action). */
+  readonly identity: CredentialIssuer;
 }
 
 function denied(ctx: RouteContext, reason: string): RouteResult {
@@ -761,6 +765,59 @@ export function createPeopleHandlers(deps: PeopleHandlerDeps): Record<string, Ro
     };
   };
 
+  /**
+   * #11 B4: the individual staff "issue login" action — the teacher
+   * counterpart of the per-class student credential sheet (that one lives in
+   * the reporting module, since it also needs the PDF renderer; this one
+   * needs only identity + people, so it stays here). Returns the plaintext
+   * temporary password exactly once, mirroring identity.password-reset-init.
+   */
+  const teacherIssueCredential: RouteHandler = async (ctx) => {
+    const principal = ctx.principal as Principal;
+    const params = ctx.request.params as { teacherId: string };
+    const teacher = await deps.people.getTeacher(params.teacherId);
+    if (teacher === null) {
+      return notFound();
+    }
+    const scope = checkScope(deps.scopeChecker, ctx, principal, "update", {
+      module: "people",
+      resourceType: "teacher",
+      org: { collegeId: teacher.collegeId },
+    });
+    if (!scope.ok) {
+      return scope.result;
+    }
+    if (teacher.identityUserId !== null) {
+      return { status: 409, body: { message: "teacher already has a login" } };
+    }
+    let issued;
+    try {
+      issued = await deps.identity.issueCredential({
+        personName: teacher.fullName,
+        username: usernameFromCode(teacher.staffNo),
+        collegeId: teacher.collegeId,
+        roles: ["teacher"],
+        createdBy: principal.id,
+      });
+    } catch (error) {
+      if (error instanceof UsernameTakenError) {
+        return { status: 409, body: { message: "derived username is already taken" } };
+      }
+      throw error;
+    }
+    const updated = await deps.people.linkTeacherIdentity(params.teacherId, issued.userId);
+    if (updated === null) {
+      return notFound();
+    }
+    const grants = await deps.assignments.syncTeacher(params.teacherId);
+    return {
+      status: 201,
+      body: { teacher: teacherView(updated), username: issued.username, temporaryPassword: issued.temporaryPassword, grants },
+      headers: { "cache-control": "no-store" },
+      audit: { resourceId: updated.id, details: { username: issued.username, grants } },
+    };
+  };
+
   const assignmentCreate: RouteHandler = async (ctx) => {
     const principal = ctx.principal as Principal;
     const params = ctx.request.params as { teacherId: string };
@@ -1136,6 +1193,7 @@ export function createPeopleHandlers(deps: PeopleHandlerDeps): Record<string, Ro
     "people.teacher-get": teacherGet,
     "people.teacher-update": teacherUpdate,
     "people.teacher-link-identity": teacherLinkIdentity,
+    "people.teacher-issue-credential": teacherIssueCredential,
     "people.assignment-create": assignmentCreate,
     "people.assignment-remove": assignmentRemove,
     "people.class-assignments": classAssignments,

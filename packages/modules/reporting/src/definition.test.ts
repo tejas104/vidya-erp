@@ -15,12 +15,18 @@ describe("reporting module definition (contract conformance)", () => {
     }
   });
 
-  it("audits the one state-changing route (report request)", () => {
-    for (const route of reportingModuleDefinition.routes) {
-      if (STATE_CHANGING_METHODS.has(route.method)) {
-        expect(route.id).toBe("reporting.request");
-        expect(route.audit).toBeDefined();
-      }
+  it("audits every state-changing route", () => {
+    const stateChanging = reportingModuleDefinition.routes.filter((route) =>
+      STATE_CHANGING_METHODS.has(route.method),
+    );
+    // reporting.request (the queued flow) and reporting.class-credentials
+    // (#11 B4's synchronous credential sheet) — both must declare an audit action.
+    expect(stateChanging.map((route) => route.id).sort()).toEqual([
+      "reporting.class-credentials",
+      "reporting.request",
+    ]);
+    for (const route of stateChanging) {
+      expect(route.audit).toBeDefined();
     }
   });
 
@@ -35,7 +41,6 @@ describe("reportParamsSchema", () => {
     expect(reportParamsSchema.safeParse({ kind: "section-attendance", sectionId: "sec" }).success).toBe(true);
     expect(reportParamsSchema.safeParse({ kind: "marks-summary", classId: "cls" }).success).toBe(true);
     expect(reportParamsSchema.safeParse({ kind: "at-risk", level: "department", nodeId: "dep" }).success).toBe(true);
-    expect(reportParamsSchema.safeParse({ kind: "class-credentials", classId: "cls" }).success).toBe(true);
   });
 
   it("rejects wrong shapes and unknown kinds", () => {

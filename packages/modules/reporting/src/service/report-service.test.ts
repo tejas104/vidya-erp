@@ -140,35 +140,6 @@ describe("request → generate → store", () => {
     expect((await repo.get(row.id))?.error).toBe("generation failed");
   });
 
-  it("routes class-credentials through the credential-sheet PDF renderer, end to end", async () => {
-    const read = new FakeAnalyticsReadModel();
-    const repo = new InMemoryReportsRepo();
-    const store = new MemoryStore();
-    const admin = principal("admin-1", { roles: ["admin"] });
-    const service = new ReportService({
-      repo,
-      readModel: read,
-      store,
-      audit: new RecordingAudit(),
-      sources: {
-        classCredentials: async (_caller, classId) => ({
-          access: "ok",
-          data: {
-            classId,
-            className: "FY BSc CS, Section A",
-            rows: [{ rollNo: "1", studentName: "Ravi Kumar", username: "ravi.kumar", temporaryPassword: "Xk9mQ2vLp" }],
-          },
-        }),
-      },
-    });
-    const row = await service.createRequest(admin, { kind: "class-credentials", classId: "cls_1" }, "pdf", YEAR);
-    await service.run(row.id, log);
-    const bytes = store.objects.get(`reports/${row.id}.pdf`)!;
-    expect(bytes.length).toBeGreaterThan(500);
-    expect(new TextDecoder().decode(bytes.slice(0, 5))).toBe("%PDF-");
-    expect((await repo.get(row.id))?.status).toBe("completed");
-  });
-
   it("skips an already-completed report (idempotent re-delivery)", async () => {
     const read = new FakeAnalyticsReadModel();
     read.student = okStudent;

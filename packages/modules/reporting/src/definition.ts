@@ -18,8 +18,6 @@ export const reportParamsSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("grade-card"), studentId: idSchema }),
   // --- exams ---
   z.object({ kind: z.literal("hall-ticket"), studentId: idSchema }),
-  // --- identity (#11 onboarding-import) ---
-  z.object({ kind: z.literal("class-credentials"), classId: idSchema }),
 ]);
 
 const reportViewSchema = z.object({
@@ -31,7 +29,6 @@ const reportViewSchema = z.object({
     "at-risk",
     "grade-card",
     "hall-ticket",
-    "class-credentials",
   ]),
   format: formatSchema,
   academicYear: z.string(),
@@ -49,8 +46,35 @@ const problemSchema = z.object({
 });
 
 const ANY_AUTHENTICATED = { public: false as const, requirement: {} };
+const ADMIN_ONLY = { public: false as const, requirement: { rolesAnyOf: ["admin" as const] } };
 
 const routes: RouteSpec[] = [
+  {
+    id: "reporting.class-credentials",
+    module: MODULE_NAME,
+    method: "POST",
+    path: "/api/v1/reports/class-credentials/{classId}",
+    summary: "Issue logins for a class's students who lack one and return a printable credential sheet (admin)",
+    description:
+      "SYNCHRONOUS, not the queued request/poll/download flow above: the sheet is generated in this request " +
+      "handler and streamed straight back as the response body. It is never written to object storage or any " +
+      "other durable store — there is no reportId, nothing to poll, and no download route for it (#11 D-ruling: " +
+      "a temporary password cannot be re-fetched at job time, so the queued flow structurally cannot produce it, " +
+      "and not persisting it is strictly better security besides). Every student in the class who does not " +
+      "already have a login gets one (identity.issueCredential, active, no force-change — #11 D2); students who " +
+      "already have a login are skipped (their password was never stored, so it cannot be reprinted) and simply " +
+      "do not appear on the sheet. Admin-only, scope-checked against the class's college, audited with the " +
+      "issued count — never the plaintext.",
+    tags: ["reporting"],
+    auth: ADMIN_ONLY,
+    request: { params: z.object({ classId: idSchema }) },
+    audit: { action: "reporting.class-credentials-issued", resourceType: "class" },
+    responses: {
+      200: { description: "The credential sheet, one page", contentType: "application/pdf" },
+      403: { description: "Scope check denied", schema: problemSchema },
+      404: { description: "No such class", schema: problemSchema },
+    },
+  },
   {
     id: "reporting.request",
     module: MODULE_NAME,
