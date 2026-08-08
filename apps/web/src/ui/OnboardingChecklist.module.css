@@ -1,0 +1,25 @@
+.wrap {
+  margin-bottom: var(--space-5);
+}
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-3);
+}
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+.checkbox {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  accent-color: var(--brand);
+}
+.done {
+  color: var(--ink-3);
+  text-decoration: line-through;
+}

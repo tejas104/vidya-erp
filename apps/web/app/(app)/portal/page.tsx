@@ -34,6 +34,7 @@ import { StatTile, Sparkline, SubjectBars, TrendLine } from "@/ui/charts";
 import { formatPaise } from "@/ui/money";
 import { Noticeboard } from "@/ui/Noticeboard";
 import { ReportButton } from "@/ui/ReportButton";
+import { OnboardingChecklist } from "@/ui/OnboardingChecklist";
 import styles from "./page.module.css";
 
 export const dynamic = "force-dynamic";
@@ -186,6 +187,8 @@ export default function PortalPage() {
             : `Admission no. ${me.student.admissionNo} — not enrolled this year.`
         }
       />
+
+      <OnboardingChecklist role="student" />
 
       <section className="stats" aria-label="My figures" style={{ marginBottom: "var(--space-5)" }}>
         <StatTile
@@ -355,7 +358,7 @@ export default function PortalPage() {
         </section>
       ) : null}
 
-      <section className="section" aria-label="Marks by subject">
+      <section id="portal-marks" className="section" aria-label="Marks by subject">
         <div className="section-head">
           <h2>My marks</h2>
           <span className="stat-sub num">{marks.subjects.length} subjects</span>
@@ -548,7 +551,7 @@ export default function PortalPage() {
       <Noticeboard />
 
       {fees !== null ? (
-        <section className="section" aria-label="My fees">
+        <section id="portal-fees" className="section" aria-label="My fees">
           <div className="section-head">
             <h2>My fees</h2>
             <span className="stat-sub num">
@@ -603,7 +606,7 @@ export default function PortalPage() {
         </section>
       ) : null}
 
-      <section className="section" aria-label="Recent sessions">
+      <section id="portal-attendance" className="section" aria-label="Recent sessions">
         <div className="section-head"><h2>Recent attendance</h2></div>
         <AsyncState
           loading={false}

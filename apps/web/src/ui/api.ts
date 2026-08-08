@@ -929,6 +929,16 @@ export const api = {
     put<TopicView>(`/api/v1/syllabus/topics/${encodeURIComponent(topicId)}/coverage`, { taughtOn }),
   mySyllabus: (academicYear: string) =>
     get<MySyllabus>(`/api/v1/syllabus/my?academicYear=${encodeURIComponent(academicYear)}`),
+  // --- identity: single-user read (self, or admin within scope) ---
+  getUser: (userId: string) => get<UserView>(`/api/v1/identity/users/${encodeURIComponent(userId)}`),
+  // --- system: per-caller keyed preferences (#11 task 11). Always scoped to
+  // the caller's own principal server-side — no user id is ever passed. ---
+  prefsGet: <T>(key: string) =>
+    get<{ key: string; value: T; updatedAt: string }>(`/api/v1/system/preferences/${encodeURIComponent(key)}`),
+  prefsSet: <T>(key: string, value: T) =>
+    put<{ key: string; value: T; updatedAt: string }>(`/api/v1/system/preferences/${encodeURIComponent(key)}`, {
+      value,
+    }),
   async login(username: string, password: string): Promise<void> {
     const response = await fetch("/api/v1/identity/auth/login", {
       method: "POST",

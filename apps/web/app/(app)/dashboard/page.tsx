@@ -16,6 +16,7 @@ import { Card, PageHeader } from "@vidya/ui-system";
 import { Noticeboard } from "@/ui/Noticeboard";
 import { AttendanceSlot, MarksSlot, RiskDonut, StatTile } from "@/ui/charts";
 import { focusOf, type Focus } from "@/ui/oversightFocus";
+import { OnboardingChecklist } from "@/ui/OnboardingChecklist";
 
 export const dynamic = "force-dynamic";
 
@@ -189,6 +190,8 @@ export default function DashboardPage() {
           lede="Your day — the class in front of you first. Every figure is drawn only from records you may read."
         />
 
+        <OnboardingChecklist role="teacher" tiles={dashboard.tiles} />
+
         {featured ? (
           <section className="td-cmd td-depth" aria-label="Next class">
             <div className="td-cmd-time">
@@ -334,6 +337,10 @@ export default function DashboardPage() {
         title={`Good day, ${session.displayName.split(" ")[0]}.`}
         lede="Every figure here is drawn only from records you're allowed to read. Rooms outside your scope simply don't appear."
       />
+
+      {session.roles.includes("admin") ? (
+        <OnboardingChecklist role="admin" userId={session.userId} />
+      ) : null}
 
       {/* --- notices --- */}
       <Noticeboard />
