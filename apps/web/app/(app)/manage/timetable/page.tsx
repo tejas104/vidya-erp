@@ -20,6 +20,7 @@ import {
   PageHeader,
   type TableColumn,
 } from "@vidya/ui-system";
+import { HelpButton } from "@/ui/help/HelpButton";
 import styles from "./page.module.css";
 
 export const dynamic = "force-dynamic";
@@ -231,6 +232,7 @@ export default function TimetablePage() {
         title="Weekly timetable"
         lede="A fixed period grid per section. The database refuses double-bookings — a busy teacher, section or room answers with a clear message."
         actions={<Button variant="ghost" onClick={() => setEditingPeriods(true)}>Edit periods</Button>}
+        help={<HelpButton slug="timetable" />}
       />
 
       {periods.length === 0 ? (

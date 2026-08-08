@@ -15,6 +15,7 @@ import {
   PageHeader,
   type TableColumn,
 } from "@vidya/ui-system";
+import { HelpButton } from "@/ui/help/HelpButton";
 import styles from "./page.module.css";
 
 export const dynamic = "force-dynamic";
@@ -197,7 +198,7 @@ export default function CourseworkPage() {
   if (targets.length === 0) {
     return (
       <>
-        <PageHeader eyebrow="Coursework" title="Assignments & study material" />
+        <PageHeader eyebrow="Coursework" title="Assignments & study material" help={<HelpButton slug="coursework" />} />
         <EmptyState title="No subject you teach." body="Coursework is managed by a subject's teacher." />
       </>
     );
@@ -241,6 +242,7 @@ export default function CourseworkPage() {
         eyebrow="Coursework"
         title="Assignments & study material"
         lede="Create assignments, evaluate submissions, and share notes — scoped to the subject you teach."
+        help={<HelpButton slug="coursework" />}
         actions={
           <span className={styles.headerActions}>
             <Button variant="ghost" onClick={() => setUploading(true)}>Upload material</Button>

@@ -16,6 +16,7 @@ import {
   type TableColumn,
 } from "@vidya/ui-system";
 import { AsyncState } from "@/ui/AsyncState";
+import { HelpButton } from "@/ui/help/HelpButton";
 import styles from "./page.module.css";
 
 export const dynamic = "force-dynamic";
@@ -186,6 +187,7 @@ export default function LeavePage() {
         title="Staff leave"
         lede="Apply for leave and track your requests. Approvers see a queue below."
         actions={<Button onClick={() => setApplying(true)}>Apply for leave</Button>}
+        help={<HelpButton slug="leave" />}
       />
 
       {isApprover && pending.length > 0 ? (

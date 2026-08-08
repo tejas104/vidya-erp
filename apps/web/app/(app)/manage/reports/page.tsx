@@ -14,6 +14,7 @@ import {
   useToast, Button, Select, Table, StatusBadge, EmptyState, PageHeader,
   type TableColumn,
 } from "@vidya/ui-system";
+import { HelpButton } from "@/ui/help/HelpButton";
 import styles from "./page.module.css";
 
 export const dynamic = "force-dynamic";
@@ -156,6 +157,7 @@ export default function ReportsPage() {
         title="Reports"
         lede="Generate a report, then download it — every download is re-checked against your scope."
         actions={<Button variant="ghost" onClick={() => void load()}>Refresh</Button>}
+        help={<HelpButton slug="reports" />}
       />
 
       <section className="section" aria-label="Generate a report">

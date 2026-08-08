@@ -14,6 +14,7 @@ import {
 import { Button, PageHeader } from "@vidya/ui-system";
 import { CompareBars, Histogram, RegisterStrip, SubjectBars, TrendLine } from "@/ui/charts";
 import { focusOf, type Focus } from "@/ui/oversightFocus";
+import { HelpButton } from "@/ui/help/HelpButton";
 
 export const dynamic = "force-dynamic";
 
@@ -120,6 +121,7 @@ export default function AnalyticsPage() {
         eyebrow={session.roles.join(" · ")}
         title="Analytics"
         lede="Trends, comparisons and distributions for the areas you oversee — every figure is drawn only from records you're allowed to read."
+        help={<HelpButton slug="analytics" />}
         // Rollups are precomputed, so an admin can force a rebuild after a
         // bulk data change. Lives here (not /dashboard) since it directly
         // affects what this screen shows.

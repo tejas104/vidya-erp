@@ -23,6 +23,7 @@ import {
   PageHeader,
   type TableColumn,
 } from "@vidya/ui-system";
+import { HelpButton } from "@/ui/help/HelpButton";
 import styles from "./page.module.css";
 
 export const dynamic = "force-dynamic";
@@ -186,6 +187,7 @@ export default function ExamsPage() {
         title="The exam timetable"
         lede="Create a series, then schedule each paper — date, time, room. Room clashes with lessons warn but never block."
         actions={<Button onClick={() => setCreatingSeries(true)}>New series</Button>}
+        help={<HelpButton slug="exams" />}
       />
 
       <section className="section" aria-label="Exam series">

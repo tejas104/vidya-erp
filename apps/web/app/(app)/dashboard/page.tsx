@@ -17,6 +17,7 @@ import { Noticeboard } from "@/ui/Noticeboard";
 import { AttendanceSlot, MarksSlot, RiskDonut, StatTile } from "@/ui/charts";
 import { focusOf, type Focus } from "@/ui/oversightFocus";
 import { OnboardingChecklist } from "@/ui/OnboardingChecklist";
+import { HelpButton } from "@/ui/help/HelpButton";
 
 export const dynamic = "force-dynamic";
 
@@ -188,6 +189,7 @@ export default function DashboardPage() {
           eyebrow={session.roles.join(" · ")}
           title={`Good day, ${session.displayName.split(" ")[0]}.`}
           lede="Your day — the class in front of you first. Every figure is drawn only from records you may read."
+          help={<HelpButton slug="dashboard" />}
         />
 
         <OnboardingChecklist role="teacher" tiles={dashboard.tiles} />
@@ -336,6 +338,7 @@ export default function DashboardPage() {
         eyebrow={session.roles.join(" · ")}
         title={`Good day, ${session.displayName.split(" ")[0]}.`}
         lede="Every figure here is drawn only from records you're allowed to read. Rooms outside your scope simply don't appear."
+        help={<HelpButton slug="dashboard" />}
       />
 
       {session.roles.includes("admin") ? (

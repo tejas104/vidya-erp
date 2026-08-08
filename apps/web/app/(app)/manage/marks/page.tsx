@@ -15,6 +15,7 @@ import {
   type TableColumn,
 } from "@vidya/ui-system";
 import { AsyncState } from "@/ui/AsyncState";
+import { HelpButton } from "@/ui/help/HelpButton";
 import styles from "./page.module.css";
 
 export const dynamic = "force-dynamic";
@@ -134,6 +135,7 @@ export default function MarksPage() {
           eyebrow="Marks"
           title="Enter marks"
           lede="Create an assessment for your subject, then enter each student's score."
+          help={<HelpButton slug="marks" />}
         />
         <DeniedState title="No subject you teach." message="Marks are entered by a subject teacher." />
       </>
@@ -159,6 +161,7 @@ export default function MarksPage() {
         eyebrow="Marks"
         title="Enter marks"
         lede="Create an assessment for your subject, then enter each student's score."
+        help={<HelpButton slug="marks" />}
       />
 
       <div className={styles.targetPicker}>

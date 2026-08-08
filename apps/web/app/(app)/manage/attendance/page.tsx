@@ -7,6 +7,7 @@ import { AsyncState } from "@/ui/AsyncState";
 import { Icon } from "@/ui/Icon";
 import { AVATARS, initials } from "@/ui/avatar";
 import { useToast, Button, EmptyState, Input, PageHeader, Select, StatusBadge } from "@vidya/ui-system";
+import { HelpButton } from "@/ui/help/HelpButton";
 import styles from "./page.module.css";
 
 export const dynamic = "force-dynamic";
@@ -101,6 +102,7 @@ export default function AttendancePage() {
             ? `Marking your subject's period (${slot}). Tap a student to mark absent.`
             : "Tap a student to mark absent — everyone starts present. Subject teachers mark their own period; the class teacher any."
         }
+        help={<HelpButton slug="attendance" />}
       />
 
       {sections.length === 0 ? (

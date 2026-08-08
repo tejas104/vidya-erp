@@ -14,6 +14,7 @@ import {
   useToast, Button, Input, Select, Modal, Table, StatusBadge, Tabs, EmptyState, Skeleton, PageHeader,
   type TableColumn,
 } from "@vidya/ui-system";
+import { HelpButton } from "@/ui/help/HelpButton";
 import styles from "./page.module.css";
 
 export const dynamic = "force-dynamic";
@@ -440,6 +441,7 @@ export default function FeesPage() {
         eyebrow={`Fees · ${year}`}
         title="Fee counter"
         lede="Open a section's ledger, take a payment, hand over the receipt."
+        help={<HelpButton slug="fees" />}
       />
 
       <Tabs

@@ -5,6 +5,7 @@ import { useToast, Button, Input, Select, Modal, Table, EmptyState, Skeleton, Pa
 import { AsyncState } from "@/ui/AsyncState";
 import { AVATARS, initials } from "@/ui/avatar";
 import { StudentSlideOver, type DrawerStudent } from "@/ui/StudentSlideOver";
+import { HelpButton } from "@/ui/help/HelpButton";
 import styles from "./page.module.css";
 
 export const dynamic = "force-dynamic";
@@ -274,6 +275,7 @@ export default function StudentsPage() {
         title="Student records"
         lede="Browse a section's roster; add, transfer or deactivate students. There is no global list — students live in sections."
         actions={<Button onClick={() => setAdding(true)} disabled={options.length === 0}>Add student</Button>}
+        help={<HelpButton slug="students" />}
       />
 
       {options.length === 0 ? (

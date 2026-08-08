@@ -16,6 +16,7 @@ import {
   type TtEntry,
   type TtPeriod,
 } from "@/ui/api";
+import { HelpButton } from "@/ui/help/HelpButton";
 import {
   useToast,
   Button,
@@ -186,6 +187,7 @@ export default function PortalPage() {
             ? `${me.enrollment.className} · Section ${me.enrollment.sectionName} · AY ${me.enrollment.academicYear} · ${me.student.admissionNo}`
             : `Admission no. ${me.student.admissionNo} — not enrolled this year.`
         }
+        help={<HelpButton slug="portal" />}
       />
 
       <OnboardingChecklist role="student" />

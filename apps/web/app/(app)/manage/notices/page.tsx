@@ -7,6 +7,7 @@ import {
   useToast, Button, Input, Select, Modal, Table, StatusBadge, EmptyState, Skeleton, PageHeader,
   type TableColumn,
 } from "@vidya/ui-system";
+import { HelpButton } from "@/ui/help/HelpButton";
 import styles from "./page.module.css";
 
 export const dynamic = "force-dynamic";
@@ -146,6 +147,7 @@ export default function NoticesPage() {
         title="The noticeboard"
         lede="Publish to the whole college, the staff room, or one department or class — readers see only what's addressed to them."
         actions={<Button onClick={() => setComposing(true)}>New notice</Button>}
+        help={<HelpButton slug="notices" />}
       />
 
       <section className="section" aria-label="All notices">

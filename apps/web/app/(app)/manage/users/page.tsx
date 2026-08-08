@@ -22,6 +22,7 @@ import {
   type TableColumn,
 } from "@vidya/ui-system";
 import { AsyncState } from "@/ui/AsyncState";
+import { HelpButton } from "@/ui/help/HelpButton";
 import styles from "./page.module.css";
 
 export const dynamic = "force-dynamic";
@@ -298,6 +299,7 @@ export default function UsersPage() {
             <Button onClick={() => setCreating(true)}>New user</Button>
           </span>
         }
+        help={<HelpButton slug="users" />}
       />
 
       <AsyncState loading={false} error={false} isEmpty={users.length === 0} empty={<EmptyState title="No users yet." />}>
