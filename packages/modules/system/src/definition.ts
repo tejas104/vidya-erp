@@ -57,6 +57,68 @@ const readyRoute: RouteSpec = {
   },
 };
 
+const ANY_AUTHENTICATED = { public: false as const, requirement: {} };
+
+const problemSchema = z.object({
+  type: z.string(),
+  title: z.string(),
+  status: z.number(),
+  requestId: z.string(),
+});
+
+/** Any JSON value — the pipeline has already run the body through
+ * JSON.parse, so the shape itself is guaranteed valid JSON; this only needs
+ * to reject a missing "value" field (openapi generation can't introspect a
+ * recursive z.lazy() union, so this stays a plain "unknown, but present"). */
+const jsonValueSchema = z.unknown().refine((value) => value !== undefined, {
+  message: "value is required",
+});
+
+export const preferenceKeySchema = z.string().trim().min(1).max(128);
+
+export const preferenceViewSchema = z.object({
+  key: z.string(),
+  value: jsonValueSchema,
+  updatedAt: z.string(),
+});
+
+const preferenceGetRoute: RouteSpec = {
+  id: "system.preference-get",
+  module: MODULE_NAME,
+  method: "GET",
+  path: "/api/v1/system/preferences/{key}",
+  summary: "Read one of the caller's own preferences",
+  description:
+    "Always scoped to the caller's own principal — the user id is never taken from the request. 404 if the caller has never set this key.",
+  tags: ["system-preferences"],
+  auth: ANY_AUTHENTICATED,
+  request: { params: z.object({ key: preferenceKeySchema }) },
+  responses: {
+    200: { description: "The preference", schema: preferenceViewSchema },
+    404: { description: "No such preference for this caller", schema: problemSchema },
+  },
+};
+
+const preferenceSetRoute: RouteSpec = {
+  id: "system.preference-set",
+  module: MODULE_NAME,
+  method: "PUT",
+  path: "/api/v1/system/preferences/{key}",
+  summary: "Write one of the caller's own preferences (upsert)",
+  description:
+    "Always scoped to the caller's own principal — the user id is never taken from the request. Creates the key on first write, overwrites it thereafter.",
+  tags: ["system-preferences"],
+  auth: ANY_AUTHENTICATED,
+  request: {
+    params: z.object({ key: preferenceKeySchema }),
+    body: z.object({ value: jsonValueSchema }),
+  },
+  audit: { action: "system.preference-set", resourceType: "user-preference" },
+  responses: {
+    200: { description: "Stored", schema: preferenceViewSchema },
+  },
+};
+
 const metricsRoute: RouteSpec = {
   id: "system.metrics",
   module: MODULE_NAME,
@@ -105,6 +167,6 @@ export const systemModuleDefinition: ModuleDefinition = {
   name: MODULE_NAME,
   tablePrefix: TABLE_PREFIX,
   migrationsDir: "migrations",
-  routes: [healthRoute, readyRoute, metricsRoute],
+  routes: [healthRoute, readyRoute, metricsRoute, preferenceGetRoute, preferenceSetRoute],
   jobs: [heartbeatJob],
 };

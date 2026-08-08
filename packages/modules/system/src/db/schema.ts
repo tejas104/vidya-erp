@@ -3,8 +3,10 @@ import {
   index,
   jsonb,
   pgTable,
+  primaryKey,
   text,
   timestamp,
+  uuid,
 } from "drizzle-orm/pg-core";
 
 /**
@@ -36,3 +38,23 @@ export const sysAuditLog = pgTable(
 );
 
 export type SysAuditLogRow = typeof sysAuditLog.$inferSelect;
+
+/**
+ * Per-user keyed preference store (#11 task 12: onboarding checklist
+ * dismissal / manual check-off state rides on this). Reads and writes are
+ * ALWAYS scoped to the caller's own principal.id at the handler layer — this
+ * table carries no other notion of ownership, so there is nothing to
+ * scope-check beyond that (see api/handlers.ts).
+ */
+export const sysUserPreferences = pgTable(
+  "sys_user_preferences",
+  {
+    userId: uuid("user_id").notNull(),
+    key: text("key").notNull(),
+    value: jsonb("value").notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [primaryKey({ columns: [table.userId, table.key] })],
+);
+
+export type SysUserPreferenceRow = typeof sysUserPreferences.$inferSelect;

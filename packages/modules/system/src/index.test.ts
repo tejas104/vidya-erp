@@ -22,6 +22,8 @@ describe("createSystemModule", () => {
     expect(Object.keys(module.handlers).sort()).toEqual([
       "system.health",
       "system.metrics",
+      "system.preference-get",
+      "system.preference-set",
       "system.ready",
     ]);
     expect(Object.keys(module.jobProcessors)).toEqual(["audit-heartbeat"]);

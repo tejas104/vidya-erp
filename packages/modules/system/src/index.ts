@@ -26,6 +26,7 @@ import {
   SystemAuditLogger,
   type AuditLogRecord,
 } from "./service/audit-writer";
+import { createPreferencesStore } from "./service/preferences";
 import { createHeartbeatProcessor } from "./jobs/heartbeat";
 import {
   HEARTBEAT_JOB_NAME,
@@ -79,6 +80,7 @@ export function createSystemModule(deps: SystemModuleDeps): RuntimeModule<System
       serviceVersion: deps.serviceVersion,
       isDraining: deps.isDraining,
       infrastructureChecks: deps.infrastructureChecks,
+      preferences: createPreferencesStore(deps.db),
     }),
     jobProcessors: {
       [HEARTBEAT_JOB_NAME]: createHeartbeatProcessor(audit),

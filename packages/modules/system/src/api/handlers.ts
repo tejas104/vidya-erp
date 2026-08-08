@@ -1,4 +1,5 @@
-import type { Metrics, ReadinessCheck, RouteHandler } from "@vidya/platform";
+import type { Metrics, Principal, ReadinessCheck, RouteHandler } from "@vidya/platform";
+import type { PreferencesStore } from "../service/preferences";
 
 export interface SystemHandlerDeps {
   readonly metrics: Metrics;
@@ -7,6 +8,8 @@ export interface SystemHandlerDeps {
   readonly isDraining: () => boolean;
   /** Postgres/Redis reachability checks, injected by the composition root. */
   readonly infrastructureChecks: readonly ReadinessCheck[];
+  /** Per-user keyed preference store (#11 task 11). */
+  readonly preferences: PreferencesStore;
 }
 
 const CHECK_TIMEOUT_MS = 2_000;
@@ -74,9 +77,41 @@ export function createSystemHandlers(deps: SystemHandlerDeps): Record<string, Ro
     contentType: deps.metrics.registry.contentType,
   });
 
+  // Auth is ANY_AUTHENTICATED, so defineRoute has already guaranteed a
+  // non-null principal by the time either handler below runs.
+
+  const preferenceGet: RouteHandler = async (ctx) => {
+    const principal = ctx.principal as Principal;
+    const params = ctx.request.params as { key: string };
+    // Scoped to the caller's own id ONLY — never a request-supplied one.
+    const row = await deps.preferences.get(principal.id, params.key);
+    if (row === null) {
+      return { status: 404, body: { message: "no such preference" } };
+    }
+    return {
+      status: 200,
+      body: { key: row.key, value: row.value, updatedAt: row.updatedAt.toISOString() },
+    };
+  };
+
+  const preferenceSet: RouteHandler = async (ctx) => {
+    const principal = ctx.principal as Principal;
+    const params = ctx.request.params as { key: string };
+    const body = ctx.request.body as { value: unknown };
+    // Scoped to the caller's own id ONLY — never a request-supplied one.
+    const row = await deps.preferences.set(principal.id, params.key, body.value);
+    return {
+      status: 200,
+      body: { key: row.key, value: row.value, updatedAt: row.updatedAt.toISOString() },
+      audit: { resourceId: row.key },
+    };
+  };
+
   return {
     "system.health": health,
     "system.ready": ready,
     "system.metrics": metrics,
+    "system.preference-get": preferenceGet,
+    "system.preference-set": preferenceSet,
   };
 }
