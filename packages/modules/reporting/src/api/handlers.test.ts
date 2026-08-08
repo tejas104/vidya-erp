@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { pino } from "pino";
 import type { OrgPath, Principal, RouteContext, ScopeChecker, ScopeDecision } from "@vidya/platform";
 import type { PeopleDirectory } from "@vidya/module-people";
@@ -86,7 +86,10 @@ const okStudent: StudentPerformanceReport = {
   overallPct: 70,
 };
 
-function makeHarness(read: FakeAnalyticsReadModel) {
+function makeHarness(
+  read: FakeAnalyticsReadModel,
+  opts: { linkStudentIdentity?: (studentId: string, identityUserId: string) => Promise<boolean> } = {},
+) {
   const service = new ReportService({
     repo: new InMemoryReportsRepo(),
     readModel: read,
@@ -105,10 +108,12 @@ function makeHarness(read: FakeAnalyticsReadModel) {
     },
     scopeChecker,
     peopleDirectory,
-    linkStudentIdentity: async (studentId, identityUserId) => {
-      linked.push({ studentId, identityUserId });
-      return true;
-    },
+    linkStudentIdentity:
+      opts.linkStudentIdentity ??
+      (async (studentId, identityUserId) => {
+        linked.push({ studentId, identityUserId });
+        return true;
+      }),
     identity,
   });
   return { handlers, service, enqueued, scopeChecker, peopleDirectory, identity, linked };
@@ -230,6 +235,34 @@ describe("class-credentials handler (#11 B4, synchronous)", () => {
     const details = JSON.stringify(result.audit?.details ?? {});
     expect(details).not.toContain("Fak3Pass");
     expect(result.audit?.details).toMatchObject({ issuedCount: 1, rosterSize: 2 });
+  });
+
+  it("skips the row and warns, but still succeeds, when linking a newly-issued identity fails", async () => {
+    const read = new FakeAnalyticsReadModel();
+    const failedLinks: { studentId: string; identityUserId: string }[] = [];
+    const { handlers, identity } = makeHarness(read, {
+      linkStudentIdentity: async (studentId, identityUserId) => {
+        failedLinks.push({ studentId, identityUserId });
+        return false;
+      },
+    });
+    const warnSpy = vi.spyOn(logger, "warn");
+    const result = await handlers["reporting.class-credentials"]!(
+      ctx(principal("admin-1", { roles: ["admin"] }), { params: { classId: CLASS_ID } }),
+    );
+
+    expect(result.status).toBe(200);
+    // The account was still issued upstream — that's the orphan risk — but
+    // because linking it back to the student failed, no row for it is
+    // printed and the count does not claim it as issued.
+    expect(identity.calls).toHaveLength(1);
+    expect(failedLinks).toEqual([{ studentId: "stu_1", identityUserId: "idn_fake_1" }]);
+    expect(result.audit?.details).toMatchObject({ issuedCount: 0, rosterSize: 2 });
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ studentId: "stu_1", identityUserId: "idn_fake_1" }),
+      expect.stringContaining("linking"),
+    );
+    warnSpy.mockRestore();
   });
 
   it("403s when the scope check denies", async () => {

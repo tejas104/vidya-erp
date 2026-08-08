@@ -11,6 +11,8 @@ import { OrgService } from "../service/org-service";
 import { PeopleService } from "../service/people-service";
 import { AssignmentsService } from "../service/assignments-service";
 import { ImportService, type CredentialIssuer } from "../service/import-service";
+import { UsernameTakenError } from "@vidya/module-identity";
+import { usernameFromCode } from "../ids";
 import {
   FakeDerivedGrants,
   InMemoryImportsRepo,
@@ -44,14 +46,14 @@ function fakeIdentity(): CredentialIssuer {
   };
 }
 
-async function makeHarness() {
+async function makeHarness(opts: { identity?: CredentialIssuer } = {}) {
   const orgRepo = new InMemoryOrgRepo();
   const peopleRepo = new InMemoryPeopleRepo();
   const importsRepo = new InMemoryImportsRepo();
   const audit = new RecordingAudit();
   const scopeChecker = new StubScopeChecker();
   const identityGrants = new FakeDerivedGrants();
-  const identity = fakeIdentity();
+  const identity = opts.identity ?? fakeIdentity();
   const org = await seedOrg(orgRepo);
   const enqueued: unknown[] = [];
   const deps: PeopleHandlerDeps = {
@@ -82,6 +84,7 @@ async function makeHarness() {
     scopeChecker,
     org,
     enqueued,
+    identity,
   };
 }
 
@@ -107,6 +110,14 @@ function ctx(input: { body?: unknown; params?: unknown; query?: unknown } = {}):
       headers: new Headers(),
     },
   };
+}
+
+async function makeTeacher(harness: Awaited<ReturnType<typeof makeHarness>>) {
+  const created = await harness.handlers["people.teacher-create"]!(
+    ctx({ body: { collegeId: harness.org.college.id, staffNo: "T1", fullName: "Asha" } }),
+  );
+  expect(created.status).toBe(201);
+  return (created.body as { id: string }).id;
 }
 
 describe("scope-check chokepoint usage", () => {
@@ -370,14 +381,6 @@ describe("student handlers", () => {
 });
 
 describe("teacher & assignment handlers", () => {
-  async function makeTeacher(harness: Awaited<ReturnType<typeof makeHarness>>) {
-    const created = await harness.handlers["people.teacher-create"]!(
-      ctx({ body: { collegeId: harness.org.college.id, staffNo: "T1", fullName: "Asha" } }),
-    );
-    expect(created.status).toBe(201);
-    return (created.body as { id: string }).id;
-  }
-
   it("creates teachers (409 on duplicates, 404 unknown college) and reads them", async () => {
     const harness = await makeHarness();
     const teacherId = await makeTeacher(harness);
@@ -551,6 +554,77 @@ describe("teacher & assignment handlers", () => {
         )
       ).status,
     ).toBe(404);
+  });
+});
+
+describe("teacher-issue-credential handler (#11 B4, mirrors teacher-link-identity)", () => {
+  it("201s a teacher without a login: issues credentials, links identity, syncs grants, and never audits the plaintext password", async () => {
+    const harness = await makeHarness();
+    const teacherId = await makeTeacher(harness);
+
+    const result = await harness.handlers["people.teacher-issue-credential"]!(
+      ctx({ params: { teacherId } }),
+    );
+
+    expect(result.status).toBe(201);
+    const body = result.body as {
+      teacher: { id: string; identityUserId: string | null };
+      username: string;
+      temporaryPassword: string;
+      grants: unknown;
+    };
+    expect(body.teacher.id).toBe(teacherId);
+    expect(body.teacher.identityUserId).toBe("idn_fake_1");
+    expect(body.username).toBe(usernameFromCode("T1"));
+    expect(body.temporaryPassword).toBe("Fak3Pass!123");
+
+    // The identity link actually landed on the teacher row, not just the response.
+    const stored = await harness.peopleRepo.getTeacher(teacherId);
+    expect(stored?.identityUserId).toBe("idn_fake_1");
+
+    // Never the plaintext temporary password in the audit trail.
+    expect(JSON.stringify(result.audit?.details ?? {})).not.toContain("Fak3Pass");
+  });
+
+  it("404s for an unknown teacher", async () => {
+    const harness = await makeHarness();
+    const result = await harness.handlers["people.teacher-issue-credential"]!(
+      ctx({ params: { teacherId: "tch_ghost" } }),
+    );
+    expect(result.status).toBe(404);
+  });
+
+  it("409s when the teacher already has a login", async () => {
+    const harness = await makeHarness();
+    const teacherId = await makeTeacher(harness);
+    await harness.handlers["people.teacher-link-identity"]!(
+      ctx({ params: { teacherId }, body: { identityUserId: "user-9" } }),
+    );
+
+    const result = await harness.handlers["people.teacher-issue-credential"]!(
+      ctx({ params: { teacherId } }),
+    );
+    expect(result.status).toBe(409);
+  });
+
+  it("409s and maps UsernameTakenError when the derived username collides", async () => {
+    const failingIdentity: CredentialIssuer = {
+      issueCredential: async (input) => {
+        throw new UsernameTakenError(input.username);
+      },
+    };
+    const harness = await makeHarness({ identity: failingIdentity });
+    const teacherId = await makeTeacher(harness);
+
+    const result = await harness.handlers["people.teacher-issue-credential"]!(
+      ctx({ params: { teacherId } }),
+    );
+    expect(result.status).toBe(409);
+    expect((result.body as { message: string }).message).toContain("already taken");
+
+    // No partial state: the teacher was never linked.
+    const stored = await harness.peopleRepo.getTeacher(teacherId);
+    expect(stored?.identityUserId).toBeNull();
   });
 });
 

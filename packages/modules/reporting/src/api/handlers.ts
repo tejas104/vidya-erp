@@ -191,7 +191,14 @@ export function createReportingHandlers(deps: ReportingHandlerDeps): Record<stri
           roles: ["student"],
           createdBy: principal.id,
         });
-        await deps.linkStudentIdentity(student.studentId, issued.userId);
+        const linked = await deps.linkStudentIdentity(student.studentId, issued.userId);
+        if (!linked) {
+          ctx.logger.warn(
+            { studentId: student.studentId, identityUserId: issued.userId },
+            "class-credentials: identity issued but linking to student failed — skipping row so no orphaned account is printed",
+          );
+          continue;
+        }
         rows.push([student.admissionNo, student.fullName, issued.username, issued.temporaryPassword]);
         issuedCount += 1;
       } catch (error) {
