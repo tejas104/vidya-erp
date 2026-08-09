@@ -45,7 +45,9 @@ const AUTO_IDS: Record<ChecklistRole, ReadonlySet<string>> = {
   student: new Set(),
 };
 
-const PREF_KEY = "onboarding";
+function prefKeyFor(role: ChecklistRole): string {
+  return `onboarding:${role}`;
+}
 
 interface StoredPrefs {
   dismissed?: boolean;
@@ -92,7 +94,7 @@ export function OnboardingChecklist({ role, userId, tiles }: OnboardingChecklist
     let alive = true;
     setLoad({ status: "loading" });
     api
-      .prefsGet<StoredPrefs>(PREF_KEY)
+      .prefsGet<StoredPrefs>(prefKeyFor(role))
       .then((row) => {
         if (!alive) return;
         setLoad({ status: "ready", dismissed: row.value.dismissed ?? false, manual: row.value.checked ?? {} });
@@ -109,7 +111,7 @@ export function OnboardingChecklist({ role, userId, tiles }: OnboardingChecklist
     return () => {
       alive = false;
     };
-  }, [reloadTick]);
+  }, [reloadTick, role]);
 
   useEffect(() => {
     let alive = true;
@@ -166,7 +168,7 @@ export function OnboardingChecklist({ role, userId, tiles }: OnboardingChecklist
     setLoad((prev) => {
       if (prev.status !== "ready") return prev;
       const nextManual = { ...prev.manual, [id]: !prev.manual[id] };
-      void api.prefsSet(PREF_KEY, { dismissed: prev.dismissed, checked: nextManual }).catch(() => undefined);
+      void api.prefsSet(prefKeyFor(role), { dismissed: prev.dismissed, checked: nextManual }).catch(() => undefined);
       return { ...prev, manual: nextManual };
     });
   }
@@ -174,7 +176,7 @@ export function OnboardingChecklist({ role, userId, tiles }: OnboardingChecklist
   function dismiss() {
     setLoad((prev) => {
       if (prev.status !== "ready") return prev;
-      void api.prefsSet(PREF_KEY, { dismissed: true, checked: prev.manual }).catch(() => undefined);
+      void api.prefsSet(prefKeyFor(role), { dismissed: true, checked: prev.manual }).catch(() => undefined);
       return { ...prev, dismissed: true };
     });
   }

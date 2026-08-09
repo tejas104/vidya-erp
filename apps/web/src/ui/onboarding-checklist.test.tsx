@@ -180,7 +180,7 @@ describe("OnboardingChecklist — persistence and dismissal", () => {
     const box = await screen.findByRole("checkbox", { name: "View your fees" });
     fireEvent.click(box);
     await waitFor(() => expect(box).toBeChecked());
-    expect(api.prefsSet).toHaveBeenCalledWith("onboarding", { dismissed: false, checked: { fees: true } });
+    expect(api.prefsSet).toHaveBeenCalledWith("onboarding:student", { dismissed: false, checked: { fees: true } });
   });
 
   it("Dismiss hides the card and persists the flag, reachable via a keyboard-operable button", async () => {
@@ -189,7 +189,7 @@ describe("OnboardingChecklist — persistence and dismissal", () => {
     const dismissBtn = screen.getByRole("button", { name: "Dismiss" });
     fireEvent.click(dismissBtn);
     await waitFor(() => expect(screen.queryByText("Get started")).not.toBeInTheDocument());
-    expect(api.prefsSet).toHaveBeenCalledWith("onboarding", { dismissed: true, checked: {} });
+    expect(api.prefsSet).toHaveBeenCalledWith("onboarding:student", { dismissed: true, checked: {} });
   });
 
   it("hides itself once every item is already checked, without needing an explicit dismiss", async () => {
