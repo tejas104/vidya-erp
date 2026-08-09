@@ -98,7 +98,13 @@ export class UsersService {
     };
   }
 
-  /** New accounts start in must_reset: the temporary password cannot log in. */
+  /**
+   * New accounts start in must_reset by default: the temporary password
+   * cannot log in. `status` lets a caller land the account in a different
+   * state in the same write — e.g. CredentialService issuing a login that
+   * must be usable immediately (#11 B2/B4) skips a second Argon2 hash this
+   * way instead of creating must_reset then re-hashing via adminSetPassword.
+   */
   async createUser(input: {
     username: string;
     displayName: string;
@@ -106,13 +112,14 @@ export class UsersService {
     temporaryPassword: string;
     roles: readonly Role[];
     createdBy: string;
+    status?: "active" | "must_reset";
   }): Promise<UserView> {
     const passwordHash = await this.deps.hasher.hash(input.temporaryPassword);
     const record = await this.deps.repo.create({
       username: input.username,
       displayName: input.displayName,
       passwordHash,
-      status: "must_reset",
+      status: input.status ?? "must_reset",
       collegeId: input.collegeId,
       roles: input.roles,
       createdBy: input.createdBy,

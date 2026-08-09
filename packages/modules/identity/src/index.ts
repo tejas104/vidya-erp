@@ -173,7 +173,7 @@ export function createIdentityModule(deps: IdentityModuleDeps): RuntimeModule<Id
     resetTokenTtlMinutes: deps.config.resetTokenTtlMinutes,
     ...(deps.externalProvider !== undefined ? { externalProvider: deps.externalProvider } : {}),
   });
-  const credentials = new CredentialService({ users, auth });
+  const credentials = new CredentialService({ users });
 
   const cookiePolicy = {
     name: deps.config.session.cookieName,

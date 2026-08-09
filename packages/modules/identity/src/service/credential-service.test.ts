@@ -55,7 +55,7 @@ function makeService() {
     resetThrottle: new FailureThrottle(store, { maxAttempts: 10, windowMinutes: 15 }, "reset"),
     resetTokenTtlMinutes: 30,
   });
-  const service = new CredentialService({ users, auth });
+  const service = new CredentialService({ users });
   return { service, repo, hasher, sessions, audit, auth };
 }
 
