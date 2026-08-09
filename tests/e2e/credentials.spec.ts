@@ -73,9 +73,10 @@ test.describe("per-class credential sheet journey (assignment #11 task B4)", () 
     const admin = await apiSession(baseURL!, "admin");
     const ids = await discover(admin);
 
-    // A student with no login yet, created directly (not through
-    // import-confirm, which auto-issues on creation — see import-service.ts)
-    // so the class-credentials endpoint below has a real row to issue.
+    // A student with no login yet — every student starts this way now that
+    // import only creates people (see import-service.ts); this one is
+    // created directly via the API for a minimal fixture the
+    // class-credentials endpoint below has a real row to issue.
     // Lowercase-alnum admission number so usernameFromCode's cleanup
     // (lowercase + strip to [a-z0-9._@-]) is a no-op: the derived username
     // IS the admission number, which is what makes this student's row

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { pino } from "pino";
-import { ImportService, type CredentialIssuer } from "./import-service";
+import { ImportService } from "./import-service";
 import { UnknownReferenceError } from "./people-service";
 import {
   InMemoryImportsRepo,
@@ -13,20 +13,7 @@ import {
 
 const log = pino({ level: "silent" });
 
-/** Always succeeds — the golden-path harness. #11 B4's own describe block
- *  below exercises a failing issuer separately. */
-function fakeIdentity(): CredentialIssuer & { issued: { username: string }[] } {
-  const issued: { username: string }[] = [];
-  return {
-    issued,
-    issueCredential: async (input) => {
-      issued.push({ username: input.username });
-      return { userId: `idn_${input.username}`, username: input.username, temporaryPassword: "Fak3Pass!123" };
-    },
-  };
-}
-
-async function makeHarness(identity: CredentialIssuer = fakeIdentity()) {
+async function makeHarness() {
   const orgRepo = new InMemoryOrgRepo();
   const people = new InMemoryPeopleRepo();
   const imports = new InMemoryImportsRepo();
@@ -40,7 +27,6 @@ async function makeHarness(identity: CredentialIssuer = fakeIdentity()) {
     orgRepo,
     store,
     audit,
-    identity,
     onFinished: (kind, status) => finished.push(`${kind}:${status}`),
   });
   return { service, orgRepo, people, imports, store, audit, org, finished };
@@ -110,15 +96,17 @@ describe("student imports", () => {
     const ravi = await people.findStudentByAdmissionNo(org.college.id, "A002");
     expect(await people.latestActiveEnrollment(ravi!.id)).toBeNull();
 
-    // #11 B4: both students lacked a login and got one during confirm.
-    expect(meera?.identityUserId).toBe("idn_a001");
-    expect(ravi?.identityUserId).toBe("idn_a002");
+    // Import creates people, not logins (fix wave, #11 B4 post-review): a
+    // freshly imported student has no identity account yet — the per-class
+    // credential sheet is the only path that issues one.
+    expect(meera?.identityUserId).toBeNull();
+    expect(ravi?.identityUserId).toBeNull();
 
     expect(audit.events[0]).toMatchObject({
       action: "people.import-completed",
       actorType: "user",
       actorId: "admin-1",
-      details: expect.objectContaining({ okRows: 2, dryRun: false, credentialsIssued: 2 }),
+      details: expect.objectContaining({ okRows: 2, dryRun: false }),
     });
     expect(finished).toEqual(["students:completed"]);
   });
@@ -250,56 +238,6 @@ describe("student imports", () => {
     await service.run(row.id, log);
     await service.run(row.id, log);
     expect(people.students.size).toBe(2);
-  });
-});
-
-describe("#11 B4: credential issuance during import-confirm", () => {
-  it("issues nothing on a dry run — nothing was created to issue for", async () => {
-    const identity = fakeIdentity();
-    const { service, imports, org } = await makeHarness(identity);
-    const row = await service.createImport({
-      kind: "students",
-      collegeId: org.college.id,
-      academicYear: "2026-27",
-      csv: studentsCsv(org),
-      dryRun: true,
-      requestedBy: "admin-1",
-    });
-    await service.run(row.id, log);
-    expect(identity.issued).toHaveLength(0);
-    // studentsCsv's A002 has no enrollment columns, so it carries the
-    // pre-existing "would be created unassigned" dry-run warning regardless
-    // of credentials — that warning is orthogonal to issuance, not proof
-    // issuance ran. Nothing issuance-related warns on a dry run.
-    expect((await imports.get(row.id))?.warningRows).toBe(1);
-  });
-
-  it("a credential-issuance failure warns the row but leaves it OK, not an error", async () => {
-    const failing: CredentialIssuer = {
-      issueCredential: async () => {
-        throw new Error("username already taken");
-      },
-    };
-    const { service, people, imports, org } = await makeHarness(failing);
-    const row = await service.createImport({
-      kind: "students",
-      collegeId: org.college.id,
-      academicYear: "2026-27",
-      csv: studentsCsv(org),
-      dryRun: false,
-      requestedBy: "admin-1",
-    });
-    await service.run(row.id, log);
-    const state = await imports.get(row.id);
-    // The students still exist — a login is a bonus a row can live without.
-    // 3 warnings, not 2: both rows warn "credential issuance failed", PLUS
-    // A002's pre-existing "would be created unassigned" warning (no
-    // enrollment columns) — unrelated to credentials, always there for this
-    // fixture.
-    expect(state).toMatchObject({ okRows: 2, errorRows: 0, warningRows: 3 });
-    expect(JSON.stringify(state?.warnings)).toContain("credential issuance failed");
-    const meera = await people.findStudentByAdmissionNo(org.college.id, "A001");
-    expect(meera?.identityUserId).toBeNull();
   });
 });
 

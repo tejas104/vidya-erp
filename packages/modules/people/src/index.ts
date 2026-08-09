@@ -65,7 +65,7 @@ export interface PeopleModuleDeps {
   readonly scopeChecker: ScopeChecker;
   /** Identity's derived-grant surface (ADR-0015). */
   readonly identityGrants: DerivedGrantsApi;
-  /** Identity's credential issuance (#11 B4: import-confirm auto-issue, per-staff action). */
+  /** Identity's credential issuance (#11 B4: per-staff "issue login" action). */
   readonly identity: CredentialIssuer;
   readonly storage: { readonly client: ObjectStorageClient; readonly bucket: string };
   /** Enqueues the bulk-import job on the people queue (composition provides it). */
@@ -186,7 +186,6 @@ export function createPeopleModule(deps: PeopleModuleDeps): RuntimeModule<People
       getText: (key) => getObjectText(deps.storage.client, deps.storage.bucket, key),
     },
     audit: deps.audit,
-    identity: deps.identity,
     onFinished: (kind, status) => importsTotal.inc({ kind, status }),
   });
 

@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { inflateSync } from "node:zlib";
 import { expect, test, type APIRequestContext } from "@playwright/test";
 import { YEAR, apiSession, browserLogin } from "./support/fixtures";
 
@@ -18,6 +19,16 @@ import { YEAR, apiSession, browserLogin } from "./support/fixtures";
  * already exist from run 1 and legitimately reject as duplicates). A
  * run-unique admission-number prefix keeps every execution independent —
  * the same trick fast-path.spec.ts uses for its attendance slot (RUN_SLOT).
+ *
+ * The journey continues past "students exist" into the import->sheet->login
+ * path (fix wave, post-review): import only creates people, never logins —
+ * the per-class credential sheet is the only path that issues one, so this
+ * spec generates that sheet for the imported class and proves the just-
+ * imported students actually get rows on it, then logs in as one of them.
+ * That assertion is what would have caught the real bug: import auto-issued
+ * a login AND linked identityUserId while throwing the plaintext away, which
+ * made every freshly imported student look "already has a login" to the
+ * sheet's filter — the sheet came back empty for an entire class.
  */
 
 const runId = randomUUID().slice(0, 8);
@@ -27,6 +38,7 @@ interface TreeSection {
   name: string;
 }
 interface TreeClass {
+  id: string;
   code: string;
   sections: TreeSection[];
 }
@@ -40,6 +52,7 @@ interface Tree {
 
 interface ImportTarget {
   collegeId: string;
+  classId: string;
   sectionId: string;
   departmentCode: string;
   classCode: string;
@@ -61,7 +74,57 @@ async function importTarget(admin: APIRequestContext): Promise<ImportTarget> {
   const dept = tree.departments.find((d) => d.code === "CSE") ?? tree.departments[0]!;
   const klass = dept.classes.find((c) => c.code === "FYCS") ?? dept.classes[0]!;
   const section = klass.sections[0]!;
-  return { collegeId, sectionId: section.id, departmentCode: dept.code, classCode: klass.code, sectionName: section.name };
+  return {
+    collegeId,
+    classId: klass.id,
+    sectionId: section.id,
+    departmentCode: dept.code,
+    classCode: klass.code,
+    sectionName: section.name,
+  };
+}
+
+/**
+ * The class-credentials sheet is a real PDF, never persisted anywhere, so a
+ * freshly issued plaintext temporary password only ever exists in this
+ * response body — parsed straight out of the PDF bytes with node:zlib alone
+ * (ADR-0009: no new PDF-parsing dependency). Duplicated from
+ * credentials.spec.ts rather than imported: an e2e spec talks to the app
+ * over HTTP, never into another spec file's internals.
+ */
+function pdfText(buf: Buffer): string {
+  const raw = buf.toString("latin1");
+  const streamsByObjNum = new Map<number, string>();
+  const pageContentRefs: number[] = [];
+  const objectRe = /(\d+) 0 obj\r?\n((?:(?!endobj)[\s\S])*?)endobj/g;
+  for (const m of raw.matchAll(objectRe)) {
+    const objNum = Number(m[1]);
+    const body = m[2]!;
+    const streamMatch = body.match(/stream\r?\n([\s\S]*?)\r?\nendstream/);
+    if (streamMatch !== null) {
+      try {
+        streamsByObjNum.set(objNum, inflateSync(Buffer.from(streamMatch[1]!, "latin1")).toString("latin1"));
+      } catch {
+        // Non-Flate stream (e.g. an embedded font) — irrelevant to page text.
+      }
+    }
+    if (/\/Type \/Page\b/.test(body) && !/\/Type \/Pages\b/.test(body)) {
+      const contentsMatch = body.match(/\/Contents (\d+) 0 R/);
+      if (contentsMatch !== null) pageContentRefs.push(Number(contentsMatch[1]));
+    }
+  }
+  const decodeHexShowOps = (streamText: string): string => {
+    const hexTokens = streamText.match(/<([0-9A-Fa-f]+)>/g) ?? [];
+    let out = "";
+    for (const token of hexTokens) {
+      const hex = token.slice(1, -1);
+      for (let i = 0; i + 1 < hex.length; i += 2) {
+        out += String.fromCharCode(parseInt(hex.slice(i, i + 2), 16));
+      }
+    }
+    return out;
+  };
+  return pageContentRefs.map((ref) => decodeHexShowOps(streamsByObjNum.get(ref) ?? "")).join("\n");
 }
 
 async function rosterCount(admin: APIRequestContext, sectionId: string): Promise<number> {
@@ -190,6 +253,34 @@ test.describe("bulk CSV import journey (assignment #11 task A5)", () => {
     // --- the 20 valid students now exist: derived from the seed, not hardcoded ---
     const after = await rosterCount(admin, target.sectionId);
     expect(after, "roster grew by exactly the 20 valid rows").toBe(before + 20);
+
+    // --- import->sheet->login: the assertion that catches the real bug.
+    // Import must never auto-issue a login (it did once — see the file
+    // header comment) or every one of these 20 students would already carry
+    // an identityUserId and the sheet below would come back with zero rows
+    // for this class. ---
+    const sheetRes = await admin.post(`/api/v1/reports/class-credentials/${encodeURIComponent(target.classId)}`);
+    expect(sheetRes.status(), "class-credentials").toBe(200);
+    expect(sheetRes.headers()["content-type"] ?? "", "pdf content-type").toContain("application/pdf");
+    const sheetBytes = await sheetRes.body();
+    expect(sheetBytes.subarray(0, 5).toString("latin1"), "%PDF- magic bytes").toBe("%PDF-");
+    const sheetText = pdfText(sheetBytes);
+    const sample = [validAdmissionNos[0]!, validAdmissionNos[9]!, validAdmissionNos[19]!];
+    for (const no of sample) {
+      expect(sheetText, `imported student ${no} has a row on the credential sheet`).toContain(no);
+    }
+
+    // --- the credential the sheet just printed actually logs in. ---
+    const chosen = validAdmissionNos[0]!;
+    const occurrences = [...sheetText.matchAll(new RegExp(chosen, "gi"))];
+    expect(occurrences.length, "roll-no cell AND username cell both carry this admission number").toBeGreaterThanOrEqual(2);
+    const usernameCellEnd = occurrences[occurrences.length - 1]!.index! + chosen.length;
+    const temporaryPassword = sheetText.slice(usernameCellEnd, usernameCellEnd + 10);
+    expect(temporaryPassword, "10-char temporary password (platform's TEMP_PASSWORD_ALPHABET)").toMatch(
+      /^[A-Za-z0-9]{10}$/,
+    );
+    await browserLogin(page, { username: chosen.toLowerCase(), password: temporaryPassword });
+    await expect(page).toHaveURL(/\/portal/);
 
     // --- idempotency: re-uploading the SAME file adds ZERO students. This is
     // the single most valuable assertion in this journey — existing

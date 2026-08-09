@@ -66,7 +66,6 @@ async function makeHarness(opts: { identity?: CredentialIssuer } = {}) {
       orgRepo,
       store: new MemoryObjectStore(),
       audit,
-      identity,
     }),
     scopeChecker,
     storage: { client: {} as PeopleHandlerDeps["storage"]["client"], bucket: "test-bucket" },
