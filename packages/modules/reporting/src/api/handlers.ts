@@ -7,6 +7,7 @@ import type {
   ScopeChecker,
 } from "@vidya/platform";
 import { usernameFromCode, type PeopleDirectory } from "@vidya/module-people";
+import { UsernameTakenError } from "@vidya/module-identity";
 import type { ReportService } from "../service/report-service";
 import type { ReportParams, ReportData } from "../report-data";
 import type { ReportFormat } from "../repo/reports-repo";
@@ -180,7 +181,37 @@ export function createReportingHandlers(deps: ReportingHandlerDeps): Record<stri
     const roster = await deps.peopleDirectory.classRoster(params.classId);
     const missing = roster.filter((student) => student.identityUserId === null);
 
+    // This handler is SYNCHRONOUS: every missing student costs one Argon2
+    // hash inside this one request (halved from two by this same fix wave —
+    // see credential-service.ts), and Argon2's own conformance tests put a
+    // single hash at roughly 100ms with this codebase's production cost
+    // parameters. 200 students is worst-case ~20s of hashing, comfortably
+    // under a typical browser/gateway timeout while covering any realistic
+    // class roster. A timeout mid-loop would leave accounts issued whose
+    // password was never printed — unrecoverable, the same failure mode
+    // Fix 1 removed from import — so this rejects up front instead.
+    const MAX_CREDENTIAL_BATCH = 200;
+    if (missing.length > MAX_CREDENTIAL_BATCH) {
+      return {
+        status: 422,
+        body: {
+          message:
+            `class has ${missing.length} students without a login, which exceeds the ` +
+            `${MAX_CREDENTIAL_BATCH}-per-request synchronous issuance limit — contact an ` +
+            "administrator before retrying",
+        },
+      };
+    }
+
     const rows: (string | number)[][] = [];
+    // Surfaced ON THE SHEET, not just the log (fix wave, Fix 3): usernames
+    // are derived straight from admission_no and are unique GLOBALLY, but
+    // admission_no is only unique PER COLLEGE — two colleges sharing an
+    // admission number collide, and the loser used to vanish from the sheet
+    // with no explanation. This does not change the username scheme (a
+    // product decision the owner rules on separately); it only makes the
+    // skip visible instead of silent.
+    const skipped: (string | number)[][] = [];
     let issuedCount = 0;
     for (const student of missing) {
       try {
@@ -197,6 +228,7 @@ export function createReportingHandlers(deps: ReportingHandlerDeps): Record<stri
             { studentId: student.studentId, identityUserId: issued.userId },
             "class-credentials: identity issued but linking to student failed — skipping row so no orphaned account is printed",
           );
+          skipped.push([student.admissionNo, student.fullName, "issued but could not be linked to this student record"]);
           continue;
         }
         rows.push([student.admissionNo, student.fullName, issued.username, issued.temporaryPassword]);
@@ -206,10 +238,21 @@ export function createReportingHandlers(deps: ReportingHandlerDeps): Record<stri
           { studentId: student.studentId, err: error },
           "class-credentials: issuance failed for one student — skipped, rest of the class continues",
         );
+        const reason =
+          error instanceof UsernameTakenError
+            ? "derived username already taken — likely the same admission number used at another college"
+            : `credential issuance failed: ${error instanceof Error ? error.message : "unknown error"}`;
+        skipped.push([student.admissionNo, student.fullName, reason]);
       }
     }
 
     const className = (await deps.peopleDirectory.namesFor([params.classId])).get(params.classId) ?? params.classId;
+    const notes = [
+      "Contains plaintext temporary passwords — hand each row's slip to its student and discard this sheet promptly.",
+    ];
+    if (skipped.length > 0) {
+      notes.push(`${skipped.length} student(s) could not be issued a login — see the last page for who and why.`);
+    }
     const data: ReportData = {
       kind: "class-credentials",
       title: "Class credential sheet",
@@ -217,17 +260,27 @@ export function createReportingHandlers(deps: ReportingHandlerDeps): Record<stri
       academicYear: currentAcademicYear(),
       generatedFor: principal.displayName ?? principal.id,
       generatedAt: new Date().toISOString(),
-      stats: [{ label: "Accounts issued", value: String(issuedCount) }],
+      stats: [
+        { label: "Accounts issued", value: String(issuedCount) },
+        { label: "Skipped", value: String(skipped.length) },
+      ],
       tables: [
         {
           caption: className,
           columns: ["Roll no", "Name", "Username", "Temporary password"],
           rows,
         },
+        ...(skipped.length > 0
+          ? [
+              {
+                caption: `${className} — skipped (not issued)`,
+                columns: ["Roll no", "Name", "Reason"],
+                rows: skipped,
+              },
+            ]
+          : []),
       ],
-      notes: [
-        "Contains plaintext temporary passwords — hand each row's slip to its student and discard this sheet promptly.",
-      ],
+      notes,
       rowCount: rows.length,
     };
     const bytes = new Uint8Array(await renderCredentialSheet(data));
@@ -242,7 +295,7 @@ export function createReportingHandlers(deps: ReportingHandlerDeps): Record<stri
       },
       audit: {
         resourceId: params.classId,
-        details: { collegeId: classPath.collegeId, issuedCount, rosterSize: roster.length },
+        details: { collegeId: classPath.collegeId, issuedCount, skippedCount: skipped.length, rosterSize: roster.length },
       },
     };
   };

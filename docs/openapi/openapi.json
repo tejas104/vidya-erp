@@ -12285,7 +12285,7 @@
     "/api/v1/reports/class-credentials/{classId}": {
       "post": {
         "summary": "Issue logins for a class's students who lack one and return a printable credential sheet (admin)",
-        "description": "SYNCHRONOUS, not the queued request/poll/download flow above: the sheet is generated in this request handler and streamed straight back as the response body. It is never written to object storage or any other durable store — there is no reportId, nothing to poll, and no download route for it (#11 D-ruling: a temporary password cannot be re-fetched at job time, so the queued flow structurally cannot produce it, and not persisting it is strictly better security besides). Every student in the class who does not already have a login gets one (identity.issueCredential, active, no force-change — #11 D2); students who already have a login are skipped (their password was never stored, so it cannot be reprinted) and simply do not appear on the sheet. Admin-only, scope-checked against the class's college, audited with the issued count — never the plaintext.\n\n**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "description": "SYNCHRONOUS, not the queued request/poll/download flow above: the sheet is generated in this request handler and streamed straight back as the response body. It is never written to object storage or any other durable store — there is no reportId, nothing to poll, and no download route for it (#11 D-ruling: a temporary password cannot be re-fetched at job time, so the queued flow structurally cannot produce it, and not persisting it is strictly better security besides). Every student in the class who does not already have a login gets one (identity.issueCredential, active, no force-change — #11 D2); students who already have a login are skipped (their password was never stored, so it cannot be reprinted) and simply do not appear on the sheet. A student a login could not be issued or linked for (e.g. a derived-username collision with another college) is listed on a trailing page of the sheet with the reason, never silently dropped. Capped at 200 students without a login per request — issuing more synchronously risks a timeout mid-batch, which would leave accounts created with their password never printed. Admin-only, scope-checked against the class's college, audited with the issued and skipped counts — never the plaintext.\n\n**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
         "tags": [
           "reporting"
         ],
@@ -12352,6 +12352,36 @@
           },
           "404": {
             "description": "No such class",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Too many students without a login for one synchronous request",
             "content": {
               "application/json": {
                 "schema": {

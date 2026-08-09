@@ -63,8 +63,11 @@ const routes: RouteSpec[] = [
       "and not persisting it is strictly better security besides). Every student in the class who does not " +
       "already have a login gets one (identity.issueCredential, active, no force-change — #11 D2); students who " +
       "already have a login are skipped (their password was never stored, so it cannot be reprinted) and simply " +
-      "do not appear on the sheet. Admin-only, scope-checked against the class's college, audited with the " +
-      "issued count — never the plaintext.",
+      "do not appear on the sheet. A student a login could not be issued or linked for (e.g. a derived-username " +
+      "collision with another college) is listed on a trailing page of the sheet with the reason, never silently " +
+      "dropped. Capped at 200 students without a login per request — issuing more synchronously risks a timeout " +
+      "mid-batch, which would leave accounts created with their password never printed. Admin-only, scope-checked " +
+      "against the class's college, audited with the issued and skipped counts — never the plaintext.",
     tags: ["reporting"],
     auth: ADMIN_ONLY,
     request: { params: z.object({ classId: idSchema }) },
@@ -73,6 +76,7 @@ const routes: RouteSpec[] = [
       200: { description: "The credential sheet, one page", contentType: "application/pdf" },
       403: { description: "Scope check denied", schema: problemSchema },
       404: { description: "No such class", schema: problemSchema },
+      422: { description: "Too many students without a login for one synchronous request", schema: problemSchema },
     },
   },
   {

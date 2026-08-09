@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { pino } from "pino";
 import type { OrgPath, Principal, RouteContext, ScopeChecker, ScopeDecision } from "@vidya/platform";
 import type { PeopleDirectory } from "@vidya/module-people";
+import { UsernameTakenError } from "@vidya/module-identity";
 import { createReportingHandlers, type CredentialIssuer } from "./handlers";
 import { ReportService } from "../service/report-service";
 import type { StudentPerformanceReport } from "@vidya/module-analytics";
@@ -257,12 +258,46 @@ describe("class-credentials handler (#11 B4, synchronous)", () => {
     // printed and the count does not claim it as issued.
     expect(identity.calls).toHaveLength(1);
     expect(failedLinks).toEqual([{ studentId: "stu_1", identityUserId: "idn_fake_1" }]);
-    expect(result.audit?.details).toMatchObject({ issuedCount: 0, rosterSize: 2 });
+    expect(result.audit?.details).toMatchObject({ issuedCount: 0, skippedCount: 1, rosterSize: 2 });
     expect(warnSpy).toHaveBeenCalledWith(
       expect.objectContaining({ studentId: "stu_1", identityUserId: "idn_fake_1" }),
       expect.stringContaining("linking"),
     );
     warnSpy.mockRestore();
+  });
+
+  it("surfaces a username collision as a skip (Fix 3) instead of silently dropping the student", async () => {
+    const read = new FakeAnalyticsReadModel();
+    const failingIdentity: CredentialIssuer & { calls: unknown[] } = {
+      calls: [],
+      issueCredential: async (input) => {
+        failingIdentity.calls.push(input);
+        throw new UsernameTakenError(input.username);
+      },
+    };
+    const service = new ReportService({
+      repo: new InMemoryReportsRepo(),
+      readModel: read,
+      store: new MemoryStore(),
+      audit: new RecordingAudit(),
+    });
+    const scopeChecker = new StubScopeChecker();
+    const peopleDirectory = new FakePeopleDirectory();
+    const handlers = createReportingHandlers({
+      service,
+      enqueue: async () => {},
+      scopeChecker,
+      peopleDirectory,
+      linkStudentIdentity: async () => true,
+      identity: failingIdentity,
+    });
+    const result = await handlers["reporting.class-credentials"]!(
+      ctx(principal("admin-1", { roles: ["admin"] }), { params: { classId: CLASS_ID } }),
+    );
+    // Still succeeds (the rest of the class is unaffected) — the collision
+    // is reported ON the sheet and in the audit count, never silent.
+    expect(result.status).toBe(200);
+    expect(result.audit?.details).toMatchObject({ issuedCount: 0, skippedCount: 1, rosterSize: 2 });
   });
 
   it("403s when the scope check denies", async () => {
@@ -283,5 +318,21 @@ describe("class-credentials handler (#11 B4, synchronous)", () => {
       ctx(principal("admin-1", { roles: ["admin"] }), { params: { classId: "cls_ghost" } }),
     );
     expect(result.status).toBe(404);
+  });
+
+  it("422s a roster whose missing-login count exceeds the synchronous batch cap, issuing nothing", async () => {
+    const read = new FakeAnalyticsReadModel();
+    const { handlers, peopleDirectory, identity } = makeHarness(read);
+    peopleDirectory.roster = Array.from({ length: 201 }, (_, i) => ({
+      studentId: `stu_${i}`,
+      admissionNo: `A${i}`,
+      fullName: `Student ${i}`,
+      identityUserId: null,
+    }));
+    const result = await handlers["reporting.class-credentials"]!(
+      ctx(principal("admin-1", { roles: ["admin"] }), { params: { classId: CLASS_ID } }),
+    );
+    expect(result.status).toBe(422);
+    expect(identity.calls).toHaveLength(0);
   });
 });
