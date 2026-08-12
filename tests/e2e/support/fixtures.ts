@@ -54,13 +54,33 @@ async function resetLoginThrottle(username: string): Promise<void> {
   }
 }
 
+/**
+ * College 2 (Northgate Junior College / DEMO2) logins — Assignment #11.5
+ * Part 1a fixture (seed commit 004614b). Deliberately NOT part of `CREDS`
+ * (and so not part of `RoleKey`): the role-gate MATRIX in
+ * negative-scope.spec.ts is `Record<RoleKey, Forbidden>` and must stay
+ * closed over the 7 college-1 roles it already covers. `apiSession` accepts
+ * these as a raw {username, password} pair, mirroring `browserLogin` below.
+ */
+export const COLLEGE2_CREDS = {
+  hod: { username: "demo2-hod-gen", password: "demo-staff-pass-2026!" },
+  teacher: { username: "demo2-teacher-eng", password: "demo-teacher-pass-2026!" },
+  classTeacher: { username: "demo2-ct-fygn", password: "demo-teacher-pass-2026!" },
+} as const;
+
 /** Real HTTP login: returns an APIRequestContext carrying the session cookie.
- *  No in-process shortcut — this is the same endpoint the browser form calls. */
-export async function apiSession(baseURL: string, role: RoleKey): Promise<APIRequestContext> {
-  await resetLoginThrottle(CREDS[role].username);
+ *  No in-process shortcut — this is the same endpoint the browser form calls.
+ *  Accepts a RoleKey (college-1 demo roles) or a raw {username, password}
+ *  (e.g. a COLLEGE2_CREDS entry) — same either-form as browserLogin. */
+export async function apiSession(
+  baseURL: string,
+  role: RoleKey | { username: string; password: string },
+): Promise<APIRequestContext> {
+  const creds = typeof role === "string" ? CREDS[role] : role;
+  await resetLoginThrottle(creds.username);
   const ctx = await request.newContext({ baseURL, extraHTTPHeaders: { "x-forwarded-for": nextXff() } });
-  const res = await ctx.post("/api/v1/identity/auth/login", { data: CREDS[role] });
-  expect(res.status(), `login as ${role}`).toBe(200);
+  const res = await ctx.post("/api/v1/identity/auth/login", { data: creds });
+  expect(res.status(), `login as ${typeof role === "string" ? role : creds.username}`).toBe(200);
   return ctx;
 }
 
@@ -89,6 +109,13 @@ export interface DemoIds {
   sectionStudentIds: string[];
   otherSectionStudentId: string;
   hallTicketStudentId: string;
+  /** Containment decoy (seed commit 004614b): the MSC department's FYMS
+   *  "Section A" — same section letter as FYCS-A, but a different
+   *  department entirely. A student here is outside every CSE-scoped
+   *  grant (hod/teacher/class_teacher), so reading it proves narrower-than-
+   *  college containment rather than just "some grant exists". */
+  otherDeptSectionId: string;
+  otherDeptStudentId: string;
 }
 
 interface TreeSubject { id: string; code: string }
@@ -128,6 +155,15 @@ export async function discover(admin: APIRequestContext): Promise<DemoIds> {
   const sectionStudentIds = await roster(sectionId);
   const otherRoster = await roster(otherSectionId);
 
+  // Decoy department (seed commit 004614b): MSC / FYMS / "Section A" — same
+  // section letter as FYCS-A, deliberately outside CSE. Admin's own
+  // college-wide grant already covers it (same `tree` fetch above), so no
+  // extra HTTP round trip is needed beyond the roster read.
+  const msc = tree.departments.find((d) => d.code === "MSC") ?? tree.departments[1] ?? cse;
+  const fyms = msc.classes.find((c) => c.code === "FYMS") ?? msc.classes[0]!;
+  const otherDeptSectionId = fyms.sections[0]!.id;
+  const otherDeptRoster = await roster(otherDeptSectionId);
+
   return {
     collegeId,
     classId: fy.id,
@@ -138,7 +174,66 @@ export async function discover(admin: APIRequestContext): Promise<DemoIds> {
     sectionStudentIds,
     otherSectionStudentId: otherRoster[0]!,
     hallTicketStudentId: sectionStudentIds[0]!,
+    otherDeptSectionId,
+    otherDeptStudentId: otherDeptRoster[0]!,
   };
+}
+
+/**
+ * College 2 (Northgate Junior College / DEMO2) ids — Assignment #11.5 Part 1b.
+ *
+ * There is deliberately no college-wide-scoped login for college 2 to
+ * discover it with (see the seed script's own comment above the college-2
+ * block in scripts/seed-demo.ts: after seeding, demo-admin holds exactly its
+ * original DEMO grant — zero standing in DEMO2). So this resolves ids the
+ * same way any *legitimate* college-2 principal would — each account reading
+ * only its own data — never a hardcoded UUID:
+ *   - demo2-teacher-eng's own session grant names their college + class;
+ *     their own class's assessments/marks name a real student (the one the
+ *     seed entered real marks for, so the marks containment case has a real
+ *     row to filter away).
+ *   - demo2-hod-gen's own pending-approvals queue names a real, still-
+ *     pending leave request (the seed leaves it undecided on purpose).
+ */
+export interface College2Ids {
+  collegeId: string;
+  classId: string;
+  studentId: string;
+  pendingLeaveRequestId: string;
+}
+
+export async function discoverCollege2(baseURL: string): Promise<College2Ids> {
+  const teacher = await apiSession(baseURL, COLLEGE2_CREDS.teacher);
+  const sessionRes = await teacher.get("/api/v1/identity/auth/session");
+  expect(sessionRes.ok(), "college2 teacher session").toBeTruthy();
+  const session = (await sessionRes.json()) as { grants: { org: { collegeId: string; classId?: string } }[] };
+  const org = session.grants[0]?.org;
+  expect(org?.classId, "college2 teacher grant has a classId").toBeTruthy();
+  const collegeId = org!.collegeId;
+  const classId = org!.classId!;
+
+  const assessmentsRes = await teacher.get(`/api/v1/academics/classes/${encodeURIComponent(classId)}/assessments`);
+  expect(assessmentsRes.ok(), "college2 class assessments").toBeTruthy();
+  const { assessments } = (await assessmentsRes.json()) as { assessments: { id: string }[] };
+  expect(assessments.length, "college2 has a seeded assessment").toBeGreaterThan(0);
+
+  const marksRes = await teacher.get(`/api/v1/academics/assessments/${encodeURIComponent(assessments[0]!.id)}/marks`);
+  expect(marksRes.ok(), "college2 assessment marks").toBeTruthy();
+  const { marks } = (await marksRes.json()) as { marks: { studentId: string }[] };
+  expect(marks.length, "college2 assessment has real marks").toBeGreaterThan(0);
+  const studentId = marks[0]!.studentId;
+  await teacher.dispose();
+
+  const hod = await apiSession(baseURL, COLLEGE2_CREDS.hod);
+  const pendingRes = await hod.get("/api/v1/leave/pending");
+  expect(pendingRes.ok(), "college2 hod pending leave").toBeTruthy();
+  const { requests } = (await pendingRes.json()) as { requests: { id: string; status: string }[] };
+  const pending = requests.find((r) => r.status === "pending");
+  expect(pending, "college2 has a pending leave request").toBeTruthy();
+  const pendingLeaveRequestId = pending!.id;
+  await hod.dispose();
+
+  return { collegeId, classId, studentId, pendingLeaveRequestId };
 }
 
 /** Poll a report to completion and return its final status row. */
