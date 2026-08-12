@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { browserLogin } from "./support/fixtures";
+import { apiSession, browserLogin } from "./support/fixtures";
 
 /**
  * ASSIGNMENT #11 TASK 12 — first-run onboarding checklist, guard (d).
@@ -9,8 +9,24 @@ import { browserLogin } from "./support/fixtures";
  * string. Persistence itself (Task 11's preference store) is unit-tested in
  * OnboardingChecklist.test.tsx; this journey only proves the wiring is real
  * end to end, through the actual browser login and the actual pages.
+ *
+ * IDEMPOTENCE: this journey ends by dismissing the checklist, which writes
+ * `dismissed: true` to demo-admin's stored preference — and a dismissed
+ * checklist never renders again. Without the reset below the test passes
+ * exactly once per fresh database and fails on every run after that, which
+ * is how it originally shipped. The reset goes through the real preference
+ * API rather than straight to SQL, so the journey stays black-box.
  */
-test("A1 admin onboarding checklist renders on the dashboard and its items deep-link", async ({ page }) => {
+test("A1 admin onboarding checklist renders on the dashboard and its items deep-link", async ({
+  page,
+  baseURL,
+}) => {
+  const api = await apiSession(baseURL!, "admin");
+  const reset = await api.put("/api/v1/system/preferences/onboarding:admin", {
+    data: { value: { dismissed: false, checked: {} } },
+  });
+  expect(reset.status(), "reset the checklist to its first-run state").toBe(200);
+
   await browserLogin(page, "admin");
   await page.goto("/dashboard");
 
