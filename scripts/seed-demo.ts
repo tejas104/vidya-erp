@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import {
   RoleRequirementPolicy,
   createDb,
@@ -262,6 +263,7 @@ function buildStack() {
     db,
     redis,
     metrics,
+    logger,
     audit: system.service.audit,
     core,
     config: config.identity,
@@ -273,6 +275,7 @@ function buildStack() {
     audit: system.service.audit,
     scopeChecker: core.scopeChecker,
     identityGrants: identity.service.derivedGrants,
+    identity: { issueCredential: identity.service.issueCredential },
     storage: { client: objectStorage, bucket: config.s3.bucket },
     enqueueImport: async () => {
       /* the demo does not use bulk CSV import */
@@ -1534,6 +1537,304 @@ async function main(): Promise<void> {
 
     // 7) Flip any resolvable manual grants (principal/HoD) to verified.
     await call("identity.grants-verify", { cookie: adminCookie });
+
+    // -------------------------------------------------------------------
+    // 8) CONTAINMENT FIXTURES (Assignment #11.5 Part 1) — deliberately
+    //    small, adversarial data the negative-scope e2e matrix reads by
+    //    stable code/admission-number (never array position), so a reseed
+    //    keeps producing the same shape. See docs in negative-scope.spec.ts.
+    // -------------------------------------------------------------------
+    const mscDeptRes = await call("people.department-create", {
+      cookie: adminCookie,
+      body: { collegeId, name: "Mathematical Sciences", code: "MSC" },
+    });
+    if (mscDeptRes.status === 409) {
+      console.log("\ncontainment fixtures already present — skipping (this block is not re-run-idempotent).");
+    } else {
+      // 8a) A second department in college 1. CSE's FYCS already has a
+      //     section "A" with subjects "Data Structures"/"Discrete
+      //     Mathematics" and students FYCS-001... . This department reuses
+      //     the SAME section letter, the SAME subject names, and an
+      //     OVERLAPPING admission-number range on purpose: a containment bug
+      //     that resolves "section A" or "Data Structures" by NAME instead
+      //     of id would silently return THIS department's rows instead of
+      //     denying them. Exercises the HOD department boundary and the
+      //     teacher/class_teacher class boundary within one college.
+      const mscDeptId = (await expectJson<{ id: string }>(mscDeptRes, [201], "department MSC")).id;
+      const fymsClassId = (
+        await expectJson<{ id: string }>(
+          await call("people.class-create", {
+            cookie: adminCookie,
+            body: { departmentId: mscDeptId, name: "FY BSc Mathematical Sciences", code: "FYMS" },
+          }),
+          [201],
+          "class FYMS",
+        )
+      ).id;
+      const fymsSectionId = (
+        await expectJson<{ id: string }>(
+          await call("people.section-create", { cookie: adminCookie, body: { classId: fymsClassId, name: "A" } }),
+          [201],
+          "section FYMS-A (decoy: same letter as FYCS-A)",
+        )
+      ).id;
+      await expectJson(
+        await call("people.subject-create", {
+          cookie: adminCookie,
+          body: { departmentId: mscDeptId, name: "Data Structures", code: "DS-FYMS" },
+        }),
+        [201],
+        "subject DS-FYMS (decoy: same name as DS-FYCS)",
+      );
+      await expectJson(
+        await call("people.subject-create", {
+          cookie: adminCookie,
+          body: { departmentId: mscDeptId, name: "Discrete Mathematics", code: "MTH-FYMS" },
+        }),
+        [201],
+        "subject MTH-FYMS (decoy: same name as MTH-FYCS)",
+      );
+      const fymsStudents = ["Rehan Sheikh", "Vidya Kulkarni", "Om Deshmukh"];
+      for (let i = 0; i < fymsStudents.length; i++) {
+        const fullName = fymsStudents[i]!;
+        const studentId = (
+          await expectJson<{ id: string }>(
+            await call("people.student-create", {
+              cookie: adminCookie,
+              body: { collegeId, admissionNo: `FYMS-${String(i + 1).padStart(3, "0")}`, fullName },
+            }),
+            [201],
+            `student ${fullName}`,
+          )
+        ).id;
+        const enroll = await call("people.student-enroll", {
+          cookie: adminCookie,
+          params: { studentId },
+          body: { sectionId: fymsSectionId, academicYear: YEAR },
+        });
+        if (enroll.status !== 200) throw new Error(`enroll ${fullName}: ${enroll.status}`);
+      }
+      console.log(
+        `  containment fixture: MSC department — decoy "Section A", decoy subject names, ${fymsStudents.length} students (FYMS-001..)`,
+      );
+
+      // 8b) A second COLLEGE, wholly separate — the only way to prove a
+      //     cross-college denial with real HTTP (the prior single-college
+      //     seed could not; see this file's negative-scope.spec.ts comment).
+      //
+      //     Provisioning it needs an admin grant scoped to college 2.
+      //     identity.service.bootstrapAdmin is a global ONE-TIME seam
+      //     (refuses once any admin exists anywhere — already spent on
+      //     demo-admin above) and identity.grant-add requires the GRANTER's
+      //     OWN grants to already cover the target college. That is a real
+      //     chicken-and-egg for any second college: nothing in this system
+      //     can grant the first authority over a new tenant through the
+      //     scoped HTTP API once bootstrap has been used once. This is a
+      //     genuine platform gap (multi-tenancy is not fully wired — see the
+      //     audit's severity-4 finding), not a ScopeChecker expressiveness
+      //     problem, so it is not something Part 1 is asked to fix.
+      //
+      //     We break the deadlock exactly once, out-of-band: one raw insert
+      //     into idn_scope_grants — mirroring what bootstrapAdmin itself
+      //     does under the hood — grants demo-admin TEMPORARY admin
+      //     authority over college 2 only long enough to build it through
+      //     the real scoped HTTP pipeline. That grant is then removed the
+      //     SAME way every other grant is removed: identity.grant-remove,
+      //     over real HTTP. By the time this script exits, demo-admin holds
+      //     exactly the one grant it started with — every negative-scope
+      //     case in the e2e matrix is testing a principal with ZERO standing
+      //     in college 2, not a temporarily-elevated one.
+      const college2 = await stack.people.service.bootstrapCollege({ name: "Northgate Junior College", code: "DEMO2" });
+      console.log(`college2: Northgate Junior College (${college2.collegeId})${college2.created ? " — created" : " — exists"}`);
+
+      const adminLookup = await expectJson<{ users: { id: string; username: string }[] }>(
+        await call("identity.user-list", { cookie: adminCookie, query: { collegeId, limit: "5" } }),
+        [200],
+        "user list (admin lookup)",
+      );
+      const adminUserId = adminLookup.users.find((u) => u.username === ADMIN.username)?.id;
+      if (adminUserId === undefined) throw new Error("cannot find demo-admin's own user id");
+
+      const tempGrantId = randomUUID();
+      await stack.pool.query(
+        `INSERT INTO idn_scope_grants (id, user_id, role, college_id, verified, source, granted_by)
+         VALUES ($1, $2, 'admin', $3, true, 'manual', 'seed-bootstrap-temp')`,
+        [tempGrantId, adminUserId, college2.collegeId],
+      );
+      const college2AdminCookie = await login(stack, ADMIN.username, ADMIN.password);
+
+      const periodsSet2 = await call("timetable.periods-set", {
+        cookie: college2AdminCookie,
+        params: { collegeId: college2.collegeId },
+        body: {
+          periods: [
+            { periodNo: 1, starts: "09:00", ends: "09:50" },
+            { periodNo: 2, starts: "10:00", ends: "10:50" },
+            { periodNo: 3, starts: "11:00", ends: "11:50" },
+          ],
+        },
+      });
+      if (periodsSet2.status !== 200) throw new Error(`college2 periods-set: ${periodsSet2.status}`);
+
+      const genDeptId = (
+        await expectJson<{ id: string }>(
+          await call("people.department-create", {
+            cookie: college2AdminCookie,
+            body: { collegeId: college2.collegeId, name: "General Studies", code: "GEN" },
+          }),
+          [201],
+          "department GEN",
+        )
+      ).id;
+      const fygnClassId = (
+        await expectJson<{ id: string }>(
+          await call("people.class-create", {
+            cookie: college2AdminCookie,
+            body: { departmentId: genDeptId, name: "FY General Studies", code: "FYGN" },
+          }),
+          [201],
+          "class FYGN",
+        )
+      ).id;
+      const fygnSectionId = (
+        await expectJson<{ id: string }>(
+          await call("people.section-create", { cookie: college2AdminCookie, body: { classId: fygnClassId, name: "A" } }),
+          [201],
+          "section FYGN-A",
+        )
+      ).id;
+      const engSubjectId = (
+        await expectJson<{ id: string }>(
+          await call("people.subject-create", {
+            cookie: college2AdminCookie,
+            body: { departmentId: genDeptId, name: "English", code: "ENG-FYGN" },
+          }),
+          [201],
+          "subject ENG-FYGN",
+        )
+      ).id;
+      const hisSubjectId = (
+        await expectJson<{ id: string }>(
+          await call("people.subject-create", {
+            cookie: college2AdminCookie,
+            body: { departmentId: genDeptId, name: "History", code: "HIS-FYGN" },
+          }),
+          [201],
+          "subject HIS-FYGN",
+        )
+      ).id;
+
+      /** Local to this block: college 2 has its own admin session/college, so
+       *  the top-level provisionUser (closed over college 1) cannot be reused. */
+      async function provisionCollege2User(
+        username: string,
+        displayName: string,
+        roles: string[],
+        password: string,
+      ): Promise<string> {
+        const created = await call("identity.user-create", {
+          cookie: college2AdminCookie,
+          body: { username, displayName, collegeId: college2.collegeId, temporaryPassword: "temporary-pass-123", roles },
+        });
+        const { id } = await expectJson<{ id: string }>(created, [201], `user-create ${username}`);
+        const reset = await call("identity.password-reset-init", { cookie: college2AdminCookie, params: { userId: id } });
+        const { token } = await expectJson<{ token: string }>(reset, [200, 201], `reset-init ${username}`);
+        const confirm = await call("identity.password-reset-confirm", { body: { token, newPassword: password } });
+        if (confirm.status !== 200) throw new Error(`reset-confirm ${username}: ${confirm.status}`);
+        return id;
+      }
+
+      const gen2HodId = await provisionCollege2User("demo2-hod-gen", "Dr. Meera Iyer", ["hod"], STAFF_PASSWORD);
+      await expectJson(
+        await call("identity.grant-add", {
+          cookie: college2AdminCookie,
+          params: { userId: gen2HodId },
+          body: { role: "hod", collegeId: college2.collegeId, departmentId: genDeptId },
+        }),
+        [201],
+        "hod grant GEN",
+      );
+
+      const eng2TeacherCookie = await provisionTeacher(
+        stack,
+        college2AdminCookie,
+        college2.collegeId,
+        "demo2-teacher-eng",
+        "Aditya Rao",
+        fygnClassId,
+        { kind: "subject_teacher", subjectId: engSubjectId },
+      );
+      await provisionTeacher(
+        stack,
+        college2AdminCookie,
+        college2.collegeId,
+        "demo2-ct-fygn",
+        "Sneha Pillai",
+        fygnClassId,
+        { kind: "class_teacher" },
+        hisSubjectId,
+      );
+
+      const fygnStudentNames = ["Ibrahim Sheikh", "Naomi Fernandes", "Rowan Dsouza", "Alisha Mathew"];
+      const fygnStudentIds: string[] = [];
+      for (let i = 0; i < fygnStudentNames.length; i++) {
+        const fullName = fygnStudentNames[i]!;
+        const studentId = (
+          await expectJson<{ id: string }>(
+            await call("people.student-create", {
+              cookie: college2AdminCookie,
+              body: { collegeId: college2.collegeId, admissionNo: `FYGN-${String(i + 1).padStart(3, "0")}`, fullName },
+            }),
+            [201],
+            `student ${fullName}`,
+          )
+        ).id;
+        const enroll = await call("people.student-enroll", {
+          cookie: college2AdminCookie,
+          params: { studentId },
+          body: { sectionId: fygnSectionId, academicYear: YEAR },
+        });
+        if (enroll.status !== 200) throw new Error(`enroll ${fullName}: ${enroll.status}`);
+        fygnStudentIds.push(studentId);
+      }
+
+      // Real marks for a college-2 student — the containment case for "read
+      // another college's marks" is a filtered-EMPTY assertion, which only
+      // means something if a real row existed to be filtered out.
+      const assessment2 = await expectJson<{ id: string }>(
+        await call("academics.assessment-create", {
+          cookie: eng2TeacherCookie,
+          body: { classId: fygnClassId, subjectId: engSubjectId, kind: "quiz", name: "Quiz 1", academicYear: YEAR, maxScore: 10 },
+        }),
+        [201],
+        "assessment ENG Quiz 1",
+      );
+      const entered2 = await call("academics.marks-enter", {
+        cookie: eng2TeacherCookie,
+        params: { assessmentId: assessment2.id },
+        body: { entries: fygnStudentIds.map((studentId, i) => ({ studentId, score: 6 + i })) },
+      });
+      if (entered2.status !== 200) throw new Error(`college2 marks: ${entered2.status}`);
+
+      // A pending leave request — left undecided on purpose so the
+      // containment matrix can attempt to decide it from college 1.
+      const leave2 = await call("leave.apply", {
+        cookie: eng2TeacherCookie,
+        body: { fromOn: "2026-09-10", toOn: "2026-09-10", kind: "casual", reason: "Personal work" },
+      });
+      if (leave2.status !== 201) throw new Error(`college2 leave apply: ${leave2.status}`);
+
+      const revoked = await call("identity.grant-remove", {
+        cookie: college2AdminCookie,
+        params: { userId: adminUserId, grantId: tempGrantId },
+      });
+      if (revoked.status !== 200) throw new Error(`revoke temp college2 admin grant: ${revoked.status}`);
+
+      console.log(
+        "  containment fixture: college 2 (Northgate Junior College) — department, class, section, " +
+          `${fygnStudentIds.length} students, real marks, 1 pending leave request; temporary admin grant revoked`,
+      );
+    }
 
     console.log("\n✓ Demo data seeded through the real scoped, audited chain.");
     printCredentials(credentials);
