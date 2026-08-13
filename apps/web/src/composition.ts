@@ -293,6 +293,7 @@ function buildWebRuntime(): WebRuntime {
   const notices = createNoticesModule({
     db,
     audit: system.service.audit,
+    scopeChecker: identityCore.scopeChecker,
     peopleDirectory: people.service.directory,
   });
 

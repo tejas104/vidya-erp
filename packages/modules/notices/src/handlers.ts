@@ -1,4 +1,4 @@
-import type { OrgPath, Principal, RouteHandler } from "@vidya/platform";
+import type { OrgPath, Principal, RouteHandler, ScopeChecker } from "@vidya/platform";
 import type { PeopleDirectory } from "@vidya/module-people";
 import type { NoticesRepo } from "./repo";
 import type { NoticeRow } from "./db/schema";
@@ -6,6 +6,7 @@ import type { NoticeRow } from "./db/schema";
 export interface NoticesHandlerDeps {
   readonly repo: NoticesRepo;
   readonly directory: PeopleDirectory;
+  readonly scopeChecker: ScopeChecker;
   readonly now?: () => Date;
 }
 
@@ -16,9 +17,22 @@ function denied() {
   return { status: 403, body: { message: "access denied" } };
 }
 
-/** Two org paths overlap when neither contradicts the other on a defined level.
- * A college-wide grant overlaps every path in its college; a class grant
- * overlaps its class and its department. Pure — unit-tested directly. */
+/**
+ * Two org paths overlap when neither contradicts the other on a defined
+ * level. A college-wide grant overlaps every path in its college; a class
+ * grant overlaps its class and its department. Pure — unit-tested directly.
+ *
+ * NOT replaceable by ScopeChecker.check(): the shared matrix's covers() is
+ * deliberately one-directional ("authority never widens upward" —
+ * identity/core/scope-checker.ts) — a grant narrower than the resource never
+ * covers it. `visible`'s audience match needs the opposite case too: a
+ * class-scoped teacher's grant IS narrower than a college-wide notice's
+ * audience, and must still see it. Swapping in covers() here would hide
+ * every department/college-wide notice from anyone holding a narrower grant
+ * — see handlers.test.ts's "class grant overlaps its class and its
+ * department" case. Kept as the audience-matching rule for `visible`; the
+ * three admin/principal-gated routes below use scopeChecker directly since
+ * those are plain single-collegeId containment, not audience matching. */
 export function orgOverlaps(a: OrgPath, b: OrgPath): boolean {
   if (a.collegeId !== b.collegeId) return false;
   if (a.departmentId !== undefined && b.departmentId !== undefined && a.departmentId !== b.departmentId) return false;
@@ -30,11 +44,13 @@ function isStaff(principal: Principal): boolean {
   return principal.roles.some((role) => role !== "student");
 }
 
-function inCollege(principal: Principal, collegeId: string): boolean {
-  return principal.grants.some((grant) => grant.org.collegeId === collegeId);
-}
-
 export function createNoticesHandlers(deps: NoticesHandlerDeps): Record<string, RouteHandler> {
+  /** Org containment for the admin/principal manage routes — delegated to
+   * the shared matrix (both roles read unconditionally once covers()
+   * matches). Not used by `visible`; see orgOverlaps' docstring above. */
+  function readAllowed(principal: Principal, org: OrgPath): boolean {
+    return deps.scopeChecker.check(principal, "read", { module: "notices", resourceType: "notice", org }).granted;
+  }
   const now = deps.now ?? (() => new Date());
 
   /** Resolves an audience to its org path (for overlap checks) or null if the target vanished. */
@@ -78,7 +94,7 @@ export function createNoticesHandlers(deps: NoticesHandlerDeps): Record<string, 
       publishAt?: string; expiresAt?: string;
     };
     if (!(await deps.directory.collegeExists(body.collegeId))) return notFound("no such college");
-    if (!inCollege(principal, body.collegeId)) return denied();
+    if (!readAllowed(principal, { collegeId: body.collegeId })) return denied();
     const target = await audiencePath(body.collegeId, body.audience);
     if (target === null || target.collegeId !== body.collegeId) {
       return notFound("no such department/class in this college");
@@ -109,7 +125,7 @@ export function createNoticesHandlers(deps: NoticesHandlerDeps): Record<string, 
   const list: RouteHandler = async (ctx) => {
     const principal = ctx.principal as Principal;
     const query = ctx.request.query as { collegeId: string };
-    if (!inCollege(principal, query.collegeId)) return denied();
+    if (!readAllowed(principal, { collegeId: query.collegeId })) return denied();
     const rows = await deps.repo.listForCollege(query.collegeId);
     return { status: 200, body: { notices: await Promise.all(rows.map((row) => view(row))) } };
   };
@@ -159,7 +175,7 @@ export function createNoticesHandlers(deps: NoticesHandlerDeps): Record<string, 
     const params = ctx.request.params as { noticeId: string };
     const row = await deps.repo.get(params.noticeId);
     if (row === null) return notFound("no such notice");
-    if (!inCollege(principal, row.collegeId)) return denied();
+    if (!readAllowed(principal, { collegeId: row.collegeId })) return denied();
     await deps.repo.delete(row.id);
     return { status: 200, body: { ok: true as const }, audit: { resourceId: row.id, details: { title: row.title } } };
   };

@@ -1,10 +1,30 @@
 import { describe, expect, it } from "vitest";
 import { pino } from "pino";
-import type { Principal, RouteContext } from "@vidya/platform";
+import type { OrgPath, Principal, RouteContext, ScopeChecker, ScopeDecision } from "@vidya/platform";
 import type { PeopleDirectory } from "@vidya/module-people";
 import { createNoticesHandlers, orgOverlaps } from "./handlers";
 import type { NoticesRepo } from "./repo";
 import type { NoticeRow } from "./db/schema";
+
+/** Org-containment-only fake for the admin/principal manage routes —
+ * identical prefix rule to the real matrix's `covers()`. `visible` never
+ * calls scopeChecker (see orgOverlaps' docstring in handlers.ts). */
+function fakeScopeChecker(): ScopeChecker {
+  function covers(g: OrgPath, r: OrgPath): boolean {
+    return (
+      g.collegeId === r.collegeId &&
+      (g.departmentId === undefined || g.departmentId === r.departmentId) &&
+      (g.classId === undefined || g.classId === r.classId) &&
+      (g.sectionId === undefined || g.sectionId === r.sectionId)
+    );
+  }
+  return {
+    check(caller, _action, resource): ScopeDecision {
+      const granted = caller.grants.some((grant) => covers(grant.org, resource.org));
+      return { granted, reason: granted ? "fake-allow" : "fake-deny" };
+    },
+  };
+}
 
 const logger = pino({ level: "silent" });
 const NOW = new Date("2026-07-13T12:00:00Z");
@@ -59,7 +79,7 @@ function makeDeps() {
     studentPosition: async () => ({ collegeId: "col_1", departmentId: "dep_1", classId: "cls_1", sectionId: "sec_1" }),
     namesFor: async (ids: readonly string[]) => new Map(ids.map((id) => [id, `n:${id}`])),
   } as unknown as PeopleDirectory;
-  return { repo, directory, now: () => NOW };
+  return { repo, directory, scopeChecker: fakeScopeChecker(), now: () => NOW };
 }
 
 async function visibleTitles(p: Principal): Promise<string[]> {

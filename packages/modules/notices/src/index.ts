@@ -12,6 +12,7 @@ import {
   type AuditLogger,
   type Db,
   type RuntimeModule,
+  type ScopeChecker,
 } from "@vidya/platform";
 import type { PeopleDirectory } from "@vidya/module-people";
 import { noticesModuleDefinition } from "./definition";
@@ -24,13 +25,18 @@ export interface NoticesModuleDeps {
   readonly db: Db;
   readonly audit: AuditLogger;
   readonly peopleDirectory: PeopleDirectory;
+  readonly scopeChecker: ScopeChecker;
 }
 
 export function createNoticesModule(deps: NoticesModuleDeps): RuntimeModule<Record<string, never>> {
   const repo = createNoticesRepo(deps.db);
   const module: RuntimeModule<Record<string, never>> = {
     definition: noticesModuleDefinition,
-    handlers: createNoticesHandlers({ repo, directory: deps.peopleDirectory }),
+    handlers: createNoticesHandlers({
+      repo,
+      directory: deps.peopleDirectory,
+      scopeChecker: deps.scopeChecker,
+    }),
     jobProcessors: {},
     readinessChecks: [],
     service: {},
