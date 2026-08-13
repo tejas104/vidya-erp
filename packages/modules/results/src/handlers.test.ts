@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { pino } from "pino";
-import type { Principal, RouteContext } from "@vidya/platform";
+import type { OrgPath, Principal, RouteContext, ScopeChecker, ScopeDecision } from "@vidya/platform";
 import type { PeopleDirectory } from "@vidya/module-people";
 import type { AcademicsReadModel, MarkRecordView } from "@vidya/module-academics";
 import { createResultsHandlers } from "./handlers";
@@ -29,6 +29,25 @@ function principal(roles: Principal["roles"], grants: Principal["grants"], id = 
 const admin = principal(["admin"], [{ role: "admin", org: { collegeId: "col_1" } }]);
 const outsider = principal(["admin"], [{ role: "admin", org: { collegeId: "col_other" } }]);
 const alphaStudent = principal(["student"], [], "u_alpha");
+
+/** Org-containment-only fake — identical prefix rule to the real matrix's
+ * `covers()`; every call site in this module checks "read" only. */
+function fakeScopeChecker(): ScopeChecker {
+  function covers(g: OrgPath, r: OrgPath): boolean {
+    return (
+      g.collegeId === r.collegeId &&
+      (g.departmentId === undefined || g.departmentId === r.departmentId) &&
+      (g.classId === undefined || g.classId === r.classId) &&
+      (g.sectionId === undefined || g.sectionId === r.sectionId)
+    );
+  }
+  return {
+    check(caller, _action, resource): ScopeDecision {
+      const granted = caller.grants.some((grant) => covers(grant.org, resource.org));
+      return { granted, reason: granted ? "fake-allow" : "fake-deny" };
+    },
+  };
+}
 
 function ctx(p: Principal, input: { params?: unknown; query?: unknown; body?: unknown } = {}): RouteContext {
   return { requestId: "r", logger, principal: p, request: { params: input.params, query: input.query, body: input.body, headers: new Headers() } };
@@ -156,7 +175,7 @@ function makeDeps() {
     studentMarks: async (studentId: string) => MARKS.filter((m) => m.studentId === studentId),
   } as unknown as AcademicsReadModel;
 
-  return { repo, directory, marks };
+  return { repo, directory, marks, scopeChecker: fakeScopeChecker() };
 }
 
 describe("results.class-results (compile preview)", () => {

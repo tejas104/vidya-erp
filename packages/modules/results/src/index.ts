@@ -13,6 +13,7 @@ import {
   type AuditLogger,
   type Db,
   type RuntimeModule,
+  type ScopeChecker,
 } from "@vidya/platform";
 import type { PeopleDirectory } from "@vidya/module-people";
 import type { AcademicsReadModel } from "@vidya/module-academics";
@@ -30,6 +31,7 @@ export interface ResultsModuleDeps {
   readonly audit: AuditLogger;
   readonly peopleDirectory: PeopleDirectory;
   readonly marksReadModel: AcademicsReadModel;
+  readonly scopeChecker: ScopeChecker;
 }
 
 /** Read surface for the reporting module's grade-card kind (R4). */
@@ -42,9 +44,10 @@ export interface ResultsService {
 export function createResultsModule(deps: ResultsModuleDeps): RuntimeModule<ResultsService> {
   const repo = createResultsRepo(deps.db);
   const shared = { repo, directory: deps.peopleDirectory, marks: deps.marksReadModel };
+  const handlersDeps = { ...shared, scopeChecker: deps.scopeChecker };
   const module: RuntimeModule<ResultsService> = {
     definition: resultsModuleDefinition,
-    handlers: createResultsHandlers(shared),
+    handlers: createResultsHandlers(handlersDeps),
     jobProcessors: {},
     readinessChecks: [],
     service: { repo, gradeCard: createGradeCardSource(shared) },

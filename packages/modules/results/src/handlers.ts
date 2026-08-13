@@ -1,4 +1,4 @@
-import type { OrgPath, Principal, RouteHandler } from "@vidya/platform";
+import type { OrgPath, Principal, RouteHandler, ScopeChecker } from "@vidya/platform";
 import type { PeopleDirectory } from "@vidya/module-people";
 import type { AcademicsReadModel } from "@vidya/module-academics";
 import { sgpa, type Band } from "./gpa";
@@ -15,6 +15,7 @@ export interface ResultsHandlerDeps {
   readonly repo: ResultsRepo;
   readonly directory: PeopleDirectory;
   readonly marks: AcademicsReadModel;
+  readonly scopeChecker: ScopeChecker;
 }
 
 function notFound(message = "not found") {
@@ -27,12 +28,15 @@ function noCredits() {
   return { status: 422, body: { message: "no credits set for this class/year — set credits first" } };
 }
 
-function inCollege(principal: Principal, collegeId: string): boolean {
-  return principal.grants.some((grant) => grant.org.collegeId === collegeId);
-}
-
 export function createResultsHandlers(deps: ResultsHandlerDeps): Record<string, RouteHandler> {
   const computer = createResultsComputer(deps);
+
+  /** Org containment — delegated to the shared matrix. Every route here is
+   * ADMIN_ONLY or ADMIN_OR_PRINCIPAL; both read unconditionally once
+   * covers() matches (identity/core/scope-checker.ts). */
+  function readAllowed(principal: Principal, org: OrgPath): boolean {
+    return deps.scopeChecker.check(principal, "read", { module: "results", resourceType: "grade-scale", org }).granted;
+  }
 
   async function scaleView(row: GradeScaleRow) {
     return {
@@ -69,7 +73,7 @@ export function createResultsHandlers(deps: ResultsHandlerDeps): Record<string, 
   > {
     const position = await deps.directory.classPath(classId);
     if (position === null) return { ok: false, response: notFound("no such class") };
-    if (!inCollege(principal, position.collegeId)) return { ok: false, response: denied() };
+    if (!readAllowed(principal, { collegeId: position.collegeId })) return { ok: false, response: denied() };
     const scale = await deps.repo.getScale(scaleId);
     if (scale === null || scale.collegeId !== position.collegeId) {
       return { ok: false, response: notFound("no such scale") };
@@ -88,7 +92,7 @@ export function createResultsHandlers(deps: ResultsHandlerDeps): Record<string, 
     const principal = ctx.principal as Principal;
     const body = ctx.request.body as { collegeId: string; name: string; bands: Band[] };
     if (!(await deps.directory.collegeExists(body.collegeId))) return notFound("no such college");
-    if (!inCollege(principal, body.collegeId)) return denied();
+    if (!readAllowed(principal, { collegeId: body.collegeId })) return denied();
     try {
       const row = await deps.repo.createScale(body.collegeId, body.name, body.bands);
       return { status: 201, body: await scaleView(row), audit: { resourceId: row.id, details: { name: row.name } } };
@@ -101,7 +105,7 @@ export function createResultsHandlers(deps: ResultsHandlerDeps): Record<string, 
   const scaleList: RouteHandler = async (ctx) => {
     const principal = ctx.principal as Principal;
     const query = ctx.request.query as { collegeId: string };
-    if (!inCollege(principal, query.collegeId)) return denied();
+    if (!readAllowed(principal, { collegeId: query.collegeId })) return denied();
     const rows = await deps.repo.listScales(query.collegeId);
     return { status: 200, body: { scales: await Promise.all(rows.map((row) => scaleView(row))) } };
   };
@@ -112,7 +116,7 @@ export function createResultsHandlers(deps: ResultsHandlerDeps): Record<string, 
     const body = ctx.request.body as { name?: string; bands?: Band[] };
     const existing = await deps.repo.getScale(params.scaleId);
     if (existing === null) return notFound("no such scale");
-    if (!inCollege(principal, existing.collegeId)) return denied();
+    if (!readAllowed(principal, { collegeId: existing.collegeId })) return denied();
     try {
       const row = await deps.repo.updateScale(params.scaleId, body);
       if (row === null) return notFound("no such scale");
@@ -130,7 +134,7 @@ export function createResultsHandlers(deps: ResultsHandlerDeps): Record<string, 
     const params = ctx.request.params as { scaleId: string };
     const existing = await deps.repo.getScale(params.scaleId);
     if (existing === null) return notFound("no such scale");
-    if (!inCollege(principal, existing.collegeId)) return denied();
+    if (!readAllowed(principal, { collegeId: existing.collegeId })) return denied();
     try {
       if (await deps.repo.scaleInUse(params.scaleId)) throw new ScaleInUseError();
       await deps.repo.deleteScale(params.scaleId);
@@ -147,7 +151,7 @@ export function createResultsHandlers(deps: ResultsHandlerDeps): Record<string, 
     const query = ctx.request.query as { academicYear: string };
     const position = await deps.directory.classPath(params.classId);
     if (position === null) return notFound("no such class");
-    if (!inCollege(principal, position.collegeId)) return denied();
+    if (!readAllowed(principal, { collegeId: position.collegeId })) return denied();
     const rows = await deps.repo.creditsFor(params.classId, query.academicYear);
     const names = await deps.directory.namesFor(rows.map((row) => row.subjectId));
     return {
@@ -171,7 +175,7 @@ export function createResultsHandlers(deps: ResultsHandlerDeps): Record<string, 
     };
     const position = await deps.directory.classPath(body.classId);
     if (position === null || position.departmentId === undefined) return notFound("no such class");
-    if (!inCollege(principal, position.collegeId)) return denied();
+    if (!readAllowed(principal, { collegeId: position.collegeId })) return denied();
     for (const entry of body.entries) {
       const departmentId = await deps.directory.subjectDepartment(entry.subjectId);
       if (departmentId === null || departmentId !== position.departmentId) {

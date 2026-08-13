@@ -209,6 +209,7 @@ function buildWebRuntime(): WebRuntime {
   const results = createResultsModule({
     db,
     audit: system.service.audit,
+    scopeChecker: identityCore.scopeChecker,
     peopleDirectory: people.service.directory,
     marksReadModel: academics.service.readModel,
   });
