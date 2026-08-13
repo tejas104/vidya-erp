@@ -225,6 +225,7 @@ function buildWebRuntime(): WebRuntime {
   const leave = createLeaveModule({
     db,
     audit: system.service.audit,
+    scopeChecker: identityCore.scopeChecker,
     peopleDirectory: people.service.directory,
   });
 

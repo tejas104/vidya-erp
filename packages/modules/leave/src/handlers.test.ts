@@ -1,8 +1,34 @@
 import { describe, expect, it } from "vitest";
-import type { Principal } from "@vidya/platform";
+import type { OrgPath, Principal, ScopeChecker, ScopeDecision } from "@vidya/platform";
 import { createLeaveHandlers } from "./handlers";
 import type { LeaveRepo } from "./repo";
 import type { LeaveRequestRow } from "./db/schema";
+
+/** Faithful-enough fake of the real matrix for this module's tests: org
+ * containment (identical prefix rule to identity/core/scope-checker.ts
+ * `covers()`) plus the two action rules leave.decide actually exercises —
+ * "read" grants to any covering grant, "approve" to hod only. */
+function fakeScopeChecker(): ScopeChecker {
+  function covers(g: OrgPath, r: OrgPath): boolean {
+    return (
+      g.collegeId === r.collegeId &&
+      (g.departmentId === undefined || g.departmentId === r.departmentId) &&
+      (g.classId === undefined || g.classId === r.classId) &&
+      (g.sectionId === undefined || g.sectionId === r.sectionId)
+    );
+  }
+  return {
+    check(caller, action, resource): ScopeDecision {
+      for (const grant of caller.grants) {
+        if (!covers(grant.org, resource.org)) continue;
+        if (action === "read" || (action === "approve" && grant.role === "hod")) {
+          return { granted: true, reason: "fake-allow" };
+        }
+      }
+      return { granted: false, reason: "fake-deny" };
+    },
+  };
+}
 
 const COLLEGE = "col_1";
 const DEPT_A = "dep_a";
@@ -93,7 +119,12 @@ function ctx(principalArg: Principal, request: { body?: unknown; params?: unknow
 }
 
 function makeHandlers(repo: LeaveRepo) {
-  return createLeaveHandlers({ repo, directory: fakeDirectory() as never, audit: recordingAudit as never });
+  return createLeaveHandlers({
+    repo,
+    directory: fakeDirectory() as never,
+    audit: recordingAudit as never,
+    scopeChecker: fakeScopeChecker(),
+  });
 }
 
 // --- tests ---------------------------------------------------------------
@@ -130,7 +161,12 @@ describe("leave.apply", () => {
     const repo = fakeRepo();
     // teacherByIdentityUser returns a teacher, but teacherDepartments is empty.
     const directory = { ...fakeDirectory(), teacherDepartments: async () => [] };
-    const handlers = createLeaveHandlers({ repo, directory: directory as never, audit: recordingAudit as never });
+    const handlers = createLeaveHandlers({
+      repo,
+      directory: directory as never,
+      audit: recordingAudit as never,
+      scopeChecker: fakeScopeChecker(),
+    });
     const res = await handlers["leave.apply"]!(
       ctx(principal({ id: "u_teacher", roles: ["teacher"] }), {
         body: { fromOn: "2026-08-01", toOn: "2026-08-02", kind: "duty", reason: "conf" },
@@ -174,7 +210,7 @@ describe("leave.decide", () => {
   it("lets the HOD of the request's department approve", async () => {
     const repo = fakeRepo([pendingRow()]);
     const res = await makeHandlers(repo)["leave.decide"]!(
-      ctx(principal({ id: "u_hod", roles: ["hod"], grants: [{ org: { collegeId: COLLEGE, departmentId: DEPT_A } } as never] }), {
+      ctx(principal({ id: "u_hod", roles: ["hod"], grants: [{ role: "hod", org: { collegeId: COLLEGE, departmentId: DEPT_A } } as never] }), {
         params: { requestId: "lvr_1" },
         body: { status: "approved" },
       }),
@@ -186,7 +222,7 @@ describe("leave.decide", () => {
   it("403s an HOD deciding a request outside their department", async () => {
     const repo = fakeRepo([pendingRow({ departmentId: DEPT_B })]);
     const res = await makeHandlers(repo)["leave.decide"]!(
-      ctx(principal({ id: "u_hod", roles: ["hod"], grants: [{ org: { collegeId: COLLEGE, departmentId: DEPT_A } } as never] }), {
+      ctx(principal({ id: "u_hod", roles: ["hod"], grants: [{ role: "hod", org: { collegeId: COLLEGE, departmentId: DEPT_A } } as never] }), {
         params: { requestId: "lvr_1" },
         body: { status: "approved" },
       }),
@@ -198,7 +234,7 @@ describe("leave.decide", () => {
     const repo = fakeRepo([pendingRow()]);
     // A teacher who is also somehow granted the dept — self-decision must still fail.
     const res = await makeHandlers(repo)["leave.decide"]!(
-      ctx(principal({ id: "u_teacher", roles: ["teacher", "hod"], grants: [{ org: { collegeId: COLLEGE, departmentId: DEPT_A } } as never] }), {
+      ctx(principal({ id: "u_teacher", roles: ["teacher", "hod"], grants: [{ role: "hod", org: { collegeId: COLLEGE, departmentId: DEPT_A } } as never] }), {
         params: { requestId: "lvr_1" },
         body: { status: "approved" },
       }),
@@ -236,7 +272,7 @@ describe("leave.pending-for-me", () => {
       { id: "b", collegeId: COLLEGE, departmentId: DEPT_B, teacherId: "tch_9", fromOn: "2026-08-01", toOn: "2026-08-01", kind: "casual", reason: "y", status: "pending", decidedBy: null, decidedAt: null, decisionNote: null, createdAt: new Date(), updatedAt: new Date() },
     ]);
     const res = await makeHandlers(repo)["leave.pending-for-me"]!(
-      ctx(principal({ id: "u_hod", roles: ["hod"], grants: [{ org: { collegeId: COLLEGE, departmentId: DEPT_A } } as never] }), {}),
+      ctx(principal({ id: "u_hod", roles: ["hod"], grants: [{ role: "hod", org: { collegeId: COLLEGE, departmentId: DEPT_A } } as never] }), {}),
     );
     expect(res.status).toBe(200);
     const ids = (res.body as { requests: { id: string }[] }).requests.map((r) => r.id);
@@ -251,6 +287,29 @@ describe("leave.pending-for-me", () => {
     const res = await makeHandlers(repo)["leave.pending-for-me"]!(
       ctx(principal({ id: "u_principal", roles: ["principal"], grants: [{ org: { collegeId: COLLEGE } } as never] }), {}),
     );
+    const ids = (res.body as { requests: { id: string }[] }).requests.map((r) => r.id).sort();
+    expect(ids).toEqual(["a", "b"]);
+  });
+
+  it("shows every college's pending rows for a multi-college principal (2b: not just grants[0])", async () => {
+    const COLLEGE_2 = "col_2";
+    const repo = fakeRepo([
+      { id: "a", collegeId: COLLEGE, departmentId: null, teacherId: TEACHER, fromOn: "2026-08-01", toOn: "2026-08-01", kind: "casual", reason: "x", status: "pending", decidedBy: null, decidedAt: null, decisionNote: null, createdAt: new Date(), updatedAt: new Date() },
+      { id: "b", collegeId: COLLEGE_2, departmentId: null, teacherId: "tch_9", fromOn: "2026-08-01", toOn: "2026-08-01", kind: "casual", reason: "y", status: "pending", decidedBy: null, decidedAt: null, decisionNote: null, createdAt: new Date(), updatedAt: new Date() },
+    ]);
+    const res = await makeHandlers(repo)["leave.pending-for-me"]!(
+      ctx(
+        principal({
+          id: "u_principal2",
+          roles: ["principal"],
+          // A grant in COLLEGE would previously win via grants[0]; putting
+          // the COLLEGE_2 grant first makes a naive grants[0] read regress.
+          grants: [{ org: { collegeId: COLLEGE_2 } }, { org: { collegeId: COLLEGE } }] as never,
+        }),
+        {},
+      ),
+    );
+    expect(res.status).toBe(200);
     const ids = (res.body as { requests: { id: string }[] }).requests.map((r) => r.id).sort();
     expect(ids).toEqual(["a", "b"]);
   });
