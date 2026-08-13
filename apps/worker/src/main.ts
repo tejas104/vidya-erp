@@ -218,6 +218,7 @@ async function main(): Promise<void> {
   const results = createResultsModule({
     db,
     audit: system.service.audit,
+    scopeChecker: identityCore.scopeChecker,
     peopleDirectory: people.service.directory,
     marksReadModel: academics.service.readModel,
   });
@@ -226,6 +227,7 @@ async function main(): Promise<void> {
   const exams = createExamsModule({
     db,
     audit: system.service.audit,
+    scopeChecker: identityCore.scopeChecker,
     peopleDirectory: people.service.directory,
     timetableRead: timetable.service.readModel,
   });
@@ -234,6 +236,7 @@ async function main(): Promise<void> {
   const leave = createLeaveModule({
     db,
     audit: system.service.audit,
+    scopeChecker: identityCore.scopeChecker,
     peopleDirectory: people.service.directory,
   });
 
@@ -297,6 +300,7 @@ async function main(): Promise<void> {
   const notices = createNoticesModule({
     db,
     audit: system.service.audit,
+    scopeChecker: identityCore.scopeChecker,
     peopleDirectory: people.service.directory,
   });
 
