@@ -1,4 +1,6 @@
+import { readFileSync } from "node:fs";
 import {
+  LICENSE_PUBLIC_KEY,
   Lifecycle,
   RoleRequirementPolicy,
   assertModuleWiring,
@@ -13,7 +15,9 @@ import {
   loadConfig,
   pingPostgres,
   pingRedis,
+  verifyLicense,
   type BoundRouteHandler,
+  type LicenseStatus,
   type Logger,
   type OrgDirectory,
   type RouteDependencies,
@@ -66,6 +70,30 @@ export interface WebRuntime {
   readonly handlers: Readonly<Record<string, BoundRouteHandler>>;
   readonly lifecycle: Lifecycle;
   readonly logger: Logger;
+  /** Verified once at boot (#12 step 4 dependency). Presentation only — see
+   * packages/platform/src/license/verify.ts; nothing reads this to allow or
+   * deny a request. */
+  readonly license: LicenseStatus;
+}
+
+/** VIDYA_LICENSE (inline token) wins; VIDYA_LICENSE_FILE is a path to read
+ * it from, for deployments that prefer a mounted secret file. Neither set,
+ * or an unreadable file, both resolve to "" — verifyLicense("") is
+ * `absent`, never a boot failure. */
+function readLicenseToken(): string {
+  const inline = process.env.VIDYA_LICENSE;
+  if (inline !== undefined && inline !== "") {
+    return inline;
+  }
+  const filePath = process.env.VIDYA_LICENSE_FILE;
+  if (filePath === undefined || filePath === "") {
+    return "";
+  }
+  try {
+    return readFileSync(filePath, "utf8").trim();
+  } catch {
+    return "";
+  }
 }
 
 function buildWebRuntime(): WebRuntime {
@@ -113,6 +141,31 @@ function buildWebRuntime(): WebRuntime {
       { name: "redis", check: () => pingRedis(redis) },
     ],
   });
+
+  // License verification (#12 step 4 dependency): verified ONCE here and
+  // stored on the runtime, never re-verified per request. Expiry blocks
+  // nothing — LicenseStatus drives presentation (a later task wires the
+  // admin banner) and this one boot audit event, full stop. If status is
+  // invalid or absent the process still starts; a license problem is never
+  // a reason to refuse to boot a college's information system.
+  const license = verifyLicense(readLicenseToken(), LICENSE_PUBLIC_KEY, new Date(), config.edition);
+  system.service.audit
+    .record({
+      module: "system",
+      action: "system.license-check",
+      actorType: "system",
+      actorId: null,
+      resourceType: "license",
+      resourceId: license.kind === "invalid" || license.kind === "absent" ? null : license.claims.id,
+      requestId: null,
+      details: {
+        status: license.kind,
+        ...(license.kind === "invalid" ? { reason: license.reason } : {}),
+      },
+    })
+    .catch((error: unknown) => {
+      logger.error({ error }, "failed to write boot license-check audit event");
+    });
 
   const identityCore = createIdentityCore({
     redis,
@@ -366,7 +419,7 @@ function buildWebRuntime(): WebRuntime {
     },
     "web runtime composed",
   );
-  return { handlers, lifecycle, logger };
+  return { handlers, lifecycle, logger, license };
 }
 
 const runtimeKey = Symbol.for("vidya.web.runtime");

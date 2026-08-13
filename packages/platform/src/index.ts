@@ -139,3 +139,6 @@ export {
 } from "./csv/escape-csv";
 
 export { generateTemporaryPassword, TEMP_PASSWORD_ALPHABET } from "./credentials/temp-password";
+
+export { verifyLicense, type LicenseClaims, type LicenseEdition, type LicenseInvalidReason, type LicenseStatus } from "./license/verify";
+export { LICENSE_PUBLIC_KEY, LICENSE_PUBLIC_KEY_DER_BASE64 } from "./license/public-key";
