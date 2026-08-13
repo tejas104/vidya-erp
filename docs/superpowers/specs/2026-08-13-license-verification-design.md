@@ -36,7 +36,9 @@ Verification is: decode → verify signature over the raw payload bytes → pars
 }
 ```
 
-Unknown fields must be **ignored, not rejected** — that is what lets you add a claim later without invalidating every license already in the field.
+**`customer` and `edition` are REQUIRED claims** (owner-ruled). A payload missing either rejects as `malformed` — it must never default, fall back, or be treated as a wildcard. An unsigned-institution licence is a licence that fits every institution.
+
+Unknown fields must be **ignored, not rejected** — that is what lets you add a claim later without invalidating every license already in the field. Required-but-missing and unknown-but-present are opposite cases and must be handled oppositely.
 
 ### Where it lives
 
@@ -50,34 +52,33 @@ type LicenseStatus =
   | { kind: "valid";    claims: LicenseClaims; daysRemaining: number }
   | { kind: "grace";    claims: LicenseClaims; daysOverdue: number }
   | { kind: "expired";  claims: LicenseClaims; daysOverdue: number }
-  | { kind: "invalid";  reason: "malformed" | "bad-signature" | "unsupported-version" | "not-yet-valid" }
+  | { kind: "invalid";  reason: "malformed" | "bad-signature" | "unsupported-version" | "not-yet-valid" | "edition-mismatch" }
   | { kind: "absent" };
 ```
 A boolean would force every call site to re-derive *why*, and the why is the whole product surface.
 
 ---
 
-## OWNER DECISION 1 — what expiry actually does
+## DECISION 1 — what expiry does: **NOTHING IS EVER BLOCKED** (owner-ruled 2026-08-13)
 
-This is the decision that matters most, and it is a business call, not a technical one.
-
-This system runs attendance, exams and fee collection for a college. **Hard-locking an expired install mid-term would lock a college out of its own attendance records during a working day.** That is a support incident, a reputational event, and plausibly a contractual problem — caused by your own enforcement, not by any failure of theirs.
-
-**My recommendation — graduated, never destructive:**
+**Ruling: banner only. No write-blocking, no grace-period cliff, no degraded mode. Ever.**
 
 | State | Behaviour |
 |---|---|
 | >30 days remaining | Nothing visible |
-| ≤30 days | Banner for admin roles only |
+| ≤30 days | Banner for admin roles |
 | ≤7 days | Banner for all staff roles |
-| Expired, within 30-day grace | Prominent persistent banner; **everything keeps working** |
-| Past grace | **Writes blocked, reads and exports always allowed.** Attendance/marks/fees entry refuses with a clear licensing message; viewing and exporting existing data never stops |
+| Expired | Persistent admin-only warning. **Every feature keeps working, indefinitely.** |
 
-"Reads and exports always allowed" is the line I would not cross. A customer in a payment dispute must always be able to get their own data out. Holding a college's attendance history hostage is the kind of thing that ends up in a procurement blacklist.
+I had proposed blocking writes past a 30-day grace. The owner overruled it, and the reasoning is better than mine: the real commercial leverage is the AMC — no updates, no patches, no support — plus a contract making post-term use a breach. Write-blocking adds almost nothing on top of that, and it buys the one scenario you cannot afford: a school mid-renewal, mid-term, unable to mark attendance. That is not an inconvenience, it is a story that travels to every principal in the distribution network.
 
-**Alternatives if you disagree:** banner-only forever (weakest lever, zero risk), or hard block at expiry (strongest lever, real risk of harming a paying customer mid-renewal).
+The differentiator against MasterSoft is being the vendor who does not hold an institution hostage. This makes that literally true, which means it can be said in a sales meeting.
 
-## OWNER DECISION 2 — the clock
+A customer genuinely running a year past expiry is a contract conversation, not an engineering one.
+
+**Implementation consequence: there is no enforcement code to write.** No middleware, no write gate, no degraded paths, no per-route licence checks. `LicenseStatus` drives presentation and one audit event. That removes an entire class of "licence check broke a working install" bugs before it exists — which is a real engineering win on top of the commercial one.
+
+## DECISION 2 — the clock: high-water mark (owner-ruled 2026-08-13, as proposed)
 
 On-prem means the customer owns the clock. Setting it back defeats expiry, and no signature scheme fixes that.
 
@@ -85,11 +86,15 @@ On-prem means the customer owns the clock. Setting it back defeats expiry, and n
 
 Do **not** phone home to a time server. This product's selling point is that it runs air-gapped.
 
-## OWNER DECISION 3 — seats
+## DECISION 3 — seats: record and surface, never enforce (owner-ruled 2026-08-13)
 
-Does `seats` enforce, or record?
+Show actual-vs-licensed on the admin system page, phrased so the clerk sees it before the vendor does:
 
-**Recommendation: record and surface, do not enforce.** Show actual-vs-licensed on the admin system page and audit when it is exceeded. Blocking student creation at seat N+1 during an admissions rush is exactly the wrong moment to be right, and the commercial conversation lands better with evidence than with a locked screen. Enforcement can come later if the data shows it is needed; unwinding a bad block is much harder.
+> **1,247 of 1,200 licensed students**
+
+That wording is deliberate. It reads as information, not accusation, and it turns up in the renewal conversation as evidence the customer already knew about. Audit when the count crosses the licensed figure, once per boot — not per student created.
+
+Blocking admissions at seat N+1 is the single worst moment to be right about anything.
 
 ---
 
@@ -108,6 +113,8 @@ Two more I would add beyond your six:
 
 7. **Unknown claims are ignored** — a payload with a future field still verifies. This is what makes the format forward-compatible.
 8. **`v` mismatch is rejected cleanly** — `v: 2` against a v1 verifier returns `unsupported-version`, not a crash and not silent acceptance.
+9. **Wrong edition rejects** (owner-added) — a validly-signed `edition: "school"` licence running under `VIDYA_EDITION=college` must reject. Both #12 step 4 and #13 Part 1 depend on this exact rejection, so it is a load-bearing case rather than a completeness one. Note the licence is *cryptographically valid* here — the rejection is a claims mismatch, and the status must say so distinctly (`edition-mismatch`), not blur into `bad-signature`.
+10. **Missing required claim rejects** — payload without `customer`, or without `edition`, returns `malformed`. Explicitly assert it does not default.
 
 ## Issuing CLI
 
@@ -125,8 +132,15 @@ npx tsx scripts/license-issue.ts \
 
 Prints the token to stdout, nothing else, so it pipes cleanly.
 
-Non-negotiables for the issuer:
-- **The private key is a path argument, never a repo file, never an env default.** If someone can run the issuer from a clean checkout without supplying a key, the key is somewhere it should not be.
+### The private key — the most valuable file the company owns
+
+Locked before implementation (owner):
+- **Path argument only.** Never a repo file, never an env default, never a fallback location. If someone can issue a licence from a clean checkout without supplying a key, the key is somewhere it should not be.
+- **It needs a real home, decided now, not later:** an encrypted file protected by a passphrase, with a **second offline copy on encrypted storage that is not the development laptop**.
+- The failure modes are asymmetric and both terminal. Lose it: no licence can ever be issued or renewed again, for any customer. Leak it: anyone can mint licences indefinitely, and there is no revocation path (see Out of scope). Neither is recoverable by engineering.
+- The issuer must never print, log or echo the key or its passphrase — only the resulting token to stdout and the decoded claims to stderr.
+
+Other non-negotiables:
 - Refuse to issue with `--expires` in the past — the most likely operator slip.
 - Print the decoded claims to **stderr** for eyeball confirmation before the operator sends it to a customer.
 - A `--verify <token>` mode using only the public key, so support can diagnose a customer's license without touching the private key.
