@@ -335,6 +335,7 @@ function buildStack() {
   const notices = createNoticesModule({
     db,
     audit: system.service.audit,
+    scopeChecker: core.scopeChecker,
     peopleDirectory: people.service.directory,
   });
 
@@ -342,6 +343,7 @@ function buildStack() {
   const results = createResultsModule({
     db,
     audit: system.service.audit,
+    scopeChecker: core.scopeChecker,
     peopleDirectory: people.service.directory,
     marksReadModel: academics.service.readModel,
   });
@@ -350,6 +352,7 @@ function buildStack() {
   const exams = createExamsModule({
     db,
     audit: system.service.audit,
+    scopeChecker: core.scopeChecker,
     peopleDirectory: people.service.directory,
     timetableRead: timetable.service.readModel,
   });
@@ -358,6 +361,7 @@ function buildStack() {
   const leave = createLeaveModule({
     db,
     audit: system.service.audit,
+    scopeChecker: core.scopeChecker,
     peopleDirectory: people.service.directory,
   });
 
@@ -1816,13 +1820,27 @@ async function main(): Promise<void> {
       });
       if (entered2.status !== 200) throw new Error(`college2 marks: ${entered2.status}`);
 
-      // A pending leave request — left undecided on purpose so the
-      // containment matrix can attempt to decide it from college 1.
-      const leave2 = await call("leave.apply", {
-        cookie: eng2TeacherCookie,
-        body: { fromOn: "2026-09-10", toOn: "2026-09-10", kind: "casual", reason: "Personal work" },
-      });
-      if (leave2.status !== 201) throw new Error(`college2 leave apply: ${leave2.status}`);
+      // Pending leave requests — left undecided on purpose so the
+      // containment matrix can attempt to decide them from college 1. Three,
+      // not one: a `leave.decide` containment probe that gets mutation-
+      // tested with the scope check disabled performs a REAL write (the
+      // decide succeeds and the request stops being pending), so a single
+      // seeded row gets consumed by the first such run and every run after
+      // it needs manual SQL to reset it. Self-healing beats a documented
+      // cleanup step — this gives repeated mutation-testing passes a few
+      // spares before a reseed is needed.
+      const leave2Dates: readonly [string, string][] = [
+        ["2026-09-10", "2026-09-10"],
+        ["2026-09-11", "2026-09-11"],
+        ["2026-09-12", "2026-09-12"],
+      ];
+      for (const [fromOn, toOn] of leave2Dates) {
+        const leave2 = await call("leave.apply", {
+          cookie: eng2TeacherCookie,
+          body: { fromOn, toOn, kind: "casual", reason: "Personal work" },
+        });
+        if (leave2.status !== 201) throw new Error(`college2 leave apply (${fromOn}): ${leave2.status}`);
+      }
 
       const revoked = await call("identity.grant-remove", {
         cookie: college2AdminCookie,
@@ -1832,7 +1850,7 @@ async function main(): Promise<void> {
 
       console.log(
         "  containment fixture: college 2 (Northgate Junior College) — department, class, section, " +
-          `${fygnStudentIds.length} students, real marks, 1 pending leave request; temporary admin grant revoked`,
+          `${fygnStudentIds.length} students, real marks, ${leave2Dates.length} pending leave requests; temporary admin grant revoked`,
       );
     }
 

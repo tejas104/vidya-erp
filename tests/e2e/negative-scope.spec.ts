@@ -243,6 +243,18 @@ const noticesCrossCollege: Probe = {
   expect: P403,
 };
 
+const resultsCrossCollege: Probe = {
+  label: "results.class-results — another college's class results preview",
+  method: "GET",
+  path: (_ids, c2) =>
+    `/api/v1/results/classes/${encodeURIComponent(c2.classId)}/preview?academicYear=${YEAR}&scaleId=containment-probe-no-such-scale`,
+  // Single up-front gate — results/src/handlers.ts `resolveClassAndScale`'s
+  // readAllowed() check (shared by classResults/publish). It runs BEFORE the
+  // scale is looked up, so a nonexistent scaleId still proves containment
+  // rather than a 404 on the scale.
+  expect: P403,
+};
+
 /** Per role: every resource its route auth permits it to attempt, aimed at
  *  a record outside its own scope. See the file-header comment above for
  *  what is excluded from each role's row and why. */
@@ -256,6 +268,7 @@ const CONTAINMENT: Partial<Record<RoleKey, Probe[]>> = {
     examScheduleCrossCollege,
     reportsCrossCollege,
     noticesCrossCollege,
+    resultsCrossCollege,
   ],
   principal: [
     studentCrossCollege,
@@ -265,6 +278,7 @@ const CONTAINMENT: Partial<Record<RoleKey, Probe[]>> = {
     examScheduleCrossCollege,
     reportsCrossCollege,
     noticesCrossCollege,
+    resultsCrossCollege,
   ],
   hod: [
     studentCrossCollege,
@@ -299,20 +313,47 @@ test.describe("negative scope matrix — containment (permitted route, wrong rec
     c2 = await discoverCollege2(baseURL!);
   });
 
+  /**
+   * One test() per (role, probe) — NOT one test looping every probe for a
+   * role. A loop aborts on its first failed assertion, so every probe after
+   * a failure is silently never issued: mutation testing proved this
+   * concretely — 3 probes (studentOtherDept for hod/teacher/classTeacher)
+   * could never be observed failing, because studentCrossCollege precedes
+   * them and shares the same chokepoint, so the loop died before their
+   * fetch was ever made. That is the "green suite hiding unrun checks"
+   * pattern. Splitting makes every probe independently observable
+   * regardless of what else in the row passes or fails.
+   *
+   * Login cost stays one per role, not one per probe: a per-role
+   * `test.describe` opens the session in `beforeAll` and disposes it in
+   * `afterAll`, shared by every probe test nested inside. 7 roles x 1 login
+   * each stays well under the per-username rate limiter no matter how many
+   * probes a role ends up with.
+   */
   for (const [role, probes] of Object.entries(CONTAINMENT) as [RoleKey, Probe[]][]) {
-    test(`${role}: containment across ${probes.length} resource(s) outside its scope`, async ({ baseURL }) => {
-      const ctx = await apiSession(baseURL!, role);
+    test.describe(`${role}: containment across ${probes.length} resource(s) outside its scope`, () => {
+      let ctx: APIRequestContext;
+
+      test.beforeAll(async ({ baseURL }) => {
+        ctx = await apiSession(baseURL!, role);
+      });
+
+      test.afterAll(async () => {
+        await ctx.dispose();
+      });
+
       for (const probe of probes) {
-        const res = await ctx.fetch(probe.path(ids, c2), { method: probe.method, data: probe.body?.(ids, c2) });
-        if (probe.expect.kind === "403") {
-          expect(res.status(), `${role} — ${probe.label}`).toBe(403);
-        } else {
-          expect(res.status(), `${role} — ${probe.label} (expected 200 + filtered-empty)`).toBe(200);
-          const json = (await res.json()) as Record<string, unknown[]>;
-          expect(json[probe.expect.field], `${role} — ${probe.label} (filtered-empty)`).toEqual([]);
-        }
+        test(probe.label, async () => {
+          const res = await ctx.fetch(probe.path(ids, c2), { method: probe.method, data: probe.body?.(ids, c2) });
+          if (probe.expect.kind === "403") {
+            expect(res.status(), `${role} — ${probe.label}`).toBe(403);
+          } else {
+            expect(res.status(), `${role} — ${probe.label} (expected 200 + filtered-empty)`).toBe(200);
+            const json = (await res.json()) as Record<string, unknown[]>;
+            expect(json[probe.expect.field], `${role} — ${probe.label} (filtered-empty)`).toEqual([]);
+          }
+        });
       }
-      await ctx.dispose();
     });
   }
 });
