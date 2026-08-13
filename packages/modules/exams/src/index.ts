@@ -12,6 +12,7 @@ import {
   type AuditLogger,
   type Db,
   type RuntimeModule,
+  type ScopeChecker,
 } from "@vidya/platform";
 import type { PeopleDirectory } from "@vidya/module-people";
 import type { TimetableReadModel } from "@vidya/module-timetable";
@@ -27,6 +28,7 @@ export interface ExamsModuleDeps {
   readonly audit: AuditLogger;
   readonly peopleDirectory: PeopleDirectory;
   readonly timetableRead: TimetableReadModel;
+  readonly scopeChecker: ScopeChecker;
 }
 
 export interface ExamsService {
@@ -36,12 +38,13 @@ export interface ExamsService {
 
 export function createExamsModule(deps: ExamsModuleDeps): RuntimeModule<ExamsService> {
   const repo = createExamsRepo(deps.db);
+  const shared = { repo, directory: deps.peopleDirectory, scopeChecker: deps.scopeChecker };
   const module: RuntimeModule<ExamsService> = {
     definition: examsModuleDefinition,
-    handlers: createExamsHandlers({ repo, directory: deps.peopleDirectory, timetable: deps.timetableRead }),
+    handlers: createExamsHandlers({ ...shared, timetable: deps.timetableRead }),
     jobProcessors: {},
     readinessChecks: [],
-    service: { hallTicket: createHallTicketSource({ repo, directory: deps.peopleDirectory }) },
+    service: { hallTicket: createHallTicketSource(shared) },
   };
   assertModuleWiring(module);
   return module;

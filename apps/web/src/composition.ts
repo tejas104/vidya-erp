@@ -217,6 +217,7 @@ function buildWebRuntime(): WebRuntime {
   const exams = createExamsModule({
     db,
     audit: system.service.audit,
+    scopeChecker: identityCore.scopeChecker,
     peopleDirectory: people.service.directory,
     timetableRead: timetable.service.readModel,
   });

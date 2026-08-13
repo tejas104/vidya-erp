@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { pino } from "pino";
-import type { Principal, RouteContext } from "@vidya/platform";
+import type { OrgPath, Principal, RouteContext, ScopeChecker, ScopeDecision } from "@vidya/platform";
 import type { PeopleDirectory } from "@vidya/module-people";
 import type { TimetableReadModel } from "@vidya/module-timetable";
 import { createExamsHandlers, createHallTicketSource, isoWeekday } from "./handlers";
@@ -9,6 +9,25 @@ import type { ExamSeriesRow, ExamSlotRow } from "./db/schema";
 
 const logger = pino({ level: "silent" });
 const YEAR = "2026-27";
+
+/** Org-containment-only fake — identical prefix rule to the real matrix's
+ * `covers()`; every call site in this module checks "read" only. */
+function fakeScopeChecker(): ScopeChecker {
+  function covers(g: OrgPath, r: OrgPath): boolean {
+    return (
+      g.collegeId === r.collegeId &&
+      (g.departmentId === undefined || g.departmentId === r.departmentId) &&
+      (g.classId === undefined || g.classId === r.classId) &&
+      (g.sectionId === undefined || g.sectionId === r.sectionId)
+    );
+  }
+  return {
+    check(caller, _action, resource): ScopeDecision {
+      const granted = caller.grants.some((grant) => covers(grant.org, resource.org));
+      return { granted, reason: granted ? "fake-allow" : "fake-deny" };
+    },
+  };
+}
 
 function principal(roles: Principal["roles"], grants: Principal["grants"], id = "u_1"): Principal {
   return { id, kind: "user", displayName: "x", roles, scopes: [], grants, sessionId: "s" };
@@ -102,7 +121,7 @@ function makeDeps() {
         : [],
   } as unknown as TimetableReadModel;
 
-  return { repo, directory, timetable };
+  return { repo, directory, timetable, scopeChecker: fakeScopeChecker() };
 }
 
 // 2026-11-02 is a Monday.

@@ -1,4 +1,4 @@
-import type { OrgPath, Principal, RouteHandler } from "@vidya/platform";
+import type { OrgPath, Principal, RouteHandler, ScopeChecker } from "@vidya/platform";
 import type { PeopleDirectory } from "@vidya/module-people";
 import type { TimetableReadModel } from "@vidya/module-timetable";
 import { DuplicateSeriesError, DuplicateSlotError, type ExamsRepo } from "./repo";
@@ -8,6 +8,7 @@ export interface ExamsHandlerDeps {
   readonly repo: ExamsRepo;
   readonly directory: PeopleDirectory;
   readonly timetable: TimetableReadModel;
+  readonly scopeChecker: ScopeChecker;
 }
 
 function notFound(message = "not found") {
@@ -17,18 +18,6 @@ function denied() {
   return { status: 403, body: { message: "access denied" } };
 }
 
-function inCollege(principal: Principal, collegeId: string): boolean {
-  return principal.grants.some((grant) => grant.org.collegeId === collegeId);
-}
-
-/** Same overlap rule as the noticeboard: no defined level may contradict. */
-export function orgOverlaps(a: OrgPath, b: OrgPath): boolean {
-  if (a.collegeId !== b.collegeId) return false;
-  if (a.departmentId !== undefined && b.departmentId !== undefined && a.departmentId !== b.departmentId) return false;
-  if (a.classId !== undefined && b.classId !== undefined && a.classId !== b.classId) return false;
-  return true;
-}
-
 /** ISO weekday for a yyyy-mm-dd date: 1=Mon … 7=Sun (timetable uses 1–6). */
 export function isoWeekday(onDate: string): number {
   const day = new Date(`${onDate}T00:00:00Z`).getUTCDay();
@@ -36,6 +25,13 @@ export function isoWeekday(onDate: string): number {
 }
 
 export function createExamsHandlers(deps: ExamsHandlerDeps): Record<string, RouteHandler> {
+  /** Org containment — delegated to the shared matrix. Every caller here is
+   * either route-gated ADMIN_ONLY (writes; admin's read is unconditional
+   * once covers() matches) or reaches this via "read" directly. */
+  function readAllowed(principal: Principal, org: OrgPath): boolean {
+    return deps.scopeChecker.check(principal, "read", { module: "exams", resourceType: "exam-schedule", org }).granted;
+  }
+
   async function slotView(row: ExamSlotRow, seriesName?: string) {
     const names = await deps.directory.namesFor([row.subjectId, ...(seriesName === undefined ? [row.seriesId] : [])]);
     return {
@@ -99,7 +95,7 @@ export function createExamsHandlers(deps: ExamsHandlerDeps): Record<string, Rout
     const principal = ctx.principal as Principal;
     const body = ctx.request.body as { collegeId: string; name: string; academicYear: string; term: string };
     if (!(await deps.directory.collegeExists(body.collegeId))) return notFound("no such college");
-    if (!inCollege(principal, body.collegeId)) return denied();
+    if (!readAllowed(principal, { collegeId: body.collegeId })) return denied();
     try {
       const row = await deps.repo.createSeries({ ...body, term: body.term.trim() });
       return { status: 201, body: seriesView(row), audit: { resourceId: row.id, details: { name: row.name, academicYear: row.academicYear } } };
@@ -112,7 +108,7 @@ export function createExamsHandlers(deps: ExamsHandlerDeps): Record<string, Rout
   const seriesList: RouteHandler = async (ctx) => {
     const principal = ctx.principal as Principal;
     const query = ctx.request.query as { collegeId: string; academicYear: string };
-    if (!inCollege(principal, query.collegeId)) return denied();
+    if (!readAllowed(principal, { collegeId: query.collegeId })) return denied();
     const rows = await deps.repo.listSeries(query.collegeId, query.academicYear);
     return { status: 200, body: { series: rows.map(seriesView) } };
   };
@@ -122,7 +118,7 @@ export function createExamsHandlers(deps: ExamsHandlerDeps): Record<string, Rout
     const params = ctx.request.params as { seriesId: string };
     const row = await deps.repo.getSeries(params.seriesId);
     if (row === null) return notFound("no such series");
-    if (!inCollege(principal, row.collegeId)) return denied();
+    if (!readAllowed(principal, { collegeId: row.collegeId })) return denied();
     await deps.repo.deleteSeries(row.id);
     return { status: 200, body: { ok: true as const }, audit: { resourceId: row.id, details: { name: row.name } } };
   };
@@ -135,7 +131,7 @@ export function createExamsHandlers(deps: ExamsHandlerDeps): Record<string, Rout
     };
     const series = await deps.repo.getSeries(body.seriesId);
     if (series === null) return notFound("no such series");
-    if (!inCollege(principal, series.collegeId)) return denied();
+    if (!readAllowed(principal, { collegeId: series.collegeId })) return denied();
     const position = await deps.directory.classPath(body.classId);
     if (position === null || position.collegeId !== series.collegeId || position.departmentId === undefined) {
       return notFound("no such class in this college");
@@ -177,7 +173,7 @@ export function createExamsHandlers(deps: ExamsHandlerDeps): Record<string, Rout
     const params = ctx.request.params as { slotId: string };
     const row = await deps.repo.getSlot(params.slotId);
     if (row === null) return notFound("no such slot");
-    if (!inCollege(principal, row.collegeId)) return denied();
+    if (!readAllowed(principal, { collegeId: row.collegeId })) return denied();
     await deps.repo.deleteSlot(row.id);
     return { status: 200, body: { ok: true as const }, audit: { resourceId: row.id, details: { onDate: row.onDate, subjectId: row.subjectId } } };
   };
@@ -188,7 +184,7 @@ export function createExamsHandlers(deps: ExamsHandlerDeps): Record<string, Rout
     const query = ctx.request.query as { academicYear: string };
     const position = await deps.directory.classPath(params.classId);
     if (position === null) return notFound("no such class");
-    if (!principal.grants.some((grant) => orgOverlaps(grant.org, position))) return denied();
+    if (!readAllowed(principal, position)) return denied();
     const rows = await deps.repo.slotsForClass(params.classId, query.academicYear);
     return { status: 200, body: { slots: await viewAll(rows) } };
   };
@@ -259,7 +255,7 @@ export type HallTicketResult =
 export type HallTicketSource = (principal: Principal, studentId: string) => Promise<HallTicketResult>;
 
 export function createHallTicketSource(
-  deps: Pick<ExamsHandlerDeps, "repo" | "directory">,
+  deps: Pick<ExamsHandlerDeps, "repo" | "directory" | "scopeChecker">,
 ): HallTicketSource {
   return async (principal, studentId) => {
     const brief = (await deps.directory.studentsBrief([studentId])).get(studentId);
@@ -269,7 +265,11 @@ export function createHallTicketSource(
 
     const own = await deps.directory.studentByIdentityUser(principal.id);
     const isSelf = own !== null && own.studentId === studentId;
-    const staffCovers = principal.grants.some((grant) => orgOverlaps(grant.org, position));
+    const staffCovers = deps.scopeChecker.check(principal, "read", {
+      module: "exams",
+      resourceType: "exam-schedule",
+      org: position,
+    }).granted;
     if (!isSelf && !staffCovers) return { access: "forbidden" };
 
     const classId = position.classId;
