@@ -20,6 +20,233 @@ async function tableExists(name: string): Promise<boolean> {
   return (result.rowCount ?? 0) > 0;
 }
 
+async function columnExists(table: string, column: string): Promise<boolean> {
+  const result = await pool.query(
+    "SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = $1 AND column_name = $2",
+    [table, column],
+  );
+  return (result.rowCount ?? 0) > 0;
+}
+
+async function indexExists(name: string): Promise<boolean> {
+  const result = await pool.query(
+    "SELECT 1 FROM pg_indexes WHERE schemaname = 'public' AND indexname = $1",
+    [name],
+  );
+  return (result.rowCount ?? 0) > 0;
+}
+
+/** Definition text of a named CHECK/UNIQUE/etc constraint on `table`, or null
+ *  if it doesn't exist. Used for migrations that DROP+ADD a constraint under
+ *  the SAME name (widening/narrowing a CHECK) — existence alone can't prove
+ *  the up/down did anything, since the name never changes. */
+async function constraintDef(table: string, constraint: string): Promise<string | null> {
+  const result = await pool.query(
+    `SELECT pg_get_constraintdef(c.oid) AS def
+     FROM pg_constraint c JOIN pg_class t ON t.oid = c.conrelid
+     WHERE t.relname = $1 AND c.conname = $2`,
+    [table, constraint],
+  );
+  return (result.rows[0]?.def as string | undefined) ?? null;
+}
+
+/**
+ * Per-migration expectations (ADR-0008 forensic follow-up, docs/audit-
+ * 2026-08-10-forensic.md item D2): what each migration's *up* introduces,
+ * so a rollback+reapply cycle can assert real schema behaviour instead of
+ * just "every .sql has a paired .down.sql" (file pairing, not behaviour —
+ * the class of bug this misses is a down.sql that runs without error but
+ * doesn't actually restore the prior schema, e.g. identity/0002_student_role
+ * forgetting to narrow the role CHECK back).
+ *
+ * One row per migration, table-driven rather than hand-written per-migration
+ * test bodies — adding a migration means adding a row here.
+ */
+interface MigrationExpectation {
+  /** Tables the up migration creates (must vanish on down). */
+  tables?: string[];
+  /** Columns the up migration adds to an existing table (must vanish on down). */
+  columns?: { table: string; column: string }[];
+  /** Indexes the up migration creates (must vanish on down). */
+  indexes?: string[];
+  /** A CHECK constraint that up widens/narrows in place (same name before
+   *  and after). `addedText` must appear in the definition after up and
+   *  must NOT appear after down. */
+  constraintDiffs?: { table: string; constraint: string; addedText: string }[];
+}
+
+const EXPECTATIONS: Record<string, MigrationExpectation> = {
+  "system/0000_audit_log": { tables: ["sys_audit_log"] },
+  "system/0001_user_preferences": { tables: ["sys_user_preferences"] },
+
+  "identity/0000_identity": {
+    tables: ["idn_users", "idn_user_roles", "idn_scope_grants", "idn_reset_tokens"],
+  },
+  "identity/0001_grant_provenance": {
+    columns: [
+      { table: "idn_scope_grants", column: "source" },
+      { table: "idn_scope_grants", column: "source_ref" },
+    ],
+    indexes: ["idn_scope_grants_source_ref_idx"],
+  },
+  "identity/0002_student_role": {
+    constraintDiffs: [
+      { table: "idn_user_roles", constraint: "idn_user_roles_role_check", addedText: "student" },
+    ],
+  },
+  "identity/0003_accountant_role": {
+    constraintDiffs: [
+      { table: "idn_user_roles", constraint: "idn_user_roles_role_check", addedText: "accountant" },
+    ],
+  },
+  "identity/0004_accountant_grant_shape": {
+    constraintDiffs: [
+      {
+        table: "idn_scope_grants",
+        constraint: "idn_scope_grants_shape_check",
+        addedText: "accountant",
+      },
+    ],
+  },
+
+  "people/0000_people": {
+    tables: [
+      "ppl_colleges",
+      "ppl_departments",
+      "ppl_classes",
+      "ppl_sections",
+      "ppl_subjects",
+      "ppl_students",
+      "ppl_teachers",
+      "ppl_enrollments",
+      "ppl_teacher_assignments",
+      "ppl_imports",
+    ],
+  },
+  "people/0001_student_identity_link": {
+    columns: [{ table: "ppl_students", column: "identity_user_id" }],
+    indexes: ["ppl_students_identity_uq"],
+  },
+  "people/0002_student_lifecycle": {
+    constraintDiffs: [
+      { table: "ppl_students", constraint: "ppl_students_status_check", addedText: "backlog" },
+    ],
+  },
+  "people/0003_student_profile": {
+    columns: [
+      { table: "ppl_students", column: "phone" },
+      { table: "ppl_students", column: "guardian_name" },
+      { table: "ppl_students", column: "guardian_phone" },
+      { table: "ppl_students", column: "dob" },
+    ],
+  },
+  "people/0004_student_documents": { tables: ["ppl_student_documents"] },
+  "people/0005_import_warnings": {
+    columns: [
+      { table: "ppl_imports", column: "warning_rows" },
+      { table: "ppl_imports", column: "processed_rows" },
+      { table: "ppl_imports", column: "warnings" },
+    ],
+  },
+
+  "academics/0000_academics": {
+    tables: ["acd_attendance_sessions", "acd_attendance_entries", "acd_assessments", "acd_marks"],
+  },
+  "academics/0001_attendance_subject": {
+    columns: [{ table: "acd_attendance_sessions", column: "subject_id" }],
+  },
+
+  "analytics/0000_analytics": {
+    tables: ["anl_attendance_rollups", "anl_marks_rollups", "anl_student_flags"],
+  },
+
+  "reporting/0000_reporting": { tables: ["rpt_reports"] },
+  "reporting/0001_grade_card_kind": {
+    constraintDiffs: [
+      { table: "rpt_reports", constraint: "rpt_reports_kind_check", addedText: "grade-card" },
+    ],
+  },
+  "reporting/0002_hall_ticket_kind": {
+    constraintDiffs: [
+      { table: "rpt_reports", constraint: "rpt_reports_kind_check", addedText: "hall-ticket" },
+    ],
+  },
+
+  "timetable/0000_timetable": { tables: ["ttb_periods", "ttb_entries"] },
+  "coursework/0000_coursework": {
+    tables: ["cwk_assignments", "cwk_submissions", "cwk_materials"],
+  },
+  "syllabus/0000_syllabus": { tables: ["syl_units", "syl_topics"] },
+  "fees/0000_fees": {
+    tables: [
+      "fee_heads",
+      "fee_structures",
+      "fee_invoices",
+      "fee_receipt_counters",
+      "fee_payments",
+      "fee_adjustments",
+      "fee_generation_runs",
+    ],
+  },
+  "notices/0000_notices": { tables: ["ntc_notices"] },
+  "notices/0001_calendar": {
+    columns: [
+      { table: "ntc_notices", column: "kind" },
+      { table: "ntc_notices", column: "event_date" },
+    ],
+  },
+  "results/0000_results": {
+    tables: ["res_grade_scales", "res_subject_credits", "res_publications"],
+  },
+  "exams/0000_exams": { tables: ["exm_series", "exm_slots"] },
+  "leave/0000_leave": { tables: ["lvs_requests"] },
+};
+
+async function assertPresent(key: string, label: string): Promise<void> {
+  const exp = EXPECTATIONS[key];
+  if (exp === undefined) return;
+  for (const t of exp.tables ?? []) {
+    expect(await tableExists(t), `${label}: table ${t} should exist`).toBe(true);
+  }
+  for (const c of exp.columns ?? []) {
+    expect(await columnExists(c.table, c.column), `${label}: column ${c.table}.${c.column} should exist`).toBe(true);
+  }
+  for (const idx of exp.indexes ?? []) {
+    expect(await indexExists(idx), `${label}: index ${idx} should exist`).toBe(true);
+  }
+  for (const cd of exp.constraintDiffs ?? []) {
+    const def = await constraintDef(cd.table, cd.constraint);
+    expect(def, `${label}: constraint ${cd.constraint} should exist`).not.toBeNull();
+    expect(def!.toLowerCase(), `${label}: constraint ${cd.constraint} should mention "${cd.addedText}"`).toContain(
+      cd.addedText.toLowerCase(),
+    );
+  }
+}
+
+async function assertAbsent(key: string, label: string): Promise<void> {
+  const exp = EXPECTATIONS[key];
+  if (exp === undefined) return;
+  for (const t of exp.tables ?? []) {
+    expect(await tableExists(t), `${label}: table ${t} should be gone`).toBe(false);
+  }
+  for (const c of exp.columns ?? []) {
+    expect(await columnExists(c.table, c.column), `${label}: column ${c.table}.${c.column} should be gone`).toBe(false);
+  }
+  for (const idx of exp.indexes ?? []) {
+    expect(await indexExists(idx), `${label}: index ${idx} should be gone`).toBe(false);
+  }
+  for (const cd of exp.constraintDiffs ?? []) {
+    const def = await constraintDef(cd.table, cd.constraint);
+    // down.sql restores the narrower/pre-change constraint under the same
+    // name — it must still exist, just without the text the up migration added.
+    expect(def, `${label}: constraint ${cd.constraint} should still exist (down restores the prior version)`).not.toBeNull();
+    expect(
+      def!.toLowerCase(),
+      `${label}: constraint ${cd.constraint} should no longer mention "${cd.addedText}"`,
+    ).not.toContain(cd.addedText.toLowerCase());
+  }
+}
+
 describe("migration harness (ADR-0008)", () => {
   it("reports the system audit migration as applied after global setup", async () => {
     const status = await migrationStatus(pool, sources);
@@ -29,33 +256,62 @@ describe("migration harness (ADR-0008)", () => {
     );
   });
 
-  it("rolls back and reapplies every module's migrations (forward + rollback proof)", async () => {
-    expect(await tableExists("sys_audit_log")).toBe(true);
-    expect(await tableExists("idn_users")).toBe(true);
+  it("every migration has a behavioural expectation registered (table stays in sync with disk)", async () => {
+    const status = await migrationStatus(pool, sources);
+    const missing = status.applied
+      .map((entry) => `${entry.module}/${entry.name}`)
+      .filter((key) => EXPECTATIONS[key] === undefined);
+    expect(missing, "add a row to EXPECTATIONS for these migrations").toEqual([]);
+  });
 
-    const applied = await migrationStatus(pool, sources);
-    const rolledBack = await migrateDown(pool, sources, applied.applied.length, logger);
-    expect(rolledBack.length).toBe(applied.applied.length);
-    expect(await tableExists("sys_audit_log")).toBe(false);
-    expect(await tableExists("idn_users")).toBe(false);
-    expect(await tableExists("idn_scope_grants")).toBe(false);
+  it("each migration's up creates its objects, its down removes them, and reapplying up restores them", async () => {
+    const status = await migrationStatus(pool, sources);
+    // Applied order == the order migrateUp actually ran them in (journal id
+    // order), which is registry order then filename order within a module —
+    // the same order migrateDown unwinds from the tail.
+    const order = status.applied.map((entry) => ({ module: entry.module, name: entry.name }));
+    expect(order.length).toBeGreaterThan(0);
 
+    // Walk backward, rolling back exactly one migration at a time (mirrors
+    // migrateDown's `steps` semantics: it always unwinds the most-recently-
+    // applied migration first). Assert each migration's own objects are
+    // present right before its rollback, and gone right after — this is
+    // the part a "does the file exist" check can never catch: a down.sql
+    // that runs without error but silently fails to undo its up.
+    for (let i = order.length - 1; i >= 0; i--) {
+      const { module, name } = order[i]!;
+      const key = `${module}/${name}`;
+      await assertPresent(key, `${key} before its own rollback`);
+      const rolledBack = await migrateDown(pool, sources, 1, logger);
+      expect(rolledBack.map((entry) => `${entry.module}/${entry.name}`)).toEqual([key]);
+      await assertAbsent(key, `${key} after its own rollback`);
+    }
+
+    // Every module's tables are gone; only the journal (empty) remains. (The
+    // loop above already proved each migration's own down worked, checked at
+    // the moment only that migration had been rolled back — a second blanket
+    // check here would be meaningless for constraint-diff entries: once an
+    // earlier migration like identity/0000 has dropped idn_user_roles
+    // entirely, "the narrowed constraint should still exist" no longer makes
+    // sense. tableExists is unambiguous at any point, so spot-check with it.)
+    for (const exp of Object.values(EXPECTATIONS)) {
+      for (const t of exp.tables ?? []) {
+        expect(await tableExists(t), `${t} should be gone once the whole schema is rolled back`).toBe(false);
+      }
+    }
+
+    // Reapply everything from a bare schema (migrateUp has no per-step
+    // granularity — unlike migrateDown it always drains the full pending
+    // queue — so "up restores it" is verified in one bulk pass with a
+    // per-migration presence check against the end state, exercising every
+    // up.sql fresh rather than relying on state left over from global setup).
     const reapplied = await migrateUp(pool, sources, logger);
-    // Reapply must restore exactly what was rolled back, in the same order —
-    // derived from the live set rather than a hardcoded list so new modules'
-    // migrations can't silently fall out of this proof (the old fixed list
-    // had gone stale at 7 of 26).
     expect(reapplied.map((entry) => `${entry.module}/${entry.name}`)).toEqual(
-      applied.applied.map((entry) => `${entry.module}/${entry.name}`),
+      order.map(({ module, name }) => `${module}/${name}`),
     );
-    expect(await tableExists("sys_audit_log")).toBe(true);
-    expect(await tableExists("idn_users")).toBe(true);
-    expect(await tableExists("ppl_colleges")).toBe(true);
-    expect(await tableExists("ppl_teacher_assignments")).toBe(true);
-    expect(await tableExists("acd_marks")).toBe(true);
-    expect(await tableExists("anl_marks_rollups")).toBe(true);
-    expect(await tableExists("anl_student_flags")).toBe(true);
-    expect(await tableExists("rpt_reports")).toBe(true);
+    for (const { module, name } of order) {
+      await assertPresent(`${module}/${name}`, `${module}/${name} after full reapply`);
+    }
   });
 
   it("is idempotent — a second up run applies nothing", async () => {
