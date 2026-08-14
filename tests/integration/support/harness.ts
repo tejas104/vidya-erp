@@ -26,6 +26,7 @@ import { createAnalyticsModule } from "@vidya/module-analytics";
 import { createReportingModule } from "@vidya/module-reporting";
 import { createSyllabusModule } from "@vidya/module-syllabus";
 import { createTimetableModule } from "@vidya/module-timetable";
+import { integrationDatabaseUrl } from "./db-url";
 
 export const ADMIN_USERNAME = "int-admin";
 export const ADMIN_PASSWORD = "integration-admin-pass-1";
@@ -54,7 +55,7 @@ export interface CallOptions {
 export function buildStack() {
   const logger = createLogger({ level: "silent", serviceName: "vidya-int" });
   const { pool, db } = createDb({
-    url: process.env.DATABASE_URL ?? "",
+    url: integrationDatabaseUrl(),
     poolMax: 5,
     logger,
     applicationName: "vidya-int-harness",

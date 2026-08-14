@@ -16,6 +16,7 @@ import {
   SYSTEM_MODULE_NAME,
   createSystemModule,
 } from "@vidya/module-system";
+import { integrationDatabaseUrl } from "./support/db-url";
 
 /**
  * THE reference end-to-end path (Definition of Done): a job enqueued to
@@ -26,7 +27,7 @@ import {
 const logger = createLogger({ level: "silent", serviceName: "vidya-int" });
 const redisUrl = process.env.REDIS_URL ?? "";
 const { pool, db } = createDb({
-  url: process.env.DATABASE_URL ?? "",
+  url: integrationDatabaseUrl(),
   poolMax: 3,
   logger,
   applicationName: "vidya-int-heartbeat",

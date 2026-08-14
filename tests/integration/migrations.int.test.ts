@@ -3,9 +3,10 @@ import pg from "pg";
 import { afterAll, describe, expect, it } from "vitest";
 import { createLogger, migrateDown, migrateUp, migrationStatus } from "@vidya/platform";
 import { migrationSources } from "../../scripts/registry";
+import { integrationDatabaseUrl } from "./support/db-url";
 
 const logger = createLogger({ level: "silent", serviceName: "vidya-int" });
-const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL, max: 3 });
+const pool = new pg.Pool({ connectionString: integrationDatabaseUrl(), max: 3 });
 const sources = migrationSources();
 
 afterAll(async () => {

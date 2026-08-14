@@ -2,10 +2,11 @@ import { randomUUID } from "node:crypto";
 import { afterAll, describe, expect, it } from "vitest";
 import { createDb, createLogger, createMetrics } from "@vidya/platform";
 import { createSystemModule } from "@vidya/module-system";
+import { integrationDatabaseUrl } from "./support/db-url";
 
 const logger = createLogger({ level: "silent", serviceName: "vidya-int" });
 const { pool, db } = createDb({
-  url: process.env.DATABASE_URL ?? "",
+  url: integrationDatabaseUrl(),
   poolMax: 3,
   logger,
   applicationName: "vidya-int-audit",
