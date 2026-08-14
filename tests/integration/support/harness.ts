@@ -31,6 +31,18 @@ export const ADMIN_USERNAME = "int-admin";
 export const ADMIN_PASSWORD = "integration-admin-pass-1";
 export const COLLEGE_CODE = "INTC";
 
+/** Every login gets its own synthetic source IP, mirroring
+ *  tests/e2e/support/fixtures.ts's nextXff() — so the per-IP login rate
+ *  limiter (packages/platform/src/http/define-route.ts's `checkIp`, scope
+ *  "login") can never bucket two logins together, however large this suite
+ *  grows. Range is 10.88.x.x — distinct from e2e's 10.77.x.x/10.99.10.x and
+ *  from this file's own fixed IPs used by deliberate throttle tests. */
+let xffCounter = 0;
+function nextXff(): string {
+  xffCounter += 1;
+  return `10.88.${(xffCounter >> 8) & 0xff}.${xffCounter & 0xff}`;
+}
+
 export interface CallOptions {
   body?: unknown;
   cookie?: string;
@@ -225,7 +237,7 @@ export function buildStack() {
   }
 
   async function login(username: string, password: string): Promise<string> {
-    const response = await call("identity.login", { body: { username, password } });
+    const response = await call("identity.login", { body: { username, password }, ip: nextXff() });
     if (response.status !== 200) {
       throw new Error(`login as ${username} failed with ${response.status}`);
     }
