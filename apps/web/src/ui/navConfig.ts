@@ -62,6 +62,8 @@ export const NAV: NavEntry[] = [
   { href: "/manage/students", label: "Students", icon: "students", group: "PEOPLE", roles: ["admin"] },
   { href: "/manage/teachers", label: "Teachers", icon: "teachers", group: "PEOPLE", roles: ["admin"] },
   { href: "/manage/users", label: "Users", icon: "key", group: "ADMINISTRATION", roles: ["admin"] },
+  // --- system (#9): version/build info for support requests, admin-only ---
+  { href: "/manage/system", label: "System", icon: "info", group: "ADMINISTRATION", roles: ["admin"] },
   // --- onboarding import (task A4): split off the old single /manage/import
   // form into dedicated students/staff screens, both PEOPLE (that's what
   // they populate), not ADMINISTRATION (which is accounts/access).
