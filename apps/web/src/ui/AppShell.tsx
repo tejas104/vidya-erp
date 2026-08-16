@@ -7,6 +7,7 @@ import { Topbar } from "./Topbar";
 import { SearchPalette } from "./search/SearchPalette";
 import { Breadcrumbs } from "./Breadcrumbs";
 import { InstallPrompt } from "./InstallPrompt";
+import { LicenseBanner } from "./LicenseBanner";
 
 export function AppShell({ session, year, children }: { session: Session; year?: string; children: ReactNode }) {
   const [drawer, setDrawer] = useState(false);
@@ -35,6 +36,7 @@ export function AppShell({ session, year, children }: { session: Session; year?:
             onMenu={() => setDrawer((open) => !open)}
             onSearch={() => setSearchOpen(true)}
           />
+          <LicenseBanner roles={session.roles} />
           <main id="main" className="page shell-page">
             <Breadcrumbs />
             {children}

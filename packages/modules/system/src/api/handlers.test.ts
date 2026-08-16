@@ -70,6 +70,8 @@ function makeDeps(overrides: Partial<SystemHandlerDeps> = {}): SystemHandlerDeps
     isDraining: () => false,
     infrastructureChecks: [],
     preferences: fakePreferencesStore(),
+    license: { kind: "absent" },
+    countActiveStudents: async () => 0,
     ...overrides,
   };
 }
@@ -238,5 +240,28 @@ describe("system.preference-get / system.preference-set", () => {
       preferenceCtx(alice, { key: "theme" }),
     );
     expect(getResult.body).toMatchObject({ value: { mode: "light" } });
+  });
+});
+
+describe("system.license", () => {
+  it("merges the boot-verified status with the live active-student count", async () => {
+    const handlers = createSystemHandlers(
+      makeDeps({
+        license: { kind: "valid", claims: { v: 1, id: "lic_1", customer: "Northgate", edition: "college", issuedAt: "2026-01-01", expiresAt: "2027-01-01", seats: 500 }, daysRemaining: 90 },
+        countActiveStudents: async () => 247,
+      }),
+    );
+    const result = await handlers["system.license"]!(ctx());
+    expect(result.status).toBe(200);
+    expect(result.body).toMatchObject({ kind: "valid", studentCount: 247, claims: { customer: "Northgate", seats: 500 } });
+  });
+
+  it("never enforces anything: an absent license still returns 200 with the count", async () => {
+    const handlers = createSystemHandlers(
+      makeDeps({ license: { kind: "absent" }, countActiveStudents: async () => 3 }),
+    );
+    const result = await handlers["system.license"]!(ctx());
+    expect(result.status).toBe(200);
+    expect(result.body).toEqual({ kind: "absent", studentCount: 3 });
   });
 });

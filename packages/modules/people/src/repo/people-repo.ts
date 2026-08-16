@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, count, eq, inArray } from "drizzle-orm";
 import type { Db } from "@vidya/platform";
 import { newId } from "../ids";
 import {
@@ -91,6 +91,8 @@ export interface PeopleRepo {
   findExistingStaffNos(collegeId: string, staffNos: readonly string[]): Promise<Set<string>>;
   /** Which of these student ids exist (batched; PeopleDirectory, #4). */
   findExistingStudentIds(studentIds: readonly string[]): Promise<Set<string>>;
+  /** Active-student headcount, org-wide (license seat usage, #11.75 item 1). */
+  countActiveStudents(): Promise<number>;
   /** Sections holding at least one live enrollment (attendance gap scan, #4). */
   sectionsWithLiveEnrollment(): Promise<string[]>;
   createDocument(input: NewDocument): Promise<PplStudentDocumentRow>;
@@ -247,6 +249,14 @@ export function createPeopleRepo(db: Db): PeopleRepo {
         }
       }
       return existing;
+    },
+
+    async countActiveStudents() {
+      const rows = await db
+        .select({ value: count() })
+        .from(pplStudents)
+        .where(eq(pplStudents.status, "active"));
+      return rows[0]?.value ?? 0;
     },
 
     async sectionsWithLiveEnrollment() {

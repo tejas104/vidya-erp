@@ -135,6 +135,8 @@ export interface PeopleModuleService {
   readonly orgDirectory: OrgDirectory;
   /** Read-only resolution/validation surface for other modules (#4+). */
   readonly directory: PeopleDirectory;
+  /** Active-student headcount, org-wide (system module's license page seat usage, #11.75 item 1). */
+  countActiveStudents(): Promise<number>;
   /** One-time operator bootstrap (scripts/create-admin.ts). Idempotent by code. */
   bootstrapCollege(input: { name: string; code: string }): Promise<{ collegeId: string; created: boolean }>;
   /**
@@ -313,6 +315,7 @@ export function createPeopleModule(deps: PeopleModuleDeps): RuntimeModule<People
           return names;
         },
       },
+      countActiveStudents: () => peopleRepo.countActiveStudents(),
       bootstrapCollege: (input) => org.bootstrapCollege(input),
       linkStudentIdentity: async (studentId, identityUserId) =>
         (await people.linkStudentIdentity(studentId, identityUserId)) !== null,

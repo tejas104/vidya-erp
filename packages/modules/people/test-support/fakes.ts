@@ -326,6 +326,14 @@ export class InMemoryPeopleRepo implements PeopleRepo {
     return existing;
   }
 
+  async countActiveStudents(): Promise<number> {
+    let n = 0;
+    for (const student of this.students.values()) {
+      if (student.status === "active") n += 1;
+    }
+    return n;
+  }
+
   async sectionsWithLiveEnrollment(): Promise<string[]> {
     const sections = new Set<string>();
     for (const enrollment of this.enrollments.values()) {

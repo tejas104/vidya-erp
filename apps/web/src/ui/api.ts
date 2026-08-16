@@ -14,6 +14,29 @@ export interface Session {
   grants: unknown[];
 }
 
+// --- license (#11.75 item 1): admin-only, surface only, never enforced ---
+export interface LicenseClaims {
+  id: string;
+  customer: string;
+  edition: "college" | "school";
+  issuedAt: string;
+  expiresAt: string;
+  seats: number;
+  notBefore?: string;
+}
+export type LicenseInvalidReason =
+  | "malformed"
+  | "bad-signature"
+  | "unsupported-version"
+  | "not-yet-valid"
+  | "edition-mismatch";
+export type LicenseInfo =
+  | { kind: "valid"; claims: LicenseClaims; daysRemaining: number; studentCount: number }
+  | { kind: "grace"; claims: LicenseClaims; daysOverdue: number; studentCount: number }
+  | { kind: "expired"; claims: LicenseClaims; daysOverdue: number; studentCount: number }
+  | { kind: "invalid"; reason: LicenseInvalidReason; studentCount: number }
+  | { kind: "absent"; studentCount: number };
+
 export interface MonthPoint {
   month: string;
   pct: number;
@@ -939,6 +962,8 @@ export const api = {
     put<{ key: string; value: T; updatedAt: string }>(`/api/v1/system/preferences/${encodeURIComponent(key)}`, {
       value,
     }),
+  // --- system: license status (admin-only; #11.75 item 1) ---
+  systemLicense: () => get<LicenseInfo>("/api/v1/system/license"),
   async login(username: string, password: string): Promise<void> {
     const response = await fetch("/api/v1/identity/auth/login", {
       method: "POST",

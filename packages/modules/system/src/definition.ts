@@ -20,6 +20,84 @@ export const readyResponseSchema = z.object({
   checks: z.array(readinessCheckResultSchema),
 });
 
+const ADMIN_ONLY = { public: false as const, requirement: { rolesAnyOf: ["admin" as const] } };
+
+/** Every staff role except student (design spec: the ≤7-day licence warning
+ * reaches all staff, not just admin — but a student must never see any
+ * licensing state, so student is excluded here rather than the route being
+ * open to any authenticated principal). */
+const STAFF_ONLY = {
+  public: false as const,
+  requirement: {
+    rolesAnyOf: [
+      "admin" as const,
+      "principal" as const,
+      "hod" as const,
+      "class_teacher" as const,
+      "teacher" as const,
+      "accountant" as const,
+    ],
+  },
+};
+
+const licenseClaimsSchema = z.object({
+  id: z.string(),
+  customer: z.string(),
+  edition: z.enum(["college", "school"]),
+  issuedAt: z.string(),
+  expiresAt: z.string(),
+  seats: z.number(),
+  notBefore: z.string().optional(),
+});
+
+/**
+ * Mirrors platform's `LicenseStatus` discriminated union plus `studentCount`
+ * (active-student seat usage, computed alongside — #11.75 item 1). Surface
+ * only: nothing downstream of this route allows or denies anything (see
+ * docs/superpowers/specs/2026-08-13-license-verification-design.md).
+ */
+export const licenseStatusResponseSchema = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("valid"),
+    claims: licenseClaimsSchema,
+    daysRemaining: z.number(),
+    studentCount: z.number(),
+  }),
+  z.object({
+    kind: z.literal("grace"),
+    claims: licenseClaimsSchema,
+    daysOverdue: z.number(),
+    studentCount: z.number(),
+  }),
+  z.object({
+    kind: z.literal("expired"),
+    claims: licenseClaimsSchema,
+    daysOverdue: z.number(),
+    studentCount: z.number(),
+  }),
+  z.object({
+    kind: z.literal("invalid"),
+    reason: z.enum(["malformed", "bad-signature", "unsupported-version", "not-yet-valid", "edition-mismatch"]),
+    studentCount: z.number(),
+  }),
+  z.object({ kind: z.literal("absent"), studentCount: z.number() }),
+]);
+
+const licenseRoute: RouteSpec = {
+  id: "system.license",
+  module: MODULE_NAME,
+  method: "GET",
+  path: "/api/v1/system/license",
+  summary: "Current license status and active-student seat usage",
+  description:
+    "Verified once at boot, never re-verified per request. Feeds the admin banner, the system page, and the all-staff ≤7-day warning (#11.75 item 1). Open to every staff role except student — the UI decides how much of the status each role is shown; a student must never reach this route at all. Presentation only — never used to allow or deny a request.",
+  tags: ["system"],
+  auth: STAFF_ONLY,
+  responses: {
+    200: { description: "Current license status", schema: licenseStatusResponseSchema },
+  },
+};
+
 const healthRoute: RouteSpec = {
   id: "system.health",
   module: MODULE_NAME,
@@ -167,6 +245,6 @@ export const systemModuleDefinition: ModuleDefinition = {
   name: MODULE_NAME,
   tablePrefix: TABLE_PREFIX,
   migrationsDir: "migrations",
-  routes: [healthRoute, readyRoute, metricsRoute, preferenceGetRoute, preferenceSetRoute],
+  routes: [healthRoute, readyRoute, metricsRoute, preferenceGetRoute, preferenceSetRoute, licenseRoute],
   jobs: [heartbeatJob],
 };

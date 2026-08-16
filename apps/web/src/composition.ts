@@ -131,6 +131,22 @@ function buildWebRuntime(): WebRuntime {
     objectStorage.destroy();
   });
 
+  // License verification (#12 step 4 dependency): verified ONCE here and
+  // stored on the runtime, never re-verified per request. Expiry blocks
+  // nothing — LicenseStatus drives presentation (the admin banner and the
+  // system page, #11.75 item 1) and this one boot audit event, full stop.
+  // If status is invalid or absent the process still starts; a license
+  // problem is never a reason to refuse to boot a college's information
+  // system. Computed before the system module so it can be handed in
+  // directly rather than late-bound.
+  const license = verifyLicense(readLicenseToken(), LICENSE_PUBLIC_KEY, new Date(), config.edition);
+
+  // Active-student seat usage for the license page: late-bound like
+  // orgDirectoryRef below, because system is composed before people exists
+  // and the system module must not reach across module boundaries to
+  // query people's tables directly.
+  const studentCountRef: { current: (() => Promise<number>) | null } = { current: null };
+
   const system = createSystemModule({
     db,
     metrics,
@@ -140,15 +156,10 @@ function buildWebRuntime(): WebRuntime {
       { name: "postgres", check: () => pingPostgres(pool) },
       { name: "redis", check: () => pingRedis(redis) },
     ],
+    license,
+    countActiveStudents: async () => (await studentCountRef.current?.()) ?? 0,
   });
 
-  // License verification (#12 step 4 dependency): verified ONCE here and
-  // stored on the runtime, never re-verified per request. Expiry blocks
-  // nothing — LicenseStatus drives presentation (a later task wires the
-  // admin banner) and this one boot audit event, full stop. If status is
-  // invalid or absent the process still starts; a license problem is never
-  // a reason to refuse to boot a college's information system.
-  const license = verifyLicense(readLicenseToken(), LICENSE_PUBLIC_KEY, new Date(), config.edition);
   system.service.audit
     .record({
       module: "system",
@@ -207,6 +218,7 @@ function buildWebRuntime(): WebRuntime {
     edition: config.edition,
   });
   orgDirectoryRef.current = people.service.orgDirectory;
+  studentCountRef.current = people.service.countActiveStudents;
 
   const academics = createAcademicsModule({
     db,

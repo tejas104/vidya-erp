@@ -11,6 +11,8 @@ function makeModule() {
     serviceVersion: "0.1.0-test",
     isDraining: () => false,
     infrastructureChecks: [],
+    license: { kind: "absent" },
+    countActiveStudents: async () => 0,
   });
   return { module, values };
 }
@@ -21,6 +23,7 @@ describe("createSystemModule", () => {
     expect(module.definition).toBe(systemModuleDefinition);
     expect(Object.keys(module.handlers).sort()).toEqual([
       "system.health",
+      "system.license",
       "system.metrics",
       "system.preference-get",
       "system.preference-set",

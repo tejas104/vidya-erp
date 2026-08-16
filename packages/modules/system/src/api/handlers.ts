@@ -1,4 +1,4 @@
-import type { Metrics, Principal, ReadinessCheck, RouteHandler } from "@vidya/platform";
+import type { LicenseStatus, Metrics, Principal, ReadinessCheck, RouteHandler } from "@vidya/platform";
 import type { PreferencesStore } from "../service/preferences";
 
 export interface SystemHandlerDeps {
@@ -10,6 +10,10 @@ export interface SystemHandlerDeps {
   readonly infrastructureChecks: readonly ReadinessCheck[];
   /** Per-user keyed preference store (#11 task 11). */
   readonly preferences: PreferencesStore;
+  /** Verified once at boot by the composition root (#12 step 4). */
+  readonly license: LicenseStatus;
+  /** Active-student seat usage, late-bound from the people module (#11.75 item 1). */
+  readonly countActiveStudents: () => Promise<number>;
 }
 
 const CHECK_TIMEOUT_MS = 2_000;
@@ -107,11 +111,23 @@ export function createSystemHandlers(deps: SystemHandlerDeps): Record<string, Ro
     };
   };
 
+  // Auth is STAFF_ONLY (RouteSpec: every role except student), so a 403
+  // never reaches this closure for a student — the API layer's half of
+  // "students never see licensing state"; the UI's half is LicenseBanner
+  // never fetching for a student session. Full status is returned to any
+  // staff caller; which parts of it render as a banner (admin gets every
+  // state, other staff only the ≤7-day warning) is a client-side decision.
+  const license: RouteHandler = async () => {
+    const studentCount = await deps.countActiveStudents();
+    return { status: 200, body: { ...deps.license, studentCount } };
+  };
+
   return {
     "system.health": health,
     "system.ready": ready,
     "system.metrics": metrics,
     "system.preference-get": preferenceGet,
     "system.preference-set": preferenceSet,
+    "system.license": license,
   };
 }

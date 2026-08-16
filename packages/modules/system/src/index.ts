@@ -14,6 +14,7 @@ import {
   assertModuleWiring,
   type AuditLogger,
   type Db,
+  type LicenseStatus,
   type Metrics,
   type ReadinessCheck,
   type RuntimeModule,
@@ -69,6 +70,10 @@ export interface SystemModuleDeps {
   readonly isDraining: () => boolean;
   /** Postgres/Redis reachability checks supplied by the composition root. */
   readonly infrastructureChecks: readonly ReadinessCheck[];
+  /** Verified once at boot by the composition root (#12 step 4); presentation only. */
+  readonly license: LicenseStatus;
+  /** Late-bound from the people module — system is composed before people (#11.75 item 1). */
+  readonly countActiveStudents: () => Promise<number>;
 }
 
 export function createSystemModule(deps: SystemModuleDeps): RuntimeModule<SystemService> {
@@ -81,6 +86,8 @@ export function createSystemModule(deps: SystemModuleDeps): RuntimeModule<System
       isDraining: deps.isDraining,
       infrastructureChecks: deps.infrastructureChecks,
       preferences: createPreferencesStore(deps.db),
+      license: deps.license,
+      countActiveStudents: deps.countActiveStudents,
     }),
     jobProcessors: {
       [HEARTBEAT_JOB_NAME]: createHeartbeatProcessor(audit),
