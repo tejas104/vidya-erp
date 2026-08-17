@@ -79,6 +79,16 @@ services:
       WORKER_METRICS_PORT: "9464"
       SYSTEM_HEARTBEAT_INTERVAL_MS: "300000"
       TRUSTED_ORIGINS: ${TRUSTED_ORIGINS:-}
+      # Edition and licence MUST be passed through explicitly. This service
+      # enumerates its environment rather than using env_file, so a variable
+      # written into .env by install.sh reaches compose only for ${...}
+      # interpolation — it does NOT reach the container unless listed here.
+      # Omitting them fails silently and badly: VIDYA_EDITION unset defaults
+      # to "college", so a school install would run as a college install, and
+      # VIDYA_LICENSE unset makes every licence read as "absent".
+      VIDYA_EDITION: ${VIDYA_EDITION:-college}
+      VIDYA_LICENSE: ${VIDYA_LICENSE:-}
+      VIDYA_LICENSE_FILE: ${VIDYA_LICENSE_FILE:-}
       # The compose stack serves plain http on localhost; production MUST
       # run behind TLS with this set to "true".
       SESSION_COOKIE_SECURE: "false"
