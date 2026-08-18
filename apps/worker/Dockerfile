@@ -9,12 +9,31 @@ ENV PATH=$PNPM_HOME:$PATH
 RUN corepack enable
 WORKDIR /repo
 
+# ALL workspace package.json files must land here before `pnpm install
+# --frozen-lockfile` runs, not just the ones this app imports directly — see
+# the matching comment in apps/web/Dockerfile (same fix, same root cause:
+# "Cannot find package 'prom-client'" at runtime, docs/install-guide.md
+# troubleshooting #1).
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/web/package.json apps/web/
 COPY apps/worker/package.json apps/worker/
 COPY packages/platform/package.json packages/platform/
-COPY packages/modules/system/package.json packages/modules/system/
+COPY packages/ui-system/package.json packages/ui-system/
+COPY packages/modules/academics/package.json packages/modules/academics/
+COPY packages/modules/analytics/package.json packages/modules/analytics/
+COPY packages/modules/coursework/package.json packages/modules/coursework/
+COPY packages/modules/exams/package.json packages/modules/exams/
+COPY packages/modules/fees/package.json packages/modules/fees/
 COPY packages/modules/identity/package.json packages/modules/identity/
+COPY packages/modules/leave/package.json packages/modules/leave/
+COPY packages/modules/notices/package.json packages/modules/notices/
+COPY packages/modules/people/package.json packages/modules/people/
+COPY packages/modules/portal/package.json packages/modules/portal/
+COPY packages/modules/reporting/package.json packages/modules/reporting/
+COPY packages/modules/results/package.json packages/modules/results/
+COPY packages/modules/syllabus/package.json packages/modules/syllabus/
+COPY packages/modules/system/package.json packages/modules/system/
+COPY packages/modules/timetable/package.json packages/modules/timetable/
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store pnpm install --frozen-lockfile
 
 COPY . .
