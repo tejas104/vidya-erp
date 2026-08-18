@@ -1,0 +1,27 @@
+# Keep the build context lean and, crucially, keep the HOST's (Windows-built)
+# node_modules / build outputs from clobbering the deps the image installs for
+# linux — that mismatch makes pnpm's pre-run deps check trigger a failing
+# install. The Dockerfiles copy package manifests then `pnpm install` fresh.
+**/node_modules
+**/.next
+**/.turbo
+.git
+.gitignore
+.vitest-cache
+**/*.tsbuildinfo
+
+# Local env + secrets + generated artifacts — never bake into an image
+.env
+.env.*
+backups/
+certs/
+minio-data/
+pg-data/
+
+# Test / tooling output and worktrees
+coverage/
+test-results/
+playwright-report/
+blob-report/
+.claude/
+**/.DS_Store
