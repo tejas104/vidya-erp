@@ -11,8 +11,11 @@ bash update.sh path/to/vidya-release-X.Y.Z.tar.gz
 ```
 
 No signature/crypto logic lives in `update.sh` either — the license/edition
-gate (step 3) shells out to `scripts/license-issue.ts --verify` exactly like
-`install.sh` does.
+gate (step 3) runs `scripts/license-issue.ts --verify` inside a throwaway
+container from the currently-installed `worker` image, exactly like
+`install.sh` does. `update.sh` also never builds images: the new release's
+images are obtained (`docker load` for an offline release, `docker compose
+pull` for a registry one) in step 6, before anything is applied.
 
 ## What "refuses to run" means here — read this before assuming you're locked out
 
@@ -52,8 +55,8 @@ each tree's `package.json`.
 
 ### 3/7 License / edition gate
 
-See "What refuses to run means" above. Uses the **currently installed**
-tree's CLI and dependencies — nothing from the new release is touched yet,
+See "What refuses to run means" above. Runs inside the **currently
+installed** `worker` image — nothing from the new release is touched yet,
 so this check can never be broken by a bad release artifact. An
 unparseable/malformed license **fails open** (the update proceeds, with a
 warning) — this gate only ever blocks on a *confirmed* edition mismatch or
@@ -63,8 +66,8 @@ un-shippable due to a license-file parsing hiccup.
 ### 4/7 Confirm
 
 ```
-Update 0.4.1 -> 0.5.0? A backup will be taken first, then images rebuilt and
-the stack restarted. [y/N]
+Update 0.4.1 -> 0.5.0? A backup will be taken first, then the new images
+will be obtained and the stack restarted. [y/N]
 ```
 
 Nothing has changed on disk or in any container up to this point — answering
@@ -86,17 +89,24 @@ In order:
    `docker compose config --images` for the exact name Compose resolves each
    service to, rather than assuming a naming convention) — the safety net for
    step 6's health check.
-2. `rsync`s the new release tree over the live install, **excluding `.env`,
+2. **Obtains the new release's images — never builds them.** An offline
+   release carries `images/*.tar.gz` in the unpacked tree (`docker load`,
+   then retag onto the names Compose expects); otherwise `docker compose
+   pull` (registry release). If neither produces a usable `web`, `worker`,
+   and `migrate` image, `update.sh` aborts here, before touching `.env`, the
+   release files on disk, or any running container.
+3. `rsync`s the new release tree over the live install, **excluding `.env`,
    `backups/`, `certs/`, `.git/`** — your secrets, your backup history, your
    TLS material, and your license file (which isn't part of any release
    tarball to begin with, so it's untouched regardless) all survive.
-3. Rebuilds and runs the `migrate` service, checks its exit code explicitly.
-   **If migration fails, `web`/`worker` are never touched** — the app keeps
-   running the old version. Release files on disk are now the new version
-   though (a "stopped mid-update" state); fix the migration issue and
-   re-run `update.sh` — it reapplies the same files and retries cleanly.
-4. Rebuilds `web`/`worker` and force-recreates them on the new images.
-5. Polls `/api/v1/system/ready` (same mechanism as `install.sh`) for up to
+4. Runs the `migrate` service on the new image, checks its exit code
+   explicitly. **If migration fails, `web`/`worker` are never touched** —
+   the app keeps running the old version. Release files on disk are now the
+   new version though (a "stopped mid-update" state); fix the migration
+   issue and re-run `update.sh` — it reapplies the same files and retries
+   cleanly.
+5. Force-recreates `web`/`worker` on the new images.
+6. Polls `/api/v1/system/ready` (same mechanism as `install.sh`) for up to
    60 seconds.
 
 **On a failed health check, `update.sh` automatically rolls back**: retags

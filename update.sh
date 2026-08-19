@@ -3,12 +3,16 @@
 #
 #   bash update.sh path/to/vidya-release-X.Y.Z.tar.gz
 #
-# Automatic pre-update backup (aborts if it fails), image rebuild, migrations,
-# health check. On a failed health check: automatic rollback to the previous
+# Automatic pre-update backup (aborts if it fails), then the new release's
+# images are obtained (docker load for an offline release, docker compose
+# pull for a registry one — never built on the client), migrations, health
+# check. On a failed health check: automatic rollback to the previous
 # images. See docs/update-guide.md and docs/runbook-backup-restore.md.
 #
 # No signature/crypto logic here either — the license/edition gate below
-# shells out to scripts/license-issue.ts --verify exactly like install.sh.
+# runs scripts/license-issue.ts --verify inside a throwaway container from
+# the currently-installed worker image, exactly like install.sh does from
+# the freshly-obtained one.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -85,8 +89,9 @@ step "3/7  License / edition gate"
 # docs/superpowers/specs/2026-08-13-license-verification-design.md) — the app
 # keeps working normally either way. What's gated here is the update itself:
 # it is an AMC service, and an install without a current AMC does not get one
-# run automatically by this script. Uses the CURRENT tree's CLI/dependencies
-# (not the new release's) since nothing has been swapped yet.
+# run automatically by this script. Runs inside the CURRENTLY-INSTALLED
+# worker image (not the new release's — that hasn't been obtained yet)
+# since nothing has been swapped yet.
 CURRENT_EDITION="$(env_get VIDYA_EDITION)"
 LICENSE_PATH="$(env_get VIDYA_LICENSE_PATH)"
 if [ -z "$CURRENT_EDITION" ]; then
@@ -95,7 +100,7 @@ elif [ -z "$LICENSE_PATH" ] || [ ! -f "$LICENSE_PATH" ]; then
   warn "no license on file (VIDYA_LICENSE_PATH unset or missing) — skipping the license/edition gate. An absent license does not block updates, only a confirmed expiry or edition mismatch does."
 else
   LICENSE_TOKEN="$(tr -d '[:space:]' < "$LICENSE_PATH")"
-  verify_output="$(npx tsx scripts/license-issue.ts --verify "$LICENSE_TOKEN" --edition "$CURRENT_EDITION" 2>&1)"
+  verify_output="$(dc run --rm --no-deps worker apps/worker/node_modules/.bin/tsx scripts/license-issue.ts --verify "$LICENSE_TOKEN" --edition "$CURRENT_EDITION" 2>&1)"
   # || true on both: "reason" only exists when kind=invalid, so on every
   # valid/grace/expired status (the common case!) that grep finds nothing —
   # under pipefail that would abort the whole script via set -e right here.
@@ -125,7 +130,7 @@ fi
 # ==============================================================================
 step "4/7  Confirm"
 # ==============================================================================
-read -r -p "Update $FROM_VERSION -> $TO_VERSION? A backup will be taken first, then images rebuilt and the stack restarted. [y/N] " reply
+read -r -p "Update $FROM_VERSION -> $TO_VERSION? A backup will be taken first, then the new images will be obtained and the stack restarted. [y/N] " reply
 [[ "$reply" =~ ^[Yy] ]] || die "aborted, nothing changed."
 
 # ==============================================================================
@@ -152,6 +157,7 @@ step "6/7  Apply, migrate, restart"
 PROJECT="$(echo "${COMPOSE_PROJECT_NAME:-$(basename "$ROOT")}" | tr '[:upper:]' '[:lower:]')"
 WEB_IMAGE="${PROJECT}-web:latest"
 WORKER_IMAGE="${PROJECT}-worker:latest"
+MIGRATE_IMAGE="${PROJECT}-migrate:latest"
 info "tagging current images for rollback..."
 for image in "$WEB_IMAGE" "$WORKER_IMAGE"; do
   if docker image inspect "$image" >/dev/null 2>&1; then
@@ -159,6 +165,39 @@ for image in "$WEB_IMAGE" "$WORKER_IMAGE"; do
   fi
 done
 ok "rollback tags set (${WEB_IMAGE}-rollback, ${WORKER_IMAGE}-rollback)"
+
+# Images are shipped, never built here — same rule as install.sh. An
+# offline release carries images/*.tar.gz in the unpacked tree (docker
+# load below); otherwise `docker compose pull` (registry). No --build
+# fallback — this is what actually swaps the running version; a silent
+# fallback to building from source here would defeat the whole point.
+IMAGES_DIR="$SRC_ROOT/images"
+if compgen -G "$IMAGES_DIR/*.tar.gz" >/dev/null 2>&1; then
+  info "offline release detected ($IMAGES_DIR) — loading image tarballs..."
+  for f in "$IMAGES_DIR"/*.tar.gz; do
+    info "  docker load < $(basename "$f")"
+    gunzip -c "$f" | docker load
+  done
+  for svc in web worker migrate; do
+    src="vidya-${svc}:${TO_VERSION}"
+    if docker image inspect "$src" >/dev/null 2>&1; then
+      docker tag "$src" "${PROJECT}-${svc}:latest"
+    fi
+  done
+  ok "images loaded from offline release"
+else
+  info "no images/ directory in this release — trying \`docker compose pull\`..."
+  dc pull || warn "docker compose pull reported errors above — checking what's actually available locally next"
+fi
+
+missing=()
+for image in "$WEB_IMAGE" "$WORKER_IMAGE" "$MIGRATE_IMAGE"; do
+  docker image inspect "$image" >/dev/null 2>&1 || missing+=("$image")
+done
+if [ "${#missing[@]}" -gt 0 ]; then
+  die "no usable image(s) for: ${missing[*]}. update.sh never builds images on the client. Re-run against a release tarball that includes an images/ directory (offline, docker load), or make sure this release's compose files point web/worker/migrate at a reachable registry image so \`docker compose pull\` can fetch them. Nothing has been applied yet — .env, the release files on disk, and the running containers are all untouched."
+fi
+ok "images present: $WEB_IMAGE, $WORKER_IMAGE, $MIGRATE_IMAGE"
 
 info "applying release files (leaving .env, backups/, certs/, .git/ untouched)..."
 rsync -a \
@@ -169,8 +208,8 @@ ok "release files applied"
 GIT_SHA="$(git -C "$ROOT" rev-parse --short HEAD 2>/dev/null || echo unknown)"
 export GIT_SHA
 
-info "rebuilding and running migrations..."
-dc up -d --build migrate
+info "running migrations..."
+dc up -d migrate
 migrate_exit="$(dc ps -a --format '{{.Name}} {{.ExitCode}}' | awk '/migrate/ {print $2; exit}' || true)"
 if [ "$migrate_exit" != "0" ]; then
   fail "migrations failed (exit ${migrate_exit:-unknown})."
@@ -214,7 +253,7 @@ ROLLBACK
 }
 
 info "starting web/worker on the new images..."
-dc up -d --build web worker
+dc up -d web worker
 info "waiting for the app to report healthy..."
 healthy=false
 for i in $(seq 1 30); do

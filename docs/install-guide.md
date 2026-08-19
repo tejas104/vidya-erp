@@ -19,9 +19,10 @@ an existing install, [`docs/update-guide.md`](update-guide.md).
 | RAM | 4 GB | **8 GB** |
 | Disk | 20 GB | **100 GB** (comfortably covers up to ~2,000 students: Postgres data, MinIO objects, 7 daily + 4 weekly backup dumps) |
 | OS | any recent Linux | **Ubuntu 24.04 LTS** (the tested target — `install.sh` warns, but does not refuse, on anything else) |
-| Software | Docker Engine + Compose v2 plugin, Node.js 22.x on the host | `install.sh` offers to install Docker; Node.js must already be present (needed to run the license CLI and admin-bootstrap CLI on the host, before any container exists) |
-| Network | Port 80 and 443 free on the host | Caddy is the only thing allowed to bind them (`docker-compose.prod.yml` unpublishes every other service) |
+| Software | Docker Engine + Compose v2 plugin | `install.sh` offers to install Docker. No Node.js/npm is needed on the host at all — the license CLI and admin-bootstrap CLI both run inside a throwaway container built from the shipped worker image |
+| Network | Port 80 and 443 free on the host | Caddy is the only thing allowed to bind them (`docker-compose.prod.yml` unpublishes every other service). An offline bundle (see below) needs none of this; a registry bundle needs outbound access to pull images |
 | A license file | from your vendor | required before step 4 will pass |
+| Images | either an offline bundle (`images/*.tar.gz` alongside `install.sh`) or a registry the host can reach | `install.sh` never builds images on the client — see step 4/8 |
 
 ## Network options
 
@@ -57,9 +58,9 @@ bash install.sh
 ### 1/8 Preflight
 
 Checks OS, Docker + Compose (offers to install Docker via the official
-convenience script if missing), ports 80/443, disk, memory, CPU, and that
-`node`/`npx` are on `PATH`. Each check prints `[ OK ]`, `[WARN]` (proceeds
-anyway), or `[FAIL]` (aborts with a specific fix).
+convenience script if missing), ports 80/443, disk, memory, and CPU. Each
+check prints `[ OK ]`, `[WARN]` (proceeds anyway), or `[FAIL]` (aborts with
+a specific fix).
 
 **Idempotence:** every check is stateless (re-reads the host each run); there
 is nothing to "skip" here, it just re-verifies.
@@ -106,12 +107,22 @@ Expected output:
 `.env`. An existing value is never regenerated or overwritten — re-running
 `install.sh` against a working install changes nothing here.
 
-### 4/8 License verification
+### 4/8 Images & license verification
 
-Reads the license file (prompts for a path, default `./license.json`) and
-shells out to `npx tsx scripts/license-issue.ts --verify <token> --edition
-<edition>` — **no signature/crypto logic lives in `install.sh` itself**, it
-only reads that command's JSON output.
+**Obtains images first — never builds them.** An offline bundle carries
+`images/*.tar.gz` next to `install.sh`: each is `docker load`ed and retagged
+onto the names Compose expects. Otherwise `install.sh` tries
+`docker compose pull` (registry bundle). If neither produces a usable
+`web`, `worker`, and `migrate` image, `install.sh` aborts here with the
+exact image name(s) missing — there is **no fallback to building from
+source** on the client.
+
+Then reads the license file (prompts for a path, default `./license.json`)
+and runs `scripts/license-issue.ts --verify <token> --edition <edition>`
+**inside a throwaway container** built from the worker image just obtained
+(`docker compose run --rm --no-deps worker ...` — `--no-deps` so this still
+runs before any other service starts) — **no signature/crypto logic lives
+in `install.sh` itself**, it only reads that command's JSON output.
 
 Success:
 ```
@@ -131,17 +142,20 @@ An **edition mismatch** aborts, naming both editions:
 'college' license from your vendor.
 ```
 
-**Idempotence:** the verified path is written to `VIDYA_LICENSE_PATH` in
-`.env`; a re-run reuses it without re-prompting (verification itself always
-re-runs — it's a stateless, side-effect-free check).
+**Idempotence:** `docker load`/`docker tag` are themselves idempotent — a
+re-run just reloads/retags the same names. The verified license path is
+written to `VIDYA_LICENSE_PATH` in `.env`; a re-run reuses it without
+re-prompting (verification itself always re-runs — it's a stateless,
+side-effect-free check).
 
 ### 5/8 Deploy stack
 
-Runs `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
---build` in two waves (infra + migrate, then web/worker/caddy), checks the
-`migrate` container's exit code explicitly, then polls the web container's
-own `/api/v1/system/ready` endpoint (via `docker compose exec`, exactly like
-the image's built-in `HEALTHCHECK`) for up to 60 seconds.
+Runs `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d`
+(no `--build` — the images were already obtained in step 4/8) in two waves
+(infra + migrate, then web/worker/caddy), checks the `migrate` container's
+exit code explicitly, then polls the web container's own
+`/api/v1/system/ready` endpoint (via `docker compose exec`, exactly like the
+image's built-in `HEALTHCHECK`) for up to 60 seconds.
 
 Expected output:
 ```
@@ -151,9 +165,9 @@ Expected output:
 [ OK ] app is healthy
 ```
 
-**Idempotence:** `docker compose up -d --build` is inherently idempotent —
-unchanged services are left running, changed ones are recreated. Migrations
-are additive (already-applied migrations are no-ops).
+**Idempotence:** `docker compose up -d` is inherently idempotent — unchanged
+services are left running, changed ones are recreated. Migrations are
+additive (already-applied migrations are no-ops).
 
 ### 6/8 First admin account
 

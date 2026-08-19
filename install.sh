@@ -7,9 +7,12 @@
 # docs/deployment-checklist.md (env var reference), docs/runbook-backup-restore.md.
 #
 # What this does NOT do: build a release tarball (that is a separate
-# packaging step) and does not reimplement license signature checking — step
-# 4 shells out to scripts/license-issue.ts --verify and reads its output;
-# there is no crypto logic in this file.
+# packaging step), build container images from source (they are shipped —
+# docker load for an offline bundle, docker compose pull for a registry one,
+# see step 4/8), or reimplement license signature checking — step 4 runs
+# scripts/license-issue.ts --verify inside a throwaway container from the
+# already-obtained worker image and reads its output; there is no crypto
+# logic in this file.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -125,13 +128,6 @@ fi
 cores="$(nproc 2>/dev/null || echo 1)"
 [ "$cores" -ge 4 ] && ok "cpu: ${cores} cores" || warn "cpu: ${cores} cores — recommended is 4"
 
-# Node/npx — required for step 4 (license CLI) and step 6 (admin bootstrap CLI),
-# both of which run on the HOST, not in a container, because they need to run
-# before any container exists / need the compose network respectively.
-command -v node >/dev/null 2>&1 || die "node not found on PATH — this installer must run from a checkout/bundle with Node.js available (needed for scripts/license-issue.ts). Install Node 22.x and re-run."
-command -v npx >/dev/null 2>&1 || die "npx not found on PATH (ships with Node.js) — re-run after fixing your Node install."
-ok "node: $(node --version)"
-
 # ==============================================================================
 step "2/8  Configuration"
 # ==============================================================================
@@ -198,10 +194,57 @@ ensure_secret REDIS_PASSWORD
 chmod 600 "$ENV_FILE"
 
 # ==============================================================================
-step "4/8  License verification"
+step "4/8  Images & license verification"
 # ==============================================================================
-# Black-box only: this step calls scripts/license-issue.ts --verify and reads
-# its JSON output. No signature/crypto logic lives in this file.
+# Images are shipped, never built here: an offline bundle carries
+# images/*.tar.gz (docker load below), a registry bundle relies on
+# `docker compose pull`. No --build fallback — a silent fallback to
+# building from source on the client is exactly the problem this removes
+# (npm registry access, minutes of CPU on a modest box, a bundle that has
+# to carry the whole source tree). See
+# docs/assignments/a12-part1-bundle-leak-finding.md.
+PROJECT="$(echo "${COMPOSE_PROJECT_NAME:-$(basename "$ROOT")}" | tr '[:upper:]' '[:lower:]')"
+BUNDLE_VERSION="$(grep -m1 '"version"' "$ROOT/package.json" | sed -E 's/.*"version": *"([^"]+)".*/\1/' || true)"
+IMAGES_DIR="$ROOT/images"
+
+if compgen -G "$IMAGES_DIR/*.tar.gz" >/dev/null 2>&1; then
+  info "offline bundle detected ($IMAGES_DIR) — loading image tarballs..."
+  for f in "$IMAGES_DIR"/*.tar.gz; do
+    info "  docker load < $(basename "$f")"
+    gunzip -c "$f" | docker load
+  done
+  # build-release.sh --offline tags the app images vidya-{web,worker,migrate}:
+  # <version>; docker-compose.yml has no `image:` key for these three
+  # services, so compose looks for the default <project>-<service>:latest
+  # name instead (verified against this repo: `docker compose config
+  # --images web` resolves to `atlas-web`) — retag what shipped onto the
+  # name compose expects.
+  for svc in web worker migrate; do
+    src="vidya-${svc}:${BUNDLE_VERSION}"
+    if docker image inspect "$src" >/dev/null 2>&1; then
+      docker tag "$src" "${PROJECT}-${svc}:latest"
+    fi
+  done
+  ok "images loaded from offline bundle"
+else
+  info "no images/ directory in this bundle — trying \`docker compose pull\`..."
+  dc pull || warn "docker compose pull reported errors above — checking what's actually available locally next"
+fi
+
+missing=()
+for svc in web worker migrate; do
+  docker image inspect "${PROJECT}-${svc}:latest" >/dev/null 2>&1 || missing+=("${PROJECT}-${svc}:latest")
+done
+if [ "${#missing[@]}" -gt 0 ]; then
+  die "no usable image(s) for: ${missing[*]}. This installer never builds images on the client. Re-run from a bundle that includes an images/ directory (offline install, docker load), or make sure this bundle's compose files point web/worker/migrate at a reachable registry image so \`docker compose pull\` can fetch them."
+fi
+ok "images present: ${PROJECT}-web:latest, ${PROJECT}-worker:latest, ${PROJECT}-migrate:latest"
+
+# Black-box only: this step runs scripts/license-issue.ts --verify inside a
+# throwaway container built from the worker image just obtained above
+# (--no-deps, so no other service is started — this still runs before any
+# service exists) and reads its JSON output. No signature/crypto logic
+# lives in this file.
 if env_has VIDYA_LICENSE_PATH; then
   LICENSE_PATH="$(env_get VIDYA_LICENSE_PATH)"
   info "using license path from .env: $LICENSE_PATH"
@@ -213,7 +256,7 @@ fi
 LICENSE_TOKEN="$(tr -d '[:space:]' < "$LICENSE_PATH")"
 [ -n "$LICENSE_TOKEN" ] || die "license file is empty: $LICENSE_PATH"
 
-run_verify() { npx tsx scripts/license-issue.ts --verify "$LICENSE_TOKEN" --edition "$1" 2>&1; }
+run_verify() { dc run --rm --no-deps worker apps/worker/node_modules/.bin/tsx scripts/license-issue.ts --verify "$LICENSE_TOKEN" --edition "$1" 2>&1; }
 # $1=field name, reads stdin. Handles both quoted-string and bare-number JSON
 # values ("kind": "valid" as well as "daysOverdue": 31) by grabbing up to the
 # next , or } and stripping the key + any quotes.
@@ -265,8 +308,8 @@ step "5/8  Deploy stack"
 # ==============================================================================
 GIT_SHA="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
 export GIT_SHA
-info "building images and starting infrastructure + migration (this can take a few minutes on first run)..."
-dc up -d --build postgres redis minio migrate
+info "starting infrastructure + migration (images already obtained in step 4/8, nothing is built here)..."
+dc up -d postgres redis minio migrate
 ok "infrastructure up"
 
 info "checking migration result..."
@@ -277,7 +320,7 @@ fi
 ok "migrations applied"
 
 info "starting web/worker/caddy..."
-dc up -d --build web worker caddy
+dc up -d web worker caddy
 ok "app containers started"
 
 info "waiting for the app to report healthy..."
