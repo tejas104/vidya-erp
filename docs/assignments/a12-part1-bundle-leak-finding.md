@@ -1,6 +1,6 @@
 # #12 Part 1 — the release bundle leaks source and internal documents
 
-**Status: OPEN. Not fixed. `build-release.sh` still produces a whole-repo tarball.**
+**Status: CLOSED 2026-08-19.** Fixed across three commits — `ff13685` (scripts stop building on the client), `3aa9343` (bundle trimmed to an allow-list + regression guard + `image:` keys). Verified: the registry-mode tarball is now **20 entries / 38 KB**, down from **1,310 entries / 822 MB**, containing only the intended manifest. No source, no internal documents, no secrets. The original analysis below is kept because it explains why the fix had to be done as one coherent change rather than a one-line trim.
 
 ## What the bundle currently contains
 
@@ -39,6 +39,19 @@ Do all of it together — a trimmed bundle without the script changes is worse t
 3. `build-release.sh`: package an explicit allow-list — compose files, `Caddyfile`, `install.sh`, `update.sh`, `.env.template`, the operator guides, `deployment-checklist.md`, `runbook-backup-restore.md`, backup/restore scripts, the `license/` slot + README, `package.json` (`update.sh:73` requires it at the bundle root, alongside `docker-compose.yml`), the image payload, and a VERSION/manifest with version + git SHA.
 4. Add a build-time guard that fails the build if the tarball contains any `.ts`/`.tsx` or any excluded doc path. A leak this consequential should be caught by the tool that creates it.
 
-## Interim risk
+## Outcome
 
-Until this is fixed, **do not hand a built tarball to a customer.** The artefact is fine for internal testing; it is not fit to distribute.
+All four steps landed:
+
+1. `install.sh`/`update.sh` obtain images via `docker load` (offline) or `docker compose pull` (registry). **No `--build` anywhere**, and a loud failure naming the missing images if neither source works. `install.sh` no longer needs Node.js on the host.
+2. Licence verification runs inside a throwaway container from the **worker** image — not `web`, which is a standalone Next build carrying neither `scripts/` nor `tsx`. It reuses the pattern `install.sh` already used for `create-admin.ts`, and still contains no signature or parsing logic of its own.
+3. `build-release.sh` packages an explicit allow-list; `package.json` and `docker-compose.yml` remain at the bundle root, so `update.sh`'s existing check still passes.
+4. A build-time guard fails the build if any `.ts`/`.tsx` or excluded doc path reaches the tarball — **proven by firing it**, not merely written: injecting `scripts/migrate.ts` into the manifest failed the build (exit 1, previous good tarball untouched); removing it passed.
+
+`docker-compose.yml` gained `image:` keys for `web`/`worker`/`migrate` so the registry path has a target, with `build:` retained so local development is unchanged. Both base and prod-overlay `docker compose config` validate.
+
+## Still unverified
+
+- Offline mode at the ~0.4 GB free-RAM floor this machine sometimes sits at. It built successfully at ~1.6 GB free; the low-memory case is untested, not known-broken.
+- A real registry push/pull round trip — no registry available here.
+- A full interactive `install.sh` run on a clean server. That is #12 Part 5, and it remains the only thing that proves the bundle end to end.
