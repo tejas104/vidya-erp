@@ -21,9 +21,8 @@ pull` for a registry one) in step 6, before anything is applied.
 
 `update.sh` can refuse to proceed on an **edition mismatch** or a license
 **expired beyond the 30-day grace window**. This is **not** the product
-locking an institution out of anything. Per deliberate policy (Decision 1,
-[`docs/superpowers/specs/2026-08-13-license-verification-design.md`](superpowers/specs/2026-08-13-license-verification-design.md)):
-an expired license never blocks the app — every feature keeps working,
+locking an institution out of anything. Per deliberate policy: an expired
+license never blocks the app — every feature keeps working,
 indefinitely, expired or not. What `update.sh` refuses in that state is
 specifically the **vendor-performed update step**, which is an AMC
 (Annual Maintenance Contract) service. The running app is completely

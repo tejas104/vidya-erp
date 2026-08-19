@@ -149,15 +149,16 @@ ok "pre-update backup verified: $(ls -1t "$ROOT/backups/db/daily"/*.dump | head 
 # ==============================================================================
 step "6/7  Apply, migrate, restart"
 # ==============================================================================
-# Compose v2's default name for a service with no explicit `image:` key is
-# <project>-<service> (verified against this repo's own compose files:
-# `docker compose config --images web` resolves to `atlas-web` here — note
-# that command prints the WHOLE dependency subgraph, not just one service, so
-# it's not usable as a per-service lookup and isn't used for that here).
-PROJECT="$(echo "${COMPOSE_PROJECT_NAME:-$(basename "$ROOT")}" | tr '[:upper:]' '[:lower:]')"
-WEB_IMAGE="${PROJECT}-web:latest"
-WORKER_IMAGE="${PROJECT}-worker:latest"
-MIGRATE_IMAGE="${PROJECT}-migrate:latest"
+# docker-compose.yml resolves web/worker/migrate's `image:` key to
+# ${VIDYA_IMAGE_REGISTRY:-}vidya-{service}:${VIDYA_IMAGE_TAG:-latest} (`docker
+# compose config --images web` prints the WHOLE dependency subgraph, not just
+# one service, so it's not usable as a per-service lookup and isn't used for
+# that here — same names computed by hand instead).
+IMAGE_REGISTRY="$(env_get VIDYA_IMAGE_REGISTRY)"
+IMAGE_TAG="$(env_get VIDYA_IMAGE_TAG)"; IMAGE_TAG="${IMAGE_TAG:-latest}"
+WEB_IMAGE="${IMAGE_REGISTRY}vidya-web:${IMAGE_TAG}"
+WORKER_IMAGE="${IMAGE_REGISTRY}vidya-worker:${IMAGE_TAG}"
+MIGRATE_IMAGE="${IMAGE_REGISTRY}vidya-migrate:${IMAGE_TAG}"
 info "tagging current images for rollback..."
 for image in "$WEB_IMAGE" "$WORKER_IMAGE"; do
   if docker image inspect "$image" >/dev/null 2>&1; then
@@ -181,7 +182,7 @@ if compgen -G "$IMAGES_DIR/*.tar.gz" >/dev/null 2>&1; then
   for svc in web worker migrate; do
     src="vidya-${svc}:${TO_VERSION}"
     if docker image inspect "$src" >/dev/null 2>&1; then
-      docker tag "$src" "${PROJECT}-${svc}:latest"
+      docker tag "$src" "${IMAGE_REGISTRY}vidya-${svc}:${IMAGE_TAG}"
     fi
   done
   ok "images loaded from offline release"
@@ -195,7 +196,7 @@ for image in "$WEB_IMAGE" "$WORKER_IMAGE" "$MIGRATE_IMAGE"; do
   docker image inspect "$image" >/dev/null 2>&1 || missing+=("$image")
 done
 if [ "${#missing[@]}" -gt 0 ]; then
-  die "no usable image(s) for: ${missing[*]}. update.sh never builds images on the client. Re-run against a release tarball that includes an images/ directory (offline, docker load), or make sure this release's compose files point web/worker/migrate at a reachable registry image so \`docker compose pull\` can fetch them. Nothing has been applied yet — .env, the release files on disk, and the running containers are all untouched."
+  die "no usable image(s) for: ${missing[*]}. update.sh never builds images on the client. Re-run against a release tarball that includes an images/ directory (offline, docker load), or set VIDYA_IMAGE_REGISTRY/VIDYA_IMAGE_TAG in .env so \`docker compose pull\` can fetch web/worker/migrate from a reachable registry. Nothing has been applied yet — .env, the release files on disk, and the running containers are all untouched."
 fi
 ok "images present: $WEB_IMAGE, $WORKER_IMAGE, $MIGRATE_IMAGE"
 

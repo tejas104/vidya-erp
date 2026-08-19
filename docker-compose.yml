@@ -48,6 +48,14 @@ services:
       retries: 12
 
   migrate:
+    # `image:` gives `docker compose pull`/`docker load` a name to obtain
+    # (install.sh/update.sh never build on the client — see
+    # docs/assignments/a12-part1-bundle-leak-finding.md). `build:` stays so
+    # `docker compose up --build` / `pnpm compose:up` still work unchanged
+    # for local dev. Default `vidya-migrate:latest` needs no config; set
+    # VIDYA_IMAGE_TAG (and VIDYA_IMAGE_REGISTRY, with trailing slash, e.g.
+    # `ghcr.io/yourorg/`) in .env to pull a specific pinned/registry image.
+    image: ${VIDYA_IMAGE_REGISTRY:-}vidya-migrate:${VIDYA_IMAGE_TAG:-latest}
     build:
       context: .
       dockerfile: apps/worker/Dockerfile
@@ -61,6 +69,9 @@ services:
     restart: "no"
 
   web:
+    # See the `migrate` service above for why both `image:` and `build:` are
+    # set.
+    image: ${VIDYA_IMAGE_REGISTRY:-}vidya-web:${VIDYA_IMAGE_TAG:-latest}
     build:
       context: .
       dockerfile: apps/web/Dockerfile
@@ -115,6 +126,9 @@ services:
         condition: service_completed_successfully
 
   worker:
+    # See the `migrate` service above for why both `image:` and `build:` are
+    # set.
+    image: ${VIDYA_IMAGE_REGISTRY:-}vidya-worker:${VIDYA_IMAGE_TAG:-latest}
     build:
       context: .
       dockerfile: apps/worker/Dockerfile

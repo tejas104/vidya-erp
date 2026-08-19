@@ -203,7 +203,12 @@ step "4/8  Images & license verification"
 # (npm registry access, minutes of CPU on a modest box, a bundle that has
 # to carry the whole source tree). See
 # docs/assignments/a12-part1-bundle-leak-finding.md.
-PROJECT="$(echo "${COMPOSE_PROJECT_NAME:-$(basename "$ROOT")}" | tr '[:upper:]' '[:lower:]')"
+# docker-compose.yml resolves web/worker/migrate's `image:` key to
+# ${VIDYA_IMAGE_REGISTRY:-}vidya-{service}:${VIDYA_IMAGE_TAG:-latest} — both
+# unset by default, so the target name is vidya-{service}:latest unless an
+# operator has pinned a registry/tag in .env.
+IMAGE_TAG="$(env_get VIDYA_IMAGE_TAG)"; IMAGE_TAG="${IMAGE_TAG:-latest}"
+IMAGE_REGISTRY="$(env_get VIDYA_IMAGE_REGISTRY)"
 BUNDLE_VERSION="$(grep -m1 '"version"' "$ROOT/package.json" | sed -E 's/.*"version": *"([^"]+)".*/\1/' || true)"
 IMAGES_DIR="$ROOT/images"
 
@@ -214,15 +219,12 @@ if compgen -G "$IMAGES_DIR/*.tar.gz" >/dev/null 2>&1; then
     gunzip -c "$f" | docker load
   done
   # build-release.sh --offline tags the app images vidya-{web,worker,migrate}:
-  # <version>; docker-compose.yml has no `image:` key for these three
-  # services, so compose looks for the default <project>-<service>:latest
-  # name instead (verified against this repo: `docker compose config
-  # --images web` resolves to `atlas-web`) — retag what shipped onto the
-  # name compose expects.
+  # <version> — retag what shipped onto exactly the name docker-compose.yml
+  # expects (see comment above) so compose finds it without a pull.
   for svc in web worker migrate; do
     src="vidya-${svc}:${BUNDLE_VERSION}"
     if docker image inspect "$src" >/dev/null 2>&1; then
-      docker tag "$src" "${PROJECT}-${svc}:latest"
+      docker tag "$src" "${IMAGE_REGISTRY}vidya-${svc}:${IMAGE_TAG}"
     fi
   done
   ok "images loaded from offline bundle"
@@ -233,12 +235,13 @@ fi
 
 missing=()
 for svc in web worker migrate; do
-  docker image inspect "${PROJECT}-${svc}:latest" >/dev/null 2>&1 || missing+=("${PROJECT}-${svc}:latest")
+  ref="${IMAGE_REGISTRY}vidya-${svc}:${IMAGE_TAG}"
+  docker image inspect "$ref" >/dev/null 2>&1 || missing+=("$ref")
 done
 if [ "${#missing[@]}" -gt 0 ]; then
-  die "no usable image(s) for: ${missing[*]}. This installer never builds images on the client. Re-run from a bundle that includes an images/ directory (offline install, docker load), or make sure this bundle's compose files point web/worker/migrate at a reachable registry image so \`docker compose pull\` can fetch them."
+  die "no usable image(s) for: ${missing[*]}. This installer never builds images on the client. Re-run from a bundle that includes an images/ directory (offline install, docker load), or set VIDYA_IMAGE_REGISTRY/VIDYA_IMAGE_TAG in .env to point web/worker/migrate at a reachable registry image so \`docker compose pull\` can fetch them."
 fi
-ok "images present: ${PROJECT}-web:latest, ${PROJECT}-worker:latest, ${PROJECT}-migrate:latest"
+ok "images present: ${IMAGE_REGISTRY}vidya-web:${IMAGE_TAG}, ${IMAGE_REGISTRY}vidya-worker:${IMAGE_TAG}, ${IMAGE_REGISTRY}vidya-migrate:${IMAGE_TAG}"
 
 # Black-box only: this step runs scripts/license-issue.ts --verify inside a
 # throwaway container built from the worker image just obtained above

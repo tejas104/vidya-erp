@@ -11,36 +11,35 @@
 # certs/.git). This script does not modify install.sh/update.sh at all —
 # read them before changing this file's output shape.
 #
+# The tarball is an explicit ALLOW-LIST, not a whole-repo `git archive`: no
+# TypeScript source, no .github/, no internal docs (ADRs, threat models,
+# audits, superpowers plans) — see
+# docs/assignments/a12-part1-bundle-leak-finding.md for why that mattered.
+# Step 6 asserts this on the built tarball and fails the build if it
+# doesn't hold — the guard lives here, not in a reviewer's head.
+#
+# Neither mode ever needs the source tree on the CLIENT: install.sh/update.sh
+# only `docker load` or `docker compose pull` images, never build (see the
+# finding doc above) — that is what makes trimming the tarball safe at all.
+#
 # Two modes, one flag:
 #   (default)  registry mode — builds + validates the migrate/web/worker
 #              images locally (so a broken build is caught HERE, not on a
 #              client server) and tags them vidya-{web,worker,migrate}:
 #              <version> for a registry push, but does not bundle image
-#              tarballs. The shipped tarball is source-only; install.sh/
-#              update.sh build the images ON the client via `docker compose
-#              up -d --build`, exactly as they already do today. Pushing
-#              the tagged images to a registry is a separate, deliberate
-#              step this script does not perform for you (`docker push
-#              <registry>/vidya-web:<version>` etc., after tagging).
+#              tarballs. Pushing the tagged images to a registry, and
+#              pointing docker-compose.yml's VIDYA_IMAGE_REGISTRY/
+#              VIDYA_IMAGE_TAG at that registry/version, is a separate,
+#              deliberate step this script does not perform for you
+#              (`docker push <registry>/vidya-web:<version>` etc., after
+#              tagging).
 #   --offline  additionally `docker save`s the built images, plus the
 #              third-party base images the compose files pull directly
-#              (postgres, redis, minio, caddy — no build step, so these
-#              alone are fully solved by this), into the tarball's
-#              images/ directory, with a load helper and a README.
-#              HONEST LIMITATION (read images/README.md in the output, and
-#              this script's own step 5 banner): install.sh/update.sh
-#              always run `docker compose up -d --build` for migrate/web/
-#              worker, which re-executes each Dockerfile's `pnpm install
-#              --frozen-lockfile` step on the client, needing npm registry
-#              access regardless of what's pre-loaded via `docker load`.
-#              This bundle removes the network dependency for the four
-#              third-party images and for pulling node:22-alpine, but does
-#              NOT make a fully air-gapped `docker compose up --build`
-#              possible end-to-end — that needs either a vendored pnpm
-#              store or a change to install.sh/update.sh to prefer
-#              pre-loaded images over rebuilding, neither of which is in
-#              this script's scope (install.sh/update.sh are #12 parts
-#              2-4, already shipped).
+#              (postgres, redis, minio, caddy — no build step), into the
+#              tarball's images/ directory. install.sh/update.sh load these
+#              automatically — no manual `docker load` needed, and no
+#              network access of any kind is needed to install/update from
+#              an offline bundle.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -157,21 +156,15 @@ pass. See docs/install-guide.md troubleshooting #1."
 fi
 ok "images built"
 
-# Same naming convention update.sh uses for its rollback tags (verified
-# against this repo: \`docker compose config --images web\` resolves through
-# the whole dependency subgraph, so it isn't used for a per-service lookup
-# here either — same reasoning as update.sh's comment).
-PROJECT="$(echo "${COMPOSE_PROJECT_NAME:-$(basename "$ROOT")}" | tr '[:upper:]' '[:lower:]')"
-WEB_IMAGE="${PROJECT}-web:latest"
-WORKER_IMAGE="${PROJECT}-worker:latest"
-MIGRATE_IMAGE="${PROJECT}-migrate:latest"
-
-IMAGE_SRCS=("$WEB_IMAGE" "$WORKER_IMAGE" "$MIGRATE_IMAGE")
+# docker-compose.yml's `image:` key (VIDYA_IMAGE_REGISTRY/VIDYA_IMAGE_TAG
+# unset in this shell) tags the images just built vidya-{web,worker,migrate}:
+# latest — retag onto this release's version so the offline bundle (step
+# 5) and any manual registry push both carry a real version, not a moving
+# `latest`.
 IMAGE_NAMES=("vidya-web" "vidya-worker" "vidya-migrate")
-for i in "${!IMAGE_SRCS[@]}"; do
-  src="${IMAGE_SRCS[$i]}"; name="${IMAGE_NAMES[$i]}"
-  docker tag "$src" "${name}:${VERSION}"
-  ok "tagged ${name}:${VERSION} (from $src) — ready for \`docker tag ${name}:${VERSION} <registry>/${name}:${VERSION} && docker push ...\` if you're pushing to a registry"
+for name in "${IMAGE_NAMES[@]}"; do
+  docker tag "${name}:latest" "${name}:${VERSION}"
+  ok "tagged ${name}:${VERSION} (from ${name}:latest) — ready for \`docker tag ${name}:${VERSION} <registry>/${name}:${VERSION} && docker push ...\` if you're pushing to a registry"
 done
 
 # ==============================================================================
@@ -183,12 +176,35 @@ trap cleanup EXIT
 PKG_NAME="vidya-$VERSION"
 STAGE_DIR="$STAGE_PARENT/$PKG_NAME"
 
+# Explicit allow-list — this bundle ships to customers, so it carries only
+# what an install/update actually needs: no TypeScript source, no CI
+# config, no internal engineering docs. Step 6 re-checks the built tarball
+# against this same intent as a regression guard; keep both in sync if a
+# real new dependency shows up.
+ALLOWLIST=(
+  docker-compose.yml
+  docker-compose.prod.yml
+  Caddyfile
+  install.sh
+  update.sh
+  .env.template
+  package.json
+  docs/deployment-checklist.md
+  docs/install-guide.md
+  docs/update-guide.md
+  docs/runbook-backup-restore.md
+  scripts/backup.sh
+  scripts/restore.sh
+  scripts/restore-drill.sh
+)
+
 # git archive (or, if --force'd past a dirty tree, `git stash create`'s
 # tree-ish, which is the working tree's tracked content without touching
-# the actual stash ref) — TRACKED FILES ONLY, always. This is what keeps
-# .env, backups/, certs/, .claude/, *.log etc. out of the tarball without
-# needing a hand-maintained exclude list: they were never tracked, so they
-# never exist in what `git archive` reads from, full stop.
+# the actual stash ref), restricted to exactly the paths above via a
+# pathspec — TRACKED FILES ONLY, and only the ones this bundle is allowed
+# to carry. A path that doesn't exist at $ARCHIVE_REF (typo, renamed file)
+# fails the archive outright rather than silently shipping less than
+# intended.
 if [ "$DIRTY" = true ]; then
   ARCHIVE_REF="$(git stash create)"
   [ -n "$ARCHIVE_REF" ] || ARCHIVE_REF="$(git rev-parse HEAD)"
@@ -196,15 +212,15 @@ else
   ARCHIVE_REF="$(git rev-parse HEAD)"
 fi
 mkdir -p "$STAGE_DIR"
-git archive --format=tar "$ARCHIVE_REF" | tar -x -C "$STAGE_DIR"
-ok "archived tracked tree ($ARCHIVE_REF) into staging"
+git archive --format=tar "$ARCHIVE_REF" -- "${ALLOWLIST[@]}" | tar -x -C "$STAGE_DIR"
+ok "archived allow-listed tree ($ARCHIVE_REF) into staging (${#ALLOWLIST[@]} paths)"
 
 [ -f "$STAGE_DIR/package.json" ] && [ -f "$STAGE_DIR/docker-compose.yml" ] || \
   die "internal error: staged tree is missing package.json/docker-compose.yml — refusing to package."
 
-# Never ship a real .env — belt-and-suspenders on top of git archive only
-# ever seeing tracked content (.env is gitignored and has never been
-# committed in this repo, but assert it anyway rather than trust that).
+# Never ship a real .env — belt-and-suspenders on top of the allow-list
+# above not naming it (.env is gitignored and has never been committed in
+# this repo, but assert it anyway rather than trust that).
 [ -e "$STAGE_DIR/.env" ] && die "internal error: a .env landed in the staged tree — aborting, not packaging a tarball that could contain secrets."
 
 cat > "$STAGE_DIR/RELEASE_INFO.txt" <<INFO
@@ -215,8 +231,8 @@ Vidya release
   built (UTC): $BUILT_AT
 INFO
 
-mkdir -p "$STAGE_DIR"
-cat > "$STAGE_DIR/LICENSE-SETUP.md" <<'LICDOC'
+mkdir -p "$STAGE_DIR/license"
+cat > "$STAGE_DIR/license/README.md" <<'LICDOC'
 # License file — required before install.sh will proceed
 
 This release does not (and never will) include a license. Bring your own
@@ -225,12 +241,13 @@ institution and edition (`college` or `school`).
 
 ## Where it goes
 
-Place it in this same directory, next to `docker-compose.yml` and
-`install.sh` — the default path `install.sh` asks for (step 4/8) is
-`./license.json` relative to wherever you unpacked/ran the installer from.
-You can point it elsewhere by answering that prompt with a different path;
-the value you give is remembered in `.env` as `VIDYA_LICENSE_PATH` so
-`update.sh` can re-check it on every future update.
+Drop it in this `license/` folder, or at the bundle root next to
+`docker-compose.yml` and `install.sh` — either works. The default path
+`install.sh` asks for (step 4/8) is `./license.json` relative to wherever
+you unpacked/ran the installer from; if you kept it in this folder, answer
+that prompt with `license/license.json` instead. The value you give is
+remembered in `.env` as `VIDYA_LICENSE_PATH` so `update.sh` can re-check it
+on every future update.
 
 ## What happens without one
 
@@ -239,11 +256,9 @@ any containers. No file (or an empty/unreadable one) aborts installation
 outright — there is no way to install without a license, valid or expired.
 
 An **expired** license is different: it does not block installation or stop
-the app from running (see
-`docs/superpowers/specs/2026-08-13-license-verification-design.md`,
-Decision 1) — every feature keeps working, indefinitely. What it DOES block
-is `update.sh`'s vendor-performed update step, since that is an AMC
-(Annual Maintenance Contract) service.
+the app from running — every feature keeps working, indefinitely. What it
+DOES block is `update.sh`'s vendor-performed update step, since that is an
+AMC (Annual Maintenance Contract) service.
 
 ## How to obtain one
 
@@ -252,16 +267,17 @@ Contact your vendor with:
   - the edition you're installing (`college` or `school` — must match what
     you choose at `install.sh` step 2/8, or step 4/8 refuses with an
     edition-mismatch error),
-  - and, if renewing, your existing license's `id` (`scripts/license-issue.ts
-    --verify` prints it, if you have an old copy to inspect).
+  - and, if renewing, your existing license's id — your vendor can look
+    this up from your account; there is no client-side tool in this bundle
+    to inspect an old license file.
 LICDOC
-ok "staged LICENSE-SETUP.md and RELEASE_INFO.txt"
+ok "staged license/README.md and RELEASE_INFO.txt"
 
 # ==============================================================================
 step "5/6  Offline images"
 # ==============================================================================
 if [ "$MODE" != "offline" ]; then
-  info "registry mode — skipping (no image tarballs bundled; install.sh/update.sh build images on the client via \`docker compose up -d --build\`, same as they do without this bundle at all)."
+  info "registry mode — skipping (no image tarballs bundled; install.sh/update.sh run \`docker compose pull\` instead, using docker-compose.yml's vidya-{web,worker,migrate} image: names — push vidya-{web,worker,migrate}:${VERSION} to your registry, and point VIDYA_IMAGE_REGISTRY/VIDYA_IMAGE_TAG in .env at it, before handing this bundle to a client, or the pull will find nothing)."
 else
   IMAGES_DIR="$STAGE_DIR/images"
   mkdir -p "$IMAGES_DIR"
@@ -288,39 +304,17 @@ else
   cat > "$IMAGES_DIR/README.md" <<'IMGDOC'
 # Pre-built images (offline install)
 
-Load all of these into the target host's local Docker BEFORE running
-`install.sh`:
+install.sh (step 4/8) and update.sh (step 6/7) `docker load` these
+automatically — nothing to do here by hand. Fully solved, all six images:
+`postgres`, `redis`, `minio`, `caddy` are the exact upstream images;
+`vidya-web`, `vidya-worker`, `vidya-migrate` are the ones this repo's own
+build tested before packaging (see RELEASE_INFO.txt for the git SHA).
+install.sh/update.sh never build on the client, so a host with zero network
+access can install/update from this bundle alone.
+
+Manual load, if you ever need it outside install.sh/update.sh:
 
     for f in images/*.tar.gz; do gunzip -c "$f" | docker load; done
-
-## What this does and does not solve
-
-- `postgres`, `redis`, `minio`, `caddy` — fully solved. These compose
-  services have no build step; `docker load`ing them here means the
-  `docker compose up` calls in `install.sh`/`update.sh` never need to pull
-  them, full stop.
-- `vidya-web`, `vidya-worker`, `vidya-migrate` — partially solved, and you
-  need to know the gap. `install.sh` and `update.sh` always run
-  `docker compose up -d --build` for these three services (see their own
-  "5/8 Deploy stack" / "6/7 Apply, migrate, restart" steps) — `--build`
-  unconditionally re-runs each Dockerfile, including `pnpm install
-  --frozen-lockfile`, which needs npm registry access. Loading the images
-  in this folder pre-warms the `node:22-alpine` base layer (so that part of
-  the build doesn't need network) but does NOT make the `pnpm install` step
-  skip the network. A host with truly zero internet access — not even an
-  internal npm/pnpm mirror — cannot complete `install.sh`/`update.sh` from
-  this bundle alone.
-
-  This is a real, currently-open gap between what "offline mode" promises
-  and what the incumbent `install.sh`/`update.sh` (already shipped,
-  unmodified by this release-builder) actually do: they were written to
-  always build from source, not to prefer a pre-loaded image. Closing it
-  needs either vendoring the pnpm store into the release tree, or changing
-  install.sh/update.sh to skip `--build` when a matching image is already
-  loaded — both are deliberately out of scope for `scripts/build-release.sh`
-  itself. If your target host truly has no network path to npm at all,
-  point it at an internal pnpm/npm mirror (`npm config set registry ...`
-  inside the build context) rather than relying on this folder alone.
 IMGDOC
   ok "offline images staged ($(ls "$IMAGES_DIR"/*.tar.gz | wc -l) tarballs)"
 fi
@@ -331,7 +325,30 @@ step "6/6  Package tarball"
 mkdir -p "$ROOT/releases"
 OUT="$ROOT/releases/vidya-$VERSION.tar.gz"
 [ -e "$OUT" ] && warn "overwriting existing $OUT"
-tar -czf "$OUT" -C "$STAGE_PARENT" "$PKG_NAME"
+TMP_OUT="$(mktemp "$ROOT/releases/.vidya-$VERSION.tar.gz.XXXXXX")"
+tar -czf "$TMP_OUT" -C "$STAGE_PARENT" "$PKG_NAME"
+
+# --- Regression guard ---------------------------------------------------
+# The whole point of the ALLOWLIST above: assert it actually held, by
+# reading the TARBALL ITSELF back — not by trusting the staging step's
+# intent. A leak this consequential (source + internal docs shipped to
+# every customer, see docs/assignments/a12-part1-bundle-leak-finding.md)
+# must be caught by the tool that creates it, not a reviewer months later.
+# Built into a temp file first (not $OUT) so a failed guard never clobbers
+# a previous good release.
+LISTING="$(tar -tzf "$TMP_OUT")"
+BAD_SOURCE="$(printf '%s\n' "$LISTING" | grep -E '\.tsx?$' || true)"
+BAD_DOCS="$(printf '%s\n' "$LISTING" | grep -E '^[^/]+/(packages/|apps/|tests/|\.github/|docs/adr/|docs/audits/|docs/superpowers/|docs/threat-model|docs/security-review\.md|docs/NEXT-SESSION\.md)' || true)"
+if [ -n "$BAD_SOURCE" ] || [ -n "$BAD_DOCS" ]; then
+  rm -f "$TMP_OUT"
+  fail "release guard failed — the tarball contains disallowed content:"
+  [ -n "$BAD_SOURCE" ] && printf '%s\n' "$BAD_SOURCE" | sed 's/^/  source file: /' >&2
+  [ -n "$BAD_DOCS" ] && printf '%s\n' "$BAD_DOCS" | sed 's/^/  internal doc: /' >&2
+  die "not shipping this tarball. Fix ALLOWLIST above (or whatever generated the extra path) and re-run."
+fi
+ok "guard passed — no .ts/.tsx files and none of the excluded doc paths in the tarball"
+
+mv "$TMP_OUT" "$OUT"
 SIZE="$(du -h "$OUT" | cut -f1)"
 SHA256="$( (command -v sha256sum >/dev/null 2>&1 && sha256sum "$OUT" || shasum -a 256 "$OUT") | cut -d' ' -f1)"
 
