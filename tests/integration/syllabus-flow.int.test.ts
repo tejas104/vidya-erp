@@ -162,7 +162,7 @@ describe("syllabus authoring + coverage through the live scope matrix", () => {
       body: { taughtOn: "2026-07-01" },
     });
     expect(covered.status).toBe(200);
-    expect((await covered.json()).taughtOn).toBe("2026-07-01");
+    expect(((await covered.json()) as { taughtOn: string }).taughtOn).toBe("2026-07-01");
 
     const view = await stack.call("syllabus.class-syllabus", {
       cookie: dsCookie,

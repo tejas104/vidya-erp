@@ -73,6 +73,11 @@ async function main(): Promise<void> {
       serviceVersion: "cli",
       isDraining: () => false,
       infrastructureChecks: [],
+      // Neither the licence banner nor the seat count has any meaning outside
+      // the web app, and nothing here reads them — but SystemModuleDeps
+      // requires both, so state the absence explicitly (#11.75).
+      license: { kind: "absent" },
+      countActiveStudents: async () => 0,
     });
     const core = createIdentityCore({
       redis,
@@ -86,6 +91,7 @@ async function main(): Promise<void> {
       db,
       redis,
       metrics,
+      logger,
       audit: system.service.audit,
       core,
       config: config.identity,
@@ -97,6 +103,7 @@ async function main(): Promise<void> {
       audit: system.service.audit,
       scopeChecker: core.scopeChecker,
       identityGrants: identity.service.derivedGrants,
+      identity: { issueCredential: identity.service.issueCredential },
       storage: { client: objectStorage, bucket: config.s3.bucket },
       enqueueImport: async (payload) => {
         await peopleQueue.queue.add(IMPORT_JOB_NAME, payload);

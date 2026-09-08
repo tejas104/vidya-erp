@@ -113,7 +113,9 @@ export class FakePeopleDirectory implements PeopleDirectory {
     return null;
   }
 
-  async teacherByIdentityUser(): Promise<{ teacherId: string; collegeId: string; fullName: string } | null> {
+  async teacherByIdentityUser(
+    _identityUserId: string,
+  ): Promise<{ teacherId: string; collegeId: string; fullName: string } | null> {
     return null;
   }
 
