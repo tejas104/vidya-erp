@@ -35,6 +35,11 @@ export default tseslint.config(
   {
     ignores: [
       "**/node_modules/**",
+      // Orphaned agent scratch copies of the whole repo (subagent runs
+      // leave them behind, and `git worktree list` no longer knows them).
+      // Linting them reported the same pre-existing errors three more
+      // times over.
+      ".claude/**",
       "**/.next/**",
       "**/dist/**",
       "coverage/**",
