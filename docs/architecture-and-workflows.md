@@ -32,10 +32,36 @@ every read scope-checked. Deny-by-default everywhere.
 | DB | PostgreSQL + Drizzle ORM, per-module SQL migrations (up/down) | constraints enforce invariants in the DB |
 | Jobs | BullMQ on Redis, separate `apps/worker` | reports, invoice generation, future digests |
 | Files | MinIO (S3 API) via platform ObjectStorage helpers | materials, submissions, report PDFs |
-| Auth | Cookie sessions, bcrypt, rate-limited login (5/15min) | human-owned core (ADR-0012) |
+| Auth | Cookie sessions, argon2id, two independent login brakes (see below) | human-owned core (ADR-0012) |
 | Observability | Prometheus metrics (:9464), structured pino logs, audit table | runbook-driven ops |
 | Tests | Vitest (unit + jsdom UI projects), RTL, Playwright drives | 500+ unit, 58 UI, live E2E per module |
 | PDF | pdfkit (ADR-0021) | reports without headless Chrome |
+
+**Two login brakes, deliberately separate.** Both answer HTTP 429, so any
+diagnosis must distinguish them by response *shape*, never by status alone:
+
+| | Rate limiter | Account lockout |
+|---|---|---|
+| Counts | every login **request** (success included) | consecutive **credential failures** |
+| Keyed by | source IP *and* username, independently | username alone (#10.5 Part 2 — never the IP) |
+| Lives in | `packages/platform/src/ratelimit/limiter.ts` | `packages/modules/identity/src/service/throttle.ts` |
+| Wired at | `defineRoute` (`packages/platform/src/http/define-route.ts`), from `apps/web/src/composition.ts:392` — **before** the handler runs | inside `AuthService.login`, i.e. only for requests the limiter let through |
+| Opted into by | `RouteSpec.rateLimit` (5 routes, all in `identity/src/definition.ts`) | always, on `identity.login` |
+| Defaults | login-IP 10/60s then exponential backoff to 30 min; login-username 5/60s; password 3/60s; session 300/60s | 10 consecutive failures → 15 min lock |
+| 429 shape | problem+json, `title: "Too many requests"`, variable `retry-after` (a Redis TTL) | plain json `{message: "too many failed attempts…"}`, `retry-after` always exactly `900` |
+
+Because the per-username limiter (5/60s) is stricter than the lockout
+threshold (10), a rapid burst against one account trips the *limiter* and
+never reaches lockout — reaching genuine lockout takes failures spaced across
+the limiter's window. Proof of each, separately: `tests/e2e/security.spec.ts`
+guards (a) and (b); `tests/integration/identity-flow.int.test.ts` proves the
+lockout subject ignores the source IP.
+
+> **Config footgun:** `LOGIN_MAX_ATTEMPTS` / `LOGIN_WINDOW_MINUTES` do **not**
+> configure login — despite the names they feed the *reset-token redemption*
+> throttle (`config.identity.throttle`). Login lockout is
+> `LOGIN_LOCKOUT_MAX_ATTEMPTS` / `LOGIN_LOCKOUT_WINDOW_MINUTES`; the limiter is
+> the `RATE_LIMIT_*` family (`packages/platform/src/config/env.ts`).
 
 **House invariants** (non-negotiable):
 1. No new runtime dependency without an ADR (`docs/adr/0009`).
