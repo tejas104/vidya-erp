@@ -168,23 +168,51 @@ describe("user administration end-to-end", () => {
   });
 });
 
-describe("login throttling against real Redis", () => {
-  it("locks the user+ip subject after repeated failures", async () => {
+describe("account lockout against real Redis", () => {
+  /**
+   * Lockout is keyed by ACCOUNT (username) ALONE — #10.5 Part 2 changed the
+   * subject from the old `user+ip` composite, and the harness runs the
+   * production threshold (10 consecutive failures / 15 min, see
+   * support/harness.ts `lockout`). Every attempt below therefore comes from
+   * a DIFFERENT source IP: if the IP were still part of the subject, ten
+   * one-per-IP failures would never accumulate and nothing would lock.
+   *
+   * This is the only 429 the integration harness can produce — routeDeps
+   * wires no rateLimiter (support/harness.ts:194), so the platform rate
+   * limiter is out of the picture here and the shape asserted below is
+   * unambiguously the lockout's (fixed retry-after, plain-json message).
+   * The limiter's own 429 is proven separately in tests/e2e/security.spec.ts.
+   */
+  it("locks the account after 10 consecutive failures, however the source IP varies", async () => {
     const victim = `locked-${runId}`;
-    const ip = "10.9.9.9";
-    for (let attempt = 0; attempt < 4; attempt += 1) {
+    for (let attempt = 0; attempt < 9; attempt += 1) {
       const response = await stack.call("identity.login", {
         body: { username: victim, password: `wrong-${attempt}` },
-        ip,
+        ip: `10.9.9.${attempt + 1}`,
       });
-      expect(response.status).toBe(401);
+      expect(response.status, `failure ${attempt + 1} from a fresh IP is a plain rejection`).toBe(
+        401,
+      );
     }
-    const fifth = await stack.call("identity.login", {
-      body: { username: victim, password: "wrong-5" },
-      ip,
+
+    const tenth = await stack.call("identity.login", {
+      body: { username: victim, password: "wrong-10" },
+      ip: "10.9.9.10",
     });
-    expect(fifth.status).toBe(429);
-    expect(fifth.headers.get("retry-after")).toBe(String(15 * 60));
+    expect(tenth.status, "the 10th consecutive failure locks the account").toBe(429);
+    expect(tenth.headers.get("retry-after")).toBe(String(15 * 60));
+    expect(((await tenth.json()) as { message: string }).message).toBe(
+      "too many failed attempts; account locked, try again later",
+    );
     expect(await auditActions()).toContain("identity.login-failed");
+  });
+
+  it("locks only that account — a different username from a used IP still gets 401", async () => {
+    const bystander = `bystander-${runId}`;
+    const response = await stack.call("identity.login", {
+      body: { username: bystander, password: "wrong" },
+      ip: "10.9.9.1", // an IP that just contributed a failure to the lockout above
+    });
+    expect(response.status).toBe(401);
   });
 });
