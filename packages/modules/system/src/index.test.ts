@@ -11,7 +11,7 @@ function makeModule() {
     serviceVersion: "0.1.0-test",
     isDraining: () => false,
     infrastructureChecks: [],
-    license: { kind: "absent" },
+    license: () => ({ kind: "absent" }),
     countActiveStudents: async () => 0,
   });
   return { module, values };

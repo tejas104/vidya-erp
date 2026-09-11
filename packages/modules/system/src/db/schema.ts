@@ -1,5 +1,7 @@
 import {
   bigint,
+  boolean,
+  date,
   index,
   jsonb,
   pgTable,
@@ -58,3 +60,17 @@ export const sysUserPreferences = pgTable(
 );
 
 export type SysUserPreferenceRow = typeof sysUserPreferences.$inferSelect;
+
+/**
+ * Single-row high-water mark of the latest date this installation has ever
+ * observed (licence design spec, DECISION 2). `id` is fixed true by a CHECK
+ * and is the primary key, so there can only ever be one row — the store
+ * upserts on it rather than tracking a row id.
+ */
+export const sysClockWatermark = pgTable("sys_clock_watermark", {
+  id: boolean("id").primaryKey().default(true),
+  observedOn: date("observed_on", { mode: "string" }).notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type SysClockWatermarkRow = typeof sysClockWatermark.$inferSelect;

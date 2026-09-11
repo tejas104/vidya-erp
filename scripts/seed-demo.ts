@@ -253,7 +253,7 @@ function buildStack() {
     // Neither the licence banner nor the seat count has any meaning outside
     // the web app, and nothing here reads them — but SystemModuleDeps
     // requires both, so state the absence explicitly (#11.75).
-    license: { kind: "absent" },
+    license: () => ({ kind: "absent" }),
     countActiveStudents: async () => 0,
   });
   const core = createIdentityCore({

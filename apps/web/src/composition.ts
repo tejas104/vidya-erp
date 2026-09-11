@@ -24,7 +24,7 @@ import {
   type RouteHandlerContext,
   type RuntimeModule,
 } from "@vidya/platform";
-import { createSystemModule } from "@vidya/module-system";
+import { createSystemModule, seatOverage } from "@vidya/module-system";
 import { createIdentityCore, createIdentityModule } from "@vidya/module-identity";
 import { IMPORT_JOB_NAME, PEOPLE_MODULE_NAME, createPeopleModule } from "@vidya/module-people";
 import { createAcademicsModule } from "@vidya/module-academics";
@@ -139,7 +139,12 @@ function buildWebRuntime(): WebRuntime {
   // problem is never a reason to refuse to boot a college's information
   // system. Computed before the system module so it can be handed in
   // directly rather than late-bound.
-  const license = verifyLicense(readLicenseToken(), LICENSE_PUBLIC_KEY, new Date(), config.edition);
+  // `let`, not `const`: the DECISION 2 clock check below is a database read and
+  // this function is synchronous, so a rolled-back clock re-verifies the
+  // licence a moment after the modules are built. The system module reads this
+  // through a getter, so the correction reaches the banner and the System page.
+  const bootWallClock = new Date();
+  let license = verifyLicense(readLicenseToken(), LICENSE_PUBLIC_KEY, bootWallClock, config.edition);
 
   // Active-student seat usage for the license page: late-bound like
   // orgDirectoryRef below, because system is composed before people exists
@@ -156,12 +161,47 @@ function buildWebRuntime(): WebRuntime {
       { name: "postgres", check: () => pingPostgres(pool) },
       { name: "redis", check: () => pingRedis(redis) },
     ],
-    license,
+    license: () => license,
     countActiveStudents: async () => (await studentCountRef.current?.()) ?? 0,
   });
 
-  system.service.audit
-    .record({
+  // Licence bookkeeping, in order and once per boot (licence design spec).
+  // Deliberately fire-and-forget and fully guarded: none of this may delay or
+  // fail boot. A licence problem is never a reason to refuse to start a
+  // college's information system.
+  const licenseBootAudit = async (): Promise<void> => {
+    // DECISION 2 — the clock. Detect a wall clock that has gone backwards
+    // past tolerance, audit it, and evaluate the licence at the high-water
+    // date instead. Never blocks; never phones home.
+    const clock = await system.service.observeClock(bootWallClock);
+    if (clock.rolledBackDays !== null) {
+      license = verifyLicense(
+        readLicenseToken(),
+        LICENSE_PUBLIC_KEY,
+        new Date(`${clock.effectiveOn}T00:00:00.000Z`),
+        config.edition,
+      );
+      logger.warn(
+        { rolledBackDays: clock.rolledBackDays, effectiveOn: clock.effectiveOn },
+        "system clock is behind the highest date ever observed — evaluating the licence at that date",
+      );
+      await system.service.audit.record({
+        module: "system",
+        action: "system.clock-rollback",
+        actorType: "system",
+        actorId: null,
+        resourceType: "license",
+        resourceId: null,
+        requestId: null,
+        details: {
+          rolledBackDays: clock.rolledBackDays,
+          observedOn: bootWallClock.toISOString().slice(0, 10),
+          highWaterOn: clock.effectiveOn,
+        },
+      });
+    }
+
+    await system.service.audit.record({
       module: "system",
       action: "system.license-check",
       actorType: "system",
@@ -173,10 +213,27 @@ function buildWebRuntime(): WebRuntime {
         status: license.kind,
         ...(license.kind === "invalid" ? { reason: license.reason } : {}),
       },
-    })
-    .catch((error: unknown) => {
-      logger.error({ error }, "failed to write boot license-check audit event");
     });
+
+    // DECISION 3 — seats: record and surface, never enforce. The System page
+    // already shows actual-vs-licensed; this is the once-per-boot audit row
+    // when the count is over, so the figure turns up in the renewal
+    // conversation as something the customer already knew about. Admissions
+    // are never blocked.
+    const over = seatOverage(license, (await studentCountRef.current?.()) ?? 0);
+    if (over !== null) {
+      await system.service.audit.record({
+        module: "system",
+        action: "system.seat-overage",
+        actorType: "system",
+        actorId: null,
+        resourceType: "license",
+        resourceId: over.licenseId,
+        requestId: null,
+        details: { students: over.students, seats: over.seats },
+      });
+    }
+  };
 
   const identityCore = createIdentityCore({
     redis,
@@ -219,6 +276,12 @@ function buildWebRuntime(): WebRuntime {
   });
   orgDirectoryRef.current = people.service.orgDirectory;
   studentCountRef.current = people.service.countActiveStudents;
+
+  // Runs here, not earlier: DECISION 3 needs the student count, which is
+  // late-bound from the people module above.
+  void licenseBootAudit().catch((error: unknown) => {
+    logger.error({ error }, "boot licence bookkeeping failed (clock mark / audit rows)");
+  });
 
   const academics = createAcademicsModule({
     db,

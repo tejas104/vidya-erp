@@ -11,7 +11,7 @@ export interface SystemHandlerDeps {
   /** Per-user keyed preference store (#11 task 11). */
   readonly preferences: PreferencesStore;
   /** Verified once at boot by the composition root (#12 step 4). */
-  readonly license: LicenseStatus;
+  readonly license: () => LicenseStatus;
   /** Active-student seat usage, late-bound from the people module (#11.75 item 1). */
   readonly countActiveStudents: () => Promise<number>;
 }
@@ -119,7 +119,7 @@ export function createSystemHandlers(deps: SystemHandlerDeps): Record<string, Ro
   // state, other staff only the ≤7-day warning) is a client-side decision.
   const license: RouteHandler = async () => {
     const studentCount = await deps.countActiveStudents();
-    return { status: 200, body: { ...deps.license, studentCount } };
+    return { status: 200, body: { ...deps.license(), studentCount } };
   };
 
   return {

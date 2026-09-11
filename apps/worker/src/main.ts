@@ -121,7 +121,7 @@ async function main(): Promise<void> {
     // The worker serves no HTTP routes (no defineRoute binding below), so
     // system.license is never reached here — the web replica is the only
     // process that verifies and surfaces license status (#11.75 item 1).
-    license: { kind: "absent" },
+    license: () => ({ kind: "absent" }),
     countActiveStudents: async () => 0,
   });
 

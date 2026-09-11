@@ -79,6 +79,7 @@ interface MigrationExpectation {
 const EXPECTATIONS: Record<string, MigrationExpectation> = {
   "system/0000_audit_log": { tables: ["sys_audit_log"] },
   "system/0001_user_preferences": { tables: ["sys_user_preferences"] },
+  "system/0002_clock_watermark": { tables: ["sys_clock_watermark"] },
 
   "identity/0000_identity": {
     tables: ["idn_users", "idn_user_roles", "idn_scope_grants", "idn_reset_tokens"],
