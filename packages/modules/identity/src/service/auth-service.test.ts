@@ -152,6 +152,40 @@ describe("AuthService.login", () => {
     expect((await service.login("asha", "right-password", "8.8.8.8")).outcome).toBe("locked");
   });
 
+  it("accumulates failures from DIFFERENT source IPs into one account bucket", async () => {
+    const { service, repo } = makeService();
+    seedActiveUser(repo);
+    // The test above proves an EXISTING lock ignores the source IP. This
+    // proves the other half, which is what actually stops distributed
+    // guessing: failures arriving one-per-address still add up. Under the
+    // pre-#10.5 (user,ip) subject each of these lands in its own bucket and
+    // nothing ever locks. Mixed case on the last one also pins that the
+    // subject is the NORMALISED username — "ASHA" must not get a fresh
+    // allowance.
+    expect((await service.login("asha", "no1", "203.0.113.1")).outcome).toBe(
+      "invalid-credentials",
+    );
+    expect((await service.login("asha", "no2", "203.0.113.2")).outcome).toBe(
+      "invalid-credentials",
+    );
+    expect((await service.login("ASHA", "no3", "203.0.113.3")).outcome).toBe("locked");
+  });
+
+  it("locks only the account under attack — another username from those IPs is unaffected", async () => {
+    const { service, repo } = makeService();
+    seedActiveUser(repo);
+    await service.login("asha", "no1", "203.0.113.1");
+    await service.login("asha", "no2", "203.0.113.1");
+    expect((await service.login("asha", "no3", "203.0.113.1")).outcome).toBe("locked");
+    // Same address, different account: the lockout subject carries no IP, so
+    // there is nothing here for a neighbour to inherit. (Bounding what one
+    // address can do at all is the per-IP RATE LIMITER's job — a different
+    // mechanism, wired in defineRoute; see docs/architecture-and-workflows.md.)
+    expect((await service.login("someone-else", "no1", "203.0.113.1")).outcome).toBe(
+      "invalid-credentials",
+    );
+  });
+
   it("admin unlock (unlockAccount) clears the lock immediately, without waiting out the window", async () => {
     const { service, repo } = makeService();
     const user = seedActiveUser(repo);
