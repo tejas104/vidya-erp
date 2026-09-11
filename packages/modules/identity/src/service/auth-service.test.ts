@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { pino } from "pino";
-import type { AuditLogger } from "@vidya/platform";
 import { AuthService } from "./auth-service";
 import { FailureThrottle } from "./throttle";
 import type { PasswordHasher } from "../core/contracts";

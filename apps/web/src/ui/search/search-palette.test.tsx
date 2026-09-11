@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import type { IndexEntry } from "./searchIndex";
 
 const push = vi.fn();
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
@@ -9,7 +10,7 @@ vi.mock("./searchIndex", () => ({
     { kind: "student", label: "Asha Rao", roll: "23CS001", sub: "s1", href: "/students/st1" },
     { kind: "staff", label: "Vikram Rao", sub: "teacher", href: "/manage/teachers" },
   ]),
-  filterIndex: (e: any[], q: string) => ({
+  filterIndex: (e: IndexEntry[], q: string) => ({
     pages: e.filter((x) => x.kind === "page" && x.label.toLowerCase().includes(q.toLowerCase())),
     students: e.filter(
       (x) => x.kind === "student" && (x.label + x.roll).toLowerCase().includes(q.toLowerCase()),

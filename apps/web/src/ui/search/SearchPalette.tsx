@@ -41,7 +41,6 @@ export function SearchPalette({
   // built it, so a warm re-open does nothing.
   useEffect(() => {
     if (open && index === null && !loadError) load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   // Modal's focus-trap lands on the Close button on open; move focus to the

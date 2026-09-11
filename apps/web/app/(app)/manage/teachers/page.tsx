@@ -122,7 +122,6 @@ export default function TeachersPage() {
       setAssignments(null);
       setAssignmentsError(true);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [classId]);
   useEffect(() => {
     void loadAssignments();

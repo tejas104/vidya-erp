@@ -52,7 +52,6 @@ test("route inventory: every RouteSpec answers non-404", async ({ request }) => 
     }
   }
 
-  // eslint-disable-next-line no-console
   console.log(
     `[route-coverage] ${allRoutes.length} RouteSpecs across ${moduleDefinitions.length} modules; ` +
       `${notReachable.length} returned 404`,

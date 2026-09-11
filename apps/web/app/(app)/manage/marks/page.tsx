@@ -81,7 +81,6 @@ export default function MarksPage() {
       setAssessmentsError(true);
     }
     if (target.sectionId) api.sectionRoster(target.sectionId).then((r) => setRoster(r.students)).catch(() => setRoster([]));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [targetIdx, target, year]);
   useEffect(() => {
     void loadAssessments();

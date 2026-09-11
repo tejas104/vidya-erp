@@ -363,7 +363,7 @@ export default function FeesPage() {
     { key: "status", header: "Status" },
     { key: "actions", header: "", align: "right" },
   ];
-  const ledgerRows: LedgerRow[] = visible.map((row, idx) => ({
+  const ledgerRows: LedgerRow[] = visible.map((row) => ({
     student: (
       <span>
         <strong>{row.studentName}</strong>

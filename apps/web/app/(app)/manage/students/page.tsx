@@ -233,7 +233,7 @@ export default function StudentsPage() {
     { key: "status", header: "Status" },
     { key: "actions", header: "", align: "right" },
   ];
-  const rows: Row[] = (roster ?? []).map((row, idx) => ({
+  const rows: Row[] = (roster ?? []).map((row) => ({
     admissionNo: row.admissionNo,
     name: (
       <a className="risk-name" href={`/students/${encodeURIComponent(row.id)}`}>

@@ -20,8 +20,6 @@ export const readyResponseSchema = z.object({
   checks: z.array(readinessCheckResultSchema),
 });
 
-const ADMIN_ONLY = { public: false as const, requirement: { rolesAnyOf: ["admin" as const] } };
-
 /** Every staff role except student (design spec: the ≤7-day licence warning
  * reaches all staff, not just admin — but a student must never see any
  * licensing state, so student is excluded here rather than the route being

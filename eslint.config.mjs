@@ -59,6 +59,28 @@ export default tseslint.config(
     },
   },
   {
+    // Service worker: a worker global scope, not Node and not a window.
+    files: ["apps/web/public/sw.js"],
+    languageOptions: {
+      globals: {
+        self: "readonly",
+        caches: "readonly",
+        clients: "readonly",
+        fetch: "readonly",
+        URL: "readonly",
+        Request: "readonly",
+        Response: "readonly",
+      },
+    },
+  },
+  {
+    // Repo check scripts run under Node (`node scripts/check-*.mjs`).
+    files: ["scripts/**/*.mjs"],
+    languageOptions: {
+      globals: { console: "readonly", process: "readonly", URL: "readonly" },
+    },
+  },
+  {
     // The platform never imports feature modules — not even their public APIs.
     files: ["packages/platform/**/*.ts"],
     rules: {

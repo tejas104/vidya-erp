@@ -11,7 +11,6 @@ import {
   StatusBadge,
   Card,
   EmptyState,
-  Skeleton,
   PageHeader,
   type TableColumn,
 } from "@vidya/ui-system";

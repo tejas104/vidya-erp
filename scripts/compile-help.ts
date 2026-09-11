@@ -1,7 +1,7 @@
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { helpSlugFor } from "../apps/web/src/ui/help/helpSlug";
+import { helpSlugFor } from "./helpSlug";
 
 /**
  * Compiles content/help/<edition>/*.md into a typed TS module at build time.

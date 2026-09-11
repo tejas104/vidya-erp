@@ -7,8 +7,9 @@ vi.mock("next/navigation", () => ({
 }));
 
 import { AppShell } from "./AppShell";
+import type { Session } from "./api";
 
-const session = { roles: ["admin"], displayName: "Admin" } as any;
+const session: Session = { userId: "u1", displayName: "Admin", roles: ["admin"], grants: [] };
 
 describe("AppShell — Cmd-K search", () => {
   it("Cmd-K opens the search palette", () => {

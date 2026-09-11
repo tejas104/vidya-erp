@@ -44,7 +44,7 @@ beforeEach(() => {
 
 describe("buildIndex", () => {
   it("indexes pages (role-filtered) + students projected WITHOUT PII", async () => {
-    const idx = await buildIndex(apiLike as any, ["admin"]);
+    const idx = await buildIndex(apiLike, ["admin"]);
     const st = idx.find((e) => e.kind === "student")!;
     expect(st).toEqual({ kind: "student", label: "Asha Rao", roll: "23CS001", sub: "s1", href: "/students/st1" });
     expect(JSON.stringify(idx)).not.toMatch(/999|guardian|2005-01-01/); // no PII
@@ -53,7 +53,7 @@ describe("buildIndex", () => {
   });
 
   it("indexes staff for an admin, projected to label + roles only", async () => {
-    const idx = await buildIndex(apiLike as any, ["admin"]);
+    const idx = await buildIndex(apiLike, ["admin"]);
     const staff = idx.find((e) => e.kind === "staff")!;
     expect(staff).toEqual({
       kind: "staff",
@@ -67,47 +67,47 @@ describe("buildIndex", () => {
   });
 
   it("does NOT fetch staff for a non-admin (listUsers is ADMIN_ONLY)", async () => {
-    const idx = await buildIndex(apiLike as any, ["principal"]);
+    const idx = await buildIndex(apiLike, ["principal"]);
     expect(apiLike.listUsers).not.toHaveBeenCalled();
     expect(idx.some((e) => e.kind === "staff")).toBe(false);
   });
 
   it("still returns students and pages when the staff fetch fails", async () => {
     apiLike.listUsers.mockRejectedValueOnce(new Error("boom"));
-    const idx = await buildIndex(apiLike as any, ["admin"]);
+    const idx = await buildIndex(apiLike, ["admin"]);
     expect(idx.some((e) => e.kind === "student")).toBe(true);
     expect(idx.some((e) => e.kind === "page")).toBe(true);
     expect(idx.some((e) => e.kind === "staff")).toBe(false);
   });
 
   it("filterIndex matches by name and by roll", async () => {
-    const idx = await buildIndex(apiLike as any, ["admin"]);
+    const idx = await buildIndex(apiLike, ["admin"]);
     expect(filterIndex(idx, "asha").students).toHaveLength(1);
     expect(filterIndex(idx, "23cs001").students).toHaveLength(1);
   });
 
   it("filterIndex with empty query returns all pages, no students", async () => {
-    const idx = await buildIndex(apiLike as any, ["admin"]);
+    const idx = await buildIndex(apiLike, ["admin"]);
     const { students, pages } = filterIndex(idx, "");
     expect(students).toHaveLength(0);
     expect(pages.length).toBeGreaterThan(0);
   });
 
   it("second buildIndex uses cache (no refetch)", async () => {
-    await buildIndex(apiLike as any, ["admin"]);
-    await buildIndex(apiLike as any, ["admin"]);
+    await buildIndex(apiLike, ["admin"]);
+    await buildIndex(apiLike, ["admin"]);
     expect(apiLike.colleges).toHaveBeenCalledTimes(1);
   });
 
   it("re-fetches when roles change (cache keyed on roles — no cross-role serving)", async () => {
-    await buildIndex(apiLike as any, ["admin"]);
-    await buildIndex(apiLike as any, ["teacher"]);
+    await buildIndex(apiLike, ["admin"]);
+    await buildIndex(apiLike, ["teacher"]);
     expect(apiLike.colleges).toHaveBeenCalledTimes(2);
   });
 
   it("getCachedIndex returns the built index, null after clear", async () => {
     expect(getCachedIndex()).toBeNull();
-    const idx = await buildIndex(apiLike as any, ["admin"]);
+    const idx = await buildIndex(apiLike, ["admin"]);
     expect(getCachedIndex()).toBe(idx);
     clearIndexCache();
     expect(getCachedIndex()).toBeNull();
@@ -145,14 +145,14 @@ describe("buildIndex", () => {
       sectionRoster: roster,
       listUsers: async () => ({ users: [] }),
     };
-    const idx = await buildIndex(api2 as any, ["admin"]);
+    const idx = await buildIndex(api2, ["admin"]);
     expect(idx.some((e) => e.kind === "student" && e.label === "Bina Roy")).toBe(true); // survivor
     expect(idx.some((e) => e.kind === "page")).toBe(true); // page shortcuts survive
   });
 
   it("reports progress across pooled roster fetches", async () => {
     const progress: { done: number; total: number }[] = [];
-    await buildIndex(apiLike as any, ["admin"], (done, total) => progress.push({ done, total }));
+    await buildIndex(apiLike, ["admin"], (done, total) => progress.push({ done, total }));
     expect(progress).toEqual([{ done: 1, total: 1 }]);
   });
 });
