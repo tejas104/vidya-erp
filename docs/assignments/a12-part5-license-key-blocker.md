@@ -77,20 +77,20 @@ Note this blocker is why Part 5 had not already caught the licence-wiring bug
 fixed in 11b11bd (the token never reached the containers). An install nobody
 can run is an install whose bugs nobody finds.
 
-## 5. Related, separate: two owner rulings were never implemented
+## 5. Related, separate: the other two owner rulings — now closed
 
-Ruled on 2026-08-13, built: **DECISION 1** only — banner-only, no enforcement,
-which by design required no code. The other two are absent from the codebase:
+Ruled on 2026-08-13. DECISION 1 (banner only, no enforcement) shipped at the
+time; by design it required no code, which is why nobody noticed the other two
+had not been written. Both landed in 8132da2:
 
-- **DECISION 2, high-water clock mark.** `apps/web/src/composition.ts:142`
-  passes a raw `new Date()`. No persisted high-water date, no audit event on
-  clock rollback. Grep for any high-water concept returns nothing. A customer
-  setting the clock back is currently undetectable — the exact thing the ruling
-  asked to make visible.
-- **DECISION 3, seat-overage audit.** The count is *surfaced* on the admin
-  System page (the "N of M licensed students" wording), but nothing compares it
-  to `claims.seats`, so the once-per-boot audit event when the count crosses
-  the licensed figure does not exist. Half the ruling shipped.
+- **DECISION 2, high-water clock mark** — `sys_clock_watermark` plus
+  `packages/modules/system/src/service/clock-watermark.ts`. A wall clock more
+  than a day behind the highest date ever observed audits
+  `system.clock-rollback` and the licence is evaluated at the mark. Never
+  blocks; one-day tolerance so an NTP correction is not an incident.
+- **DECISION 3, seat-overage audit** — `system.seat-overage`, once per boot,
+  when the active-student count exceeds `claims.seats`. Admissions are never
+  blocked.
 
-Neither is a blocker for Part 5. Both were previously reported as delivered,
-which was wrong.
+Neither was ever a blocker for Part 5. They are recorded here because this
+document is where the claim that they were missing was first written down.

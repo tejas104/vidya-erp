@@ -115,12 +115,13 @@ in so many words that nothing stops working
 
   That is the whole list. No routes, roles, schemas, modules, menus, or
   validation rules branch on edition.
-- **Two spec decisions are unimplemented.** DECISION 2's high-water clock
-  (`…design.md:81-85`) has no code — `verifyLicense` is handed a raw
-  `new Date()` (`apps/web/src/composition.ts:142`) and nothing persists an
-  observed-date mark. DECISION 3's "audit once per boot when the student count
-  crosses `seats`" (`…design.md:89-95`) has no code either; seats are displayed
-  (`apps/web/app/(app)/manage/system/page.tsx:55`) and nothing more.
+- **All three spec decisions are now implemented** (DECISION 2 and 3 landed in
+  8132da2). The high-water clock mark lives in
+  `packages/modules/system/src/service/clock-watermark.ts` behind a single-row
+  `sys_clock_watermark` table, and the seat-overage audit in
+  `packages/modules/system/src/service/seat-usage.ts`; the composition root
+  runs both once per boot. Neither gates anything — DECISION 1 still holds,
+  and nothing in the licence path blocks a request.
 - **The public key is a placeholder.** No licence has ever been issued against
   it; it must be rotated before the first real release
   (`packages/platform/src/license/public-key.ts:12-19`).
@@ -178,8 +179,10 @@ automatically. One of those three is wrong.
    `install.sh` derive one from `VIDYA_LICENSE_PATH`? Until this is answered,
    the System page and banner show "absent" on a correctly licensed install
    (§4).
-5. **Are DECISION 2 (high-water clock) and DECISION 3 (seat-overage audit)
-   still wanted?** Both are ruled in the spec and neither exists in code.
+5. **Is a `system.clock-rollback` or `system.seat-overage` audit row meant to
+   surface anywhere a human looks?** Both are written once per boot (8132da2)
+   but nothing reads them back — there is no operational view of the audit log
+   short of SQL, so a rollback is recorded and then silent.
 6. **Does `content/help/school/` need to exist before a school install is
    possible?** `scripts/compile-help.ts:20-21` points at a directory that is
    not in the repo, and the choice is made at build time, not run time — so
