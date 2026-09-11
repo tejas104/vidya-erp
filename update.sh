@@ -43,6 +43,21 @@ die()  { fail "$*"; exit 1; }
 # (cut/sed) succeeds on the resulting empty input.
 env_get() { grep -m1 "^$1=" "$ENV_FILE" 2>/dev/null | cut -d= -f2- || true; }
 env_has() { grep -q "^$1=" "$ENV_FILE" 2>/dev/null; }
+env_set_if_blank() { # name value — fills a key that is ABSENT or PRESENT-BUT-EMPTY
+  # Deliberately a second copy of install.sh's helper, same as env_get/env_has
+  # above: these two scripts run at different times and must not depend on a
+  # shared file shipping correctly in the release tarball. "^NAME=" matches an
+  # empty key too, so an absent-vs-blank distinction is needed here; a key
+  # with a real value is never clobbered.
+  local name="$1" value="$2"
+  if grep -q "^$name=[[:space:]]*$" "$ENV_FILE" 2>/dev/null; then
+    # Safe unquoted/undelimited: the only caller passes a licence token,
+    # which is base64url + "." — no |, &, \, or newline.
+    sed -i "s|^$name=[[:space:]]*$|$name=$value|" "$ENV_FILE"
+  elif ! env_has "$name"; then
+    printf '%s=%s\n' "$name" "$value" >> "$ENV_FILE"
+  fi
+}
 pkg_version() { grep -m1 '"version"' "$1/package.json" | sed -E 's/.*"version": *"([^"]+)".*/\1/' || true; }
 
 TARBALL="${1:-}"
@@ -125,6 +140,14 @@ else
       warn "could not parse license verifier output — proceeding (this gate fails open on unparseable output, not closed, since it must never be the reason a security patch can't ship). Raw: $verify_output"
       ;;
   esac
+
+  # Backfill the token the containers actually read. Installers before this
+  # change wrote only VIDYA_LICENSE_PATH (a host path the app never sees), so
+  # every existing install shows licence status "absent" on the admin System
+  # page despite being correctly licensed. docker-compose.yml already passes
+  # VIDYA_LICENSE through to web and worker, so this alone heals them on the
+  # next update. An operator-set value is left alone.
+  env_set_if_blank VIDYA_LICENSE "$LICENSE_TOKEN"
 fi
 
 # ==============================================================================

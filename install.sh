@@ -41,6 +41,22 @@ env_set_once() { # name value — no-op if already present, so re-runs never clo
   if env_has "$1"; then return 0; fi
   printf '%s=%s\n' "$1" "$2" >> "$ENV_FILE"
 }
+env_set_if_blank() { # name value — fills a key that is ABSENT or PRESENT-BUT-EMPTY
+  # Why this exists next to env_set_once: env_has matches "^NAME=", which is
+  # true for a key that is present but empty. install.sh's own .env starts
+  # from `touch` so it is empty and env_set_once is fine there — but
+  # .env.template ships "VIDYA_LICENSE=" empty, so an operator who copied the
+  # template to .env first would get a silent no-op from env_set_once.
+  # A key with a real value is still never clobbered.
+  local name="$1" value="$2"
+  if grep -q "^$name=[[:space:]]*$" "$ENV_FILE" 2>/dev/null; then
+    # Safe unquoted/undelimited: the only caller passes a licence token,
+    # which is base64url + "." — no |, &, \, or newline.
+    sed -i "s|^$name=[[:space:]]*$|$name=$value|" "$ENV_FILE"
+  elif ! env_has "$name"; then
+    printf '%s=%s\n' "$name" "$value" >> "$ENV_FILE"
+  fi
+}
 ensure_secret() { # name — generates only if absent; NEVER echoes the value
   local name="$1"
   if env_has "$name"; then
@@ -305,6 +321,13 @@ $primary_output"
     ;;
 esac
 env_set_once VIDYA_LICENSE_PATH "$LICENSE_PATH"
+# VIDYA_LICENSE_PATH above is a HOST path, read only by this script and
+# update.sh — the app never sees it. The containers read the token itself
+# from VIDYA_LICENSE, which docker-compose.yml already passes into web and
+# worker. Without the line below, a correctly-licensed install boots with
+# licence status "absent" forever: no customer name, no expiry warning, no
+# seat count on the admin System page.
+env_set_if_blank VIDYA_LICENSE "$LICENSE_TOKEN"
 
 # ==============================================================================
 step "5/8  Deploy stack"
@@ -440,13 +463,12 @@ NEXT STEPS
      (docs/runbook-backup-restore.md).
 
 KNOWN GAP (not fixed by this script — outside its file scope):
-  docker-compose.yml does not currently pass VIDYA_EDITION or
-  VIDYA_LICENSE/VIDYA_LICENSE_FILE into the web/worker containers'
-  environment block. Edition- and license-verification at the CLI level
-  (step 4 above) is real and already protects install/update; the admin
-  System page's edition/license display and edition-specific CSV templates
-  will show config defaults until docker-compose.yml is extended to pass
-  these two variables through.
+  REDIS_PASSWORD was generated into .env above, but docker-compose.yml
+  starts redis without --requirepass and points the app at
+  redis://redis:6379 with no credentials, so that value currently has no
+  effect. Redis holds sessions; it is not published outside the compose
+  network, but adding AUTH is still on the hardening list
+  (docs/deployment-checklist.md).
 
 Full checklist: docs/install-guide.md
 SUMMARY
