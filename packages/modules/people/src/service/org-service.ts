@@ -8,6 +8,27 @@ import type {
   PplSubjectRow,
 } from "../db/schema";
 
+/**
+ * A school has no departments, but `ppl_classes.department_id` and
+ * `ppl_subjects.department_id` are NOT NULL (schema.ts:41, :58) and
+ * OrgDirectory.verifyOrgPath refuses a classId without a departmentId
+ * (below). So a school install gets exactly ONE department that its UI and
+ * API never render or accept: the school's standards hang off it, and the
+ * org path a school resource carries is a full four-level path whose
+ * department level is this row.
+ *
+ * Why not nullable FKs: that would mean a migration on both tables plus
+ * every join, grant-derivation path and containment check handling the
+ * hole — for a level the school product does not have. Why not a separate
+ * school org tree: it would duplicate enrollment, teacher assignment and
+ * grant derivation forever. This is the owner's 2026-09-12 ruling.
+ *
+ * ponytail: sentinel code rather than an `is_implicit` column — no
+ * migration. Add the column if a school ever needs a second department.
+ */
+export const IMPLICIT_DEPARTMENT_CODE = "__SCHOOL__";
+export const IMPLICIT_DEPARTMENT_NAME = "School";
+
 export interface OrgServiceDeps {
   readonly repo: OrgRepo;
   readonly audit: AuditLogger;
@@ -59,6 +80,36 @@ export class OrgService {
     verifySubjectId: async (subjectId: string) =>
       (await this.deps.repo.getSubject(subjectId)) !== null,
   };
+
+  /**
+   * The school edition's single implicit department, created on first use
+   * and audited as system activity. Idempotent: resolves by the reserved
+   * code, so a re-run (or an install that already has one) returns it.
+   */
+  async ensureImplicitDepartment(collegeId: string): Promise<{ departmentId: string; created: boolean }> {
+    const existing = (await this.deps.repo.listDepartmentsOfCollege(collegeId)).find(
+      (department) => department.code === IMPLICIT_DEPARTMENT_CODE,
+    );
+    if (existing !== undefined) {
+      return { departmentId: existing.id, created: false };
+    }
+    const created = await this.deps.repo.createDepartment({
+      collegeId,
+      name: IMPLICIT_DEPARTMENT_NAME,
+      code: IMPLICIT_DEPARTMENT_CODE,
+    });
+    await this.deps.audit.record({
+      module: "people",
+      action: "people.implicit-department-created",
+      actorType: "system",
+      actorId: null,
+      resourceType: "department",
+      resourceId: created.id,
+      requestId: null,
+      details: { collegeId, code: IMPLICIT_DEPARTMENT_CODE, reason: "school edition has no department level" },
+    });
+    return { departmentId: created.id, created: true };
+  }
 
   createDepartment(input: { collegeId: string; name: string; code: string }): Promise<PplDepartmentRow> {
     return this.deps.repo.createDepartment(input);

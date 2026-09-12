@@ -46,7 +46,7 @@ function fakeIdentity(): CredentialIssuer {
   };
 }
 
-async function makeHarness(opts: { identity?: CredentialIssuer } = {}) {
+async function makeHarness(opts: { identity?: CredentialIssuer; edition?: "college" | "school" } = {}) {
   const orgRepo = new InMemoryOrgRepo();
   const peopleRepo = new InMemoryPeopleRepo();
   const importsRepo = new InMemoryImportsRepo();
@@ -72,7 +72,7 @@ async function makeHarness(opts: { identity?: CredentialIssuer } = {}) {
     enqueueImport: async (payload) => {
       enqueued.push(payload);
     },
-    edition: "college",
+    edition: opts.edition ?? "college",
     identity,
   };
   return {
@@ -728,5 +728,24 @@ describe("imports", () => {
     expect(
       (await handlers["people.import-errors"]!(ctx({ params: { importId: "imp_ghost" } }))).status,
     ).toBe(404);
+  });
+});
+
+describe("people.department-create on the school edition", () => {
+  it("refuses: a school has no department level", async () => {
+    const { handlers } = await makeHarness({ edition: "school" });
+    const result = await handlers["people.department-create"]!(
+      ctx({ body: { collegeId: "col_1", name: "Science", code: "SCI" } }),
+    );
+    expect(result.status).toBe(409);
+    expect(result.body).toEqual({ message: "the school edition has no department level" });
+  });
+
+  it("still allows it on the college edition (the regression net)", async () => {
+    const { handlers, org } = await makeHarness({ edition: "college" });
+    const result = await handlers["people.department-create"]!(
+      ctx({ body: { collegeId: org.college.id, name: "Science", code: "SCI2" } }),
+    );
+    expect(result.status).toBe(201);
   });
 });

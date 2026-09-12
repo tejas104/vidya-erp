@@ -51,6 +51,7 @@ export {
   peopleModuleDefinition,
 } from "./definition";
 export { ASSIGNMENT_SOURCE_PREFIX } from "./service/assignments-service";
+export { IMPLICIT_DEPARTMENT_CODE, IMPLICIT_DEPARTMENT_NAME } from "./service/org-service";
 export type { CredentialIssuer } from "./service/import-service";
 /** Shared username derivation (#11 B4) — the reporting module's per-class
  *  credential sheet reuses this so the scheme is identical everywhere. */
@@ -139,6 +140,12 @@ export interface PeopleModuleService {
   countActiveStudents(): Promise<number>;
   /** One-time operator bootstrap (scripts/create-admin.ts). Idempotent by code. */
   bootstrapCollege(input: { name: string; code: string }): Promise<{ collegeId: string; created: boolean }>;
+  /**
+   * School-edition bootstrap: the ONE implicit department a school's
+   * standards hang off (see IMPLICIT_DEPARTMENT_CODE). Idempotent; a
+   * no-op to call on a college install, but pointless there.
+   */
+  ensureImplicitDepartment(collegeId: string): Promise<{ departmentId: string; created: boolean }>;
   /**
    * Links a freshly identity-issued account back onto its student record
    * (#11 B4: the per-class credential sheet, owned by the reporting module —
@@ -317,6 +324,7 @@ export function createPeopleModule(deps: PeopleModuleDeps): RuntimeModule<People
       },
       countActiveStudents: () => peopleRepo.countActiveStudents(),
       bootstrapCollege: (input) => org.bootstrapCollege(input),
+      ensureImplicitDepartment: (collegeId) => org.ensureImplicitDepartment(collegeId),
       linkStudentIdentity: async (studentId, identityUserId) =>
         (await people.linkStudentIdentity(studentId, identityUserId)) !== null,
     },

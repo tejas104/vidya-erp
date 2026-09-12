@@ -16,6 +16,27 @@ import { defineConfig, devices } from "@playwright/test";
  */
 const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3000";
 
+/**
+ * Edition suites (#13). An install's edition is fixed when the SERVER boots
+ * (config.edition gates which modules the composition root registers), so the
+ * two suites cannot share one webServer — they are two runs, not two projects
+ * against one target:
+ *
+ *   pnpm test:e2e                        # college (the regression net)
+ *   VIDYA_EDITION=school pnpm test:e2e   # school
+ *
+ * Specs directly under tests/e2e/ are SHARED and run in both: login, scope
+ * probes and anything whose behaviour is edition-independent. Only
+ * genuinely edition-specific journeys go in the college/ or school/
+ * subdirectory, so the college regression net stays byte-identical.
+ *
+ * Only the project matching the booted server is active — a school spec run
+ * against a college server would fail on missing modules rather than on a
+ * real regression, which is exactly the false signal to avoid.
+ */
+const edition = process.env.VIDYA_EDITION === "school" ? "school" : "college";
+const otherEdition = edition === "school" ? "college" : "school";
+
 export default defineConfig({
   testDir: "tests/e2e",
   // Journeys mutate a shared seeded database (create users, submit leave,
@@ -32,7 +53,14 @@ export default defineConfig({
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
   },
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  projects: [
+    {
+      name: edition,
+      use: { ...devices["Desktop Chrome"] },
+      // Shared specs plus this edition's own; the other edition's are skipped.
+      testIgnore: [`${otherEdition}/**`],
+    },
+  ],
   webServer: process.env.PLAYWRIGHT_BASE_URL
     ? undefined
     : {

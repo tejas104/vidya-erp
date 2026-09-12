@@ -118,3 +118,60 @@ describe("bootstrapCollege", () => {
     expect(audit.events).toHaveLength(1);
   });
 });
+
+describe("ensureImplicitDepartment (school edition has no department level)", () => {
+  it("creates the reserved department once, audited as system, then resolves it", async () => {
+    const { service, audit } = makeService();
+    const { collegeId } = await service.bootstrapCollege({ name: "Vidya Vidyalaya", code: "VV" });
+
+    const first = await service.ensureImplicitDepartment(collegeId);
+    expect(first.created).toBe(true);
+    expect(audit.actions()).toEqual([
+      "people.college-bootstrapped",
+      "people.implicit-department-created",
+    ]);
+
+    const second = await service.ensureImplicitDepartment(collegeId);
+    expect(second).toEqual({ departmentId: first.departmentId, created: false });
+    // Idempotent: no second row and no second audit event.
+    expect(audit.events).toHaveLength(2);
+  });
+
+  it("gives a school standard a four-level path that OrgDirectory accepts", async () => {
+    const { service } = makeService();
+    const { collegeId } = await service.bootstrapCollege({ name: "Vidya Vidyalaya", code: "VV" });
+    const { departmentId } = await service.ensureImplicitDepartment(collegeId);
+
+    // "Standard 8" is a class; "8B" a section. The department level exists in
+    // storage and is never shown.
+    const standard = await service.createClass({ departmentId, name: "Standard 8", code: "STD8" });
+    const section = await service.createSection({ classId: standard.id, name: "B" });
+
+    const path = {
+      collegeId,
+      departmentId,
+      classId: standard.id,
+      sectionId: section.id,
+    };
+    expect((await service.orgDirectory.verifyOrgPath(path)).valid).toBe(true);
+  });
+
+  it("resolves per college, so two schools never share one implicit department", async () => {
+    const { service } = makeService();
+    const a = await service.bootstrapCollege({ name: "School A", code: "A" });
+    const b = await service.bootstrapCollege({ name: "School B", code: "B" });
+    const depA = await service.ensureImplicitDepartment(a.collegeId);
+    const depB = await service.ensureImplicitDepartment(b.collegeId);
+    expect(depA.created).toBe(true);
+    expect(depB.created).toBe(true);
+    expect(depA.departmentId).not.toBe(depB.departmentId);
+  });
+
+  it("ignores a real department that is not the reserved one", async () => {
+    const { service } = makeService();
+    const { collegeId } = await service.bootstrapCollege({ name: "Mixed", code: "M" });
+    await service.createDepartment({ collegeId, name: "Science", code: "SCI" });
+    const implicit = await service.ensureImplicitDepartment(collegeId);
+    expect(implicit.created).toBe(true);
+  });
+});

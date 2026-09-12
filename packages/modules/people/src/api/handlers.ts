@@ -229,6 +229,14 @@ export function createPeopleHandlers(deps: PeopleHandlerDeps): Record<string, Ro
   const departmentCreate: RouteHandler = async (ctx) => {
     const principal = ctx.principal as Principal;
     const body = ctx.request.body as { collegeId: string; name: string; code: string };
+    // A school has no department level (owner's 2026-09-12 ruling): its
+    // standards hang off ONE implicit department that ensureImplicitDepartment
+    // owns. Refuse here rather than trust the UI to hide the form — the
+    // "exactly one" invariant is what lets a school org path resolve its
+    // department without asking which.
+    if (deps.edition === "school") {
+      return { status: 409, body: { message: "the school edition has no department level" } };
+    }
     if ((await deps.org.getCollege(body.collegeId)) === null) {
       return notFound();
     }

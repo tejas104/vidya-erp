@@ -121,6 +121,18 @@ async function main(): Promise<void> {
         : `college exists: ${collegeName} (${college.collegeId})`,
     );
 
+    // A school has no department level, but classes and subjects need a
+    // department parent (NOT NULL). Seed the one implicit department here so
+    // the very first standard a school creates has somewhere to hang.
+    if (config.edition === "school") {
+      const department = await people.service.ensureImplicitDepartment(college.collegeId);
+      console.log(
+        department.created
+          ? `implicit school department created: ${department.departmentId}`
+          : `implicit school department exists: ${department.departmentId}`,
+      );
+    }
+
     const { userId } = await identity.service.bootstrapAdmin({
       username: username as string,
       displayName: displayName as string,
