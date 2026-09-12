@@ -8,15 +8,9 @@ import { createPublicKey, type KeyObject } from "node:crypto";
  * (never in this repo, never in a container image, never in CI). Not
  * env-configurable on purpose: an env-supplied public key would let anyone
  * self-sign a license, which defeats the point.
- *
- * PLACEHOLDER: this is a freshly generated throwaway key. No license has
- * ever been issued against it, and its private half was never written to
- * disk. Before cutting the first real release, run
- * `npx tsx scripts/license-keygen.ts --out <secure path>` and paste the
- * printed constant here — that is the entire key-rotation procedure.
  */
 export const LICENSE_PUBLIC_KEY_DER_BASE64 =
-  "MCowBQYDK2VwAyEAdxqYSPYwCyd/yxd9a7rPbCYYDIRo5aOtTDFf+f0/ONg=";
+  "MCowBQYDK2VwAyEAXWXj79+KarShSxMfMY5yqhtm3u9C1vHs/8I6O3oBd8I=";
 
 export const LICENSE_PUBLIC_KEY: KeyObject = createPublicKey({
   key: Buffer.from(LICENSE_PUBLIC_KEY_DER_BASE64, "base64"),
