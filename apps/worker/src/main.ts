@@ -1,6 +1,7 @@
 import {
   Lifecycle,
   assertModuleWiring,
+  moduleRunsOnEdition,
   createDb,
   createLogger,
   createMetrics,
@@ -315,7 +316,10 @@ async function main(): Promise<void> {
     timetableRead: timetable.service.readModel,
   });
 
-  const modules: RuntimeModule<unknown>[] = [
+  // Same edition filter as the web composition root, via the shared
+  // predicate: a worker that consumed jobs for a module the web app never
+  // registered would be the drift this helper exists to prevent.
+  const allModules: RuntimeModule<unknown>[] = [
     system,
     identity,
     people,
@@ -332,6 +336,7 @@ async function main(): Promise<void> {
     leave,
     portal,
   ];
+  const modules = allModules.filter((module) => moduleRunsOnEdition(module, config.edition));
 
   for (const module of modules) {
     assertModuleWiring(module);

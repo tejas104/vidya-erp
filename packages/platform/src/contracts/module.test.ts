@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import {
   assertModuleWiring,
+  moduleRunsOnEdition,
   type ModuleDefinition,
   type RuntimeModule,
 } from "./module";
@@ -75,5 +76,36 @@ describe("assertModuleWiring", () => {
         }),
       ),
     ).toThrow(/no job spec/);
+  });
+});
+
+describe("moduleRunsOnEdition", () => {
+  const on = (editions: ModuleDefinition["editions"]) =>
+    runtime({ definition: { ...definition, editions } });
+
+  it("runs a module with no editions list on every edition (the fifteen pre-edition modules)", () => {
+    expect(definition.editions).toBeUndefined();
+    expect(moduleRunsOnEdition(on(undefined), "college")).toBe(true);
+    expect(moduleRunsOnEdition(on(undefined), "school")).toBe(true);
+  });
+
+  it("excludes a school-only module from a college install", () => {
+    expect(moduleRunsOnEdition(on(["school"]), "college")).toBe(false);
+    expect(moduleRunsOnEdition(on(["school"]), "school")).toBe(true);
+  });
+
+  it("excludes a college-only module from a school install", () => {
+    expect(moduleRunsOnEdition(on(["college"]), "school")).toBe(false);
+    expect(moduleRunsOnEdition(on(["college"]), "college")).toBe(true);
+  });
+
+  it("runs a module listing both editions on both", () => {
+    expect(moduleRunsOnEdition(on(["college", "school"]), "college")).toBe(true);
+    expect(moduleRunsOnEdition(on(["college", "school"]), "school")).toBe(true);
+  });
+
+  it("treats an empty list as running nowhere, not everywhere", () => {
+    expect(moduleRunsOnEdition(on([]), "college")).toBe(false);
+    expect(moduleRunsOnEdition(on([]), "school")).toBe(false);
   });
 });

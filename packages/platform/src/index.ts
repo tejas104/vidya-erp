@@ -12,6 +12,7 @@ export { createLogger, type Logger, type LoggerOptions } from "./logger/logger";
 export {
   STATE_CHANGING_METHODS,
   assertModuleWiring,
+  moduleRunsOnEdition,
   type HttpMethod,
   type JobContext,
   type JobProcessor,

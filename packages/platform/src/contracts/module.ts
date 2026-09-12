@@ -2,6 +2,7 @@ import type { z } from "zod";
 import type { Logger } from "../logger/logger";
 import type { AccessRequirement, Principal } from "../auth/types";
 import type { ActorType } from "../audit/types";
+import type { LicenseEdition } from "../license/verify";
 
 /**
  * THE MODULE CONTRACT.
@@ -114,6 +115,18 @@ export interface ModuleDefinition {
   readonly migrationsDir: string;
   readonly routes: readonly RouteSpec[];
   readonly jobs: readonly JobSpec[];
+  /**
+   * Editions this module belongs to. ABSENT MEANS EVERY EDITION — the
+   * fifteen modules that predate editions therefore need no change, and a
+   * module is only ever edition-scoped by saying so explicitly.
+   *
+   * Gating is a runtime decision made once by the composition root
+   * (`config.edition`), not a build-time one: one image ships both
+   * editions. A module excluded here contributes no routes, no jobs and no
+   * service — its endpoints 404 rather than 403, because on that edition
+   * they do not exist.
+   */
+  readonly editions?: readonly LicenseEdition[];
 }
 
 /** A readiness contribution: throws (or rejects) when the dependency is unhealthy. */
@@ -186,6 +199,19 @@ export interface RuntimeModule<TService = unknown> {
   readonly readinessChecks: readonly ReadinessCheck[];
   /** The module's public service API — the ONLY thing other modules may call. */
   readonly service: TService;
+}
+
+/**
+ * Does this module run on `edition`? A module with no `editions` list runs
+ * everywhere (see ModuleDefinition.editions).
+ *
+ * One predicate shared by the web and worker composition roots: they must
+ * agree, or the worker would process jobs for a module whose routes the web
+ * app never registered.
+ */
+export function moduleRunsOnEdition(module: RuntimeModule<unknown>, edition: LicenseEdition): boolean {
+  const editions = module.definition.editions;
+  return editions === undefined || editions.includes(edition);
 }
 
 /**

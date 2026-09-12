@@ -22,6 +22,7 @@ import {
   type OrgDirectory,
   type RouteDependencies,
   type RouteHandlerContext,
+  moduleRunsOnEdition,
   type RuntimeModule,
 } from "@vidya/platform";
 import { createSystemModule, seatOverage } from "@vidya/module-system";
@@ -431,7 +432,10 @@ function buildWebRuntime(): WebRuntime {
     timetableRead: timetable.service.readModel,
   });
 
-  const modules: RuntimeModule<unknown>[] = [
+  // Every module built, then filtered by edition — construction is cheap and
+  // uniform, and a module that does not run on this edition simply never
+  // reaches the route table (its endpoints 404, they do not 403).
+  const allModules: RuntimeModule<unknown>[] = [
     system,
     identity,
     people,
@@ -448,6 +452,7 @@ function buildWebRuntime(): WebRuntime {
     leave,
     portal,
   ];
+  const modules = allModules.filter((module) => moduleRunsOnEdition(module, config.edition));
 
   // Redis-backed, shared across replicas (#10.5 Part 1) — the same redis
   // client every module already uses, one middleware call site in
