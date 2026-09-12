@@ -96,6 +96,9 @@ export interface SystemModuleDeps {
 export function createSystemModule(deps: SystemModuleDeps): RuntimeModule<SystemService> {
   const audit = new SystemAuditLogger(deps.db);
   const clockWatermark = createClockWatermark(deps.db);
+  // Bound once, shared by the audit-log route handler and the service surface.
+  const recentAuditEvents = (limit: number) => readRecentAuditEvents(deps.db, limit);
+  const auditEventsByAction = (action: string, limit: number) => readAuditEventsByAction(deps.db, action, limit);
   const module: RuntimeModule<SystemService> = {
     definition: systemModuleDefinition,
     handlers: createSystemHandlers({
@@ -106,6 +109,8 @@ export function createSystemModule(deps: SystemModuleDeps): RuntimeModule<System
       preferences: createPreferencesStore(deps.db),
       license: deps.license,
       countActiveStudents: deps.countActiveStudents,
+      readRecentAuditEvents: recentAuditEvents,
+      readAuditEventsByAction: auditEventsByAction,
     }),
     jobProcessors: {
       [HEARTBEAT_JOB_NAME]: createHeartbeatProcessor(audit),
@@ -113,11 +118,10 @@ export function createSystemModule(deps: SystemModuleDeps): RuntimeModule<System
     readinessChecks: [],
     service: {
       audit,
-      readRecentAuditEvents: (limit: number) => readRecentAuditEvents(deps.db, limit),
+      readRecentAuditEvents: recentAuditEvents,
       readAuditEventsForResource: (resourceType: string, resourceId: string, limit: number) =>
         readAuditEventsForResource(deps.db, resourceType, resourceId, limit),
-      readAuditEventsByAction: (action: string, limit: number) =>
-        readAuditEventsByAction(deps.db, action, limit),
+      readAuditEventsByAction: auditEventsByAction,
       observeClock: (now: Date) => clockWatermark.observe(now),
     },
   };

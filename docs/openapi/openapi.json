@@ -347,6 +347,393 @@
         }
       }
     },
+    "/api/v1/system/license": {
+      "get": {
+        "summary": "Current license status and active-student seat usage",
+        "description": "Verified once at boot, never re-verified per request. Feeds the admin banner, the system page, and the all-staff ≤7-day warning (#11.75 item 1). Open to every staff role except student — the UI decides how much of the status each role is shown; a student must never reach this route at all. Presentation only — never used to allow or deny a request.\n\n**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "system"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current license status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "valid"
+                          ]
+                        },
+                        "claims": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "customer": {
+                              "type": "string"
+                            },
+                            "edition": {
+                              "type": "string",
+                              "enum": [
+                                "college",
+                                "school"
+                              ]
+                            },
+                            "issuedAt": {
+                              "type": "string"
+                            },
+                            "expiresAt": {
+                              "type": "string"
+                            },
+                            "seats": {
+                              "type": "number"
+                            },
+                            "notBefore": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "customer",
+                            "edition",
+                            "issuedAt",
+                            "expiresAt",
+                            "seats"
+                          ]
+                        },
+                        "daysRemaining": {
+                          "type": "number"
+                        },
+                        "studentCount": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "claims",
+                        "daysRemaining",
+                        "studentCount"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "grace"
+                          ]
+                        },
+                        "claims": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "customer": {
+                              "type": "string"
+                            },
+                            "edition": {
+                              "type": "string",
+                              "enum": [
+                                "college",
+                                "school"
+                              ]
+                            },
+                            "issuedAt": {
+                              "type": "string"
+                            },
+                            "expiresAt": {
+                              "type": "string"
+                            },
+                            "seats": {
+                              "type": "number"
+                            },
+                            "notBefore": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "customer",
+                            "edition",
+                            "issuedAt",
+                            "expiresAt",
+                            "seats"
+                          ]
+                        },
+                        "daysOverdue": {
+                          "type": "number"
+                        },
+                        "studentCount": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "claims",
+                        "daysOverdue",
+                        "studentCount"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "expired"
+                          ]
+                        },
+                        "claims": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string"
+                            },
+                            "customer": {
+                              "type": "string"
+                            },
+                            "edition": {
+                              "type": "string",
+                              "enum": [
+                                "college",
+                                "school"
+                              ]
+                            },
+                            "issuedAt": {
+                              "type": "string"
+                            },
+                            "expiresAt": {
+                              "type": "string"
+                            },
+                            "seats": {
+                              "type": "number"
+                            },
+                            "notBefore": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "customer",
+                            "edition",
+                            "issuedAt",
+                            "expiresAt",
+                            "seats"
+                          ]
+                        },
+                        "daysOverdue": {
+                          "type": "number"
+                        },
+                        "studentCount": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "claims",
+                        "daysOverdue",
+                        "studentCount"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "invalid"
+                          ]
+                        },
+                        "reason": {
+                          "type": "string",
+                          "enum": [
+                            "malformed",
+                            "bad-signature",
+                            "unsupported-version",
+                            "not-yet-valid",
+                            "edition-mismatch"
+                          ]
+                        },
+                        "studentCount": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "reason",
+                        "studentCount"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "absent"
+                          ]
+                        },
+                        "studentCount": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "studentCount"
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Access denied by the role/scope policy (problem+json)"
+          }
+        }
+      }
+    },
+    "/api/v1/system/audit": {
+      "get": {
+        "summary": "Recent audit events, newest first (admin)",
+        "description": "The read path for sys_audit_log: every security-relevant event (identity.login-failed, identity.login-locked, identity.roles-changed, system.clock-rollback, system.seat-overage, every state-changing route's audit action). Optional `action` narrows to one action. Admin only — rows carry usernames, IP addresses and user agents in `details`, so no other role may read them. Read-only; nothing here changes state.\n\n**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "system"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            },
+            "required": false,
+            "name": "action",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 50
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Audit events, newest first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "events": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "number"
+                          },
+                          "occurredAt": {
+                            "type": "string"
+                          },
+                          "module": {
+                            "type": "string"
+                          },
+                          "action": {
+                            "type": "string"
+                          },
+                          "actorType": {
+                            "type": "string"
+                          },
+                          "actorId": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "resourceType": {
+                            "type": "string"
+                          },
+                          "resourceId": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "requestId": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "details": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "nullable": true
+                            }
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "occurredAt",
+                          "module",
+                          "action",
+                          "actorType",
+                          "actorId",
+                          "resourceType",
+                          "resourceId",
+                          "requestId",
+                          "details"
+                        ]
+                      }
+                    },
+                    "limit": {
+                      "type": "number"
+                    },
+                    "truncated": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "events",
+                    "limit",
+                    "truncated"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Access denied by the role/scope policy (problem+json)"
+          }
+        }
+      }
+    },
     "/api/v1/identity/auth/login": {
       "post": {
         "summary": "Log in with username and password",

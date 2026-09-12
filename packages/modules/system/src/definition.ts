@@ -38,6 +38,12 @@ const STAFF_ONLY = {
   },
 };
 
+/** Admin only. Same shape as identity's ADMIN_ONLY — the audit log carries
+ * usernames, IP addresses and user agents (identity.login-failed /
+ * login-locked write all three into `details`), so no other staff role may
+ * reach it, not even principal. */
+const ADMIN_ONLY = { public: false as const, requirement: { rolesAnyOf: ["admin" as const] } };
+
 const licenseClaimsSchema = z.object({
   id: z.string(),
   customer: z.string(),
@@ -93,6 +99,51 @@ const licenseRoute: RouteSpec = {
   auth: STAFF_ONLY,
   responses: {
     200: { description: "Current license status", schema: licenseStatusResponseSchema },
+  },
+};
+
+/** One row of sys_audit_log as the operational reader sees it. */
+export const auditEventViewSchema = z.object({
+  id: z.number(),
+  occurredAt: z.string(),
+  module: z.string(),
+  action: z.string(),
+  actorType: z.string(),
+  actorId: z.string().nullable(),
+  resourceType: z.string(),
+  resourceId: z.string().nullable(),
+  requestId: z.string().nullable(),
+  details: z.record(z.string(), z.unknown()),
+});
+
+export const auditEventsResponseSchema = z.object({
+  events: z.array(auditEventViewSchema),
+  /** Echoed back so the UI can say "newest N" without re-deriving it. */
+  limit: z.number(),
+  /** A full page came back — older events exist beyond this window. */
+  truncated: z.boolean(),
+});
+
+const AUDIT_LIMIT_MAX = 200;
+
+const auditLogRoute: RouteSpec = {
+  id: "system.audit-log",
+  module: MODULE_NAME,
+  method: "GET",
+  path: "/api/v1/system/audit",
+  summary: "Recent audit events, newest first (admin)",
+  description:
+    "The read path for sys_audit_log: every security-relevant event (identity.login-failed, identity.login-locked, identity.roles-changed, system.clock-rollback, system.seat-overage, every state-changing route's audit action). Optional `action` narrows to one action. Admin only — rows carry usernames, IP addresses and user agents in `details`, so no other role may read them. Read-only; nothing here changes state.",
+  tags: ["system"],
+  auth: ADMIN_ONLY,
+  request: {
+    query: z.object({
+      action: z.string().trim().min(1).max(120).optional(),
+      limit: z.coerce.number().int().min(1).max(AUDIT_LIMIT_MAX).default(50),
+    }),
+  },
+  responses: {
+    200: { description: "Audit events, newest first", schema: auditEventsResponseSchema },
   },
 };
 
@@ -243,6 +294,6 @@ export const systemModuleDefinition: ModuleDefinition = {
   name: MODULE_NAME,
   tablePrefix: TABLE_PREFIX,
   migrationsDir: "migrations",
-  routes: [healthRoute, readyRoute, metricsRoute, preferenceGetRoute, preferenceSetRoute, licenseRoute],
+  routes: [healthRoute, readyRoute, metricsRoute, preferenceGetRoute, preferenceSetRoute, licenseRoute, auditLogRoute],
   jobs: [heartbeatJob],
 };

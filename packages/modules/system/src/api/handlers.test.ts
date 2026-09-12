@@ -9,6 +9,7 @@ import {
 import { createSystemHandlers, type SystemHandlerDeps } from "./handlers";
 import type { PreferencesStore } from "../service/preferences";
 import type { SysUserPreferenceRow } from "../db/schema";
+import type { AuditLogRecord } from "../service/audit-writer";
 
 const logger = pino({ level: "silent" });
 
@@ -72,6 +73,8 @@ function makeDeps(overrides: Partial<SystemHandlerDeps> = {}): SystemHandlerDeps
     preferences: fakePreferencesStore(),
     license: () => ({ kind: "absent" }),
     countActiveStudents: async () => 0,
+    readRecentAuditEvents: async () => [],
+    readAuditEventsByAction: async () => [],
     ...overrides,
   };
 }
@@ -263,5 +266,86 @@ describe("system.license", () => {
     const result = await handlers["system.license"]!(ctx());
     expect(result.status).toBe(200);
     expect(result.body).toEqual({ kind: "absent", studentCount: 3 });
+  });
+});
+
+describe("system.audit-log", () => {
+  const row = (over: Partial<AuditLogRecord> = {}): AuditLogRecord => ({
+    id: 1,
+    occurredAt: new Date("2026-09-12T10:00:00.000Z"),
+    module: "identity",
+    action: "identity.login-failed",
+    actorType: "anonymous",
+    actorId: null,
+    resourceType: "session",
+    resourceId: null,
+    requestId: "req-9",
+    details: { username: "asha" },
+    ...over,
+  });
+
+  function auditCtx(query: { action?: string; limit: number }): RouteContext {
+    return { ...ctx(), request: { ...ctx().request, query } };
+  }
+
+  it("reads the newest events and serialises occurredAt as ISO", async () => {
+    const handlers = createSystemHandlers(makeDeps({ readRecentAuditEvents: async () => [row()] }));
+    const result = await handlers["system.audit-log"]!(auditCtx({ limit: 50 }));
+    expect(result.status).toBe(200);
+    expect(result.body).toEqual({
+      events: [
+        {
+          id: 1,
+          occurredAt: "2026-09-12T10:00:00.000Z",
+          module: "identity",
+          action: "identity.login-failed",
+          actorType: "anonymous",
+          actorId: null,
+          resourceType: "session",
+          resourceId: null,
+          requestId: "req-9",
+          details: { username: "asha" },
+        },
+      ],
+      limit: 50,
+      truncated: false,
+    });
+  });
+
+  it("routes to the by-action reader only when `action` is present, passing it through", async () => {
+    const seen: string[] = [];
+    const handlers = createSystemHandlers(
+      makeDeps({
+        readRecentAuditEvents: async () => {
+          seen.push("recent");
+          return [];
+        },
+        readAuditEventsByAction: async (action) => {
+          seen.push(action);
+          return [row({ action: "system.clock-rollback" })];
+        },
+      }),
+    );
+    const result = await handlers["system.audit-log"]!(auditCtx({ action: "system.clock-rollback", limit: 50 }));
+    expect(seen).toEqual(["system.clock-rollback"]);
+    expect(result.body).toMatchObject({ events: [{ action: "system.clock-rollback" }] });
+  });
+
+  it("flags truncated when a full page came back, so the UI can say older events exist", async () => {
+    const handlers = createSystemHandlers(
+      makeDeps({ readRecentAuditEvents: async (limit) => Array.from({ length: limit }, (_, i) => row({ id: i })) }),
+    );
+    const result = await handlers["system.audit-log"]!(auditCtx({ limit: 2 }));
+    expect(result.body).toMatchObject({ limit: 2, truncated: true });
+  });
+
+  it("renders a null details column as an empty object rather than null", async () => {
+    const handlers = createSystemHandlers(
+      makeDeps({ readRecentAuditEvents: async () => [row({ details: null })] }),
+    );
+    const result = await handlers["system.audit-log"]!(auditCtx({ limit: 50 }));
+    const { events } = result.body as { events: { details: unknown }[] };
+    // Strictly `{}`, not merely object-like: toMatchObject({}) also accepts null.
+    expect(events[0]!.details).toStrictEqual({});
   });
 });

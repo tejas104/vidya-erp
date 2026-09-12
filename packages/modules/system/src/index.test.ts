@@ -22,6 +22,7 @@ describe("createSystemModule", () => {
     const { module } = makeModule();
     expect(module.definition).toBe(systemModuleDefinition);
     expect(Object.keys(module.handlers).sort()).toEqual([
+      "system.audit-log",
       "system.health",
       "system.license",
       "system.metrics",
