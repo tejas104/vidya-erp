@@ -127,18 +127,18 @@ function importView(row: PplImportRow) {
  * one must change the other.
  *
  * The academic-structure columns (department_code/class_code/section_name)
- * are ONE constant reused for every edition, not two hardcoded strings
- * switched by edition: today "college" and "school" share the same org-tree
- * shape (college -> department -> class -> section), so there is nothing to
- * diverge yet (design finding 5 — edition has exactly one consumer here,
- * unproven until a school install exists). The exhaustive switch is the
- * seam a real per-edition structure would extend later.
+ * DO diverge by edition (#13, ADR-0023): a college CSV carries
+ * department_code/class_code/section_name, a school CSV carries
+ * standard_code/section_name, because a school has no department level —
+ * its single implicit department is supplied during lookup rather than
+ * named in the file.
  */
 function academicStructureColumns(edition: AppConfig["edition"]): readonly string[] {
   switch (edition) {
     case "college":
-    case "school":
       return ["department_code", "class_code", "section_name"];
+    case "school":
+      return ["standard_code", "section_name"];
   }
 }
 

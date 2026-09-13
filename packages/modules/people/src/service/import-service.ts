@@ -14,8 +14,11 @@ import { UnknownReferenceError } from "./people-service";
  * CSV from Excel (approved decision; ADR-0009 for csv-parse).
  *
  * Student columns: admission_no, full_name and OPTIONALLY the enrollment
- * trio department_code, class_code, section_name (requires the import's
- * academicYear). Teacher columns: staff_no, full_name.
+ * columns, which differ by edition (#13, ADR-0023) and require the import's
+ * academicYear — college: department_code, class_code, section_name;
+ * school: standard_code, section_name, because a school has no department
+ * level and its single implicit department is supplied during lookup.
+ * Teacher columns: staff_no, full_name (identical on both editions).
  *
  * Row failures never abort the run: each row is validated and applied
  * independently, errors are reported per row (capped), and the audit trail
@@ -30,6 +33,15 @@ const studentRowSchema = z.object({
   department_code: z.string().trim().max(64).optional().default(""),
   class_code: z.string().trim().max(64).optional().default(""),
   section_name: z.string().trim().max(64).optional().default(""),
+  /**
+   * The school edition's spelling of class_code (#13, ADR-0023). A school
+   * CSV carries standard_code + section_name and no department column,
+   * because a school has no department level — the implicit department is
+   * supplied during lookup. Accepted on both editions so a mis-editioned
+   * file fails on the ENROLLMENT columns with a clear message rather than
+   * on an unknown header.
+   */
+  standard_code: z.string().trim().max(64).optional().default(""),
 });
 
 const teacherRowSchema = z.object({
@@ -66,6 +78,8 @@ export interface ImportServiceDeps {
   readonly orgRepo: OrgRepo;
   readonly store: ImportObjectStore;
   readonly audit: AuditLogger;
+  /** Decides which enrollment columns a student CSV carries (#13, ADR-0023). */
+  readonly edition: "college" | "school";
   readonly onFinished?: (kind: ImportKind, status: "completed" | "failed") => void;
 }
 
@@ -194,11 +208,18 @@ export class ImportService {
     // Section lookup by (department_code, class_code, section_name) — one
     // tree read instead of per-row queries.
     const tree = await this.deps.orgRepo.getTree(imp.collegeId);
+    const school = this.deps.edition === "school";
     const sectionByCodes = new Map<string, string>();
     for (const department of tree?.departments ?? []) {
       for (const classRow of department.classes) {
         for (const section of classRow.sections) {
-          sectionByCodes.set(`${department.code}/${classRow.code}/${section.name}`, section.id);
+          // On school the department level is implicit and absent from the
+          // CSV, so the key drops it: standards are unique per school because
+          // there is only ever one department to hold them (ADR-0023).
+          const key = school
+            ? `${classRow.code}/${section.name}`
+            : `${department.code}/${classRow.code}/${section.name}`;
+          sectionByCodes.set(key, section.id);
         }
       }
     }
@@ -231,24 +252,32 @@ export class ImportService {
       }
       seenInFile.add(row.admission_no);
 
-      const trio = [row.department_code, row.class_code, row.section_name];
-      const provided = trio.filter((part) => part !== "").length;
+      // College: department_code/class_code/section_name. School:
+      // standard_code/section_name (ADR-0023).
+      const parts = school
+        ? [row.standard_code, row.section_name]
+        : [row.department_code, row.class_code, row.section_name];
+      const required = parts.length;
+      const provided = parts.filter((part) => part !== "").length;
       let sectionId: string | undefined;
-      if (provided > 0 && provided < 3) {
+      if (provided > 0 && provided < required) {
         errors.push({
           row: rowNumber,
-          message: "enrollment requires all of department_code, class_code and section_name",
+          message: school
+            ? "enrollment requires both of standard_code and section_name"
+            : "enrollment requires all of department_code, class_code and section_name",
         });
         return;
       }
-      if (provided === 3) {
+      if (provided === required) {
         if (imp.academicYear === null) {
           errors.push({ row: rowNumber, message: "import has no academicYear; enrollment columns cannot be used" });
           return;
         }
-        sectionId = sectionByCodes.get(trio.join("/"));
+        const key = parts.join("/");
+        sectionId = sectionByCodes.get(key);
         if (sectionId === undefined) {
-          errors.push({ row: rowNumber, message: `no such section "${trio.join("/")}" in this college` });
+          errors.push({ row: rowNumber, message: `no such section "${key}" in this college` });
           return;
         }
       }

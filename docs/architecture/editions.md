@@ -161,7 +161,18 @@ automatically. One of those three is wrong.
 
 ## Open questions for the owner
 
-1. **What is actually supposed to differ between `college` and `school`?**
+> **ANSWERED 2026-09-12 (question 1).** The school edition's tree is
+> school → standard → section, built on the existing four-level tree with one
+> implicit department — see [ADR-0023](../adr/0023-school-edition-org-tree.md).
+> Module-level gating now exists (`ModuleDefinition.editions` +
+> `moduleRunsOnEdition`, runtime, at the composition root), and the e2e suite
+> splits into a college and a school run (`playwright.config.ts`). Questions
+> 2–4, 6 and 7 below are unchanged; question 5 is answered on the read-path
+> side only (`GET /api/v1/system/audit` exists; no UI consumes it yet).
+
+1. ~~**What is actually supposed to differ between `college` and `school`?**~~
+   **ANSWERED — see the note above and ADR-0023.** Original finding, kept for
+   the record:
    Today: nothing but CSV header text that is currently identical
    (`packages/modules/people/src/api/handlers.ts:137-143`) and a help-content
    directory that exists for only one of the two editions. Is the school

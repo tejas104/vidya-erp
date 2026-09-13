@@ -13,7 +13,7 @@ import {
 
 const log = pino({ level: "silent" });
 
-async function makeHarness() {
+async function makeHarness(edition: "college" | "school" = "college") {
   const orgRepo = new InMemoryOrgRepo();
   const people = new InMemoryPeopleRepo();
   const imports = new InMemoryImportsRepo();
@@ -27,6 +27,7 @@ async function makeHarness() {
     orgRepo,
     store,
     audit,
+    edition,
     onFinished: (kind, status) => finished.push(`${kind}:${status}`),
   });
   return { service, orgRepo, people, imports, store, audit, org, finished };
@@ -256,5 +257,90 @@ describe("teacher imports", () => {
     await service.run(row.id, log);
     expect(await imports.get(row.id)).toMatchObject({ totalRows: 3, okRows: 1, errorRows: 2 });
     expect(await people.findTeacherByStaffNo(org.college.id, "T001")).not.toBeNull();
+  });
+});
+
+describe("student import on the school edition (#13, ADR-0023)", () => {
+  it("enrolls from standard_code + section_name, with no department column", async () => {
+    const { service, imports, people, org } = await makeHarness("school");
+    const csv = [
+      "admission_no,full_name,standard_code,section_name",
+      "S001,Aarti Deshmukh,BSC1,A",
+      "S002,Nikhil Patil,,",
+    ].join("\n");
+    const row = await service.createImport({
+      kind: "students",
+      collegeId: org.college.id,
+      academicYear: "2026-27",
+      csv,
+      dryRun: false,
+      requestedBy: "admin-1",
+    });
+    await service.run(row.id, log);
+    expect(await imports.get(row.id)).toMatchObject({
+      status: "completed",
+      totalRows: 2,
+      okRows: 2,
+      errorRows: 0,
+    });
+    // The enrolled one landed in the seeded section; the bare one is unassigned.
+    const enrolled = [...people.students.values()].find((s) => s.admissionNo === "S001");
+    expect(enrolled).toBeDefined();
+    expect([...people.enrollments.values()].some((e) => e.sectionId === org.section.id)).toBe(true);
+  });
+
+  it("names the school columns in the partial-enrollment error, not the college ones", async () => {
+    const { service, imports, org } = await makeHarness("school");
+    const csv = ["admission_no,full_name,standard_code,section_name", "S010,Half Row,BSC1,"].join("\n");
+    const row = await service.createImport({
+      kind: "students",
+      collegeId: org.college.id,
+      academicYear: "2026-27",
+      csv,
+      dryRun: false,
+      requestedBy: "admin-1",
+    });
+    await service.run(row.id, log);
+    const state = await imports.get(row.id);
+    const messages = (state?.errors as { row: number; message: string }[]).map((e) => e.message);
+    expect(messages[0]).toContain("both of standard_code and section_name");
+    expect(messages[0]).not.toContain("department_code");
+  });
+
+  it("rejects a college-shaped file loudly rather than importing it unassigned", async () => {
+    const { service, imports, org } = await makeHarness("school");
+    // section_name is common to BOTH shapes, so a college CSV on a school
+    // install supplies 1 of the 2 school columns — a partial enrollment,
+    // which errors. That is the wanted outcome: a mis-editioned file must not
+    // quietly import every student with no section at all.
+    const csv = ["admission_no,full_name,department_code,class_code,section_name", "S020,Wrong Shape,SCI,BSC1,A"].join("\n");
+    const row = await service.createImport({
+      kind: "students",
+      collegeId: org.college.id,
+      academicYear: "2026-27",
+      csv,
+      dryRun: false,
+      requestedBy: "admin-1",
+    });
+    await service.run(row.id, log);
+    const state = await imports.get(row.id);
+    expect(state).toMatchObject({ okRows: 0, errorRows: 1 });
+    const messages = (state?.errors as { message: string }[]).map((e) => e.message);
+    expect(messages[0]).toContain("both of standard_code and section_name");
+  });
+
+  it("college edition still requires the full trio (the regression net)", async () => {
+    const { service, imports, org } = await makeHarness("college");
+    const csv = ["admission_no,full_name,department_code,class_code,section_name", "C001,Trio Row,SCI,BSC1,A"].join("\n");
+    const row = await service.createImport({
+      kind: "students",
+      collegeId: org.college.id,
+      academicYear: "2026-27",
+      csv,
+      dryRun: false,
+      requestedBy: "admin-1",
+    });
+    await service.run(row.id, log);
+    expect(await imports.get(row.id)).toMatchObject({ okRows: 1, errorRows: 0 });
   });
 });

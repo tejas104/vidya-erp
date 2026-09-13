@@ -183,10 +183,15 @@ export function createPeopleModule(deps: PeopleModuleDeps): RuntimeModule<People
       bucketReady = true;
     }
   };
+  // ONE binding: the template columns the handlers advertise and the columns
+  // the import service parses must agree, or a school CSV is offered and then
+  // rejected (#13, ADR-0023).
+  const edition = deps.edition ?? "college";
   const imports = new ImportService({
     imports: importsRepo,
     people: peopleRepo,
     orgRepo,
+    edition,
     store: {
       putText: async (key, body) => {
         await ensureReady();
@@ -208,7 +213,7 @@ export function createPeopleModule(deps: PeopleModuleDeps): RuntimeModule<People
       scopeChecker: deps.scopeChecker,
       storage: deps.storage,
       enqueueImport: deps.enqueueImport,
-      edition: deps.edition ?? "college",
+      edition,
       identity: deps.identity,
     }),
     jobProcessors: {

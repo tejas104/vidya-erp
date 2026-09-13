@@ -64,6 +64,7 @@ async function makeHarness(opts: { identity?: CredentialIssuer; edition?: "colle
       imports: importsRepo,
       people: peopleRepo,
       orgRepo,
+      edition: opts.edition ?? "college",
       store: new MemoryObjectStore(),
       audit,
     }),
@@ -747,5 +748,26 @@ describe("people.department-create on the school edition", () => {
       ctx({ body: { collegeId: org.college.id, name: "Science", code: "SCI2" } }),
     );
     expect(result.status).toBe(201);
+  });
+});
+
+describe("people.import-template diverges by edition (#13, ADR-0023)", () => {
+  it("offers standard_code + section_name on the school edition, with no department column", async () => {
+    const { handlers } = await makeHarness({ edition: "school" });
+    const res = await handlers["people.import-template"]!(ctx({ query: { kind: "students" } }));
+    expect(res.status).toBe(200);
+    const header = String(res.body).split("\r\n")[0];
+    expect(header).toBe("admission_no,full_name,standard_code,section_name");
+    expect(header).not.toContain("department_code");
+  });
+
+  it("offers the same teacher columns on both editions (no org structure in them)", async () => {
+    const college = await makeHarness({ edition: "college" });
+    const school = await makeHarness({ edition: "school" });
+    const headerFor = async (h: Awaited<ReturnType<typeof makeHarness>>) =>
+      String((await h.handlers["people.import-template"]!(ctx({ query: { kind: "teachers" } }))).body).split(
+        "\r\n",
+      )[0];
+    expect(await headerFor(school)).toBe(await headerFor(college));
   });
 });
