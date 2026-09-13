@@ -195,10 +195,26 @@ automatically. One of those three is wrong.
    but nothing reads them back — there is no operational view of the audit log
    short of SQL, so a rollback is recorded and then silent.
 6. **Does `content/help/school/` need to exist before a school install is
-   possible?** `scripts/compile-help.ts:20-21` points at a directory that is
-   not in the repo, and the choice is made at build time, not run time — so
-   "edition" is currently partly a *build* property, not only a deploy one. Is
-   one image per edition intended?
+   possible?** **No — measured 2026-09-13.** `listMarkdownFiles`
+   (`scripts/compile-help.ts:158-168`) treats a missing directory as "zero
+   docs, not an error", so a school build succeeds. Observed by running it:
+
+   ```
+   VIDYA_EDITION=school npx tsx scripts/compile-help.ts
+   [compile-help] 29 screen(s) with no help doc: analytics, attendance, ...
+   wrote help-content.generated.ts (0 doc(s), edition=school, 29 route slug(s))
+   ```
+
+   versus 15 docs on college. So a school install *works* and ships with **no
+   help at all**. That is a content gap for the owner, not an engineering
+   blocker — writing the school help docs is authoring work and is
+   deliberately not invented here.
+
+   Still open, and unchanged by the above: help is chosen at BUILD time while
+   module gating (#13) is now a RUNTIME decision, so "edition" remains partly
+   a build property. One image can serve both editions in every respect
+   except help content. Is one image per edition intended, or should help
+   move to a runtime lookup?
 7. **When must the placeholder signing key be rotated**
    (`packages/platform/src/license/public-key.ts:12-19`), and who holds the
    private half?

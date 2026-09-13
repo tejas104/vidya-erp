@@ -22,3 +22,13 @@ regression net, and keeping it byte-identical is what lets #14 and #15 prove
 "zero behavioural change" for college. Triaging which of the 76 are genuinely
 edition-independent — and moving the rest into `../college/` — is work for #14,
 when there is a school server to run them against.
+
+Two specific ones are already known to need triage:
+
+- `../help.spec.ts` — a school build compiles **zero** help docs
+  (`content/help/school/` does not exist; measured 2026-09-13, see
+  `docs/architecture/editions.md` question 6), so any assertion that a help
+  panel has content will fail on school for a content reason, not a code one.
+- `../import.spec.ts` — the student CSV columns differ by edition
+  (ADR-0023): college sends `department_code,class_code,section_name`,
+  school sends `standard_code,section_name`.
