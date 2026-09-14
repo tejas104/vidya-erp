@@ -2,6 +2,12 @@ import { describe, expect, it } from "vitest";
 import { visibleNav, crumbsFor } from "./navConfig";
 
 describe("navConfig 8-domain regroup", () => {
+  it("shows school term management only on the school edition and to oversight roles", () => {
+    const links = (roles: Parameters<typeof visibleNav>[0], edition: "college" | "school") => visibleNav(roles, edition).flatMap((group) => group.entries).map((entry) => entry.href);
+    expect(links(["admin"], "school")).toContain("/manage/terms");
+    expect(links(["admin"], "college")).not.toContain("/manage/terms");
+    expect(links(["teacher"], "school")).not.toContain("/manage/terms");
+  });
   it("orders groups TOP→PEOPLE→ACADEMICS→…→ANALYTICS→ADMINISTRATION for admin", () => {
     const g = visibleNav(["admin"]).map((x) => x.group);
     expect(g[0]).toBe("TOP");

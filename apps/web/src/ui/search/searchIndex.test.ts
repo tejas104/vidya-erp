@@ -43,6 +43,12 @@ beforeEach(() => {
 });
 
 describe("buildIndex", () => {
+  it("keeps school-only navigation out of the college search index and its cache", async () => {
+    const school = await buildIndex(apiLike, ["admin"], undefined, "school");
+    expect(school.some((entry) => entry.href === "/manage/terms")).toBe(true);
+    const college = await buildIndex(apiLike, ["admin"], undefined, "college");
+    expect(college.some((entry) => entry.href === "/manage/terms")).toBe(false);
+  });
   it("indexes pages (role-filtered) + students projected WITHOUT PII", async () => {
     const idx = await buildIndex(apiLike, ["admin"]);
     const st = idx.find((e) => e.kind === "student")!;

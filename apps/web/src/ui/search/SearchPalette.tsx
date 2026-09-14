@@ -9,10 +9,10 @@ import styles from "./SearchPalette.module.css";
 const DEBOUNCE_MS = 150;
 
 export function SearchPalette({
-  open, onClose, roles,
-}: { open: boolean; onClose: () => void; roles: Role[] }) {
+  open, onClose, roles, edition = "college",
+}: { open: boolean; onClose: () => void; roles: Role[]; edition?: "college" | "school" }) {
   const router = useRouter();
-  const [index, setIndex] = useState<IndexEntry[] | null>(() => getCachedIndex());
+  const [index, setIndex] = useState<IndexEntry[] | null>(() => getCachedIndex(roles, edition));
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [loadError, setLoadError] = useState(false);
   const [query, setQuery] = useState("");
@@ -27,7 +27,7 @@ export function SearchPalette({
     loadingRef.current = true;
     setLoadError(false);
     setProgress(null);
-    buildIndex(api, roles, (done, total) => setProgress({ done, total }))
+    buildIndex(api, roles, (done, total) => setProgress({ done, total }), edition)
       .then((entries) => setIndex(entries))
       .catch(() => setLoadError(true))
       .finally(() => {

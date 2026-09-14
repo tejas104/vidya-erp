@@ -44,7 +44,7 @@ export function Topbar({
       <button type="button" className="ui-iconbtn shell-hamburger" aria-label="Open menu" onClick={onMenu}>
         <Icon name="menu" />
       </button>
-      <button type="button" className="shell-search-btn" onClick={onSearch}>
+      <button type="button" className="shell-search-btn" aria-label="Search" onClick={onSearch}>
         <Icon name="search" size={16} />
         <span>Search… ⌘K</span>
       </button>

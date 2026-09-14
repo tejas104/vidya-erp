@@ -17,9 +17,9 @@ function loadCollapsed(): Set<string> {
   }
 }
 
-export function Sidebar({ roles, open, onClose }: { roles: Role[]; open: boolean; onClose: () => void }) {
+export function Sidebar({ roles, open, onClose, edition = "college" }: { roles: Role[]; open: boolean; onClose: () => void; edition?: "college" | "school" }) {
   const pathname = usePathname();
-  const groups = visibleNav(roles);
+  const groups = visibleNav(roles, edition);
   const [collapsed, setCollapsed] = useState<Set<string>>(loadCollapsed);
 
   function toggle(group: string) {

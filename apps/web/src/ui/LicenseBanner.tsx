@@ -104,6 +104,7 @@ export function LicenseBanner({ roles }: { roles: Role[] }) {
           role={banner.tone === "bad" ? "alert" : "status"}
           style={{
             display: "flex",
+            flexWrap: "wrap",
             alignItems: "center",
             gap: "var(--space-3)",
             background: TONE_BG[banner.tone],
@@ -113,7 +114,7 @@ export function LicenseBanner({ roles }: { roles: Role[] }) {
           }}
         >
           <span aria-hidden="true">{banner.tone === "bad" ? "⚠" : "ℹ"}</span>
-          <p style={{ margin: 0, flex: 1, color: "inherit" }}>{banner.message}</p>
+          <p style={{ margin: 0, flex: "1 1 12rem", color: "inherit" }}>{banner.message}</p>
           <a href="/manage/system" style={{ color: "inherit", fontWeight: 600, whiteSpace: "nowrap" }}>
             Licence details
           </a>

@@ -9,7 +9,7 @@ import { Breadcrumbs } from "./Breadcrumbs";
 import { InstallPrompt } from "./InstallPrompt";
 import { LicenseBanner } from "./LicenseBanner";
 
-export function AppShell({ session, year, children }: { session: Session; year?: string; children: ReactNode }) {
+export function AppShell({ session, year, children, edition = "college" }: { session: Session; year?: string; children: ReactNode; edition?: "college" | "school" }) {
   const [drawer, setDrawer] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
 
@@ -27,7 +27,7 @@ export function AppShell({ session, year, children }: { session: Session; year?:
   return (
     <ToastProvider>
       <div className="shell">
-        <Sidebar roles={session.roles} open={drawer} onClose={() => setDrawer(false)} />
+        <Sidebar roles={session.roles} edition={edition} open={drawer} onClose={() => setDrawer(false)} />
         {drawer ? <div className="shell-drawer-scrim" onMouseDown={() => setDrawer(false)} /> : null}
         <div className="shell-body">
           <Topbar
@@ -42,7 +42,7 @@ export function AppShell({ session, year, children }: { session: Session; year?:
             {children}
           </main>
         </div>
-        <SearchPalette open={searchOpen} onClose={() => setSearchOpen(false)} roles={session.roles} />
+        <SearchPalette open={searchOpen} onClose={() => setSearchOpen(false)} roles={session.roles} edition={edition} />
         <InstallPrompt roles={session.roles} />
       </div>
     </ToastProvider>

@@ -1246,6 +1246,15 @@ a {
 .shell-hamburger { display: none; }
 .shell-page { width: 100%; }
 .shell-drawer-scrim { display: none; }
+@media (max-width: 600px) {
+  .shell-top { gap: var(--space-2); padding: var(--space-3); }
+  .shell-top-year { white-space: nowrap; font-size: var(--text-12); }
+  .shell-search-btn { min-width: 44px; min-height: 44px; flex: 0 0 44px; margin-left: 0; justify-content: center; padding: var(--space-2); }
+  .shell-search-btn span { display: none; }
+  .shell-top > .ui-menu-root { min-width: 0; margin-left: auto; }
+  .shell-top .ui-menubtn { min-width: 0; max-width: 100%; overflow-wrap: anywhere; padding: var(--space-2); }
+  .shell-top .ui-iconbtn { flex-shrink: 0; }
+}
 @media (max-width: 959px) {
   .shell-side {
     position: fixed;

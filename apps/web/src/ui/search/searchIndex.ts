@@ -1,5 +1,5 @@
 import { mapPool } from "./pool";
-import { NAV } from "../navConfig";
+import { visibleNav } from "../navConfig";
 import type { Role } from "../api";
 
 export type IndexEntry = {
@@ -59,7 +59,8 @@ export function clearIndexCache(): void {
 
 /** The currently-cached index (any role), or null if not built yet. Lets the
  *  palette render instantly on re-open without re-fetching. */
-export function getCachedIndex(): IndexEntry[] | null {
+export function getCachedIndex(roles?: Role[], edition: "college" | "school" = "college"): IndexEntry[] | null {
+  if (roles && cache?.key !== `${edition}:${keyOf(roles)}`) return null;
   return cache?.entries ?? null;
 }
 
@@ -67,13 +68,13 @@ export async function buildIndex(
   apiLike: ApiLike,
   roles: Role[],
   onProgress?: (done: number, total: number) => void,
+  edition: "college" | "school" = "college",
 ): Promise<IndexEntry[]> {
-  const key = keyOf(roles);
+  const key = `${edition}:${keyOf(roles)}`;
   if (cache && cache.key === key) return cache.entries;
 
-  const pages: IndexEntry[] = NAV.filter(
-    (e) => e.group !== "TOP" && e.roles.some((r) => roles.includes(r)),
-  ).map((e) => ({ kind: "page", label: e.label, href: e.href }));
+  const pages: IndexEntry[] = visibleNav(roles, edition).filter((group) => group.group !== "TOP")
+    .flatMap((group) => group.entries).map((e) => ({ kind: "page", label: e.label, href: e.href }));
 
   const { colleges } = await apiLike.colleges();
   const sections = (
