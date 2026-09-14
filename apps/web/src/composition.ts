@@ -537,7 +537,7 @@ export function routeHandler(
     const runtime = getWebRuntime();
     const handler = runtime.handlers[routeId];
     if (handler === undefined) {
-      throw new Error(`no route registered with id "${routeId}"`);
+      return Response.json({ message: "Not found" }, { status: 404 });
     }
     return handler(request, context);
   };

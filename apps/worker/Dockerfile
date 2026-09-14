@@ -31,6 +31,7 @@ COPY packages/modules/people/package.json packages/modules/people/
 COPY packages/modules/portal/package.json packages/modules/portal/
 COPY packages/modules/reporting/package.json packages/modules/reporting/
 COPY packages/modules/results/package.json packages/modules/results/
+COPY packages/modules/school-academics/package.json packages/modules/school-academics/
 COPY packages/modules/syllabus/package.json packages/modules/syllabus/
 COPY packages/modules/system/package.json packages/modules/system/
 COPY packages/modules/timetable/package.json packages/modules/timetable/

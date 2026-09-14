@@ -73,6 +73,9 @@ jobs:
       - name: Table-ownership convention
         run: pnpm check:ownership
 
+      - name: Docker workspace manifest coverage
+        run: pnpm check:docker-manifests
+
       - name: OpenAPI spec in sync with route declarations
         run: pnpm openapi:check
 

@@ -24,9 +24,12 @@ function probeUrl(specPath: string): string {
   return specPath.replace(/\{[^}]+\}/g, "e2e-probe");
 }
 
-const allRoutes = moduleDefinitions.flatMap((def) =>
+const edition = process.env.VIDYA_EDITION === "school" ? "school" : "college";
+const runsHere = (definition: (typeof moduleDefinitions)[number]) => definition.editions?.includes(edition) ?? true;
+const runningRoutes = moduleDefinitions.filter(runsHere).flatMap((def) =>
   def.routes.map((r) => ({ module: def.name, id: r.id, method: r.method, path: r.path })),
 );
+const excludedRoutes = moduleDefinitions.filter((definition) => !runsHere(definition)).flatMap((def) => def.routes);
 
 test("route inventory: every RouteSpec answers non-404", async ({ request }) => {
   // Probes every route sequentially; against a dev server each route compiles
@@ -34,7 +37,7 @@ test("route inventory: every RouteSpec answers non-404", async ({ request }) => 
   test.setTimeout(240_000);
   const notReachable: string[] = [];
 
-  for (const route of allRoutes) {
+  for (const route of runningRoutes) {
     // Tolerate a transient connection drop with one retry.
     let status = 0;
     for (let attempt = 0; attempt < 2; attempt++) {
@@ -53,9 +56,16 @@ test("route inventory: every RouteSpec answers non-404", async ({ request }) => 
   }
 
   console.log(
-    `[route-coverage] ${allRoutes.length} RouteSpecs across ${moduleDefinitions.length} modules; ` +
+    `[route-coverage] ${runningRoutes.length} active RouteSpecs across ${moduleDefinitions.length} modules; ` +
       `${notReachable.length} returned 404`,
   );
 
   expect(notReachable, `Registered routes returning 404:\n${notReachable.join("\n")}`).toEqual([]);
+});
+
+test("edition-gated routes are absent with 404", async ({ request }) => {
+  for (const route of excludedRoutes) {
+    const response = await request.fetch(probeUrl(route.path), { method: route.method });
+    expect(response.status(), `${route.id} should not exist on ${edition}`).toBe(404);
+  }
 });

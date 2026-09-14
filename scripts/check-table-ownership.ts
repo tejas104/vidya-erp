@@ -21,7 +21,12 @@ import { migrationSources, moduleDefinitions, modulePackageDir } from "./registr
 const TABLE_DDL_PATTERN =
   /\b(?:CREATE|ALTER|DROP)\s+TABLE\s+(?:IF\s+(?:NOT\s+)?EXISTS\s+)?"?([a-z_][a-z0-9_]*)"?/gi;
 const PG_TABLE_PATTERN = /\bpgTable\(\s*["']([a-z0-9_]+)["']/g;
+const SQL_TABLE_REFERENCE_PATTERN = /\b(?:TABLE|REFERENCES|FROM|JOIN|INTO|UPDATE)\s+(?:IF\s+(?:NOT\s+)?EXISTS\s+)?"?([a-z_][a-z0-9_]*)"?/gi;
 const JOURNAL_TABLE = "platform_migrations";
+
+function withoutComments(contents: string): string {
+  return contents.replace(/\/\*[\s\S]*?\*\//g, "").replace(/--[^\r\n]*/g, "");
+}
 
 async function listFilesRecursive(dir: string, extension: string): Promise<string[]> {
   const results: string[] = [];
@@ -50,19 +55,21 @@ async function main(): Promise<void> {
     const sqlFiles = await listFilesRecursive(source.dir, ".sql");
     for (const filePath of sqlFiles) {
       const contents = await readFile(filePath, "utf8");
+      const executable = withoutComments(contents);
       const label = `${definition.name}: ${path.basename(filePath)}`;
-      for (const match of contents.matchAll(TABLE_DDL_PATTERN)) {
+      for (const match of executable.matchAll(TABLE_DDL_PATTERN)) {
         const table = match[1] ?? "";
         if (!table.startsWith(definition.tablePrefix)) {
           violations.push(`${label}: DDL targets "${table}" outside prefix "${definition.tablePrefix}"`);
         }
       }
-      if (contents.includes(JOURNAL_TABLE)) {
+      if (new RegExp(`\\b${JOURNAL_TABLE}\\b`).test(executable)) {
         violations.push(`${label}: references the platform-owned journal table "${JOURNAL_TABLE}"`);
       }
-      for (const prefix of foreignPrefixes) {
-        if (contents.includes(prefix)) {
-          violations.push(`${label}: references another module's table prefix "${prefix}"`);
+      for (const match of executable.matchAll(SQL_TABLE_REFERENCE_PATTERN)) {
+        const table = match[1] ?? "";
+        for (const prefix of foreignPrefixes) {
+          if (table.startsWith(prefix)) violations.push(`${label}: references another module's table "${table}"`);
         }
       }
     }
@@ -78,13 +85,9 @@ async function main(): Promise<void> {
           violations.push(`${label}: pgTable("${table}") outside prefix "${definition.tablePrefix}"`);
         }
       }
-      if (contents.includes(JOURNAL_TABLE)) {
+      const executable = withoutComments(contents);
+      if (new RegExp(`\\b${JOURNAL_TABLE}\\b`).test(executable)) {
         violations.push(`${label}: references the platform-owned journal table "${JOURNAL_TABLE}"`);
-      }
-      for (const prefix of foreignPrefixes) {
-        if (contents.includes(prefix)) {
-          violations.push(`${label}: references another module's table prefix "${prefix}"`);
-        }
       }
     }
   }
