@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@vidya/module-results": "workspace:*",
     "@vidya/module-people": "workspace:*",
     "@vidya/platform": "workspace:*",
     "drizzle-orm": "^0.44.2",

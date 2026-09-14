@@ -58,6 +58,9 @@ function row(over: Partial<SchTermRow> = {}): SchTermRow {
     startsOn: "2026-04-01",
     endsOn: "2026-09-30",
     status: "open",
+    scaleId: null,
+    scaleName: null,
+    gradeBands: null,
     closedAt: null,
     closedBy: null,
     closedReason: null,
@@ -207,6 +210,7 @@ describe("school-academics.close", () => {
     expect(result.status).toBe(200);
     expect(result.body).toMatchObject({ status: "closed", closedReason: "results finalised" });
     expect(result.audit).toEqual({
+      org: { collegeId: SCHOOL, departmentId: DEPT },
       resourceId: "trm_1",
       details: { status: "closed", reason: "results finalised" },
     });
@@ -251,6 +255,7 @@ describe("school-academics.reopen", () => {
     expect(result.status).toBe(200);
     expect(result.body).toMatchObject({ status: "open", closedReason: "marks were wrong" });
     expect(result.audit).toEqual({
+      org: { collegeId: SCHOOL, departmentId: DEPT },
       resourceId: "trm_1",
       details: { status: "open", reason: "marks were wrong" },
     });

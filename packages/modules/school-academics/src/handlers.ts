@@ -1,5 +1,5 @@
 import type { OrgPath, Principal, RouteHandler, ScopeChecker } from "@vidya/platform";
-import type { PeopleDirectory } from "@vidya/module-people";
+import { IMPLICIT_DEPARTMENT_CODE, type PeopleDirectory } from "@vidya/module-people";
 import { DuplicateTermError, type TermsRepo } from "./repo";
 import { termRef } from "./resource-refs";
 import type { SchTermRow } from "./db/schema";
@@ -71,7 +71,8 @@ export function createSchoolAcademicsHandlers(
     // The org position is resolved server-side, never taken from the caller:
     // a school has exactly ONE department and it is implicit (ADR-0023).
     const departments = await deps.directory.departmentsOfCollege(body.collegeId);
-    const departmentId = departments[0]?.departmentId;
+    const departmentId = departments.find((department) => department.code === IMPLICIT_DEPARTMENT_CODE)?.departmentId
+      ?? (departments.length === 1 && departments[0]?.code === undefined ? departments[0]?.departmentId : undefined);
     if (departmentId === undefined) return notFound("no such school");
     const position = { collegeId: body.collegeId, departmentId };
     if (!writeAllowed(principal, termRef(position).org)) return denied();
@@ -84,6 +85,7 @@ export function createSchoolAcademicsHandlers(
         status: 201,
         body: termView(row),
         audit: {
+          org: position,
           resourceId: row.id,
           details: { name: row.name, academicYear: row.academicYear, startsOn: row.startsOn, endsOn: row.endsOn },
         },
@@ -133,10 +135,11 @@ export function createSchoolAcademicsHandlers(
         actorId: principal.id,
         reason: reason === "" ? null : reason,
       });
+      if (updated === null) return { status: 409, body: { message: "The term status changed. Reload before trying again." } };
       return {
         status: 200,
         body: termView(updated),
-        audit: { resourceId: term.id, details: { status: to, reason: reason === "" ? null : reason } },
+        audit: { org: termRef(term).org, resourceId: term.id, details: { status: to, reason: reason === "" ? null : reason } },
       };
     };
   }

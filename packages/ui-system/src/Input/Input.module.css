@@ -7,6 +7,8 @@
   padding: var(--space-3) var(--space-3); border-radius: var(--radius-sm);
   border: 1px solid var(--rule-strong); background: var(--paper); color: var(--ink); }
 .input:focus-visible { border-color: var(--focus); }
+.input[aria-invalid="true"] { border-color: var(--bad); }
+.input:disabled { opacity: 0.65; cursor: not-allowed; }
 
 .hint { margin: var(--space-1) 0 0; font-size: var(--text-14); color: var(--ink-3); }
 .error { margin: var(--space-1) 0 0; font-size: var(--text-14); color: var(--accent); }

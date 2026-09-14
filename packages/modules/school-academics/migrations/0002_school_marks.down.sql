@@ -1,0 +1,10 @@
+DROP TRIGGER sca_grade_basis_guard ON sca_terms;
+DROP FUNCTION sca_guard_grade_basis();
+DROP TRIGGER sca_used_types_guard ON sca_assessment_types;
+DROP FUNCTION sca_guard_used_types();
+DROP TABLE sca_marks;
+DROP FUNCTION sca_guard_mark();
+DROP TABLE sca_assessments;
+DROP FUNCTION sca_guard_assessment();
+ALTER TABLE sca_terms DROP CONSTRAINT sca_terms_scale_check;
+ALTER TABLE sca_terms DROP COLUMN grade_bands, DROP COLUMN scale_name, DROP COLUMN scale_id;

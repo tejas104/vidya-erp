@@ -1,0 +1,6 @@
+.stack { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-5); }
+.tableViewport > div > table { min-width: 28rem; }
+.grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }
+.fields { border: 0; padding: 0; margin: 0; min-width: 0; }
+.notice { color: var(--ink-2); font-size: var(--text-14); margin: var(--space-3) 0; }
+@media (max-width: 600px) { .grid { grid-template-columns: minmax(0, 1fr); } }

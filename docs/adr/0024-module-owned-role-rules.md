@@ -83,6 +83,10 @@ two relations are not interchangeable.
 - Mutation-proof required: removing the `readAllowed` guard must turn tests red.
   Verified for `school-academics` — dropping it turns 15 passed into 13 passed /
   2 failed.
+- The same proof covers the added assessment routes. Bypassing their four shared
+  checks made the named foreign-class and foreign-subject cases fail; restoring
+  the checks returned 29/29 term/configuration unit tests and 6/6 authenticated
+  school-marks integration tests to green (2026-09-14).
 
 ## Related: migrations are NOT edition-gated
 

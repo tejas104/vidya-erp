@@ -315,6 +315,7 @@ async function main(): Promise<void> {
   // parity, and so the edition filter below sees the same list the web
   // composition root does.)
   const schoolAcademics = createSchoolAcademicsModule({
+    gradeScales: results.service.repo,
     db,
     scopeChecker: identityCore.scopeChecker,
     peopleDirectory: people.service.directory,

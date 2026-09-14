@@ -1,5 +1,5 @@
 "use client";
-import { useMemo, useRef, type KeyboardEvent } from "react";
+import { useId, useMemo, useRef, type KeyboardEvent } from "react";
 import { Button, Card } from "@vidya/ui-system";
 import styles from "./ScoreEntryCard.module.css";
 
@@ -41,6 +41,7 @@ export function validateScore(raw: string, max: number): string | null {
  * on entry, running progress, inline per-row validation, one save. Holds no
  * data of its own — the caller owns the roster and the values. */
 export function ScoreEntryCard({ title, roster, values, maxScore, onChange, onSave, saving = false, error = null }: ScoreEntryCardProps) {
+  const id = useId();
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   const rowErrors = useMemo(() => {
@@ -66,8 +67,8 @@ export function ScoreEntryCard({ title, roster, values, maxScore, onChange, onSa
   }
 
   function submit() {
-    if (hasErrors) return;
-    onSave(roster.filter((s) => values[s.id] !== undefined && values[s.id] !== "").map((s) => ({ studentId: s.id, score: Number(values[s.id]) })));
+    if (hasErrors || saving || enteredCount === 0) return;
+    onSave(roster.filter((s) => (values[s.id] ?? "").trim() !== "").map((s) => ({ studentId: s.id, score: Number(values[s.id]) })));
   }
 
   return (
@@ -89,21 +90,23 @@ export function ScoreEntryCard({ title, roster, values, maxScore, onChange, onSa
                   enterKeyHint={i < roster.length - 1 ? "next" : "done"}
                   min={0}
                   max={maxScore}
+                  disabled={saving}
                   value={values[s.id] ?? ""}
                   className={styles.scoreInput}
                   onChange={(event) => onChange(s.id, event.target.value)}
                   onKeyDown={(event) => onRowKeyDown(event, i)}
                   aria-label={`score for ${s.fullName}`}
                   aria-invalid={rowError !== null}
+                  aria-describedby={rowError !== null ? `${id}-${i}-error` : undefined}
                 />
-                {rowError !== null ? <span className="formerror" role="alert">{rowError}</span> : null}
+                {rowError !== null ? <span id={`${id}-${i}-error`} className="formerror" role="alert">{rowError}</span> : null}
               </span>
             </div>
           );
         })}
       </div>
       <div className={styles.formActions}>
-        <Button onClick={submit} loading={saving} disabled={hasErrors}>Save marks</Button>
+        <Button onClick={submit} loading={saving} disabled={hasErrors || enteredCount === 0}>Save marks</Button>
         {error !== null ? <span className="formerror" role="alert">{error}</span> : null}
       </div>
     </Card>

@@ -13,6 +13,7 @@ import {
   createObjectStorage,
   createRedis,
   defineRoute,
+  moduleRunsOnEdition,
   type BoundRouteHandler,
   type OrgDirectory,
   type RouteDependencies,
@@ -26,6 +27,8 @@ import { createAnalyticsModule } from "@vidya/module-analytics";
 import { createReportingModule } from "@vidya/module-reporting";
 import { createSyllabusModule } from "@vidya/module-syllabus";
 import { createTimetableModule } from "@vidya/module-timetable";
+import { createSchoolAcademicsModule } from "@vidya/module-school-academics";
+import { createResultsModule } from "@vidya/module-results";
 import { integrationDatabaseUrl } from "./db-url";
 
 export const ADMIN_USERNAME = "int-admin";
@@ -52,7 +55,7 @@ export interface CallOptions {
   ip?: string;
 }
 
-export function buildStack() {
+export function buildStack(edition: "college" | "school" = "college") {
   const logger = createLogger({ level: "silent", serviceName: "vidya-int" });
   const { pool, db } = createDb({
     url: integrationDatabaseUrl(),
@@ -66,8 +69,13 @@ export function buildStack() {
     connectionName: "vidya-int-harness",
   });
   const metrics = createMetrics({ serviceName: "vidya-int", defaultMetrics: false });
+  const core = createIdentityCore({
+    redis,
+    session: { ttlHours: 12, idleMinutes: 30 },
+  });
 
   const system = createSystemModule({
+    scopeChecker: core.scopeChecker,
     db,
     metrics,
     serviceVersion: "integration",
@@ -80,10 +88,6 @@ export function buildStack() {
     countActiveStudents: async () => 0,
   });
 
-  const core = createIdentityCore({
-    redis,
-    session: { ttlHours: 12, idleMinutes: 30 },
-  });
   const orgDirectoryRef: { current: OrgDirectory | null } = { current: null };
   const identity = createIdentityModule({
     db,
@@ -115,6 +119,7 @@ export function buildStack() {
   });
   const enqueuedImports: { importId: string; source: string }[] = [];
   const people = createPeopleModule({
+    edition,
     db,
     metrics,
     audit: system.service.audit,
@@ -196,6 +201,9 @@ export function buildStack() {
     peopleDirectory: people.service.directory,
   });
 
+  const results = createResultsModule({ db, audit: system.service.audit, peopleDirectory: people.service.directory, marksReadModel: academics.service.readModel, scopeChecker: core.scopeChecker });
+  const schoolAcademics = createSchoolAcademicsModule({ db, peopleDirectory: people.service.directory, scopeChecker: core.scopeChecker, gradeScales: results.service.repo });
+
   const routeDeps: RouteDependencies = {
     logger,
     authenticator: identity.service.authenticator,
@@ -205,7 +213,8 @@ export function buildStack() {
   };
   const specs = new Map<string, RouteSpec>();
   const handlers: Record<string, BoundRouteHandler> = {};
-  for (const module of [identity, people, academics, analytics, reporting, syllabus, timetable]) {
+  for (const module of [system, identity, people, academics, analytics, reporting, syllabus, timetable, schoolAcademics, results]) {
+    if (!moduleRunsOnEdition(module, edition)) continue;
     for (const route of module.definition.routes) {
       specs.set(route.id, route);
       handlers[route.id] = defineRoute(route, module.handlers[route.id]!, routeDeps);
@@ -259,6 +268,7 @@ export function buildStack() {
       name: "Integration College",
       code: COLLEGE_CODE,
     });
+    if (edition === "school") await people.service.ensureImplicitDepartment(college.collegeId);
     try {
       await identity.service.bootstrapAdmin({
         username: ADMIN_USERNAME,
@@ -293,6 +303,8 @@ export function buildStack() {
     reporting,
     syllabus,
     timetable,
+    schoolAcademics,
+    results,
     core,
     enqueuedImports,
     enqueuedRollups,

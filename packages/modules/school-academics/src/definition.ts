@@ -1,11 +1,13 @@
 import { z } from "zod";
 import type { ModuleDefinition, RouteSpec } from "@vidya/platform";
+import { assessmentTypesInputSchema, assessmentTypeViewSchema } from "./assessment-types";
+import { schoolMarksRoutes } from "./marks-contracts";
 
 export const MODULE_NAME = "school-academics";
 export const TABLE_PREFIX = "sca_";
 
 const idSchema = z.string().min(1).max(64);
-const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'date like "2026-04-01"');
+const dateSchema = z.string().date();
 const nameSchema = z.string().trim().min(1).max(120);
 const academicYearSchema = z.string().trim().min(1).max(32);
 /** Non-empty after trimming: a reopen reason of "   " is not a reason. */
@@ -36,6 +38,34 @@ export const termViewSchema = z.object({
 const termsResponseSchema = z.object({ terms: z.array(termViewSchema) });
 
 const routes: RouteSpec[] = [
+  ...schoolMarksRoutes,
+  {
+    id: "school-academics.types-list", module: MODULE_NAME, method: "GET",
+    path: "/api/v1/school/terms/{termId}/assessment-types",
+    summary: "Read assessment types and percentage weights for a school term",
+    tags: ["school-academics"], auth: ANY_AUTHENTICATED,
+    request: { params: z.object({ termId: idSchema }) },
+    responses: {
+      200: { description: "Assessment types", schema: z.object({ types: z.array(assessmentTypeViewSchema), locked: z.boolean() }) },
+      403: { description: "Outside scope", schema: problemSchema },
+      404: { description: "No such term", schema: problemSchema },
+    },
+  },
+  {
+    id: "school-academics.types-set", module: MODULE_NAME, method: "PUT",
+    path: "/api/v1/school/terms/{termId}/assessment-types",
+    summary: "Replace a term's assessment types with a complete 100% weighting distribution",
+    tags: ["school-academics"], auth: ANY_AUTHENTICATED,
+    request: { params: z.object({ termId: idSchema }), body: assessmentTypesInputSchema },
+    audit: { action: "school-academics.types-configured", resourceType: "term" },
+    responses: {
+      200: { description: "Saved assessment types", schema: z.object({ types: z.array(assessmentTypeViewSchema) }) },
+      403: { description: "Outside scope or not an administrator", schema: problemSchema },
+      404: { description: "No such term", schema: problemSchema },
+      409: { description: "Term closed or configuration changed", schema: problemSchema },
+      422: { description: "Invalid assessment types or weights", schema: problemSchema },
+    },
+  },
   {
     id: "school-academics.create",
     module: MODULE_NAME,

@@ -37,7 +37,7 @@ export interface TermsRepo {
     status: "open" | "closed";
     actorId: string;
     reason: string | null;
-  }): Promise<SchTermRow>;
+  }): Promise<SchTermRow | null>;
 }
 
 export function createTermsRepo(db: Db): TermsRepo {
@@ -84,9 +84,9 @@ export function createTermsRepo(db: Db): TermsRepo {
           closedReason: input.reason,
           updatedAt: new Date(),
         })
-        .where(eq(schTerms.id, input.id))
+        .where(and(eq(schTerms.id, input.id), eq(schTerms.status, input.status === "open" ? "closed" : "open")))
         .returning();
-      return rows[0]!;
+      return rows[0] ?? null;
     },
   };
 }

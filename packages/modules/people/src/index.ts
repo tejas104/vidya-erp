@@ -110,7 +110,7 @@ export interface PeopleDirectory {
   /** A class's sections (id + display name), for dashboard tiles (#5). */
   sectionsOfClass(classId: string): Promise<{ sectionId: string; name: string }[]>;
   /** A college's departments (id + name), for cross-node comparison (analytics). */
-  departmentsOfCollege(collegeId: string): Promise<{ departmentId: string; name: string }[]>;
+  departmentsOfCollege(collegeId: string): Promise<{ departmentId: string; name: string; code?: string }[]>;
   /** A department's classes (id + name), for cross-node comparison (analytics). */
   classesOfDepartment(departmentId: string): Promise<{ classId: string; name: string }[]>;
   /**
@@ -277,6 +277,7 @@ export function createPeopleModule(deps: PeopleModuleDeps): RuntimeModule<People
           (await orgRepo.listDepartmentsOfCollege(collegeId)).map((department) => ({
             departmentId: department.id,
             name: department.name,
+            code: department.code,
           })),
         classesOfDepartment: async (departmentId) =>
           (await orgRepo.listClassesOfDepartment(departmentId)).map((klass) => ({
