@@ -48,6 +48,7 @@ import { createNoticesModule } from "@vidya/module-notices";
 import { createResultsModule } from "@vidya/module-results";
 import { createExamsModule } from "@vidya/module-exams";
 import { createLeaveModule } from "@vidya/module-leave";
+import { createSchoolTermsModule } from "@vidya/module-school-terms";
 
 /**
  * COMPOSITION ROOT — web process.
@@ -426,6 +427,13 @@ function buildWebRuntime(): WebRuntime {
     peopleDirectory: people.service.directory,
   });
 
+  // --- school-terms --- (editions: ["school"]; filtered out on college)
+  const schoolTerms = createSchoolTermsModule({
+    db,
+    scopeChecker: identityCore.scopeChecker,
+    peopleDirectory: people.service.directory,
+  });
+
   const portal = createPortalModule({
     peopleDirectory: people.service.directory,
     academicsRead: academics.service.readModel,
@@ -451,6 +459,7 @@ function buildWebRuntime(): WebRuntime {
     exams,
     leave,
     portal,
+    schoolTerms,
   ];
   const modules = allModules.filter((module) => moduleRunsOnEdition(module, config.edition));
 

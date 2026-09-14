@@ -16,6 +16,7 @@ import { noticesModuleDefinition } from "@vidya/module-notices";
 import { resultsModuleDefinition } from "@vidya/module-results";
 import { examsModuleDefinition } from "@vidya/module-exams";
 import { leaveModuleDefinition } from "@vidya/module-leave";
+import { schoolTermsModuleDefinition } from "@vidya/module-school-terms";
 
 /**
  * Tooling-side module registry. New modules are added here (one line) and in
@@ -38,6 +39,7 @@ export const moduleDefinitions: readonly ModuleDefinition[] = [
   resultsModuleDefinition,
   examsModuleDefinition,
   leaveModuleDefinition,
+  schoolTermsModuleDefinition,
 ];
 
 const require = createRequire(import.meta.url);

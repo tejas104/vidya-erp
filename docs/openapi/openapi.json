@@ -23982,6 +23982,780 @@
           }
         }
       }
+    },
+    "/api/v1/school/terms": {
+      "post": {
+        "summary": "Create an academic term (school edition)",
+        "description": "Terms open on creation. `departmentId` is never accepted — a school has no department level (ADR-0023); the row's org position is resolved server-side from the school's one implicit department.\n\n**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "school-terms"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "collegeId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120
+                  },
+                  "academicYear": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 32
+                  },
+                  "startsOn": {
+                    "type": "string",
+                    "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                  },
+                  "endsOn": {
+                    "type": "string",
+                    "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                  }
+                },
+                "required": [
+                  "collegeId",
+                  "name",
+                  "academicYear",
+                  "startsOn",
+                  "endsOn"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "collegeId": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "academicYear": {
+                      "type": "string"
+                    },
+                    "startsOn": {
+                      "type": "string"
+                    },
+                    "endsOn": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "open",
+                        "closed"
+                      ]
+                    },
+                    "closedAt": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "closedBy": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "closedReason": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "collegeId",
+                    "name",
+                    "academicYear",
+                    "startsOn",
+                    "endsOn",
+                    "status",
+                    "closedAt",
+                    "closedBy",
+                    "closedReason"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Outside the caller's scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such school",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A term of that name already exists in that academic year",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The term would end before it starts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "summary": "Terms the caller can see, newest first",
+        "description": "Row-filtered by the shared ScopeChecker: a term the caller holds no covering grant for is simply absent.\n\n**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "school-terms"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 32
+            },
+            "required": false,
+            "name": "academicYear",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Visible terms",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "terms": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "collegeId": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "academicYear": {
+                            "type": "string"
+                          },
+                          "startsOn": {
+                            "type": "string"
+                          },
+                          "endsOn": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "open",
+                              "closed"
+                            ]
+                          },
+                          "closedAt": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "closedBy": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "closedReason": {
+                            "type": "string",
+                            "nullable": true
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "collegeId",
+                          "name",
+                          "academicYear",
+                          "startsOn",
+                          "endsOn",
+                          "status",
+                          "closedAt",
+                          "closedBy",
+                          "closedReason"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "terms"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Access denied by the role/scope policy (problem+json)"
+          }
+        }
+      }
+    },
+    "/api/v1/school/terms/{termId}/close": {
+      "post": {
+        "summary": "Close a term",
+        "description": "**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "school-terms"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "termId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "reason": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 500
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Closed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "collegeId": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "academicYear": {
+                      "type": "string"
+                    },
+                    "startsOn": {
+                      "type": "string"
+                    },
+                    "endsOn": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "open",
+                        "closed"
+                      ]
+                    },
+                    "closedAt": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "closedBy": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "closedReason": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "collegeId",
+                    "name",
+                    "academicYear",
+                    "startsOn",
+                    "endsOn",
+                    "status",
+                    "closedAt",
+                    "closedBy",
+                    "closedReason"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Outside the caller's scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such term",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Already closed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/school/terms/{termId}/reopen": {
+      "post": {
+        "summary": "Reopen a closed term — a non-empty reason is MANDATORY and audited",
+        "description": "The asymmetry with college publication is deliberate (plan §4 Part 3): a school term has a real, reopenable lifecycle, and every reopen is on the record with the reason its admin gave.\n\n**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "school-terms"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "termId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "reason": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 500
+                  }
+                },
+                "required": [
+                  "reason"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Reopened",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "collegeId": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "academicYear": {
+                      "type": "string"
+                    },
+                    "startsOn": {
+                      "type": "string"
+                    },
+                    "endsOn": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "open",
+                        "closed"
+                      ]
+                    },
+                    "closedAt": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "closedBy": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "closedReason": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "collegeId",
+                    "name",
+                    "academicYear",
+                    "startsOn",
+                    "endsOn",
+                    "status",
+                    "closedAt",
+                    "closedBy",
+                    "closedReason"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Outside the caller's scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such term",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Already open",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Missing or blank reason",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
     }
   }
 }
