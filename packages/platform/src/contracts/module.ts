@@ -1,6 +1,6 @@
 import type { z } from "zod";
 import type { Logger } from "../logger/logger";
-import type { AccessRequirement, Principal } from "../auth/types";
+import type { AccessRequirement, Principal, OrgPath } from "../auth/types";
 import type { ActorType } from "../audit/types";
 import type { LicenseEdition } from "../license/verify";
 
@@ -165,6 +165,7 @@ export interface RouteResult {
   readonly headers?: Readonly<Record<string, string>>;
   /** Extra audit fields the handler can contribute for state-changing routes. */
   readonly audit?: {
+    readonly org?: OrgPath;
     readonly resourceId?: string;
     readonly details?: Readonly<Record<string, unknown>>;
     /**

@@ -21,6 +21,7 @@ describe("SystemAuditLogger", () => {
     await new SystemAuditLogger(db).record(event);
     expect(insert).toHaveBeenCalledTimes(1);
     expect(values).toHaveBeenCalledWith({
+      org: null,
       module: "system",
       action: "system.heartbeat",
       actorType: "system",

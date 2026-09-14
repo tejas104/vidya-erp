@@ -6,9 +6,12 @@
  * sys_audit_log table and is injected by each composition root.
  */
 
+import type { OrgPath } from "../auth/types";
 export type ActorType = "user" | "service" | "system";
 
 export interface AuditEvent {
+  /** Resolved resource scope, supplied by trusted server code. Absent means operational-only. */
+  readonly org?: OrgPath;
   /** Owning module of the action, e.g. "system". */
   readonly module: string;
   /** Dotted verb, e.g. "system.heartbeat". */

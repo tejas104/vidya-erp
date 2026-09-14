@@ -37,6 +37,58 @@ export type LicenseInfo =
   | { kind: "invalid"; reason: LicenseInvalidReason; studentCount: number }
   | { kind: "absent"; studentCount: number };
 
+export interface AuditEventView {
+  id: number;
+  occurredAt: string;
+  module: string;
+  action: string;
+  actorType: string;
+  actorId: string | null;
+  resourceType: string;
+  resourceId: string | null;
+  requestId: string | null;
+  details: Record<string, unknown>;
+}
+
+export interface AuditEventsView {
+  events: AuditEventView[];
+  limit: number;
+  truncated: boolean;
+}
+
+export interface SchoolTermView {
+  id: string;
+  collegeId: string;
+  name: string;
+  academicYear: string;
+  startsOn: string;
+  endsOn: string;
+  status: "open" | "closed";
+  closedAt: string | null;
+  closedBy: string | null;
+  closedReason: string | null;
+}
+
+export interface SchoolAssessmentType {
+  id: string;
+  termId: string;
+  name: string;
+  weight: number;
+}
+
+export interface SchoolAssessmentView {
+  id: string; termId: string; typeId: string; classId: string; subjectId: string;
+  name: string; academicYear: string; maxScore: number; heldOn: string;
+}
+export interface SchoolMarkView {
+  id: string; assessmentId: string; studentId: string; score: number;
+  percentage: number; grade: string; points: number; recordedBy: string; updatedAt: string;
+}
+export interface SchoolClassSetup {
+  terms: { id: string; name: string; academicYear: string; startsOn: string; endsOn: string; status: "open" | "closed"; scaleId: string | null; scaleName: string | null; types: { id: string; name: string; weight: number }[] }[];
+  scales: { id: string; name: string }[];
+}
+
 export interface MonthPoint {
   month: string;
   pct: number;
@@ -964,6 +1016,31 @@ export const api = {
     }),
   // --- system: license status (admin-only; #11.75 item 1) ---
   systemLicense: () => get<LicenseInfo>("/api/v1/system/license"),
+  systemAudit: (action = "", limit = 50) => {
+    const query = new URLSearchParams({ limit: String(limit) });
+    if (action.trim()) query.set("action", action.trim());
+    return get<AuditEventsView>(`/api/v1/system/audit?${query}`);
+  },
+  schoolTerms: (academicYear?: string) =>
+    get<{ terms: SchoolTermView[] }>(`/api/v1/school/terms${academicYear ? `?academicYear=${encodeURIComponent(academicYear)}` : ""}`),
+  schoolCreateTerm: (body: { collegeId: string; name: string; academicYear: string; startsOn: string; endsOn: string }) =>
+    post<SchoolTermView>("/api/v1/school/terms", body),
+  schoolAssessmentTypes: (termId: string) =>
+    get<{ types: SchoolAssessmentType[]; locked?: boolean }>(`/api/v1/school/terms/${encodeURIComponent(termId)}/assessment-types`),
+  schoolClassSetup: (classId: string, academicYear: string) =>
+    get<SchoolClassSetup>(`/api/v1/school/classes/${encodeURIComponent(classId)}/setup?academicYear=${encodeURIComponent(academicYear)}`),
+  schoolAssessments: (classId: string, academicYear: string) =>
+    get<{ assessments: SchoolAssessmentView[] }>(`/api/v1/school/classes/${encodeURIComponent(classId)}/assessments?academicYear=${encodeURIComponent(academicYear)}`),
+  schoolCreateAssessment: (body: { classId: string; subjectId: string; termId: string; typeId: string; scaleId: string; name: string; maxScore: number; heldOn: string }) =>
+    post<SchoolAssessmentView>("/api/v1/school/assessments", body),
+  schoolMarks: (assessmentId: string) =>
+    get<{ marks: SchoolMarkView[]; termStatus: "open" | "closed" }>(`/api/v1/school/assessments/${encodeURIComponent(assessmentId)}/marks`),
+  schoolEnterMarks: (assessmentId: string, entries: { studentId: string; score: number }[]) =>
+    put<{ marks: SchoolMarkView[] }>(`/api/v1/school/assessments/${encodeURIComponent(assessmentId)}/marks`, { entries }),
+  schoolSetAssessmentTypes: (termId: string, types: { id?: string; name: string; weight: number }[]) =>
+    put<{ types: SchoolAssessmentType[] }>(`/api/v1/school/terms/${encodeURIComponent(termId)}/assessment-types`, { types }),
+  schoolTransitionTerm: (termId: string, action: "close" | "reopen", reason: string) =>
+    post<SchoolTermView>(`/api/v1/school/terms/${encodeURIComponent(termId)}/${action}`, reason.trim() ? { reason: reason.trim() } : {}),
   async login(username: string, password: string): Promise<void> {
     const response = await fetch("/api/v1/identity/auth/login", {
       method: "POST",

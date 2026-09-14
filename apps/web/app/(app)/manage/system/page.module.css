@@ -1,0 +1,4 @@
+.facts { display: grid; grid-template-columns: minmax(0, max-content) minmax(0, 1fr); gap: var(--space-2) var(--space-5); margin: 0; overflow-wrap: anywhere; }
+.error { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); margin-top: var(--space-4); color: var(--bad); }
+.audit { margin-top: var(--space-6); }
+@media (max-width: 480px) { .facts { grid-template-columns: minmax(0, 1fr); } }

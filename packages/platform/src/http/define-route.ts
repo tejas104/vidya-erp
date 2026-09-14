@@ -409,6 +409,7 @@ export function defineRoute(
       ) {
         const actorOverride = result.audit?.actor;
         await deps.auditLogger.record({
+          org: result.audit?.org,
           module: spec.module,
           action: spec.audit.action,
           actorType:

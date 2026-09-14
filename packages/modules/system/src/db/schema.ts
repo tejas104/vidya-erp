@@ -1,3 +1,4 @@
+import type { OrgPath } from "@vidya/platform";
 import {
   bigint,
   boolean,
@@ -31,6 +32,7 @@ export const sysAuditLog = pgTable(
     resourceType: text("resource_type").notNull(),
     resourceId: text("resource_id"),
     requestId: text("request_id"),
+    org: jsonb("org").$type<OrgPath>(),
     details: jsonb("details").notNull().default({}),
   },
   (table) => [

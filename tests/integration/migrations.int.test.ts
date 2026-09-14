@@ -80,6 +80,10 @@ const EXPECTATIONS: Record<string, MigrationExpectation> = {
   "system/0000_audit_log": { tables: ["sys_audit_log"] },
   "system/0001_user_preferences": { tables: ["sys_user_preferences"] },
   "system/0002_clock_watermark": { tables: ["sys_clock_watermark"] },
+  "system/0003_audit_scope": {
+    columns: [{ table: "sys_audit_log", column: "org" }],
+    indexes: ["sys_audit_log_org_id_idx"],
+  },
 
   "identity/0000_identity": {
     tables: ["idn_users", "idn_user_roles", "idn_scope_grants", "idn_reset_tokens"],
@@ -202,6 +206,9 @@ const EXPECTATIONS: Record<string, MigrationExpectation> = {
   },
   "exams/0000_exams": { tables: ["exm_series", "exm_slots"] },
   "leave/0000_leave": { tables: ["lvs_requests"] },
+  "school-academics/0000_school_academics": { tables: ["sca_terms"] },
+  "school-academics/0001_assessment_types": { tables: ["sca_assessment_types"], indexes: ["sca_assessment_types_term_idx", "sca_assessment_types_name_idx"] },
+  "school-academics/0002_school_marks": { tables: ["sca_assessments", "sca_marks"], columns: [{ table: "sca_terms", column: "grade_bands" }, { table: "sca_terms", column: "scale_id" }, { table: "sca_terms", column: "scale_name" }] },
 };
 
 async function assertPresent(key: string, label: string): Promise<void> {
@@ -308,10 +315,14 @@ describe("migration harness (ADR-0008)", () => {
     // per-migration presence check against the end state, exercising every
     // up.sql fresh rather than relying on state left over from global setup).
     const reapplied = await migrateUp(pool, sources, logger);
-    expect(reapplied.map((entry) => `${entry.module}/${entry.name}`)).toEqual(
-      order.map(({ module, name }) => `${module}/${name}`),
+    // A newly added migration can have a later journal id on this already-used
+    // local database even though a fresh install runs it with its module. The
+    // rollback order above must follow journal order; the reapply assertion is
+    // about the same complete migration set, independent of that history.
+    expect(reapplied.map((entry) => `${entry.module}/${entry.name}`).sort()).toEqual(
+      order.map(({ module, name }) => `${module}/${name}`).sort(),
     );
-    for (const { module, name } of order) {
+    for (const { module, name } of reapplied) {
       await assertPresent(`${module}/${name}`, `${module}/${name} after full reapply`);
     }
   });

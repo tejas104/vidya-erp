@@ -153,8 +153,10 @@ function buildWebRuntime(): WebRuntime {
   // and the system module must not reach across module boundaries to
   // query people's tables directly.
   const studentCountRef: { current: (() => Promise<number>) | null } = { current: null };
+  const scopeCheckerRef: { current: ReturnType<typeof createIdentityCore>["scopeChecker"] | null } = { current: null };
 
   const system = createSystemModule({
+    scopeChecker: { check: (...args) => scopeCheckerRef.current?.check(...args) ?? { granted: false, reason: "identity core is not ready" } },
     db,
     metrics,
     serviceVersion: config.serviceVersion,
@@ -244,6 +246,7 @@ function buildWebRuntime(): WebRuntime {
       idleMinutes: config.identity.session.idleMinutes,
     },
   });
+  scopeCheckerRef.current = identityCore.scopeChecker;
   // Late-bound: identity ← people is interface-only (OrgDirectory) to keep
   // the package graph acyclic; the target is set right after people exists.
   const orgDirectoryRef: { current: OrgDirectory | null } = { current: null };

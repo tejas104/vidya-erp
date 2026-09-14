@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import type { AuditEvent, AuditLogger, Db } from "@vidya/platform";
 import { sysAuditLog, type SysAuditLogRow } from "../db/schema";
 
@@ -14,6 +14,7 @@ export class SystemAuditLogger implements AuditLogger {
 
   async record(event: AuditEvent): Promise<void> {
     await this.db.insert(sysAuditLog).values({
+      org: event.org ?? null,
       module: event.module,
       action: event.action,
       actorType: event.actorType,
@@ -24,6 +25,16 @@ export class SystemAuditLogger implements AuditLogger {
       details: event.details,
     });
   }
+}
+
+/** Filter before LIMIT so another institution cannot crowd out this page. */
+export async function readScopedAuditEvents(db: Db, collegeIds: string[], action: string | undefined, limit: number): Promise<AuditLogRecord[]> {
+  if (!Number.isInteger(limit) || limit < 1 || limit > 1000) throw new RangeError("invalid audit limit");
+  if (collegeIds.length === 0) return [];
+  return db.select().from(sysAuditLog).where(and(
+    inArray(sql<string>`${sysAuditLog.org}->>'collegeId'`, collegeIds),
+    action === undefined ? undefined : eq(sysAuditLog.action, action),
+  )).orderBy(desc(sysAuditLog.id)).limit(limit);
 }
 
 /**

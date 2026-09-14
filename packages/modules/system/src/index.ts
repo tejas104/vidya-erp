@@ -18,12 +18,14 @@ import {
   type Metrics,
   type ReadinessCheck,
   type RuntimeModule,
+  type ScopeChecker,
 } from "@vidya/platform";
 import { createSystemHandlers } from "./api/handlers";
 import {
   readAuditEventsByAction,
   readAuditEventsForResource,
   readRecentAuditEvents,
+  readScopedAuditEvents,
   SystemAuditLogger,
   type AuditLogRecord,
 } from "./service/audit-writer";
@@ -73,6 +75,7 @@ export interface SystemService {
 }
 
 export interface SystemModuleDeps {
+  readonly scopeChecker?: ScopeChecker;
   readonly db: Db;
   readonly metrics: Metrics;
   readonly serviceVersion: string;
@@ -109,8 +112,8 @@ export function createSystemModule(deps: SystemModuleDeps): RuntimeModule<System
       preferences: createPreferencesStore(deps.db),
       license: deps.license,
       countActiveStudents: deps.countActiveStudents,
-      readRecentAuditEvents: recentAuditEvents,
-      readAuditEventsByAction: auditEventsByAction,
+      readScopedAuditEvents: (collegeIds, action, limit) => readScopedAuditEvents(deps.db, collegeIds, action, limit),
+      scopeChecker: deps.scopeChecker,
     }),
     jobProcessors: {
       [HEARTBEAT_JOB_NAME]: createHeartbeatProcessor(audit),

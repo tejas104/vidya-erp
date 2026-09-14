@@ -1,17 +1,18 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import SystemPage from "../../app/(app)/manage/system/page";
 import { api, type LicenseInfo } from "./api";
 
 vi.mock("./api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./api")>();
-  return { ...actual, api: { ...actual.api, systemLicense: vi.fn() } };
+  return { ...actual, api: { ...actual.api, systemLicense: vi.fn(), systemAudit: vi.fn() } };
 });
 
 const systemLicense = api.systemLicense as ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.mocked(api.systemAudit).mockResolvedValue({ events: [], limit: 50, truncated: false });
 });
 
 const claims = {
@@ -84,11 +85,13 @@ describe("system page — every LicenseStatus variant renders, never a crash or 
     expect(seatRow.getAttribute("style") ?? "").not.toMatch(/color/i);
   });
 
-  it("a failed fetch leaves Loading… rather than crashing the page", async () => {
-    systemLicense.mockRejectedValue(new Error("network down"));
+  it("a failed fetch offers a retry and keeps deployment facts available", async () => {
+    systemLicense.mockRejectedValueOnce(new Error("network down")).mockResolvedValueOnce({ kind: "absent", studentCount: 3 });
     render(<SystemPage />);
-    // Give the rejected promise a tick to settle.
-    await Promise.resolve().then(() => Promise.resolve());
-    expect(screen.getAllByText("Loading…").length).toBeGreaterThan(0);
+    expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't load licence details");
+    expect(screen.queryByText("Loading…")).not.toBeInTheDocument();
+    expect(screen.getByText("Version")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Retry licence details" }));
+    expect(await screen.findByText("No licence installed")).toBeInTheDocument();
   });
 });

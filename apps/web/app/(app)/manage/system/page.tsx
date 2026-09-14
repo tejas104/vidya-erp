@@ -1,8 +1,10 @@
 "use client";
 import { useEffect, useState } from "react";
-import { PageHeader } from "@vidya/ui-system";
+import { Button, PageHeader } from "@vidya/ui-system";
 import { HelpButton } from "@/ui/help/HelpButton";
-import { api, type LicenseInfo } from "@/ui/api";
+import { api, ApiError, type LicenseInfo } from "@/ui/api";
+import { AuditLog } from "@/ui/AuditLog";
+import styles from "./page.module.css";
 
 export const dynamic = "force-dynamic";
 
@@ -58,25 +60,35 @@ function licenseRows(info: LicenseInfo | null): [string, string][] {
 
 export default function SystemPage() {
   const [license, setLicense] = useState<LicenseInfo | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [denied, setDenied] = useState(false);
+  const [revision, setRevision] = useState(0);
 
   useEffect(() => {
     let alive = true;
+    setError(null);
+    setDenied(false);
     api
       .systemLicense()
       .then((result) => {
         if (alive) setLicense(result);
       })
-      .catch(() => undefined); // surface-only: a failed fetch just leaves "Loading…"
+      .catch((caught: unknown) => {
+        if (!alive) return;
+        const forbidden = caught instanceof ApiError && caught.status === 403;
+        setDenied(forbidden);
+        setError(forbidden ? "Only administrators can view licence details." : "Couldn't load licence details. Check your connection and retry.");
+      });
     return () => {
       alive = false;
     };
-  }, []);
+  }, [revision]);
 
   const rows: [string, string][] = [
     ["Version", VERSION],
     ["Build (git SHA)", GIT_SHA],
     ["Deployed version", `${VERSION}+${GIT_SHA}`],
-    ...licenseRows(license),
+    ...(error ? [] : licenseRows(license)),
   ];
   return (
     <>
@@ -86,7 +98,7 @@ export default function SystemPage() {
         lede="The running version, for the license register's deployed-version column and support requests."
         help={<HelpButton slug="system" />}
       />
-      <dl style={{ display: "grid", gridTemplateColumns: "max-content 1fr", gap: "var(--space-2) var(--space-5)", margin: 0 }}>
+      <dl className={styles.facts}>
         {rows.map(([label, value]) => (
           <div key={label} style={{ display: "contents" }}>
             <dt style={{ opacity: 0.7 }}>{label}</dt>
@@ -94,6 +106,8 @@ export default function SystemPage() {
           </div>
         ))}
       </dl>
+      {error ? <div className={styles.error} role="alert">{error}{!denied ? <Button variant="secondary" size="sm" onClick={() => setRevision((value) => value + 1)}>Retry licence details</Button> : null}</div> : null}
+      <div className={styles.audit}><AuditLog /></div>
     </>
   );
 }

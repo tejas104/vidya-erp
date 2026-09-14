@@ -1,0 +1,7 @@
+.description { color: var(--ink-2); margin: var(--space-3) 0; font-size: var(--text-14); }
+.filters { display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--space-3); margin-bottom: var(--space-4); }
+.filters > :first-child { flex: 1 1 240px; }
+.filters > button { align-self: center; }
+.identifier { overflow-wrap: anywhere; }
+.tableViewport > div > table { min-width: 52rem; }
+.details { white-space: pre-wrap; overflow-wrap: anywhere; max-width: 32rem; min-width: 12rem; font-size: var(--text-12); padding: var(--space-3); background: var(--surface-2); border-radius: var(--radius-sm); }

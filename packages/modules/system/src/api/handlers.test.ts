@@ -73,8 +73,13 @@ function makeDeps(overrides: Partial<SystemHandlerDeps> = {}): SystemHandlerDeps
     preferences: fakePreferencesStore(),
     license: () => ({ kind: "absent" }),
     countActiveStudents: async () => 0,
-    readRecentAuditEvents: async () => [],
-    readAuditEventsByAction: async () => [],
+    readScopedAuditEvents: async () => [],
+    scopeChecker: {
+      check: (caller, _action, resource) => ({
+        granted: caller.grants.some((grant) => grant.org.collegeId === resource.org.collegeId),
+        reason: "test containment",
+      }),
+    },
     ...overrides,
   };
 }
@@ -280,16 +285,21 @@ describe("system.audit-log", () => {
     resourceType: "session",
     resourceId: null,
     requestId: "req-9",
+    org: { collegeId: "college-1" },
     details: { username: "asha" },
     ...over,
   });
 
   function auditCtx(query: { action?: string; limit: number }): RouteContext {
-    return { ...ctx(), request: { ...ctx().request, query } };
+    return {
+      ...ctx(),
+      principal: { id: "admin-1", kind: "user", displayName: "Admin", roles: ["admin"], scopes: [], sessionId: "sess-admin", grants: [{ role: "admin", org: { collegeId: "college-1" } }] },
+      request: { ...ctx().request, query },
+    };
   }
 
   it("reads the newest events and serialises occurredAt as ISO", async () => {
-    const handlers = createSystemHandlers(makeDeps({ readRecentAuditEvents: async () => [row()] }));
+    const handlers = createSystemHandlers(makeDeps({ readScopedAuditEvents: async () => [row()] }));
     const result = await handlers["system.audit-log"]!(auditCtx({ limit: 50 }));
     expect(result.status).toBe(200);
     expect(result.body).toEqual({
@@ -316,12 +326,8 @@ describe("system.audit-log", () => {
     const seen: string[] = [];
     const handlers = createSystemHandlers(
       makeDeps({
-        readRecentAuditEvents: async () => {
-          seen.push("recent");
-          return [];
-        },
-        readAuditEventsByAction: async (action) => {
-          seen.push(action);
+        readScopedAuditEvents: async (_collegeIds, action) => {
+          seen.push(action ?? "recent");
           return [row({ action: "system.clock-rollback" })];
         },
       }),
@@ -333,7 +339,7 @@ describe("system.audit-log", () => {
 
   it("flags truncated when a full page came back, so the UI can say older events exist", async () => {
     const handlers = createSystemHandlers(
-      makeDeps({ readRecentAuditEvents: async (limit) => Array.from({ length: limit }, (_, i) => row({ id: i })) }),
+      makeDeps({ readScopedAuditEvents: async (_collegeIds, _action, limit) => Array.from({ length: limit }, (_, i) => row({ id: i })) }),
     );
     const result = await handlers["system.audit-log"]!(auditCtx({ limit: 2 }));
     expect(result.body).toMatchObject({ limit: 2, truncated: true });
@@ -341,11 +347,24 @@ describe("system.audit-log", () => {
 
   it("renders a null details column as an empty object rather than null", async () => {
     const handlers = createSystemHandlers(
-      makeDeps({ readRecentAuditEvents: async () => [row({ details: null })] }),
+      makeDeps({ readScopedAuditEvents: async () => [row({ details: null })] }),
     );
     const result = await handlers["system.audit-log"]!(auditCtx({ limit: 50 }));
     const { events } = result.body as { events: { details: unknown }[] };
     // Strictly `{}`, not merely object-like: toMatchObject({}) also accepts null.
     expect(events[0]!.details).toStrictEqual({});
+  });
+
+  it("removes a foreign-college candidate even if the repository is faulty", async () => {
+    const handlers = createSystemHandlers(makeDeps({
+      readScopedAuditEvents: async () => [row(), row({ id: 2, org: { collegeId: "college-2" } })],
+    }));
+    const result = await handlers["system.audit-log"]!(auditCtx({ limit: 50 }));
+    expect(result.body).toMatchObject({ events: [{ id: 1 }] });
+  });
+
+  it("fails closed when the shared scope checker is unavailable", async () => {
+    const handlers = createSystemHandlers(makeDeps({ scopeChecker: undefined }));
+    expect((await handlers["system.audit-log"]!(auditCtx({ limit: 50 }))).status).toBe(403);
   });
 });
