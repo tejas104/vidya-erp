@@ -48,7 +48,7 @@ import { createNoticesModule } from "@vidya/module-notices";
 import { createResultsModule } from "@vidya/module-results";
 import { createExamsModule } from "@vidya/module-exams";
 import { createLeaveModule } from "@vidya/module-leave";
-import { createSchoolTermsModule } from "@vidya/module-school-terms";
+import { createSchoolAcademicsModule } from "@vidya/module-school-academics";
 
 /**
  * COMPOSITION ROOT — web process.
@@ -427,8 +427,8 @@ function buildWebRuntime(): WebRuntime {
     peopleDirectory: people.service.directory,
   });
 
-  // --- school-terms --- (editions: ["school"]; filtered out on college)
-  const schoolTerms = createSchoolTermsModule({
+  // --- school-academics --- (editions: ["school"]; filtered out on college)
+  const schoolTerms = createSchoolAcademicsModule({
     db,
     scopeChecker: identityCore.scopeChecker,
     peopleDirectory: people.service.directory,

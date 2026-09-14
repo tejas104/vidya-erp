@@ -2,7 +2,7 @@ import type { OrgPath, ResourceRef } from "@vidya/platform";
 import type { SchTermRow } from "./db/schema";
 
 /**
- * THE scope-integration surface of the school-terms module — one short file
+ * THE scope-integration surface of the school-academics module — one short file
  * so the security review reads one page (ADR-0017).
  *
  * A term is an ADMINISTRATIVE, NON-SUBJECT record: no subjectId, ever. Its
@@ -15,5 +15,5 @@ export function termOrg(term: Pick<SchTermRow, "collegeId" | "departmentId">): O
 }
 
 export function termRef(term: Pick<SchTermRow, "collegeId" | "departmentId">): ResourceRef {
-  return { module: "school-terms", resourceType: "term", org: termOrg(term) };
+  return { module: "school-academics", resourceType: "term", org: termOrg(term) };
 }

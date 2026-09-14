@@ -1,5 +1,5 @@
 /**
- * @vidya/module-school-terms — PUBLIC API (the only importable surface).
+ * @vidya/module-school-academics — PUBLIC API (the only importable surface).
  *
  * The academic TERM entity, school edition only. Assignment #14's foundation
  * slice: assessments, marks and report cards are deliberately NOT here.
@@ -16,26 +16,26 @@ import {
 } from "@vidya/platform";
 import type { PeopleDirectory } from "@vidya/module-people";
 import { schoolTermsModuleDefinition } from "./definition";
-import { createSchoolTermsHandlers } from "./handlers";
+import { createSchoolAcademicsHandlers } from "./handlers";
 import { createTermsRepo } from "./repo";
 
 export {
-  MODULE_NAME as SCHOOL_TERMS_MODULE_NAME,
+  MODULE_NAME as SCHOOL_ACADEMICS_MODULE_NAME,
   schoolTermsModuleDefinition,
 } from "./definition";
 
-export interface SchoolTermsModuleDeps {
+export interface SchoolAcademicsModuleDeps {
   readonly db: Db;
   readonly peopleDirectory: PeopleDirectory;
   readonly scopeChecker: ScopeChecker;
 }
 
-export function createSchoolTermsModule(
-  deps: SchoolTermsModuleDeps,
+export function createSchoolAcademicsModule(
+  deps: SchoolAcademicsModuleDeps,
 ): RuntimeModule<Record<string, never>> {
   const module: RuntimeModule<Record<string, never>> = {
     definition: schoolTermsModuleDefinition,
-    handlers: createSchoolTermsHandlers({
+    handlers: createSchoolAcademicsHandlers({
       repo: createTermsRepo(deps.db),
       directory: deps.peopleDirectory,
       scopeChecker: deps.scopeChecker,

@@ -63,7 +63,7 @@ import { createNoticesModule } from "@vidya/module-notices";
 import { createResultsModule } from "@vidya/module-results";
 import { createExamsModule } from "@vidya/module-exams";
 import { createLeaveModule } from "@vidya/module-leave";
-import { createSchoolTermsModule } from "@vidya/module-school-terms";
+import { createSchoolAcademicsModule } from "@vidya/module-school-academics";
 import { createMetricsServer } from "./metrics-server";
 
 const RESET_CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
@@ -311,10 +311,10 @@ async function main(): Promise<void> {
     peopleDirectory: people.service.directory,
   });
 
-  // --- school-terms --- (no jobs; included for registry <-> composition
+  // --- school-academics --- (no jobs; included for registry <-> composition
   // parity, and so the edition filter below sees the same list the web
   // composition root does.)
-  const schoolTerms = createSchoolTermsModule({
+  const schoolTerms = createSchoolAcademicsModule({
     db,
     scopeChecker: identityCore.scopeChecker,
     peopleDirectory: people.service.directory,

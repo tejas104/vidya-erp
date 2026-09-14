@@ -68,9 +68,9 @@ importers:
       '@vidya/module-results':
         specifier: workspace:*
         version: link:packages/modules/results
-      '@vidya/module-school-terms':
+      '@vidya/module-school-academics':
         specifier: workspace:*
-        version: link:packages/modules/school-terms
+        version: link:packages/modules/school-academics
       '@vidya/module-syllabus':
         specifier: workspace:*
         version: link:packages/modules/syllabus
@@ -641,7 +641,7 @@ importers:
         specifier: ^3.2.0
         version: 3.2.6(@types/node@22.20.0)(jsdom@25.0.1)(tsx@4.22.4)(yaml@2.9.0)
 
-  packages/modules/school-terms:
+  packages/modules/school-academics:
     dependencies:
       '@vidya/module-people':
         specifier: workspace:*

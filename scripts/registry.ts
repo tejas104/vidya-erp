@@ -16,7 +16,7 @@ import { noticesModuleDefinition } from "@vidya/module-notices";
 import { resultsModuleDefinition } from "@vidya/module-results";
 import { examsModuleDefinition } from "@vidya/module-exams";
 import { leaveModuleDefinition } from "@vidya/module-leave";
-import { schoolTermsModuleDefinition } from "@vidya/module-school-terms";
+import { schoolTermsModuleDefinition } from "@vidya/module-school-academics";
 
 /**
  * Tooling-side module registry. New modules are added here (one line) and in

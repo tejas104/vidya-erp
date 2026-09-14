@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { OrgPath, Principal, ScopeChecker, ScopeDecision } from "@vidya/platform";
-import { createSchoolTermsHandlers } from "./handlers";
+import { createSchoolAcademicsHandlers } from "./handlers";
 import type { NewTerm, TermsRepo } from "./repo";
 import type { SchTermRow } from "./db/schema";
 
@@ -117,7 +117,7 @@ function ctx(p: Principal, request: { body?: unknown; params?: unknown; query?: 
 }
 
 function handlers(repo: TermsRepo) {
-  return createSchoolTermsHandlers({
+  return createSchoolAcademicsHandlers({
     repo,
     directory: fakeDirectory(),
     scopeChecker: fakeScopeChecker(),
@@ -132,10 +132,10 @@ const CREATE_BODY = {
   endsOn: "2026-09-30",
 };
 
-describe("school-terms.create", () => {
+describe("school-academics.create", () => {
   it("creates an open term and denormalizes the implicit department", async () => {
     const repo = fakeRepo();
-    const result = await handlers(repo)["school-terms.create"]!(
+    const result = await handlers(repo)["school-academics.create"]!(
       ctx(schoolAdmin, { body: CREATE_BODY }),
     );
 
@@ -150,7 +150,7 @@ describe("school-terms.create", () => {
 
   it("422s a term that would end before it starts", async () => {
     const repo = fakeRepo();
-    const result = await handlers(repo)["school-terms.create"]!(
+    const result = await handlers(repo)["school-academics.create"]!(
       ctx(schoolAdmin, { body: { ...CREATE_BODY, endsOn: "2026-03-31" } }),
     );
     expect(result.status).toBe(422);
@@ -159,7 +159,7 @@ describe("school-terms.create", () => {
 
   it("404s an unknown school before anything is written", async () => {
     const repo = fakeRepo();
-    const result = await handlers(repo)["school-terms.create"]!(
+    const result = await handlers(repo)["school-academics.create"]!(
       ctx(schoolAdmin, { body: { ...CREATE_BODY, collegeId: "col_nope" } }),
     );
     expect(result.status).toBe(404);
@@ -167,10 +167,10 @@ describe("school-terms.create", () => {
   });
 });
 
-describe("school-terms.list", () => {
+describe("school-academics.list", () => {
   it("returns the caller's own school's terms", async () => {
     const repo = fakeRepo([row(), row({ id: "trm_2", name: "Term 2" })]);
-    const result = await handlers(repo)["school-terms.list"]!(ctx(schoolAdmin, { query: {} }));
+    const result = await handlers(repo)["school-academics.list"]!(ctx(schoolAdmin, { query: {} }));
 
     expect(result.status).toBe(200);
     expect((result.body as { terms: { name: string }[] }).terms.map((t) => t.name)).toEqual([
@@ -181,7 +181,7 @@ describe("school-terms.list", () => {
 
   it("filters by academicYear", async () => {
     const repo = fakeRepo([row(), row({ id: "trm_2", academicYear: "2027-28" })]);
-    const result = await handlers(repo)["school-terms.list"]!(
+    const result = await handlers(repo)["school-academics.list"]!(
       ctx(schoolAdmin, { query: { academicYear: "2027-28" } }),
     );
     expect((result.body as { terms: { id: string }[] }).terms.map((t) => t.id)).toEqual(["trm_2"]);
@@ -192,15 +192,15 @@ describe("school-terms.list", () => {
     // is about the handler's scope filter rather than about the SQL.
     const repo = fakeRepo([row({ id: "trm_x", collegeId: OTHER_SCHOOL, departmentId: OTHER_DEPT })]);
     repo.list = async () => repo.rows;
-    const result = await handlers(repo)["school-terms.list"]!(ctx(schoolAdmin, { query: {} }));
+    const result = await handlers(repo)["school-academics.list"]!(ctx(schoolAdmin, { query: {} }));
     expect((result.body as { terms: unknown[] }).terms).toEqual([]);
   });
 });
 
-describe("school-terms.close", () => {
+describe("school-academics.close", () => {
   it("closes an open term and audits it", async () => {
     const repo = fakeRepo([row()]);
-    const result = await handlers(repo)["school-terms.close"]!(
+    const result = await handlers(repo)["school-academics.close"]!(
       ctx(schoolAdmin, { params: { termId: "trm_1" }, body: { reason: "results finalised" } }),
     );
 
@@ -215,7 +215,7 @@ describe("school-terms.close", () => {
 
   it("409s a term that is already closed", async () => {
     const repo = fakeRepo([row({ status: "closed" })]);
-    const result = await handlers(repo)["school-terms.close"]!(
+    const result = await handlers(repo)["school-academics.close"]!(
       ctx(schoolAdmin, { params: { termId: "trm_1" }, body: {} }),
     );
     expect(result.status).toBe(409);
@@ -223,18 +223,18 @@ describe("school-terms.close", () => {
 
   it("404s an unknown term BEFORE any scope decision", async () => {
     const repo = fakeRepo([]);
-    const result = await handlers(repo)["school-terms.close"]!(
+    const result = await handlers(repo)["school-academics.close"]!(
       ctx(foreignAdmin, { params: { termId: "trm_missing" }, body: {} }),
     );
     expect(result.status).toBe(404);
   });
 });
 
-describe("school-terms.reopen", () => {
+describe("school-academics.reopen", () => {
   it("requires a non-empty reason — whitespace is not a reason", async () => {
     const repo = fakeRepo([row({ status: "closed" })]);
     for (const reason of [undefined, "", "   "]) {
-      const result = await handlers(repo)["school-terms.reopen"]!(
+      const result = await handlers(repo)["school-academics.reopen"]!(
         ctx(schoolAdmin, { params: { termId: "trm_1" }, body: { reason } }),
       );
       expect(result.status, `reason=${JSON.stringify(reason)}`).toBe(422);
@@ -244,7 +244,7 @@ describe("school-terms.reopen", () => {
 
   it("reopens with a reason and puts that reason in the audit trail", async () => {
     const repo = fakeRepo([row({ status: "closed" })]);
-    const result = await handlers(repo)["school-terms.reopen"]!(
+    const result = await handlers(repo)["school-academics.reopen"]!(
       ctx(schoolAdmin, { params: { termId: "trm_1" }, body: { reason: "  marks were wrong  " } }),
     );
 
@@ -258,7 +258,7 @@ describe("school-terms.reopen", () => {
 
   it("409s a term that is already open", async () => {
     const repo = fakeRepo([row()]);
-    const result = await handlers(repo)["school-terms.reopen"]!(
+    const result = await handlers(repo)["school-academics.reopen"]!(
       ctx(schoolAdmin, { params: { termId: "trm_1" }, body: { reason: "because" } }),
     );
     expect(result.status).toBe(409);
@@ -268,7 +268,7 @@ describe("school-terms.reopen", () => {
 describe("scope enforcement (the shared ScopeChecker, never hand-rolled)", () => {
   it("403s an admin of another school on create", async () => {
     const repo = fakeRepo();
-    const result = await handlers(repo)["school-terms.create"]!(
+    const result = await handlers(repo)["school-academics.create"]!(
       ctx(foreignAdmin, { body: CREATE_BODY }),
     );
     expect(result.status).toBe(403);
@@ -279,10 +279,10 @@ describe("scope enforcement (the shared ScopeChecker, never hand-rolled)", () =>
     const repo = fakeRepo([row(), row({ id: "trm_2", status: "closed" })]);
     const h = handlers(repo);
 
-    const close = await h["school-terms.close"]!(
+    const close = await h["school-academics.close"]!(
       ctx(foreignAdmin, { params: { termId: "trm_1" }, body: {} }),
     );
-    const reopen = await h["school-terms.reopen"]!(
+    const reopen = await h["school-academics.reopen"]!(
       ctx(foreignAdmin, { params: { termId: "trm_2" }, body: { reason: "let me in" } }),
     );
 
@@ -297,7 +297,7 @@ describe("scope enforcement (the shared ScopeChecker, never hand-rolled)", () =>
       grants: [{ role: "teacher", org: { collegeId: SCHOOL }, subjectId: "sub_1" }],
     });
     const repo = fakeRepo([row()]);
-    const result = await handlers(repo)["school-terms.close"]!(
+    const result = await handlers(repo)["school-academics.close"]!(
       ctx(teacher, { params: { termId: "trm_1" }, body: {} }),
     );
     expect(result.status).toBe(403);

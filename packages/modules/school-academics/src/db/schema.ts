@@ -1,8 +1,8 @@
 import { date, index, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 
 /**
- * INTERNAL to the school-terms module (not exported from index.ts). Every
- * table carries the "sch_" prefix (Constitution rule 2; CI-checked).
+ * INTERNAL to the school-academics module (not exported from index.ts). Every
+ * table carries the "sca_" prefix (Constitution rule 2; CI-checked).
  *
  * `mode: "string"` on the date columns is load-bearing: node-postgres parses
  * a bare `date` into a JS Date at LOCAL midnight, which reads a day early
@@ -10,7 +10,7 @@ import { date, index, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/
  * production path does elsewhere (the academics module's date columns).
  */
 export const schTerms = pgTable(
-  "sch_terms",
+  "sca_terms",
   {
     id: text("id").primaryKey(),
     collegeId: text("college_id").notNull(),
@@ -30,8 +30,8 @@ export const schTerms = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
-    uniqueIndex("sch_terms_unique_idx").on(table.collegeId, table.academicYear, table.name),
-    index("sch_terms_college_year_idx").on(table.collegeId, table.academicYear),
+    uniqueIndex("sca_terms_unique_idx").on(table.collegeId, table.academicYear, table.name),
+    index("sca_terms_college_year_idx").on(table.collegeId, table.academicYear),
   ],
 );
 

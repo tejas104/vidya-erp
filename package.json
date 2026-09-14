@@ -56,7 +56,7 @@
     "@vidya/module-portal": "workspace:*",
     "@vidya/module-reporting": "workspace:*",
     "@vidya/module-results": "workspace:*",
-    "@vidya/module-school-terms": "workspace:*",
+    "@vidya/module-school-academics": "workspace:*",
     "@vidya/module-syllabus": "workspace:*",
     "@vidya/module-system": "workspace:*",
     "@vidya/module-timetable": "workspace:*",

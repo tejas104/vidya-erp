@@ -1,8 +1,8 @@
 {
-  "name": "@vidya/module-school-terms",
+  "name": "@vidya/module-school-academics",
   "version": "0.1.0",
   "private": true,
-  "description": "Vidya school-terms module (sch_): the academic term entity for the school edition. Terms open and close; reopening needs an audited reason. School edition only.",
+  "description": "Vidya school-academics module (sca_): the academic term entity for the school edition. Terms open and close; reopening needs an audited reason. School edition only.",
   "type": "module",
   "exports": {
     ".": "./src/index.ts",

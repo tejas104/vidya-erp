@@ -23988,7 +23988,7 @@
         "summary": "Create an academic term (school edition)",
         "description": "Terms open on creation. `departmentId` is never accepted — a school has no department level (ADR-0023); the row's org position is resolved server-side from the school's one implicit department.\n\n**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
         "tags": [
-          "school-terms"
+          "school-academics"
         ],
         "security": [
           {
@@ -24227,7 +24227,7 @@
         "summary": "Terms the caller can see, newest first",
         "description": "Row-filtered by the shared ScopeChecker: a term the caller holds no covering grant for is simply absent.\n\n**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
         "tags": [
-          "school-terms"
+          "school-academics"
         ],
         "security": [
           {
@@ -24333,7 +24333,7 @@
         "summary": "Close a term",
         "description": "**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
         "tags": [
-          "school-terms"
+          "school-academics"
         ],
         "security": [
           {
@@ -24531,7 +24531,7 @@
         "summary": "Reopen a closed term — a non-empty reason is MANDATORY and audited",
         "description": "The asymmetry with college publication is deliberate (plan §4 Part 3): a school term has a real, reopenable lifecycle, and every reopen is on the record with the reason its admin gave.\n\n**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
         "tags": [
-          "school-terms"
+          "school-academics"
         ],
         "security": [
           {

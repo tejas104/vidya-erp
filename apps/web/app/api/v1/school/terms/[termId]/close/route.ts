@@ -3,4 +3,4 @@ import { routeHandler } from "@/composition";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-export const POST = routeHandler("school-terms.close");
+export const POST = routeHandler("school-academics.close");

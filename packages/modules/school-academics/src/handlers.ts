@@ -4,7 +4,7 @@ import { DuplicateTermError, type TermsRepo } from "./repo";
 import { termRef } from "./resource-refs";
 import type { SchTermRow } from "./db/schema";
 
-export interface SchoolTermsHandlerDeps {
+export interface SchoolAcademicsHandlerDeps {
   readonly repo: TermsRepo;
   readonly directory: PeopleDirectory;
   readonly scopeChecker: ScopeChecker;
@@ -34,13 +34,13 @@ function termView(row: SchTermRow) {
   };
 }
 
-export function createSchoolTermsHandlers(
-  deps: SchoolTermsHandlerDeps,
+export function createSchoolAcademicsHandlers(
+  deps: SchoolAcademicsHandlerDeps,
 ): Record<string, RouteHandler> {
   /** Containment, decided by the SHARED matrix — never hand-rolled here. */
   function readAllowed(principal: Principal, org: OrgPath): boolean {
     return deps.scopeChecker.check(principal, "read", {
-      module: "school-terms",
+      module: "school-academics",
       resourceType: "term",
       org,
     }).granted;
@@ -142,9 +142,9 @@ export function createSchoolTermsHandlers(
   }
 
   return {
-    "school-terms.create": create,
-    "school-terms.list": list,
-    "school-terms.close": transition("closed"),
-    "school-terms.reopen": transition("open"),
+    "school-academics.create": create,
+    "school-academics.list": list,
+    "school-academics.close": transition("closed"),
+    "school-academics.reopen": transition("open"),
   };
 }
