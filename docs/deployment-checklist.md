@@ -63,7 +63,7 @@ overlay — verify below.
 | `LOGIN_MAX_ATTEMPTS` / `LOGIN_WINDOW_MINUTES` | `5` / `15` | Login throttle. Needs the proxy's `X-Forwarded-For` (Caddy sets it). |
 | `BODY_MAX_BYTES` | `1048576` | Request body cap (imports are ≤1 MB). |
 | `DATABASE_POOL_MAX` | `10` per replica | Keep `replicas × pool ≤` Postgres `max_connections`. |
-| `REDIS_URL` | `redis://:<pass>@redis:6379` | **Add AUTH in prod** — Redis holds sessions. |
+| `REDIS_URL` | `redis://:<pass>@redis:6379` | Built by compose from `REDIS_PASSWORD` (AUTH is on — Redis holds sessions). |
 | `S3_BUCKET` | `vidya` | Create it before first run if the store doesn't auto-create. |
 | `S3_FORCE_PATH_STYLE` | `true` for MinIO | `false` for AWS S3. |
 | `ANALYTICS_MIN_COHORT` | `5` | Small-N suppression floor; don't lower without a privacy review. |
@@ -97,6 +97,7 @@ Data safety:
 - [ ] Backup cron (or sidecar) installed; **it has run at least once** (`ls -lt backups/db/daily`).
 - [ ] **Restore drill passes** on a staging copy: `bash scripts/restore-drill.sh` → `PASS`.
 - [ ] Redis has AUTH; Postgres/MinIO/Redis ports are **not** published to the host (prod overlay `!reset`s them).
+- [ ] For the first Redis-AUTH upgrade, a sign-in interruption was announced; recreating Redis invalidates existing sessions.
 
 Ops:
 

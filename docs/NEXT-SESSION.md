@@ -72,7 +72,7 @@ port, never wrong credentials.
 docker compose -f docker-compose.yml -f docker-compose.altport.yml up -d postgres redis minio
 
 export DATABASE_URL="postgres://vidya:local-dev-only-pg@127.0.0.1:55432/vidya" \
-  REDIS_URL="redis://127.0.0.1:6379" S3_ENDPOINT="http://127.0.0.1:9000" \
+  REDIS_URL="redis://:local-dev-only-redis@127.0.0.1:6379" S3_ENDPOINT="http://127.0.0.1:9000" \
   S3_REGION="us-east-1" S3_ACCESS_KEY_ID="local-dev-only-minio" \
   S3_SECRET_ACCESS_KEY="local-dev-only-minio-secret" S3_BUCKET="vidya"
 ```

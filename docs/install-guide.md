@@ -96,12 +96,16 @@ Expected output:
 [ OK ]   REDIS_PASSWORD generated
 ```
 
-> **Known gap:** `REDIS_PASSWORD` is generated (Redis is where sessions
-> live, and `docs/deployment-checklist.md` flags "Add AUTH in prod" against
-> exactly this) but `docker-compose.yml`'s `redis` service does not yet apply
-> `--requirepass`, so this value has no effect on a running install today.
-> It is written so the value exists and doesn't need re-generating once that
-> wiring lands. Not fixed here — out of this script's file scope.
+`REDIS_PASSWORD` is Redis AUTH — Redis is where sessions live.
+`docker-compose.yml` starts the `redis` service as `redis-server
+--requirepass ${REDIS_PASSWORD}` and hands the app
+`REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379`, so the generated value is
+live from the first `docker compose up -d`.
+
+For an existing installation upgrading from Redis without AUTH, the first
+Compose restart recreates Redis with authentication. Existing Redis-backed web
+sessions are lost, so schedule the restart and tell signed-in users they will
+need to sign in again. PostgreSQL application data is unaffected.
 
 **Idempotence:** each secret is generated only if its name is absent from
 `.env`. An existing value is never regenerated or overwritten — re-running

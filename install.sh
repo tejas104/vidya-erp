@@ -201,11 +201,9 @@ env_set_once MINIO_ROOT_USER "vidya-prod" # not secret — just non-default, per
 ensure_secret MINIO_ROOT_PASSWORD
 # "Session secret": this app keeps sessions server-side in Redis with no
 # client-side signing secret (SessionManager is the human-owned core) — the
-# nearest real thing is Redis AUTH, which is exactly what
-# docs/deployment-checklist.md flags as "Add AUTH in prod" (Redis holds
-# sessions). Generated here so it exists; see the KNOWN GAP note printed in
-# the step 8 summary — docker-compose.yml does not yet apply --requirepass,
-# so this has no effect until that wiring lands (out of this task's file scope).
+# nearest real thing is Redis AUTH. docker-compose.yml consumes this twice:
+# the redis service runs `redis-server --requirepass ${REDIS_PASSWORD}` and
+# the app's REDIS_URL is redis://:${REDIS_PASSWORD}@redis:6379.
 ensure_secret REDIS_PASSWORD
 chmod 600 "$ENV_FILE"
 
@@ -461,14 +459,6 @@ NEXT STEPS
      points at this host so Let's Encrypt can issue a certificate.
   3. Run a restore drill before going live: bash scripts/restore-drill.sh
      (docs/runbook-backup-restore.md).
-
-KNOWN GAP (not fixed by this script — outside its file scope):
-  REDIS_PASSWORD was generated into .env above, but docker-compose.yml
-  starts redis without --requirepass and points the app at
-  redis://redis:6379 with no credentials, so that value currently has no
-  effect. Redis holds sessions; it is not published outside the compose
-  network, but adding AUTH is still on the hardening list
-  (docs/deployment-checklist.md).
 
 Full checklist: docs/install-guide.md
 SUMMARY
