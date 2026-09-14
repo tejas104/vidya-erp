@@ -16,7 +16,7 @@ import { noticesModuleDefinition } from "@vidya/module-notices";
 import { resultsModuleDefinition } from "@vidya/module-results";
 import { examsModuleDefinition } from "@vidya/module-exams";
 import { leaveModuleDefinition } from "@vidya/module-leave";
-import { schoolTermsModuleDefinition } from "@vidya/module-school-academics";
+import { schoolAcademicsModuleDefinition } from "@vidya/module-school-academics";
 
 /**
  * Tooling-side module registry. New modules are added here (one line) and in
@@ -39,7 +39,7 @@ export const moduleDefinitions: readonly ModuleDefinition[] = [
   resultsModuleDefinition,
   examsModuleDefinition,
   leaveModuleDefinition,
-  schoolTermsModuleDefinition,
+  schoolAcademicsModuleDefinition,
 ];
 
 const require = createRequire(import.meta.url);
@@ -48,6 +48,14 @@ export function modulePackageDir(moduleName: string): string {
   return path.dirname(require.resolve(`@vidya/module-${moduleName}/package.json`));
 }
 
+/**
+ * Every module's migrations, REGARDLESS OF EDITION. ModuleDefinition.editions
+ * gates registration at runtime (routes/jobs/service, both composition roots);
+ * it deliberately does NOT gate schema, so a college install creates the school
+ * module's tables and leaves them empty. One schema per release, identical
+ * migration journal on both editions, and switching an install's edition needs
+ * no backfill. See ADR-0024.
+ */
 export function migrationSources(): ModuleMigrationSource[] {
   return moduleDefinitions.map((definition) => ({
     module: definition.name,

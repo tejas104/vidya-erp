@@ -15,13 +15,13 @@ import {
   type ScopeChecker,
 } from "@vidya/platform";
 import type { PeopleDirectory } from "@vidya/module-people";
-import { schoolTermsModuleDefinition } from "./definition";
+import { schoolAcademicsModuleDefinition } from "./definition";
 import { createSchoolAcademicsHandlers } from "./handlers";
 import { createTermsRepo } from "./repo";
 
 export {
   MODULE_NAME as SCHOOL_ACADEMICS_MODULE_NAME,
-  schoolTermsModuleDefinition,
+  schoolAcademicsModuleDefinition,
 } from "./definition";
 
 export interface SchoolAcademicsModuleDeps {
@@ -34,7 +34,7 @@ export function createSchoolAcademicsModule(
   deps: SchoolAcademicsModuleDeps,
 ): RuntimeModule<Record<string, never>> {
   const module: RuntimeModule<Record<string, never>> = {
-    definition: schoolTermsModuleDefinition,
+    definition: schoolAcademicsModuleDefinition,
     handlers: createSchoolAcademicsHandlers({
       repo: createTermsRepo(deps.db),
       directory: deps.peopleDirectory,

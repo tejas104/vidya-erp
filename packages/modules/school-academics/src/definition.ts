@@ -128,7 +128,7 @@ const routes: RouteSpec[] = [
  * Static module definition. `editions: ["school"]` means a college install
  * never registers this module: its endpoints 404 there, they do not 403.
  */
-export const schoolTermsModuleDefinition: ModuleDefinition = {
+export const schoolAcademicsModuleDefinition: ModuleDefinition = {
   name: MODULE_NAME,
   tablePrefix: TABLE_PREFIX,
   migrationsDir: "migrations",

@@ -314,7 +314,7 @@ async function main(): Promise<void> {
   // --- school-academics --- (no jobs; included for registry <-> composition
   // parity, and so the edition filter below sees the same list the web
   // composition root does.)
-  const schoolTerms = createSchoolAcademicsModule({
+  const schoolAcademics = createSchoolAcademicsModule({
     db,
     scopeChecker: identityCore.scopeChecker,
     peopleDirectory: people.service.directory,
@@ -345,7 +345,7 @@ async function main(): Promise<void> {
     exams,
     leave,
     portal,
-    schoolTerms,
+    schoolAcademics,
   ];
   const modules = allModules.filter((module) => moduleRunsOnEdition(module, config.edition));
 

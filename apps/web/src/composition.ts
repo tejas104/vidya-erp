@@ -428,7 +428,7 @@ function buildWebRuntime(): WebRuntime {
   });
 
   // --- school-academics --- (editions: ["school"]; filtered out on college)
-  const schoolTerms = createSchoolAcademicsModule({
+  const schoolAcademics = createSchoolAcademicsModule({
     db,
     scopeChecker: identityCore.scopeChecker,
     peopleDirectory: people.service.directory,
@@ -459,7 +459,7 @@ function buildWebRuntime(): WebRuntime {
     exams,
     leave,
     portal,
-    schoolTerms,
+    schoolAcademics,
   ];
   const modules = allModules.filter((module) => moduleRunsOnEdition(module, config.edition));
 
