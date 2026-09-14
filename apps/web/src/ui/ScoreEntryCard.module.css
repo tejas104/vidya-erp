@@ -1,0 +1,31 @@
+.scoreList {
+  display: grid;
+  gap: var(--space-1);
+}
+.scoreRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+  border-top: 1px solid var(--rule);
+}
+.scoreInputWrap {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-1);
+}
+.scoreInput {
+  width: 90px;
+}
+.progress {
+  font-size: var(--text-14);
+  color: var(--ink-2);
+}
+.formActions {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+  margin-top: var(--space-3);
+}
