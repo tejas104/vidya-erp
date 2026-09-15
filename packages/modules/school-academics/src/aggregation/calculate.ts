@@ -12,6 +12,7 @@ import {
   SCORE_DECIMALS,
   type AssessmentDefinition,
   type AssessmentEntry,
+  type CalculationFailureCode,
   type CalculationIssue,
   type CalculationOutcome,
   type CalculationPolicy,
@@ -21,10 +22,93 @@ import {
 } from "./contract";
 import { add, divide, divideByInt, fromDecimal, fromInt, multiply, roundToCents, sum, ZERO, type Rational } from "./rational";
 
+/**
+ * True iff `value` is representable at exactly `decimals` fractional digits.
+ *
+ * F2 correction: the tolerance must only absorb floating-point
+ * REPRESENTATION noise (e.g. 80.29 stored as 8028.999999999999 once scaled),
+ * not genuine extra precision. A fixed absolute tolerance like `1e-6` is
+ * broad enough to also accept a value like `1e-10`, whose scaled form
+ * (1e-8) sits well within 1e-6 of zero despite not being a 2-decimal number
+ * at all — `fromDecimal` then silently rounds it to exactly 0. The
+ * tolerance below instead scales with the magnitude being checked (a few
+ * ULPs — `Number.EPSILON` — of the larger of the scaled value or 1), so it
+ * shrinks toward zero exactly where representation noise shrinks toward
+ * zero, and never masks a value that is genuinely off an integer cent by a
+ * humanly meaningful amount.
+ */
 function isFiniteWithDecimals(value: unknown, decimals: number): value is number {
   if (typeof value !== "number" || !Number.isFinite(value)) return false;
   const scale = 10 ** decimals;
-  return Math.abs(value * scale - Math.round(value * scale)) < 1e-6;
+  const scaled = value * scale;
+  const tolerance = Math.max(Math.abs(scaled), 1) * Number.EPSILON * 8;
+  return Math.abs(scaled - Math.round(scaled)) < tolerance;
+}
+
+/**
+ * A valid assessment maximum must be positive, in range, representable at
+ * `SCORE_DECIMALS`, AND still strictly positive once actually converted to
+ * the engine's internal Rational — F2's explicit second guarantee. Given
+ * the tightened tolerance above, no positive value should be able to
+ * collapse to zero on conversion any more, but a divisor is exactly the
+ * place to keep that invariant checked explicitly rather than assumed.
+ */
+function isValidMaxScore(value: unknown): value is number {
+  if (!isFiniteWithDecimals(value, SCORE_DECIMALS)) return false;
+  if (value <= 0 || value > MAX_SCORE) return false;
+  return fromDecimal(value, SCORE_DECIMALS).num > 0n;
+}
+
+function isNullish(value: unknown): value is null | undefined {
+  return value === null || value === undefined;
+}
+
+/**
+ * F4 correction: validates the request's SHAPE — every container the code
+ * below iterates is actually an array, and every element it dereferences is
+ * a non-null object — before any typed check reads a property or iterates.
+ * `CalculationRequest` only binds compile-time callers; a caller passing
+ * deserialized/untrusted data can still hand this function `null`
+ * anywhere in the tree (a null request, a null policy, a null element in
+ * an otherwise-fine array), which throws immediately on property access
+ * rather than producing the documented failure outcome. This function
+ * treats its input as effectively `unknown` regardless of the declared
+ * parameter type, and is the only place in this file that does so — every
+ * function below it can keep assuming its typed shape actually holds,
+ * because this ran first.
+ *
+ * This only screens for shapes that would THROW (null/undefined containers
+ * or elements, non-arrays where an array is iterated). A present-but-wrong
+ * primitive (e.g. a numeric typeId, a string weight) does not throw on
+ * property access in JavaScript, so those are left to the existing
+ * semantic checks below, which already reject them without crashing.
+ */
+function checkRequestShape(request: unknown): { code: CalculationFailureCode; issues: CalculationIssue[] } | null {
+  if (isNullish(request) || typeof request !== "object") {
+    return { code: "invalid-policy", issues: [{ message: "The calculation request must be an object." }] };
+  }
+  const { policy, assessments, entries } = request as Record<string, unknown>;
+
+  if (isNullish(policy) || typeof policy !== "object") {
+    return { code: "invalid-policy", issues: [{ message: "policy must be an object." }] };
+  }
+  const typeWeights = (policy as Record<string, unknown>).typeWeights;
+  if (Array.isArray(typeWeights) && typeWeights.some((typeWeight) => isNullish(typeWeight) || typeof typeWeight !== "object")) {
+    return { code: "invalid-policy", issues: [{ message: "Each entry in policy.typeWeights must be an object." }] };
+  }
+
+  if (Array.isArray(assessments) && assessments.some((assessment) => isNullish(assessment) || typeof assessment !== "object")) {
+    return { code: "invalid-assessment", issues: [{ message: "Each entry in assessments must be an object." }] };
+  }
+
+  if (!Array.isArray(entries)) {
+    return { code: "invalid-entry", issues: [{ message: "entries must be an array." }] };
+  }
+  if (entries.some((entry) => isNullish(entry) || typeof entry !== "object")) {
+    return { code: "invalid-entry", issues: [{ message: "Each entry in entries must be an object." }] };
+  }
+
+  return null;
 }
 
 function checkPolicy(policy: CalculationPolicy): { code: "unsupported-policy" | "invalid-policy"; issues: CalculationIssue[] } | null {
@@ -90,7 +174,7 @@ function checkAssessments(assessments: readonly AssessmentDefinition[], policy: 
     if (!validTypeIds.has(assessment.typeId)) {
       issues.push({ message: `Assessment "${assessment.id}" references type "${assessment.typeId}", which is not part of the policy.`, assessmentId: assessment.id, typeId: assessment.typeId });
     }
-    if (!isFiniteWithDecimals(assessment.maxScore, SCORE_DECIMALS) || assessment.maxScore <= 0 || assessment.maxScore > MAX_SCORE) {
+    if (!isValidMaxScore(assessment.maxScore)) {
       issues.push({ message: `Assessment "${assessment.id}" has an invalid maximum score; it must be finite, greater than zero, at most ${MAX_SCORE}, and use at most ${SCORE_DECIMALS} decimal places.`, assessmentId: assessment.id });
     }
   }
@@ -167,6 +251,9 @@ function aggregateType(
 }
 
 export function calculateWeightedResult(request: CalculationRequest): CalculationOutcome {
+  const shapeProblem = checkRequestShape(request);
+  if (shapeProblem) return { ok: false, code: shapeProblem.code, issues: shapeProblem.issues };
+
   const policyProblem = checkPolicy(request.policy);
   if (policyProblem) return { ok: false, code: policyProblem.code, issues: policyProblem.issues };
 
@@ -181,6 +268,14 @@ export function calculateWeightedResult(request: CalculationRequest): Calculatio
 
   const scoreById = new Map(request.entries.map((entry) => [entry.assessmentId, entry.score as number]));
 
+  // F3 rounding contract: `finalRational` accumulates each type's EXACT
+  // (unrounded) weightedContribution, so finalPercentage below is rounded
+  // once from the true aggregate. `percentage`/`weightedContribution` on
+  // each pushed row are separately rounded from that same type's exact
+  // values, purely for display — never fed back into finalRational, and
+  // never derived from each other's rounded form. See the rounding
+  // contract documented on `TypeContribution` in contract.ts: the displayed
+  // rows are not guaranteed to sum to finalPercentage.
   const typeContributions: TypeContribution[] = [];
   let finalRational: Rational = ZERO;
   for (const typeWeight of request.policy.typeWeights) {

@@ -81,20 +81,52 @@ export interface CalculationRequest {
   readonly entries: readonly AssessmentEntry[];
 }
 
+/**
+ * Per-type breakdown, for EXPLAINING `finalPercentage` — not for
+ * reconstructing it by re-summing these fields.
+ *
+ * ROUNDING CONTRACT (explicit, reviewed decision — F3 correction):
+ * `percentage` and `weightedContribution` are independently rounded,
+ * per-type EXPLANATORY values, each rounded to 2dp from that type's own
+ * exact rational aggregate. `finalPercentage` is rounded once, from the
+ * exact sum of every type's UNROUNDED weighted contribution — never from
+ * summing the rounded `weightedContribution` values below, and never from
+ * this type's rounded `percentage` either.
+ *
+ * Because two independent roundings of parts do not generally equal one
+ * rounding of the whole, `Σ typeContributions[].weightedContribution` can
+ * differ from `finalPercentage` by a cent or two. Counterexample: two
+ * equally weighted (50/50) types each scoring exactly 1/3 report
+ * `weightedContribution` 16.67 and 16.67 (displayed sum 33.34), while
+ * `finalPercentage` is the correct 33.33 (rounded once from the exact
+ * 100/3). This is expected, not a defect — `finalPercentage` is always the
+ * authoritative figure, and a caller must not validate or re-derive it by
+ * summing these rows. A residual-allocation rule that forces the rows to
+ * reconcile exactly was deliberately not introduced.
+ */
 export interface TypeContribution {
   readonly typeId: string;
   readonly weight: number;
   readonly assessmentCount: number;
-  /** This type's aggregated percentage (0-100), rounded to 2dp. */
+  /** This type's own aggregated percentage (0-100), rounded to 2dp from its
+   * exact rational value. An explanatory figure, independent of every other
+   * type's rounding — see the rounding contract above. */
   readonly percentage: number;
-  /** percentage * weight / 100, rounded to 2dp. Sums to `finalPercentage`. */
+  /** This type's exact aggregate percentage × weight / 100, rounded to 2dp
+   * from that exact (unrounded) product — not from the rounded `percentage`
+   * field above. An explanatory figure; see the rounding contract above for
+   * why summing these across types need not equal `finalPercentage`. */
   readonly weightedContribution: number;
 }
 
 export interface CalculationResult {
   readonly policyVersion: string;
   readonly calculationVersion: string;
-  /** 0-100, rounded to 2dp — see rational.ts for the rounding rule. */
+  /** 0-100, rounded to 2dp from the EXACT sum of every type's unrounded
+   * weighted contribution (see rational.ts for the rounding rule) — not
+   * from summing `typeContributions[].weightedContribution`. Always the
+   * authoritative final figure; see the rounding contract documented on
+   * `TypeContribution`. */
   readonly finalPercentage: number;
   readonly typeContributions: readonly TypeContribution[];
 }
