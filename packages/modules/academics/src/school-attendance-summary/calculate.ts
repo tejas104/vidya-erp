@@ -11,6 +11,7 @@ import {
   POLICY_VERSION,
   type AttendancePolicy,
   type AttendanceRecord,
+  type AttendanceSummaryFailureCode,
   type AttendanceSummaryIssue,
   type AttendanceSummaryOutcome,
   type AttendanceSummaryRequest,
@@ -25,6 +26,61 @@ const VALID_STATUSES: ReadonlySet<string> = new Set(["present", "absent", "late"
 const VALID_LATE: ReadonlySet<string> = new Set(["counts-as-present", "counts-as-absent"]);
 const VALID_EXCUSED: ReadonlySet<string> = new Set(["excluded-from-denominator", "counts-as-absent"]);
 const VALID_HALF_DAY: ReadonlySet<string> = new Set(["half-credit", "counts-as-present", "counts-as-absent"]);
+
+function isNullish(value: unknown): value is null | undefined {
+  return value === null || value === undefined;
+}
+
+/**
+ * F5 correction: validates the request's SHAPE — every container the code
+ * below iterates is actually an array, and every element it dereferences is
+ * a non-null object — before any typed check reads a property or iterates.
+ * `AttendanceSummaryRequest` only binds compile-time callers; a caller
+ * passing deserialized/untrusted data can still hand this function `null`
+ * anywhere in the tree (a null request, a null policy, a null interval, a
+ * null calendar, a null element inside enrollments/records, or a records
+ * container that isn't an array at all), which throws immediately on
+ * property access or iteration rather than producing the documented
+ * `AttendanceSummaryOutcome` failure. This function treats its input as
+ * effectively `unknown` regardless of the declared parameter type, and is
+ * the only place in this file that does so — every function below it can
+ * keep assuming its typed shape actually holds, because this ran first.
+ *
+ * This only screens for shapes that would THROW (null/undefined containers
+ * or elements, non-arrays where an array is iterated). A present-but-wrong
+ * primitive (e.g. a numeric status, a non-string date) does not throw on
+ * property access in JavaScript — those are left to the existing semantic
+ * checks below (and to `isValidIsoDate`, which itself now rejects any
+ * non-string value before parsing), which already reject them without
+ * crashing.
+ */
+function checkRequestShape(request: unknown): { code: AttendanceSummaryFailureCode; issues: AttendanceSummaryIssue[] } | null {
+  if (isNullish(request) || typeof request !== "object") {
+    return { code: "invalid-policy", issues: [{ message: "The attendance summary request must be an object." }] };
+  }
+  const { policy, interval, calendar, enrollments, records } = request as Record<string, unknown>;
+
+  if (isNullish(policy) || typeof policy !== "object") {
+    return { code: "invalid-policy", issues: [{ message: "policy must be an object." }] };
+  }
+  if (isNullish(interval) || typeof interval !== "object") {
+    return { code: "invalid-interval", issues: [{ message: "interval must be an object." }] };
+  }
+  if (isNullish(calendar) || typeof calendar !== "object") {
+    return { code: "invalid-calendar", issues: [{ message: "calendar must be an object." }] };
+  }
+  if (Array.isArray(enrollments) && enrollments.some((enrollment) => isNullish(enrollment) || typeof enrollment !== "object")) {
+    return { code: "invalid-enrollment", issues: [{ message: "Each enrollment interval must be an object." }] };
+  }
+  if (!Array.isArray(records)) {
+    return { code: "invalid-record", issues: [{ message: "records must be an array." }] };
+  }
+  if (records.some((record) => isNullish(record) || typeof record !== "object")) {
+    return { code: "invalid-record", issues: [{ message: "Each attendance record must be an object." }] };
+  }
+
+  return null;
+}
 
 function checkPolicy(policy: AttendancePolicy): AttendanceSummaryIssue[] {
   const issues: AttendanceSummaryIssue[] = [];
@@ -93,6 +149,9 @@ function checkEnrollments(enrollments: readonly EnrollmentInterval[]): Attendanc
 }
 
 function checkRecords(records: readonly AttendanceRecord[]): AttendanceSummaryIssue[] {
+  if (!Array.isArray(records)) {
+    return [{ message: "records must be an array." }];
+  }
   const issues: AttendanceSummaryIssue[] = [];
   const seen = new Set<string>();
   for (const record of records) {
@@ -150,6 +209,9 @@ function percentageOf(halfUnits: number, denominatorDays: number): number {
 }
 
 export function summarizeAttendance(request: AttendanceSummaryRequest): AttendanceSummaryOutcome {
+  const shapeProblem = checkRequestShape(request);
+  if (shapeProblem) return { ok: false, code: shapeProblem.code, issues: shapeProblem.issues };
+
   const policyIssues = checkPolicy(request.policy);
   if (policyIssues.length > 0) return { ok: false, code: "invalid-policy", issues: policyIssues };
 

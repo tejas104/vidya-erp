@@ -32,10 +32,23 @@ function format(parts: DateParts): string {
   return `${y}-${m}-${d}`;
 }
 
-/** True iff `value` is "YYYY-MM-DD" AND names a real calendar date (rejects
- * 2026-02-30, 2026-13-01, etc. — Date.UTC silently rolls those over, so the
- * round-trip through UTC getters is what actually catches them). */
-export function isValidIsoDate(value: string): boolean {
+/**
+ * True iff `value` is a string of the form "YYYY-MM-DD" AND names a real
+ * calendar date (rejects 2026-02-30, 2026-13-01, etc. — Date.UTC silently
+ * rolls those over, so the round-trip through UTC getters is what actually
+ * catches them).
+ *
+ * F5 correction: `value` is typed `unknown`, and the very first check is an
+ * explicit `typeof value === "string"` — not a reliance on `RegExp.exec`'s
+ * implicit `ToString` coercion of its argument. Every caller in this
+ * package hands untrusted/deserialized data through this function before
+ * any calendar arithmetic, so a non-string (null, a number, an object) must
+ * be rejected here, explicitly, rather than accidentally "working" via
+ * coercion today and breaking silently if that implicit behavior ever
+ * changed upstream.
+ */
+export function isValidIsoDate(value: unknown): value is string {
+  if (typeof value !== "string") return false;
   const parts = parseParts(value);
   if (!parts) return false;
   const ms = Date.UTC(parts.year, parts.month - 1, parts.day);
