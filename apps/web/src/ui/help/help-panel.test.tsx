@@ -9,15 +9,21 @@ describe("HelpPanel", () => {
     expect(screen.getByRole("heading", { name: /marking attendance/i })).toBeVisible();
   });
 
+  it("renders the compiled school article for the same slug", () => {
+    render(<HelpEditionProvider edition="school"><HelpPanel slug="attendance" open onClose={() => {}} /></HelpEditionProvider>);
+    expect(screen.getByRole("heading", { name: "Record school attendance" })).toBeVisible();
+    expect(screen.queryByRole("heading", { name: /marking attendance/i })).not.toBeInTheDocument();
+  });
+
   it("shows a no-help-yet state for an unknown slug", () => {
     render(<HelpPanel slug="nope" open onClose={() => {}} />);
     expect(screen.getByText(/no help yet/i)).toBeVisible();
   });
 
-  it("shows the missing-help state for a school article without using college content", () => {
-    render(<HelpEditionProvider edition="school"><HelpPanel slug="attendance" open onClose={() => {}} /></HelpEditionProvider>);
+  it("shows the missing-help state for an uncovered school slug without using college content", () => {
+    render(<HelpEditionProvider edition="school"><HelpPanel slug="analytics" open onClose={() => {}} /></HelpEditionProvider>);
     expect(screen.getByText(/no help yet/i)).toBeVisible();
-    expect(screen.queryByRole("heading", { name: /marking attendance/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: /reading the analytics screen/i })).not.toBeInTheDocument();
   });
 
   it("renders nothing when closed", () => {
