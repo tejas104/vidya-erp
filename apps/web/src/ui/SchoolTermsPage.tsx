@@ -127,7 +127,7 @@ export function SchoolTermsPage() {
     <Modal open={target !== null} onClose={closeDialog} title={target?.status === "open" ? "Close academic term" : "Reopen academic term"}
       footer={<><Button variant="ghost" onClick={closeDialog} disabled={saving}>Cancel</Button><Button loading={saving} disabled={target?.status === "closed" && !reason.trim()} onClick={() => void transition()}>{target?.status === "open" ? "Confirm closure" : "Confirm reopening"}</Button></>}>
       <p>{target?.name} · {target?.academicYear}</p>
-      <p className={styles.secondary}>{target?.status === "closed" ? "A reason is required and will be recorded in the audit log." : "This records the term as closed. Existing assessment marks are not locked by this status."}</p>
+      <p className={styles.secondary}>{target?.status === "closed" ? "A reason is required and will be recorded in the audit log." : "Closing this term makes its assessment marks read-only. An administrator must reopen it with a reason before making corrections."}</p>
       <Input label={target?.status === "closed" ? "Reopening reason" : "Closure reason (optional)"} value={reason} onChange={(event) => setReason(event.target.value)} maxLength={500} disabled={saving} required={target?.status === "closed"} />
       {saveError ? <p className="formerror" role="alert">{saveError}</p> : null}
     </Modal>

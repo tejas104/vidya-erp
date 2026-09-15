@@ -26,7 +26,7 @@ describe("School term management", () => {
     expect(await screen.findByRole("heading", { name: "Academic Terms" })).toBeInTheDocument();
     expect(screen.getByLabelText("Academic Year")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Close term" }));
-    expect(screen.getByRole("dialog")).toHaveTextContent("Existing assessment marks are not locked by this status.");
+    expect(screen.getByRole("dialog")).toHaveTextContent("Closing this term makes its assessment marks read-only. An administrator must reopen it with a reason before making corrections.");
     expect(screen.queryByText(/college-style marks/i)).not.toBeInTheDocument();
   });
 
