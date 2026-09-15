@@ -20,6 +20,16 @@ beforeEach(() => {
 function renderPage() { return render(<ToastProvider><SchoolTermsPage /></ToastProvider>); }
 
 describe("School term management", () => {
+  it("uses school vocabulary for Academic Year fields and removes college wording", async () => {
+    vi.mocked(api.schoolTerms).mockResolvedValue({ terms: [{ ...term, status: "open" }] });
+    renderPage();
+    expect(await screen.findByRole("heading", { name: "Academic Terms" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Academic Year")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Close term" }));
+    expect(screen.getByRole("dialog")).toHaveTextContent("Existing assessment marks are not locked by this status.");
+    expect(screen.queryByText(/college-style marks/i)).not.toBeInTheDocument();
+  });
+
   it("requires a reason before reopening and reflects the saved status", async () => {
     vi.mocked(api.schoolTransitionTerm).mockResolvedValue({ ...term, status: "open", closedReason: "Correction approved" });
     renderPage();

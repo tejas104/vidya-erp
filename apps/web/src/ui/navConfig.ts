@@ -1,4 +1,5 @@
 import type { Role } from "./api";
+import { vocabularyFor, type Edition, type EditionVocabulary } from "./editionVocabulary";
 import type { IconName } from "./Icon";
 
 export interface NavEntry {
@@ -8,6 +9,7 @@ export interface NavEntry {
   group: string;
   roles: Role[];
   editions?: readonly ("college" | "school")[];
+  vocabularyKey?: keyof Pick<EditionVocabulary, "academicTerms">;
 }
 
 // All staff-side roles. Entries tagged ALL map to ANY_AUTHENTICATED routes
@@ -52,7 +54,7 @@ export const NAV: NavEntry[] = [
   { href: "/manage/notices", label: "Notices", icon: "bell", group: "COMMUNICATION", roles: ["admin", "principal"] },
   // --- results ---
   { href: "/manage/results", label: "Results", icon: "marks", group: "ACADEMICS", roles: ["admin", "principal"] },
-  { href: "/manage/terms", label: "Academic terms", icon: "attendance", group: "ACADEMICS", roles: ["admin", "principal"], editions: ["school"] },
+  { href: "/manage/terms", label: "Academic terms", vocabularyKey: "academicTerms", icon: "attendance", group: "ACADEMICS", roles: ["admin", "principal"], editions: ["school"] },
   { href: "/manage/backlogs", label: "Backlogs", icon: "marks", group: "ACADEMICS", roles: ["admin", "principal"] },
   // --- exams ---
   { href: "/manage/exams", label: "Exams", icon: "check", group: "ACADEMICS", roles: ["admin"] },
@@ -97,22 +99,27 @@ export function domainLabel(group: string): string {
   return LABEL[group] ?? group;
 }
 
-export function visibleNav(roles: Role[], edition: "college" | "school" = "college"): { group: string; entries: NavEntry[] }[] {
+function labelFor(entry: NavEntry, edition: Edition): string {
+  return entry.vocabularyKey ? vocabularyFor(edition)[entry.vocabularyKey] : entry.label;
+}
+
+export function visibleNav(roles: Role[], edition: Edition = "college"): { group: string; entries: NavEntry[] }[] {
   const groups: { group: string; entries: NavEntry[] }[] = [];
   for (const entry of NAV) {
     if (entry.editions && !entry.editions.includes(edition)) continue;
     if (!entry.roles.some((role) => roles.includes(role))) continue;
     const bucket = groups.find((g) => g.group === entry.group);
-    if (bucket) bucket.entries.push(entry);
-    else groups.push({ group: entry.group, entries: [entry] });
+    const visibleEntry = { ...entry, label: labelFor(entry, edition) };
+    if (bucket) bucket.entries.push(visibleEntry);
+    else groups.push({ group: entry.group, entries: [visibleEntry] });
   }
   return groups.sort((a, b) => DOMAIN_ORDER.indexOf(a.group as (typeof DOMAIN_ORDER)[number]) - DOMAIN_ORDER.indexOf(b.group as (typeof DOMAIN_ORDER)[number]));
 }
 
 // Derives breadcrumbs from the same NAV source — no second hand-maintained
 // route map. [] for /dashboard (TOP, ungrouped) and unknown paths.
-export function crumbsFor(pathname: string): { label: string; href?: string }[] {
-  const entry = NAV.find((e) => e.group !== "TOP" && (pathname === e.href || pathname.startsWith(`${e.href}/`)));
+export function crumbsFor(pathname: string, edition: Edition = "college"): { label: string; href?: string }[] {
+  const entry = NAV.find((e) => e.group !== "TOP" && (!e.editions || e.editions.includes(edition)) && (pathname === e.href || pathname.startsWith(`${e.href}/`)));
   if (!entry) return [];
-  return [{ label: LABEL[entry.group] ?? entry.group }, { label: entry.label }];
+  return [{ label: LABEL[entry.group] ?? entry.group }, { label: labelFor(entry, edition) }];
 }

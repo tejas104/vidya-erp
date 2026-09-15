@@ -4,6 +4,7 @@ import { Button, Card, EmptyState, Input, Modal, PageHeader, Select, StatusBadge
 import { api, ApiError, currentAcademicYear, type SchoolTermView } from "./api";
 import { AsyncState } from "./AsyncState";
 import { AssessmentTypesEditor } from "./AssessmentTypesEditor";
+import { schoolVocabulary } from "./editionVocabulary";
 import styles from "./SchoolTermsPage.module.css";
 
 export function SchoolTermsPage() {
@@ -90,16 +91,16 @@ export function SchoolTermsPage() {
   }
 
   return <>
-    <PageHeader eyebrow="Academics" title="Academic terms" lede="Manage the school calendar and keep a record of term closures and reopening reasons." />
+    <PageHeader eyebrow="Academics" title={schoolVocabulary.academicTerms} lede={`Manage the school calendar for each ${schoolVocabulary.academicYear.toLowerCase()} and keep a record of term closures and reopening reasons.`} />
     <div className={styles.toolbar}>
       <form className={styles.filters} onSubmit={(event) => { event.preventDefault(); setFilterYear(year.trim()); setRevision((value) => value + 1); }}>
-        <Input label="Academic year" value={year} maxLength={32} onChange={(event) => setYear(event.target.value)} placeholder="All years" />
+        <Input label={schoolVocabulary.academicYear} value={year} maxLength={32} onChange={(event) => setYear(event.target.value)} placeholder="All years" />
         <Button type="submit" variant="secondary" disabled={loading}>Apply</Button>
       </form>
       {admin && !error ? <Button disabled={loading || schools.length === 0} onClick={() => { setAcademicYear(filterYear || currentAcademicYear()); setSaveError(null); setCreating(true); }}>Create term</Button> : null}
     </div>
     <AsyncState loading={loading} error={error !== null} errorMessage={error} onRetry={denied ? undefined : () => setRevision((value) => value + 1)}
-      isEmpty={terms.length === 0} empty={<EmptyState title="No terms for this year" body={admin ? "Create a term with its dates to begin setting up the school year." : "Your administrator can create the school year's terms."} />}>
+      isEmpty={terms.length === 0} empty={<EmptyState title={`No terms for this ${schoolVocabulary.academicYear.toLowerCase()}`} body={admin ? `Create a term with its dates to begin setting up this ${schoolVocabulary.academicYear.toLowerCase()}.` : `Your administrator can create this ${schoolVocabulary.academicYear.toLowerCase()}'s terms.`} />}>
       <Card title="Term register">
         <div className={styles.tableViewport}><Table columns={[{ key: "term", header: "Term" }, { key: "school", header: "School" }, { key: "dates", header: "Dates" }, { key: "status", header: "Status" }, { key: "reason", header: "Last transition reason" }, { key: "actions", header: "Actions" }]}
           rows={terms.map((term) => ({
@@ -115,9 +116,9 @@ export function SchoolTermsPage() {
     <Modal open={creating} onClose={closeDialog} title="Create academic term" footer={<><Button variant="ghost" onClick={closeDialog} disabled={saving}>Cancel</Button><Button type="submit" form="create-school-term" loading={saving} disabled={!collegeId || !name.trim() || !academicYear.trim() || !startsOn || !endsOn || endsOn < startsOn}>Create term</Button></>}>
       <form id="create-school-term" onSubmit={(event) => { event.preventDefault(); void create(); }}>
         <fieldset className={styles.fields} disabled={saving}>
-          <Select label="School" value={collegeId} onChange={(event) => setCollegeId(event.target.value)} options={schools.map((school) => ({ value: school.id, label: school.name }))} />
+          <Select label={schoolVocabulary.institution} value={collegeId} onChange={(event) => setCollegeId(event.target.value)} options={schools.map((school) => ({ value: school.id, label: school.name }))} />
           <Input label="Term name" value={name} onChange={(event) => setName(event.target.value)} maxLength={120} required placeholder="Term 1" />
-          <Input label="Term academic year" value={academicYear} onChange={(event) => setAcademicYear(event.target.value)} maxLength={32} required />
+          <Input label={schoolVocabulary.academicYear} value={academicYear} onChange={(event) => setAcademicYear(event.target.value)} maxLength={32} required />
           <div className={styles.dateFields}><Input label="Start date" type="date" value={startsOn} onChange={(event) => setStartsOn(event.target.value)} required /><Input label="End date" type="date" min={startsOn || undefined} value={endsOn} onChange={(event) => setEndsOn(event.target.value)} required error={startsOn && endsOn && endsOn < startsOn ? "End date must be on or after the start date." : undefined} /></div>
         </fieldset>
         {saveError ? <p className="formerror" role="alert">{saveError}</p> : null}
@@ -126,7 +127,7 @@ export function SchoolTermsPage() {
     <Modal open={target !== null} onClose={closeDialog} title={target?.status === "open" ? "Close academic term" : "Reopen academic term"}
       footer={<><Button variant="ghost" onClick={closeDialog} disabled={saving}>Cancel</Button><Button loading={saving} disabled={target?.status === "closed" && !reason.trim()} onClick={() => void transition()}>{target?.status === "open" ? "Confirm closure" : "Confirm reopening"}</Button></>}>
       <p>{target?.name} · {target?.academicYear}</p>
-      <p className={styles.secondary}>{target?.status === "closed" ? "A reason is required and will be recorded in the audit log." : "This records the term as closed. Existing college-style marks are not locked by this status."}</p>
+      <p className={styles.secondary}>{target?.status === "closed" ? "A reason is required and will be recorded in the audit log." : "This records the term as closed. Existing assessment marks are not locked by this status."}</p>
       <Input label={target?.status === "closed" ? "Reopening reason" : "Closure reason (optional)"} value={reason} onChange={(event) => setReason(event.target.value)} maxLength={500} disabled={saving} required={target?.status === "closed"} />
       {saveError ? <p className="formerror" role="alert">{saveError}</p> : null}
     </Modal>

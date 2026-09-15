@@ -2,6 +2,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { ToastProvider } from "@vidya/ui-system";
 import type { Session } from "./api";
+import type { Edition } from "./editionVocabulary";
 import { Sidebar } from "./Sidebar";
 import { Topbar } from "./Topbar";
 import { SearchPalette } from "./search/SearchPalette";
@@ -9,7 +10,7 @@ import { Breadcrumbs } from "./Breadcrumbs";
 import { InstallPrompt } from "./InstallPrompt";
 import { LicenseBanner } from "./LicenseBanner";
 
-export function AppShell({ session, year, children, edition = "college" }: { session: Session; year?: string; children: ReactNode; edition?: "college" | "school" }) {
+export function AppShell({ session, year, children, edition = "college" }: { session: Session; year?: string; children: ReactNode; edition?: Edition }) {
   const [drawer, setDrawer] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
 
@@ -33,12 +34,13 @@ export function AppShell({ session, year, children, edition = "college" }: { ses
           <Topbar
             displayName={session.displayName}
             year={year}
+            edition={edition}
             onMenu={() => setDrawer((open) => !open)}
             onSearch={() => setSearchOpen(true)}
           />
           <LicenseBanner roles={session.roles} />
           <main id="main" className="page shell-page">
-            <Breadcrumbs />
+            <Breadcrumbs edition={edition} />
             {children}
           </main>
         </div>

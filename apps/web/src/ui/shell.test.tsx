@@ -95,6 +95,12 @@ describe("Topbar", () => {
     fireEvent.click(screen.getByRole("menuitem", { name: /chalk|paper/i }));
     expect(document.documentElement.getAttribute("data-theme")).toMatch(/dark|light/);
   });
+  it("keeps the compact year display while exposing the full school Academic Year label", () => {
+    const { rerender } = render(<Topbar displayName="Asha Rao" year="2026-27" edition="school" onMenu={() => {}} onSearch={() => {}} />);
+    expect(screen.getByText("AY 2026-27")).toHaveAccessibleName("Academic Year 2026-27");
+    rerender(<Topbar displayName="Asha Rao" year="2026-27" edition="college" onMenu={() => {}} onSearch={() => {}} />);
+    expect(screen.getByText("AY 2026-27")).toBeInTheDocument();
+  });
   it("signs out via the user menu", async () => {
     render(<Topbar displayName="Asha Rao" onMenu={() => {}} onSearch={() => {}} />);
     fireEvent.click(screen.getByRole("button", { name: /asha rao/i }));

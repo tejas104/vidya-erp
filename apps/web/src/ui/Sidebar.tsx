@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { usePathname } from "next/navigation";
 import type { Role } from "./api";
+import type { Edition } from "./editionVocabulary";
 import { Icon } from "./Icon";
 import { domainLabel, visibleNav, type NavEntry } from "./navConfig";
 
@@ -17,7 +18,7 @@ function loadCollapsed(): Set<string> {
   }
 }
 
-export function Sidebar({ roles, open, onClose, edition = "college" }: { roles: Role[]; open: boolean; onClose: () => void; edition?: "college" | "school" }) {
+export function Sidebar({ roles, open, onClose, edition = "college" }: { roles: Role[]; open: boolean; onClose: () => void; edition?: Edition }) {
   const pathname = usePathname();
   const groups = visibleNav(roles, edition);
   const [collapsed, setCollapsed] = useState<Set<string>>(loadCollapsed);

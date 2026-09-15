@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { api } from "./api";
+import { vocabularyFor, type Edition } from "./editionVocabulary";
 import { Icon } from "./Icon";
 import { Menu } from "./Menu";
 import { NotificationBell } from "./NotificationBell";
@@ -8,15 +9,18 @@ import { NotificationBell } from "./NotificationBell";
 export function Topbar({
   displayName,
   year,
+  edition = "college",
   onMenu,
   onSearch,
 }: {
   displayName: string;
   year?: string;
+  edition?: Edition;
   onMenu: () => void;
   onSearch?: () => void;
 }) {
   const [theme, setTheme] = useState<"light" | "dark" | null>(null);
+  const vocabulary = vocabularyFor(edition);
 
   useEffect(() => {
     const stored = localStorage.getItem("vidya-theme");
@@ -48,7 +52,7 @@ export function Topbar({
         <Icon name="search" size={16} />
         <span>Search… ⌘K</span>
       </button>
-      {year !== undefined ? <span className="shell-top-year num">AY {year}</span> : null}
+      {year !== undefined ? <span className="shell-top-year num" aria-label={`${vocabulary.academicYear} ${year}`}>AY {year}</span> : null}
       <NotificationBell />
       <Menu
         label={displayName}

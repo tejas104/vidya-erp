@@ -8,6 +8,12 @@ describe("navConfig 8-domain regroup", () => {
     expect(links(["admin"], "college")).not.toContain("/manage/terms");
     expect(links(["teacher"], "school")).not.toContain("/manage/terms");
   });
+  it("uses school terminology for term navigation and breadcrumbs without changing destinations", () => {
+    const schoolTerms = visibleNav(["admin"], "school").flatMap((group) => group.entries).find((entry) => entry.href === "/manage/terms");
+    expect(schoolTerms).toMatchObject({ label: "Academic Terms", href: "/manage/terms" });
+    expect(crumbsFor("/manage/terms", "school")).toEqual([{ label: "Academics" }, { label: "Academic Terms" }]);
+    expect(crumbsFor("/manage/terms", "college")).toEqual([]);
+  });
   it("orders groups TOP→PEOPLE→ACADEMICS→…→ANALYTICS→ADMINISTRATION for admin", () => {
     const g = visibleNav(["admin"]).map((x) => x.group);
     expect(g[0]).toBe("TOP");

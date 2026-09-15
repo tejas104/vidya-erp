@@ -1,9 +1,10 @@
 "use client";
 import { usePathname } from "next/navigation";
+import type { Edition } from "./editionVocabulary";
 import { crumbsFor } from "./navConfig";
 import styles from "./Breadcrumbs.module.css";
-export function Breadcrumbs() {
-  const crumbs = crumbsFor(usePathname());
+export function Breadcrumbs({ edition = "college" }: { edition?: Edition }) {
+  const crumbs = crumbsFor(usePathname(), edition);
   if (crumbs.length === 0) return null;
   return (
     <nav aria-label="Breadcrumb" className={styles.crumbs}>

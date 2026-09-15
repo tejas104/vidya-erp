@@ -4,6 +4,7 @@ import { Button, Card, EmptyState, Input, PageHeader, Select, StatusBadge, Table
 import { api, ApiError, currentAcademicYear, type SchoolAssessmentView, type SchoolClassSetup, type SchoolMarkView } from "./api";
 import { AsyncState } from "./AsyncState";
 import { ScoreEntryCard, type ScoreEntryStudent } from "./ScoreEntryCard";
+import { schoolVocabulary } from "./editionVocabulary";
 import styles from "./SchoolMarksPage.module.css";
 
 type Target = { key: string; classId: string; subjectId: string; sectionId: string; label: string };
@@ -124,14 +125,14 @@ export function SchoolMarksPage() {
   }
 
   return <>
-    <PageHeader eyebrow="Academics" title="Enter marks" lede="School assessments, term weights and recorded grades for the subjects you teach." />
+    <PageHeader eyebrow="Academics" title="Enter marks" lede={`School assessments, term weights and recorded grades for the ${schoolVocabulary.academicYear.toLowerCase()}.`} />
     <AsyncState loading={targets === null && !initialError} error={initialError} onRetry={() => setReload((value) => value + 1)} isEmpty={targets?.length === 0} empty={<EmptyState title="No teaching subjects assigned" body="Your administrator can assign a subject and section to your staff record." />}>
       {target ? <>
         <Select label="Class, section and subject" value={targetKey} disabled={saving} onChange={(event) => setTargetKey(event.target.value)} options={(targets ?? []).map((choice) => ({ value: choice.key, label: choice.label }))} />
         <AsyncState loading={setup === null && loadError === null} error={loadError !== null} errorMessage={loadError} onRetry={() => setReload((value) => value + 1)}>
           {setup ? <div className={styles.stack}>
-            {setup.terms.length === 0 ? <EmptyState title="No academic terms configured" body="Ask your administrator to create a term, assessment types and a grade scale for this school year." /> : <>
-              <Select label="Academic term" value={termId} disabled={saving} onChange={(event) => { setTermId(event.target.value); setTypeId(""); setActive(null); setCreateError(null); }} options={setup.terms.map((item) => ({ value: item.id, label: `${item.name} · ${item.status}` }))} />
+            {setup.terms.length === 0 ? <EmptyState title={`No ${schoolVocabulary.academicTerms.toLowerCase()} configured`} body={`Ask your administrator to create a term, assessment types and a grade scale for this ${schoolVocabulary.academicYear.toLowerCase()}.`} /> : <>
+              <Select label={schoolVocabulary.term} value={termId} disabled={saving} onChange={(event) => { setTermId(event.target.value); setTypeId(""); setActive(null); setCreateError(null); }} options={setup.terms.map((item) => ({ value: item.id, label: `${item.name} · ${item.status}` }))} />
               {term?.status === "closed" ? <p className={styles.notice}>This term is closed. Recorded marks remain available below; an administrator must reopen it before corrections.</p> : term?.types.length === 0 ? <EmptyState title="Assessment types need setup" body="Ask your administrator to configure this term's percentage weights." /> : <Card title="Create assessment">
                 <form onSubmit={(event) => { event.preventDefault(); void create(); }}>
                   <fieldset className={styles.fields} disabled={saving}>

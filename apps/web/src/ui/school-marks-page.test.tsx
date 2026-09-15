@@ -22,6 +22,13 @@ function show() { render(<ToastProvider><SchoolMarksPage /></ToastProvider>); }
 async function open() { show(); fireEvent.click(await screen.findByRole("button", { name: "Open marks" })); }
 
 describe("School marks entry", () => {
+  it("uses Academic Year and Term labels for school assessment setup", async () => {
+    show();
+    expect(await screen.findByText(/recorded grades for the academic year/i)).toBeInTheDocument();
+    expect(await screen.findByLabelText("Term")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Academic term")).not.toBeInTheDocument();
+  });
+
   it("creates a term-linked assessment with the selected grading scale", async () => {
     show();
     fireEvent.change(await screen.findByLabelText("Assessment name"), { target: { value: "Unit test" } });
