@@ -9,6 +9,7 @@ import { SearchPalette } from "./search/SearchPalette";
 import { Breadcrumbs } from "./Breadcrumbs";
 import { InstallPrompt } from "./InstallPrompt";
 import { LicenseBanner } from "./LicenseBanner";
+import { HelpEditionProvider } from "./help/HelpEditionContext";
 
 export function AppShell({ session, year, children, edition = "college" }: { session: Session; year?: string; children: ReactNode; edition?: Edition }) {
   const [drawer, setDrawer] = useState(false);
@@ -27,26 +28,28 @@ export function AppShell({ session, year, children, edition = "college" }: { ses
 
   return (
     <ToastProvider>
-      <div className="shell">
-        <Sidebar roles={session.roles} edition={edition} open={drawer} onClose={() => setDrawer(false)} />
-        {drawer ? <div className="shell-drawer-scrim" onMouseDown={() => setDrawer(false)} /> : null}
-        <div className="shell-body">
-          <Topbar
-            displayName={session.displayName}
-            year={year}
-            edition={edition}
-            onMenu={() => setDrawer((open) => !open)}
-            onSearch={() => setSearchOpen(true)}
-          />
-          <LicenseBanner roles={session.roles} />
-          <main id="main" className="page shell-page">
-            <Breadcrumbs edition={edition} />
-            {children}
-          </main>
+      <HelpEditionProvider edition={edition}>
+        <div className="shell">
+          <Sidebar roles={session.roles} edition={edition} open={drawer} onClose={() => setDrawer(false)} />
+          {drawer ? <div className="shell-drawer-scrim" onMouseDown={() => setDrawer(false)} /> : null}
+          <div className="shell-body">
+            <Topbar
+              displayName={session.displayName}
+              year={year}
+              edition={edition}
+              onMenu={() => setDrawer((open) => !open)}
+              onSearch={() => setSearchOpen(true)}
+            />
+            <LicenseBanner roles={session.roles} />
+            <main id="main" className="page shell-page">
+              <Breadcrumbs edition={edition} />
+              {children}
+            </main>
+          </div>
+          <SearchPalette open={searchOpen} onClose={() => setSearchOpen(false)} roles={session.roles} edition={edition} />
+          <InstallPrompt roles={session.roles} />
         </div>
-        <SearchPalette open={searchOpen} onClose={() => setSearchOpen(false)} roles={session.roles} edition={edition} />
-        <InstallPrompt roles={session.roles} />
-      </div>
+      </HelpEditionProvider>
     </ToastProvider>
   );
 }

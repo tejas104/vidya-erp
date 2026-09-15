@@ -1,5 +1,32 @@
-import { describe, expect, it } from "vitest";
-import { compileDoc } from "./compile-help";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { compileDoc, compileHelp } from "./compile-help";
+
+const temporaryDirectories: string[] = [];
+
+afterEach(async () => {
+  await Promise.all(temporaryDirectories.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
+});
+
+async function createHelpFixture() {
+  const root = await mkdtemp(path.join(tmpdir(), "vidya-help-"));
+  temporaryDirectories.push(root);
+  const helpRoot = path.join(root, "help");
+  const appRoutesDir = path.join(root, "app", "(app)");
+  await Promise.all([
+    mkdir(path.join(helpRoot, "college"), { recursive: true }),
+    mkdir(path.join(helpRoot, "school"), { recursive: true }),
+    mkdir(path.join(appRoutesDir, "manage", "shared"), { recursive: true }),
+  ]);
+  await Promise.all([
+    writeFile(path.join(helpRoot, "college", "shared.md"), "# College guide\n\nCollege content", "utf8"),
+    writeFile(path.join(helpRoot, "school", "shared.md"), "# School guide\n\nSchool content", "utf8"),
+    writeFile(path.join(appRoutesDir, "manage", "shared", "page.tsx"), "export default function Page() { return null; }", "utf8"),
+  ]);
+  return { root, helpRoot, appRoutesDir };
+}
 
 // Regression coverage for the compiler's escaping/markdown-subset logic
 // (escapeHtml/parseBlocks/renderBlocks via the compileDoc entry point).
@@ -51,5 +78,32 @@ describe("compileDoc", () => {
     );
     expect(html).not.toContain("<p>&gt;");
     expect(html).not.toContain("<b>evil</b>");
+  });
+});
+
+describe("compileHelp", () => {
+  it("writes a deterministic edition-aware artifact with different same-slug documents", async () => {
+    const { root, helpRoot, appRoutesDir } = await createHelpFixture();
+    const firstOutput = path.join(root, "first.generated.ts");
+    const secondOutput = path.join(root, "second.generated.ts");
+    const originalEdition = process.env.VIDYA_EDITION;
+    const quiet = { log: vi.fn(), warn: vi.fn() };
+
+    try {
+      process.env.VIDYA_EDITION = "school";
+      const first = await compileHelp({ helpRoot, appRoutesDir, outputPath: firstOutput, ...quiet });
+      process.env.VIDYA_EDITION = "college";
+      const second = await compileHelp({ helpRoot, appRoutesDir, outputPath: secondOutput, ...quiet });
+
+      expect(first).toEqual(second);
+      expect(first.college.shared.title).toBe("College guide");
+      expect(first.school.shared.title).toBe("School guide");
+      expect(first.school.shared.html).not.toBe(first.college.shared.html);
+      expect(await readFile(firstOutput, "utf8")).toBe(await readFile(secondOutput, "utf8"));
+      expect(await readFile(firstOutput, "utf8")).toContain('export type HelpEdition = "college" | "school";');
+    } finally {
+      if (originalEdition === undefined) delete process.env.VIDYA_EDITION;
+      else process.env.VIDYA_EDITION = originalEdition;
+    }
   });
 });

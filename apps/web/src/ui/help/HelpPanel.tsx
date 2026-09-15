@@ -1,8 +1,9 @@
 import { EmptyState, SlideOver } from "@vidya/ui-system";
 import { HELP_DOCS } from "./help-content.generated";
+import { useHelpEdition } from "./HelpEditionContext";
 
 /**
- * Looks `slug` up in the build-time-compiled HELP_DOCS and renders it inside
+ * Looks `slug` up in the runtime edition's build-time-compiled HELP_DOCS and renders it inside
  * the shared SlideOver. `doc.html` is pre-escaped by scripts/compile-help.ts
  * from repo-controlled markdown — dangerouslySetInnerHTML is safe and
  * intended here (no sanitiser dependency per ADR-0009).
@@ -21,7 +22,8 @@ export function HelpPanel({
   open: boolean;
   onClose: () => void;
 }) {
-  const doc = HELP_DOCS[slug];
+  const edition = useHelpEdition();
+  const doc = HELP_DOCS[edition][slug];
   return (
     <SlideOver open={open} onClose={onClose} title="Help">
       {doc ? (
