@@ -96,9 +96,15 @@ describe("compileHelp", () => {
       const second = await compileHelp({ helpRoot, appRoutesDir, outputPath: secondOutput, ...quiet });
 
       expect(first).toEqual(second);
-      expect(first.college.shared.title).toBe("College guide");
-      expect(first.school.shared.title).toBe("School guide");
-      expect(first.school.shared.html).not.toBe(first.college.shared.html);
+      const collegeShared = first.college.shared;
+      const schoolShared = first.school.shared;
+      if (!collegeShared || !schoolShared) {
+        throw new Error("Expected both college and school shared fixture documents to be compiled.");
+      }
+
+      expect(collegeShared.title).toBe("College guide");
+      expect(schoolShared.title).toBe("School guide");
+      expect(schoolShared.html).not.toBe(collegeShared.html);
       expect(await readFile(firstOutput, "utf8")).toBe(await readFile(secondOutput, "utf8"));
       expect(await readFile(firstOutput, "utf8")).toContain('export type HelpEdition = "college" | "school";');
     } finally {
