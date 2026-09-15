@@ -15,6 +15,12 @@ test("school admin configures weights, closes a term, and reopens it with a reco
   await page.goto("/manage/terms");
   await expect(page.getByRole("heading", { name: "Academic terms" })).toBeVisible();
   await expect(page.locator(".shell-nav-link", { hasText: "Academic terms" })).toBeVisible();
+  await page.getByRole("button", { name: "Help" }).click();
+  const help = page.getByRole("dialog", { name: "Help" });
+  await expect(help.getByRole("heading", { name: "Academic terms and assessment types", level: 1 })).toBeVisible();
+  await expect(help).not.toContainText("Entering marks");
+  await help.getByRole("button", { name: "Close" }).click();
+  await expect(help).not.toBeVisible();
   await page.getByRole("button", { name: "Create term", exact: true }).click();
   let dialog = page.getByRole("dialog");
   const name = `Browser term ${Date.now()}`;

@@ -5,6 +5,7 @@ import { api, ApiError, currentAcademicYear, type SchoolTermView } from "./api";
 import { AsyncState } from "./AsyncState";
 import { AssessmentTypesEditor } from "./AssessmentTypesEditor";
 import { schoolVocabulary } from "./editionVocabulary";
+import { HelpButton } from "./help/HelpButton";
 import styles from "./SchoolTermsPage.module.css";
 
 export function SchoolTermsPage() {
@@ -91,7 +92,7 @@ export function SchoolTermsPage() {
   }
 
   return <>
-    <PageHeader eyebrow="Academics" title={schoolVocabulary.academicTerms} lede={`Manage the school calendar for each ${schoolVocabulary.academicYear.toLowerCase()} and keep a record of term closures and reopening reasons.`} />
+    <PageHeader eyebrow="Academics" title={schoolVocabulary.academicTerms} lede={`Manage the school calendar for each ${schoolVocabulary.academicYear.toLowerCase()} and keep a record of term closures and reopening reasons.`} help={<HelpButton slug="terms" />} />
     <div className={styles.toolbar}>
       <form className={styles.filters} onSubmit={(event) => { event.preventDefault(); setFilterYear(year.trim()); setRevision((value) => value + 1); }}>
         <Input label={schoolVocabulary.academicYear} value={year} maxLength={32} onChange={(event) => setYear(event.target.value)} placeholder="All years" />

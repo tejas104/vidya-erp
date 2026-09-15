@@ -33,7 +33,13 @@ test("subject teacher creates a school assessment, saves grades and observes clo
     await post(`/api/v1/people/teachers/${teacherId}/assignments`, { classId, subjectId, academicYear, kind: "subject_teacher" });
     await browserLogin(page, { username, password });
     await page.goto("/manage/marks");
-    await page.getByLabel("Academic term").selectOption(termId);
+    await page.getByRole("button", { name: "Help" }).click();
+    const help = page.getByRole("dialog", { name: "Help" });
+    await expect(help.getByRole("heading", { name: "School assessments and marks", level: 1 })).toBeVisible();
+    await expect(help).not.toContainText("Entering marks");
+    await help.getByRole("button", { name: "Close" }).click();
+    await expect(help).not.toBeVisible();
+    await page.getByLabel("Term").selectOption(termId);
     await page.getByLabel("Assessment name").fill("First test");
     await page.getByLabel("Assessment date").fill("2026-06-01");
     await page.getByLabel("Grade scale").selectOption(scaleId);
@@ -51,7 +57,7 @@ test("subject teacher creates a school assessment, saves grades and observes clo
     }
     await post(`/api/v1/school/terms/${termId}/close`, {});
     await page.reload();
-    await page.getByLabel("Academic term").selectOption(termId);
+    await page.getByLabel("Term").selectOption(termId);
     await page.getByRole("button", { name: "Open marks" }).click();
     await expect(page.getByText("Term closed · marks are read only.")).toBeVisible();
     await expect(page.getByLabel("score for Meera Browser")).toHaveCount(0);

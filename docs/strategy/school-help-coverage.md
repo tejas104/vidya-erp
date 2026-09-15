@@ -13,7 +13,7 @@ Updated for T03 on `codex/school-r01-terra`. This inventory uses the route-to-sl
 
 These four documents use only the compiler's supported Markdown subset. They contain no screenshot placeholders because no T03 browser capture was made.
 
-`attendance` and `coursework` currently render their matching `HelpButton` slugs. `terms` and the school implementation of `marks` compile to their matching slugs, but their screen components do not currently render a `HelpButton`. Wiring those existing screens is outside this content-only T03 boundary; the required change would be in `apps/web/src/ui/SchoolTermsPage.tsx` and `apps/web/src/ui/SchoolMarksPage.tsx`.
+`attendance`, `coursework`, `terms`, and the school implementation of `marks` render their matching `HelpButton` slugs. Focused UI tests verify that the school `terms` and `marks` entry points open their school articles and not college content.
 
 ## Active route and slug inventory not yet covered
 

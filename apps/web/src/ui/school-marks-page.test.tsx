@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { ToastProvider } from "@vidya/ui-system";
 import { SchoolMarksPage } from "./SchoolMarksPage";
 import { api, type SchoolAssessmentView } from "./api";
+import { HelpEditionProvider } from "./help/HelpEditionContext";
 
 vi.mock("./api", async (original) => {
   const actual = await original<typeof import("./api")>();
@@ -18,7 +19,7 @@ beforeEach(() => {
   vi.mocked(api.schoolMarks).mockResolvedValue({ marks: [], termStatus: "open" });
   vi.mocked(api.schoolCreateAssessment).mockResolvedValue(assessment);
 });
-function show() { render(<ToastProvider><SchoolMarksPage /></ToastProvider>); }
+function show() { render(<HelpEditionProvider edition="school"><ToastProvider><SchoolMarksPage /></ToastProvider></HelpEditionProvider>); }
 async function open() { show(); fireEvent.click(await screen.findByRole("button", { name: "Open marks" })); }
 
 describe("School marks entry", () => {
@@ -27,6 +28,16 @@ describe("School marks entry", () => {
     expect(await screen.findByText(/recorded grades for the academic year/i)).toBeInTheDocument();
     expect(await screen.findByLabelText("Term")).toBeInTheDocument();
     expect(screen.queryByLabelText("Academic term")).not.toBeInTheDocument();
+  });
+
+  it("opens the compiled school marks article from the header help button", async () => {
+    show();
+    fireEvent.click(await screen.findByRole("button", { name: "Help" }));
+    const dialog = screen.getByRole("dialog", { name: "Help" });
+    expect(dialog).toHaveTextContent("School assessments and marks");
+    expect(dialog).not.toHaveTextContent("Entering marks");
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    expect(screen.queryByRole("dialog", { name: "Help" })).not.toBeInTheDocument();
   });
 
   it("creates a term-linked assessment with the selected grading scale", async () => {

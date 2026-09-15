@@ -5,6 +5,7 @@ import { api, ApiError, currentAcademicYear, type SchoolAssessmentView, type Sch
 import { AsyncState } from "./AsyncState";
 import { ScoreEntryCard, type ScoreEntryStudent } from "./ScoreEntryCard";
 import { schoolVocabulary } from "./editionVocabulary";
+import { HelpButton } from "./help/HelpButton";
 import styles from "./SchoolMarksPage.module.css";
 
 type Target = { key: string; classId: string; subjectId: string; sectionId: string; label: string };
@@ -125,7 +126,7 @@ export function SchoolMarksPage() {
   }
 
   return <>
-    <PageHeader eyebrow="Academics" title="Enter marks" lede={`School assessments, term weights and recorded grades for the ${schoolVocabulary.academicYear.toLowerCase()}.`} />
+    <PageHeader eyebrow="Academics" title="Enter marks" lede={`School assessments, term weights and recorded grades for the ${schoolVocabulary.academicYear.toLowerCase()}.`} help={<HelpButton slug="marks" />} />
     <AsyncState loading={targets === null && !initialError} error={initialError} onRetry={() => setReload((value) => value + 1)} isEmpty={targets?.length === 0} empty={<EmptyState title="No teaching subjects assigned" body="Your administrator can assign a subject and section to your staff record." />}>
       {target ? <>
         <Select label="Class, section and subject" value={targetKey} disabled={saving} onChange={(event) => setTargetKey(event.target.value)} options={(targets ?? []).map((choice) => ({ value: choice.key, label: choice.label }))} />

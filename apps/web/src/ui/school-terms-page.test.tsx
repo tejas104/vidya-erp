@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { ToastProvider } from "@vidya/ui-system";
 import { SchoolTermsPage } from "./SchoolTermsPage";
 import { api, type SchoolTermView } from "./api";
+import { HelpEditionProvider } from "./help/HelpEditionContext";
 
 vi.mock("./api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./api")>();
@@ -17,7 +18,7 @@ beforeEach(() => {
   vi.mocked(api.colleges).mockResolvedValue({ colleges: [{ id: "col_1", name: "Northgate School", code: "NS" }] });
 });
 
-function renderPage() { return render(<ToastProvider><SchoolTermsPage /></ToastProvider>); }
+function renderPage() { return render(<HelpEditionProvider edition="school"><ToastProvider><SchoolTermsPage /></ToastProvider></HelpEditionProvider>); }
 
 describe("School term management", () => {
   it("uses school vocabulary for Academic Year fields and removes college wording", async () => {
@@ -28,6 +29,16 @@ describe("School term management", () => {
     fireEvent.click(screen.getByRole("button", { name: "Close term" }));
     expect(screen.getByRole("dialog")).toHaveTextContent("Closing this term makes its assessment marks read-only. An administrator must reopen it with a reason before making corrections.");
     expect(screen.queryByText(/college-style marks/i)).not.toBeInTheDocument();
+  });
+
+  it("opens the compiled school terms article from the header help button", async () => {
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: "Help" }));
+    const dialog = screen.getByRole("dialog", { name: "Help" });
+    expect(within(dialog).getByRole("heading", { name: "Academic terms and assessment types" })).toBeVisible();
+    expect(within(dialog).queryByRole("heading", { name: /marking attendance/i })).not.toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Close" }));
+    expect(screen.queryByRole("dialog", { name: "Help" })).not.toBeInTheDocument();
   });
 
   it("requires a reason before reopening and reflects the saved status", async () => {
