@@ -54,6 +54,12 @@ export class InvoiceWaivedError extends Error {
     this.name = "InvoiceWaivedError";
   }
 }
+export class RefundExceedsEligibleError extends Error {
+  constructor(readonly eligiblePaise: number, readonly requestedPaise: number) {
+    super(`refund of ${requestedPaise} paise exceeds the ${eligiblePaise} paise still eligible for refund`);
+    this.name = "RefundExceedsEligibleError";
+  }
+}
 
 export interface NewStructure {
   readonly collegeId: string;
@@ -384,6 +390,27 @@ export function createFeesRepo(db: Db): FeesRepo {
         const invoiceRows = await tx.select().from(feeInvoices).where(eq(feeInvoices.id, input.invoiceId)).for("update");
         const invoice = invoiceRows[0];
         if (invoice === undefined) throw new InvoiceNotFoundError();
+
+        // A refund gives back money already collected — it must never
+        // exceed what remains eligible (total paid, net of prior refunds).
+        // Computed AFTER the row lock above, so two concurrent refund
+        // requests serialize on the invoice lock: the second sees the
+        // first's committed refund before this check runs, so a combined
+        // refund can never exceed eligibility (strategy plan §5.7/§8.4).
+        if (input.kind === "refund") {
+          const [existingPayments, existingAdjustments] = await Promise.all([
+            tx.select().from(feePayments).where(eq(feePayments.invoiceId, invoice.id)),
+            tx.select().from(feeAdjustments).where(eq(feeAdjustments.invoiceId, invoice.id)),
+          ]);
+          const ledger = computeLedger(
+            invoice.amount,
+            existingPayments.map((p) => ({ amountPaise: p.amount })),
+            existingAdjustments.map((a) => ({ kind: a.kind, amountPaise: a.amount })),
+          );
+          if (input.amountPaise > ledger.effectivePaidPaise) {
+            throw new RefundExceedsEligibleError(ledger.effectivePaidPaise, input.amountPaise);
+          }
+        }
 
         const rows = await tx
           .insert(feeAdjustments)

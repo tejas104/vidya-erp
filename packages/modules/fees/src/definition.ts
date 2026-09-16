@@ -6,8 +6,18 @@ export const TABLE_PREFIX = "fee_";
 
 export const idSchema = z.string().min(1).max(64);
 export const academicYearSchema = z.string().regex(/^\d{4}-\d{2}$/, 'academic year like "2026-27"');
-/** Integer paise — never a float (house convention). */
-export const paiseSchema = z.number().int().positive();
+/**
+ * Integer paise — never a float (house convention). Capped well under
+ * Postgres `integer`'s 2,147,483,647 ceiling (all fee amount/receipt-amount
+ * columns are `integer`, db/schema.ts): without a ceiling here, a value
+ * this schema still calls "positive" can overflow that column at INSERT
+ * time and surface as an uncaught 500 instead of a clean validation error
+ * (docs/audits/school-fee-correctness.md, numeric bounds finding). ₹2 crore
+ * (2,00,00,000.00) is far beyond any real single school-fee transaction and
+ * leaves over 900 million paise of headroom under the column's actual limit.
+ */
+export const MAX_PAISE_AMOUNT = 2_000_000_000;
+export const paiseSchema = z.number().int().positive().max(MAX_PAISE_AMOUNT);
 export const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'date like "2026-07-11"');
 export const adjustmentKindSchema = z.enum(["scholarship", "fine", "refund", "waiver"]);
 export const paymentModeSchema = z.enum(["cash", "upi", "card", "bank", "gateway"]);
@@ -300,6 +310,7 @@ const routes: RouteSpec[] = [
         schema: z.object({ adjustment: feeAdjustmentViewSchema, invoice: feeInvoiceViewSchema }),
       },
       404: { description: "No such invoice", schema: problemSchema },
+      409: { description: "Refund exceeds the amount still eligible for refund", schema: problemSchema },
     },
   },
   {

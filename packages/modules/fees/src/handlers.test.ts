@@ -8,6 +8,7 @@ import {
   DuplicateStructureError,
   HeadInUseError,
   InvoiceWaivedError,
+  RefundExceedsEligibleError,
   type FeesRepo,
 } from "./repo";
 
@@ -39,6 +40,7 @@ interface Opts {
   headInUse?: boolean;
   duplicateStructure?: boolean;
   waived?: boolean;
+  refundExceedsEligible?: boolean;
   studentLinked?: boolean;
   payments?: (typeof paymentRow)[];
   /** action → granted (default: everything granted) */
@@ -86,13 +88,16 @@ function makeDeps(opts: Opts = {}) {
         invoice: { ...invoiceRow, status: "paid" as const },
       };
     },
-    addAdjustment: async (input: { kind: string; amountPaise: number }) => ({
-      adjustment: {
-        id: "fad_1", invoiceId: "fiv_1", collegeId: "col_1", kind: input.kind, amount: input.amountPaise,
-        reason: "", actor: "u_acc", createdAt: new Date(),
-      },
-      invoice: { ...invoiceRow, status: "waived" as const },
-    }),
+    addAdjustment: async (input: { kind: string; amountPaise: number }) => {
+      if (opts.refundExceedsEligible) throw new RefundExceedsEligibleError(0, input.amountPaise);
+      return {
+        adjustment: {
+          id: "fad_1", invoiceId: "fiv_1", collegeId: "col_1", kind: input.kind, amount: input.amountPaise,
+          reason: "", actor: "u_acc", createdAt: new Date(),
+        },
+        invoice: { ...invoiceRow, status: "waived" as const },
+      };
+    },
   } as unknown as FeesRepo;
 
   const directory = {
@@ -164,6 +169,14 @@ describe("fees handlers", () => {
     const handlers = createFeesHandlers(makeDeps({ waived: true }).deps);
     const result = await handlers["fees.payment-record"]!(
       ctx(accountant, { body: { invoiceId: "fiv_1", amountPaise: 1000, mode: "cash", ref: "" } }),
+    );
+    expect(result.status).toBe(409);
+  });
+
+  it("answers 409 when a refund exceeds the amount eligible for refund (S04 finding)", async () => {
+    const handlers = createFeesHandlers(makeDeps({ refundExceedsEligible: true }).deps);
+    const result = await handlers["fees.adjustment-add"]!(
+      ctx(accountant, { body: { invoiceId: "fiv_1", kind: "refund", amountPaise: 999_999, reason: "" } }),
     );
     expect(result.status).toBe(409);
   });

@@ -6,6 +6,7 @@ import {
   HeadInUseError,
   InvoiceNotFoundError,
   InvoiceWaivedError,
+  RefundExceedsEligibleError,
   type FeesRepo,
 } from "./repo";
 import type {
@@ -363,6 +364,7 @@ export function createFeesHandlers(deps: FeesHandlerDeps): Record<string, RouteH
       };
     } catch (error) {
       if (error instanceof InvoiceNotFoundError) return notFound("no such invoice");
+      if (error instanceof RefundExceedsEligibleError) return { status: 409, body: { message: error.message } };
       throw error;
     }
   };
