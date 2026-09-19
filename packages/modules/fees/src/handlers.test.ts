@@ -181,6 +181,27 @@ describe("fees handlers", () => {
     expect(result.status).toBe(409);
   });
 
+  // S04 F4: ADR-0025 hides audit rows without an org from institution audit
+  // history, so every fee mutation must attach the resource's OrgPath.
+  it("attaches the resource OrgPath to every fee mutation's audit record", async () => {
+    const handlers = createFeesHandlers(makeDeps().deps);
+    const invoiceOrg = { collegeId: "col_1", departmentId: "dep_1", classId: "cls_1", sectionId: "sec_1" };
+    const classOrg = { collegeId: "col_1", departmentId: "dep_1", classId: "cls_1" };
+    const cases: [string, RouteContext, unknown][] = [
+      ["fees.head-create", ctx(admin, { body: { collegeId: "col_1", name: "Tuition" } }), { collegeId: "col_1" }],
+      ["fees.head-delete", ctx(admin, { params: { headId: "fhd_1" } }), { collegeId: "col_1" }],
+      ["fees.structure-create", ctx(admin, { body: { classId: "cls_1", headId: "fhd_1", academicYear: YEAR, amountPaise: 50_000, dueOn: "2026-08-01", installmentNo: 1 } }), classOrg],
+      ["fees.invoices-generate", ctx(admin, { body: { classId: "cls_1", academicYear: YEAR } }), classOrg],
+      ["fees.payment-record", ctx(accountant, { body: { invoiceId: "fiv_1", amountPaise: 1000, mode: "cash", ref: "" } }), invoiceOrg],
+      ["fees.adjustment-add", ctx(accountant, { body: { invoiceId: "fiv_1", kind: "fine", amountPaise: 1000, reason: "" } }), invoiceOrg],
+    ];
+    for (const [id, context, org] of cases) {
+      const result = await handlers[id]!(context);
+      expect(result.status, id).toBeLessThan(400);
+      expect(result.audit?.org, id).toEqual(org);
+    }
+  });
+
   it("denies fees writes to a teacher even when reads are in scope", async () => {
     const handlers = createFeesHandlers(makeDeps({ scope: (action) => action === "read" }).deps);
     const result = await handlers["fees.payment-record"]!(

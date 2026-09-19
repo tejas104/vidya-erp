@@ -1,6 +1,7 @@
 # School fee correctness — S04 investigation and evidence report
 
-Date: 2026-09-16. Scope: `packages/modules/fees/` as it exists on
+Date: 2026-09-16, second pass 2026-09-19 (F4, F5, OpenAPI drift, receipt
+and display consistency — see "Second pass" below). Scope: `packages/modules/fees/` as it exists on
 `codex/school-r01-sonnet`, against strategy plan §5.7 (fees and minimum
 financial correctness) and §5.8 (online fee payments, read for context only
 — no gateway work was in scope or performed).
@@ -42,7 +43,7 @@ or atomicity claim):
   Not represented as a "bug"; no contract currently promises it exists.
 
 Evidence lives in [`tests/integration/fees-repo.int.test.ts`](../../tests/integration/fees-repo.int.test.ts)
-(11 tests, all passing, run three times consecutively with no flakiness)
+(12 tests after the second pass, all passing)
 and [`packages/modules/fees/src/definition.test.ts`](../../packages/modules/fees/src/definition.test.ts) /
 the amended [`handlers.test.ts`](../../packages/modules/fees/src/handlers.test.ts).
 
@@ -55,7 +56,7 @@ the amended [`handlers.test.ts`](../../packages/modules/fees/src/handlers.test.t
 | 4 | Receipt-number allocation under concurrency | Eight **real, concurrent** `recordPayment` calls against the same college produce receipt numbers `[1..8]` — no gaps, no duplicates — via the existing `for("update")` row lock on `fee_receipt_counters` (`fees-repo.int.test.ts`, "receipt numbering under real concurrency"). |
 | 6 | Partial-payment allocation | A payment less than the invoice amount correctly yields status `part`; a payment (or sum of payments) meeting or exceeding it yields `paid`. Covered by the pre-existing `money.test.ts` suite (unchanged, re-run clean). |
 | 6 | Invoice-generation idempotency (a form of retry safety) | `createInvoicesForStructures`' `(studentId, structureId)` unique index makes re-running invoice generation for the same pairs a no-op. Real-DB test: inserting the identical pair twice leaves exactly one row (`fees-repo.int.test.ts`, "invoice-generation idempotency"). |
-| 9 | Audit evidence | Every state-changing fee route (`head-create`, `head-delete`, `structure-create`, `invoices-generate`, `payment-record`, `adjustment-add`) declares an `audit` action in `definition.ts`; `defineRoute` refuses to register a state-changing route without one (a build-time guarantee, `platform/src/http/define-route.ts:190-194`), and each fees handler returns the `resourceId`/`details` that guarantee needs. Confirmed by inspection of all six route declarations and by a direct check that `paymentRecord`'s return value carries a non-empty `audit.resourceId`. End-to-end "audit row actually written" is `defineRoute`'s own separately-verified guarantee (not re-proven here, since these tests call handlers directly and bypass that wrapper — see the test file's own note). |
+| 9 | Audit evidence (see also F4, F5) | Every state-changing fee route (`head-create`, `head-delete`, `structure-create`, `invoices-generate`, `payment-record`, `adjustment-add`) declares an `audit` action in `definition.ts`; `defineRoute` refuses to register a state-changing route without one (a build-time guarantee, `platform/src/http/define-route.ts:190-194`), and each fees handler returns the `resourceId`/`details` that guarantee needs. Confirmed by inspection of all six route declarations and by a direct check that `paymentRecord`'s return value carries a non-empty `audit.resourceId`. End-to-end "audit row actually written" is `defineRoute`'s own separately-verified guarantee (not re-proven here, since these tests call handlers directly and bypass that wrapper — see the test file's own note). |
 | 10 | Atomicity when a later operation fails | Forced a **real** unique-constraint collision on `fee_payments(college_id, receipt_no)` at the LAST step of `recordPayment`'s transaction (after the receipt counter had already been read-locked and was about to be advanced). The whole transaction rolled back: the counter still reads its pre-attempt value, and no orphan payment row exists (`fees-repo.int.test.ts`, "atomicity when a later operation fails"). |
 
 ## Reproduced and fixed defects
@@ -175,6 +176,108 @@ and leave that specific item for an approved follow-up").
 4. This is additive and backward compatible: a caller that never sends a
    key gets exactly today's behavior (documented, not silently changed).
 
+## Second pass (2026-09-19)
+
+Re-audited the first pass against the full S04 brief (money bounds, tenant
+containment, receipt allocation, retries, refunds/reversal, stored vs
+displayed vs receipt totals, transactional audit). Also re-ran the F1
+reproduction as a **mutation check**: disabling the refund guard in
+`addAdjustment` turns 3 of the 12 integration tests red (over-limit,
+cumulative, concurrent refund); restoring it returns 12/12.
+
+### F4 — fee mutations wrote audit events with no organization (fixed)
+
+**Contract:** ADR-0025 (accepted 2026-09-14): institution audit history
+returns only rows whose `org` is set; "new institution-visible actions must
+attach the resolved resource `OrgPath` to their audit result."
+
+**Defect:** none of the six fee mutation handlers set `audit.org`, so
+`sys_audit_log.org` was `NULL` for every payment, refund, waiver, fine,
+scholarship, fee head, structure and generation run. Those events were
+therefore **invisible** to the institution's own audit history (they failed
+closed, so this was a missing audit trail, not a cross-tenant leak).
+
+**Reproduction:** `handlers.test.ts`, "attaches the resource OrgPath to every
+fee mutation's audit record" — failed on the pre-fix handlers (`received:
+undefined`); the `fees-repo.int.test.ts` audit test now also asserts the
+payment audit carries the invoice's real `{collegeId, departmentId,
+classId, sectionId}` read from Postgres.
+
+**Fix** (`handlers.ts`): payment/adjustment attach the invoice's full org
+path (already computed for the write check); structure-create and
+invoices-generate attach the class path; head create/delete attach
+`{collegeId}`. No schema, API or platform change.
+
+**Mutation proof:** reverting only `handlers.ts` makes exactly the unit
+case (40/41) and the integration audit case (11/12) fail; restoring returns
+41/41 and 12/12.
+
+**Not re-proven here:** that `SystemAuditLogger` persists `event.org` and
+that the scoped read returns it — that is ADR-0025's own integration test
+(`tests/integration/audit-scope.int.test.ts`), which needs the shared
+harness (Redis) and was **not run** in this session.
+
+### F5 — audit write happens after the payment commits (reproduced, not fixed — platform boundary)
+
+**Invariant:** Constitution rule 7 as implemented in `defineRoute`: "a
+failed audit write fails the request (fail-closed)."
+
+**Defect:** `defineRoute` calls the handler first; `recordPayment` /
+`addAdjustment` commit their own transaction; only then is
+`auditLogger.record` called, on a separate connection. If that write fails,
+the client gets `500` but the payment, its receipt number and the invoice
+status change are already committed, with **no audit row**. A client that
+treats the 500 as "not recorded" and retries creates a second payment
+(compounding F2).
+
+**Reproduction:** `fees-repo.int.test.ts`, "F5 … characterizes the current
+gap" — real `defineRoute` + real fees handler + real Postgres, only the
+audit sink throws: response `500`, yet `fee_payments` has 1 row and the
+receipt counter is at 1. Green on the **current** behavior, by design (a
+characterization test to flip when fixed).
+
+**Why not fixed here:** a correct fix makes the audit insert part of the
+money transaction (e.g. an `AuditLogger.record(event, tx)` variant, or a
+handler-owned outbox row committed in the same tx). That changes the
+platform audit seam and `defineRoute`, which are shared platform code
+outside this assignment's ownership. Proposed follow-up: add a
+transaction-aware audit write to the platform seam, have fees write its
+audit row inside `recordPayment`/`addAdjustment`, and let `defineRoute`
+skip its post-handler write for routes that declare they audited in-tx.
+
+### Contract drift — committed OpenAPI spec was stale after fc158c1 (fixed)
+
+`pnpm openapi:check` failed: `fc158c1` added `maximum: 2000000000` to
+amount fields and the `409` response on `fees.adjustment-add`, but did not
+regenerate `docs/openapi/openapi.json`. Regenerated with `pnpm
+openapi:generate`; the diff contains only those fee changes. Note for
+review: the `maximum` narrows accepted input, but only values that
+previously crashed with a 500 at INSERT time.
+
+### Areas checked with no new defect
+
+- **Money precision/rounding:** all arithmetic is integer paise;
+  `formatRupees` (`(paise/100).toFixed(2)`) is exact for integer paise (the
+  float error of `paise/100` is far below the 0.005 rounding threshold at
+  any value the ₹2 crore cap allows). JS sums stay exact (far below 2^53).
+  **Untested assumption:** per-invoice sums of payments/fines are not
+  bounded, but no amount column stores a sum, so they cannot overflow
+  Postgres `integer`.
+- **Receipt PDFs:** none exist. The receipt is the web counterfoil
+  (`apps/web/app/(app)/manage/fees/page.tsx`, printed via `window.print()`)
+  rendering the API's `receiptNo` and `amountPaise` with the web
+  `formatPaise`/`formatPaiseInWords`. Frontend was out of scope and not
+  changed or tested here; the stored amount is what the counterfoil receives.
+- **Stored vs displayed totals:** invoice `status` is persisted and
+  `paidPaise`/`duesPaise` are recomputed live from the same ledger function
+  (`computeLedger`); both writes recompute status under the invoice row
+  lock, so they cannot diverge except for the documented overpayment clamp.
+- **Cancellation/reversal:** there is no payment void/cancel route; the
+  only reversal is a `refund` adjustment (F1). Nothing further to audit.
+- **Lock ordering:** `recordPayment` locks invoice then receipt counter;
+  `addAdjustment` locks invoice only. Consistent order, no deadlock path
+  found (inspection, not a stress test).
+
 ## Missing capabilities (not defects — no existing contract promises these)
 
 These are described in §5.7 as things the fees module should eventually do,
@@ -206,6 +309,11 @@ a bug relative to any existing promise:
   assignment's boundary ("do not add a payment gateway") and were not
   investigated beyond confirming no gateway integration exists to
   investigate.
+- **Institution timezone for date ranges.** `paymentsInRange` treats
+  `from`/`to` as UTC calendar days, so an IST payment between 00:00 and
+  05:30 is counted on the previous day in `fees.collection-summary`. No
+  college timezone exists anywhere in the platform to do better, so this is
+  a known ceiling, not a contract breach.
 - **Scholarship/fine ceilings.** No cap exists on how large a `scholarship`
   or `fine` adjustment may be relative to the invoice. Unlike refunds, the
   strategy plan makes no explicit promise here — treated as a policy
@@ -237,6 +345,17 @@ a bug relative to any existing promise:
 | `pnpm exec vitest run --project unit packages/modules/fees` | **40/40 passed** (money 12, definition 11, generate-job 2, handlers 15) |
 | `pnpm exec vitest run --config <ad-hoc, uncommitted config>` targeting `tests/integration/fees-repo.int.test.ts` against a real local Postgres (native install, `postgres:postgres@localhost:5432`, disposable database `vidya_s04_fees_test`, migrated with only the fees module's own migration) | **11/11 passed**, run three consecutive times with no flakiness |
 | `git diff --cached --check` | clean |
+| **Second pass (2026-09-19)** | |
+| `pnpm exec vitest run --project unit packages/modules/fees/src/handlers.test.ts` before the F4 fix | 1 failed / 15 passed (the new F4 case, `received: undefined`) |
+| `pnpm exec vitest run --project unit packages/modules/fees` | **41/41 passed** |
+| `pnpm exec vitest run --root . --config <scratch config: include only tests/integration/fees-repo.int.test.ts, no globalSetup>` against local PostgreSQL 14.23, disposable `vidya_s04_fees_test` | **12/12 passed** |
+| Mutation: revert `handlers.ts` only | unit 40/41, integration 11/12 (the F4 cases); restored, green |
+| Mutation: disable the refund guard in `repo.ts` | integration 9/12 (the 3 F1 cases); restored, green |
+| `pnpm openapi:check` | failed (stale), then `pnpm openapi:generate`, then up to date |
+| `pnpm test` (all unit) | **92 files, 1067/1067 passed** |
+| `pnpm typecheck` | exit 0 |
+| `pnpm lint` (eslint + style checks) | exit 0 |
+| `pnpm test:integration tests/integration/fees-repo.int.test.ts` (official harness) | **not run — environment**: global setup throws `integration tests require REDIS_URL`; no Redis/shared harness here. Not counted as passing. |
 
 **On the integration-test harness:** this repository's shared
 `tests/integration/global-setup.ts` migrates *every* module into
@@ -256,7 +375,8 @@ the unrelated `analytics` migration issue is fixed for this environment.
 
 - Starting SHA (S03 commit, this assignment's predecessor): `9ac4630cd63774e571e84988fd04435d8609c1eb`
 - Fix + regression-test commit (F1, F3, evidence test file): `fc158c1f5f2f240e176e282140216bdc9e89a7a9`
-- Evidence report commit (this document): recorded as the resulting SHA in the top-level response accompanying this report (committed separately, per the instruction to keep fixes and the report in separate commits when that improves review)
+- Evidence report commit (first pass): `20e3ca4e0afe84769647531dcc31ee0e8a6138ed`
+- Second pass (F4 fix, F5 characterization, OpenAPI regeneration, this update): the commit directly on top of `20e3ca4`
 
 ## Remaining risks and limitations
 
@@ -264,6 +384,9 @@ the unrelated `analytics` migration issue is fixed for this environment.
   network retry or a double-submitted form still creates two receipts today.
   This is now precisely documented and evidenced, with a scoped migration
   proposal, but it is **not fixed**.
+- **F5 (audit after commit) remains live.** An audit-sink failure leaves a
+  committed payment with no audit row and a 500 that invites a retry.
+  Needs the platform audit seam change described above.
 - **No cheque/settlement modeling, no day-close report, no per-year receipt
   numbering** — all as described above.
 - This review did not examine the frontend, did not review

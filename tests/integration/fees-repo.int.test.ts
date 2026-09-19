@@ -24,6 +24,8 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   createDb,
   createLogger,
+  createMetrics,
+  defineRoute,
   migrateUp,
   type AuditLogger,
   type Db,
@@ -33,7 +35,7 @@ import {
   type ScopeChecker,
 } from "@vidya/platform";
 import type { PeopleDirectory } from "@vidya/module-people";
-import { createFeesModule } from "@vidya/module-fees";
+import { createFeesModule, feesModuleDefinition } from "@vidya/module-fees";
 import { modulePackageDir } from "../../scripts/registry";
 
 const SCRATCH_DB_NAME = process.env.FEES_AUDIT_DB_NAME ?? "vidya_s04_fees_test";
@@ -355,9 +357,40 @@ describe("S04 — audit evidence for successful financial changes (verified inva
     // confirms the handler returns the `audit` envelope defineRoute needs
     // to do so; end-to-end audit-on-write is defineRoute's own, separately
     // verified guarantee (Constitution rule 7), not re-proven here.
-    const invoiceId = await seedInvoice({ amount: 500_000 });
+    const collegeId = `col_${randomUUID()}`;
+    const invoiceId = await seedInvoice({ amount: 500_000, collegeId });
     const result = await handlers["fees.payment-record"]!(reqCtx(accountant, { body: { invoiceId, amountPaise: 100_000, mode: "cash", ref: "" } }));
     expect(result.status).toBe(201);
     expect(result.audit?.resourceId).toBeTruthy();
+    // F4: without org the row is invisible to institution audit history (ADR-0025).
+    expect(result.audit?.org).toEqual({ collegeId, departmentId: "dep_x", classId: "cls_x", sectionId: "sec_x" });
+  });
+});
+
+describe("S04 — audit write is outside the payment transaction (F5: reproduced, NOT fixed — platform boundary)", () => {
+  it("characterizes the current gap: a failed audit write answers 500 but the payment and its receipt stay committed", async () => {
+    // Real defineRoute + real fees handler + real DB; only the audit sink fails.
+    // Pins CURRENT behavior so the follow-up (audit inside the money tx) has a
+    // test to flip — it is not an endorsement.
+    const spec = feesModuleDefinition.routes.find((route) => route.id === "fees.payment-record")!;
+    const route = defineRoute(spec, handlers["fees.payment-record"]!, {
+      logger,
+      authenticator: { authenticate: async () => ({ authenticated: true, principal: accountant }) },
+      accessPolicy: { authorize: async () => ({ granted: true }) },
+      auditLogger: { record: async () => { throw new Error("audit sink unavailable"); } },
+      metrics: createMetrics({ serviceName: "s04-fees", defaultMetrics: false }),
+    });
+    const collegeId = `col_${randomUUID()}`;
+    const invoiceId = await seedInvoice({ amount: 500_000, collegeId });
+    const response = await route(
+      new Request("http://localhost/api/v1/fees/payments", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ invoiceId, amountPaise: 100_000, mode: "cash", ref: "" }),
+      }),
+    );
+    expect(response.status).toBe(500);
+    expect(await paymentCount(invoiceId)).toBe(1);
+    expect(await receiptCounter(collegeId)).toBe(1);
   });
 });

@@ -18558,7 +18558,8 @@
                   "amountPaise": {
                     "type": "integer",
                     "minimum": 0,
-                    "exclusiveMinimum": true
+                    "exclusiveMinimum": true,
+                    "maximum": 2000000000
                   },
                   "dueOn": {
                     "type": "string",
@@ -19470,7 +19471,8 @@
                   "amountPaise": {
                     "type": "integer",
                     "minimum": 0,
-                    "exclusiveMinimum": true
+                    "exclusiveMinimum": true,
+                    "maximum": 2000000000
                   },
                   "mode": {
                     "type": "string",
@@ -19745,7 +19747,8 @@
                   "amountPaise": {
                     "type": "integer",
                     "minimum": 0,
-                    "exclusiveMinimum": true
+                    "exclusiveMinimum": true,
+                    "maximum": 2000000000
                   },
                   "reason": {
                     "type": "string",
@@ -19909,6 +19912,36 @@
           },
           "404": {
             "description": "No such invoice",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Refund exceeds the amount still eligible for refund",
             "content": {
               "application/json": {
                 "schema": {

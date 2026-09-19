@@ -169,7 +169,7 @@ export function createFeesHandlers(deps: FeesHandlerDeps): Record<string, RouteH
     if (!readAllowed(principal, { collegeId: body.collegeId })) return denied();
     try {
       const row = await deps.repo.createHead(body.collegeId, body.name);
-      return { status: 201, body: headView(row), audit: { resourceId: row.id, details: { name: row.name } } };
+      return { status: 201, body: headView(row), audit: { org: { collegeId: row.collegeId }, resourceId: row.id, details: { name: row.name } } };
     } catch (error) {
       if (error instanceof DuplicateHeadError) return { status: 409, body: { message: error.message } };
       throw error;
@@ -192,7 +192,7 @@ export function createFeesHandlers(deps: FeesHandlerDeps): Record<string, RouteH
     if (!readAllowed(principal, { collegeId: head.collegeId })) return denied();
     try {
       await deps.repo.deleteHead(head.id);
-      return { status: 200, body: { ok: true as const }, audit: { resourceId: head.id, details: { name: head.name } } };
+      return { status: 200, body: { ok: true as const }, audit: { org: { collegeId: head.collegeId }, resourceId: head.id, details: { name: head.name } } };
     } catch (error) {
       if (error instanceof HeadInUseError) return { status: 409, body: { message: error.message } };
       throw error;
@@ -224,7 +224,7 @@ export function createFeesHandlers(deps: FeesHandlerDeps): Record<string, RouteH
       return {
         status: 201,
         body: structureView(row, head.name),
-        audit: { resourceId: row.id, details: { classId: row.classId, headId: row.headId, amountPaise: row.amount } },
+        audit: { org: path, resourceId: row.id, details: { classId: row.classId, headId: row.headId, amountPaise: row.amount } },
       };
     } catch (error) {
       if (error instanceof DuplicateStructureError) return { status: 409, body: { message: error.message } };
@@ -263,7 +263,7 @@ export function createFeesHandlers(deps: FeesHandlerDeps): Record<string, RouteH
     return {
       status: 202,
       body: { runId: run.id },
-      audit: { resourceId: run.id, details: { classId: body.classId, academicYear: body.academicYear } },
+      audit: { org: path, resourceId: run.id, details: { classId: body.classId, academicYear: body.academicYear } },
     };
   };
 
@@ -325,6 +325,7 @@ export function createFeesHandlers(deps: FeesHandlerDeps): Record<string, RouteH
         status: 201,
         body: { payment: paymentView(payment), invoice: await singleInvoiceView(updated) },
         audit: {
+          org,
           resourceId: payment.id,
           details: { invoiceId: invoice.id, receiptNo: payment.receiptNo, amountPaise: payment.amount, mode: payment.mode },
         },
@@ -358,6 +359,7 @@ export function createFeesHandlers(deps: FeesHandlerDeps): Record<string, RouteH
         status: 201,
         body: { adjustment: adjustmentView(adjustment), invoice: await singleInvoiceView(updated) },
         audit: {
+          org,
           resourceId: adjustment.id,
           details: { invoiceId: invoice.id, kind: adjustment.kind, amountPaise: adjustment.amount },
         },
