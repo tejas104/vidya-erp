@@ -7,6 +7,8 @@
  */
 
 import type { OrgPath } from "../auth/types";
+import type { Db } from "../db/client";
+import type { DurableAuditReceipt } from "./durable-receipt";
 export type ActorType = "user" | "service" | "system";
 
 export interface AuditEvent {
@@ -33,4 +35,16 @@ export interface AuditLogger {
    * (the http pipeline fails the request if the audit write fails).
    */
   record(event: AuditEvent): Promise<void>;
+}
+
+/**
+ * An audit sink that can also write inside a caller-owned transaction
+ * (ADR-0026). The mutation and its audit row then commit or roll back
+ * together. `tx` is the transaction handle from `db.transaction(...)`; the
+ * implementation MUST run its insert on it (never on its own connection) and
+ * return the receipt only after that insert resolved. A rejection must
+ * propagate so the caller's transaction rolls back (fail-closed).
+ */
+export interface TransactionalAuditLogger extends AuditLogger {
+  recordInTransaction(tx: Db, event: AuditEvent): Promise<DurableAuditReceipt>;
 }

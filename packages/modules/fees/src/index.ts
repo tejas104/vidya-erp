@@ -11,7 +11,7 @@
 
 import {
   assertModuleWiring,
-  type AuditLogger,
+  type TransactionalAuditLogger,
   type Db,
   type RuntimeModule,
   type ScopeChecker,
@@ -26,7 +26,8 @@ export { MODULE_NAME as FEES_MODULE_NAME, feesModuleDefinition, INVOICE_GENERATE
 
 export interface FeesModuleDeps {
   readonly db: Db;
-  readonly audit: AuditLogger;
+  /** Must write inside the caller's transaction: payment/adjustment audit rows commit atomically (ADR-0026). */
+  readonly audit: TransactionalAuditLogger;
   readonly scopeChecker: ScopeChecker;
   readonly peopleDirectory: PeopleDirectory;
   /** Enqueues the invoice-generate job (BullMQ in prod, inline fake in tests). */
@@ -34,7 +35,7 @@ export interface FeesModuleDeps {
 }
 
 export function createFeesModule(deps: FeesModuleDeps): RuntimeModule<Record<string, never>> {
-  const repo = createFeesRepo(deps.db);
+  const repo = createFeesRepo(deps.db, deps.audit);
   const module: RuntimeModule<Record<string, never>> = {
     definition: feesModuleDefinition,
     handlers: createFeesHandlers({

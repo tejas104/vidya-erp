@@ -4,6 +4,18 @@ import type { JobSpec, ModuleDefinition, RouteSpec } from "@vidya/platform";
 export const MODULE_NAME = "fees";
 export const TABLE_PREFIX = "fee_";
 
+/**
+ * Audit identity of the two routes that write their audit row inside the
+ * money transaction (ADR-0026). Shared by the RouteSpec and the repo so the
+ * event that commits with the payment/adjustment is, by construction, the
+ * action the route declares. defineRoute only skips its own write when the
+ * receipt matches these exactly.
+ */
+export const FEES_AUDIT = {
+  paymentRecorded: { action: "fees.payment-recorded", resourceType: "fee-payment" },
+  adjustmentAdded: { action: "fees.adjustment-added", resourceType: "fee-adjustment" },
+} as const;
+
 export const idSchema = z.string().min(1).max(64);
 export const academicYearSchema = z.string().regex(/^\d{4}-\d{2}$/, 'academic year like "2026-27"');
 /**
@@ -279,7 +291,7 @@ const routes: RouteSpec[] = [
         idempotencyKey: paymentIdempotencyKeySchema,
       }),
     },
-    audit: { action: "fees.payment-recorded", resourceType: "fee-payment" },
+    audit: FEES_AUDIT.paymentRecorded,
     responses: {
       200: {
         description: "Previously recorded payment returned for an identical retry",
@@ -309,7 +321,7 @@ const routes: RouteSpec[] = [
         reason: z.string().trim().max(256).default(""),
       }),
     },
-    audit: { action: "fees.adjustment-added", resourceType: "fee-adjustment" },
+    audit: FEES_AUDIT.adjustmentAdded,
     responses: {
       201: {
         description: "Recorded",

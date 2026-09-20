@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { pino } from "pino";
-import type { Principal, RouteContext, ScopeChecker } from "@vidya/platform";
+import { isDurableAuditReceipt, issueDurableAuditReceipt, type Principal, type RouteContext, type ScopeChecker } from "@vidya/platform";
 import type { PeopleDirectory } from "@vidya/module-people";
 import { createFeesHandlers, type FeesHandlerDeps } from "./handlers";
+import { FEES_AUDIT } from "./definition";
 import {
   DuplicateHeadError,
   DuplicateStructureError,
@@ -53,6 +54,12 @@ interface Opts {
 
 function makeDeps(opts: Opts = {}) {
   const enqueued: { runId: string }[] = [];
+  const attributions: { requestId: string; actorType: string; actorId: string | null }[] = [];
+  const receiptFor = (spec: { action: string; resourceType: string }, requestId: string) =>
+    issueDurableAuditReceipt({
+      module: "fees", action: spec.action, actorType: "user", actorId: "u_acc",
+      resourceType: spec.resourceType, resourceId: "x", requestId, details: {},
+    });
   const repo = {
     createHead: async (collegeId: string, name: string) => {
       if (opts.duplicateHead) throw new DuplicateHeadError();
@@ -85,18 +92,23 @@ function makeDeps(opts: Opts = {}) {
     paymentsForInvoice: async () => opts.payments ?? [],
     adjustmentsForInvoice: async () => [],
     paymentsInRange: async () => [paymentRow, { ...paymentRow, id: "fpy_2", receiptNo: 8, amount: 25_000, mode: "upi" as const }],
-    recordPayment: async (input: { amountPaise: number }) => {
+    recordPayment: async (input: { amountPaise: number }, attribution: { requestId: string; actorType: string; actorId: string | null }) => {
+      attributions.push(attribution);
       if (opts.waived) throw new InvoiceWaivedError();
       if (opts.paymentIdempotencyConflict) throw new PaymentIdempotencyConflictError();
+      const replayed = opts.paymentReplayed ?? false;
       return {
         payment: { ...paymentRow, amount: input.amountPaise },
         invoice: { ...invoiceRow, status: "paid" as const },
-        replayed: opts.paymentReplayed ?? false,
+        replayed,
+        auditReceipt: replayed ? null : receiptFor(FEES_AUDIT.paymentRecorded, attribution.requestId),
       };
     },
-    addAdjustment: async (input: { kind: string; amountPaise: number }) => {
+    addAdjustment: async (input: { kind: string; amountPaise: number }, attribution: { requestId: string; actorType: string; actorId: string | null }) => {
+      attributions.push(attribution);
       if (opts.refundExceedsEligible) throw new RefundExceedsEligibleError(0, input.amountPaise);
       return {
+        auditReceipt: receiptFor(FEES_AUDIT.adjustmentAdded, attribution.requestId),
         adjustment: {
           id: "fad_1", invoiceId: "fiv_1", collegeId: "col_1", kind: input.kind, amount: input.amountPaise,
           reason: "", actor: "u_acc", createdAt: new Date(),
@@ -126,7 +138,7 @@ function makeDeps(opts: Opts = {}) {
     repo, directory, scopeChecker,
     enqueueGenerate: async (payload) => { enqueued.push(payload); },
   };
-  return { deps, enqueued };
+  return { deps, enqueued, attributions };
 }
 
 describe("fees handlers", () => {
@@ -185,13 +197,41 @@ describe("fees handlers", () => {
       ctx(accountant, { body: { invoiceId: "fiv_1", amountPaise: 1000, mode: "cash", ref: "", idempotencyKey: PAYMENT_KEY } }),
     );
     expect(replayed.status).toBe(200);
-    expect(replayed.audit?.details).toMatchObject({ replayed: true });
+    // ADR-0026: a replay commits nothing, so it must not be audited as a new payment.
+    expect(replayed.audit?.persisted).toEqual({ kind: "idempotent-replay", resourceId: "fpy_1" });
 
     const conflict = createFeesHandlers(makeDeps({ paymentIdempotencyConflict: true }).deps);
     const rejected = await conflict["fees.payment-record"]!(
       ctx(accountant, { body: { invoiceId: "fiv_1", amountPaise: 1000, mode: "cash", ref: "", idempotencyKey: PAYMENT_KEY } }),
     );
     expect(rejected.status).toBe(409);
+  });
+
+  it("a new payment declares its audit as persisted in-transaction, with a platform receipt for THIS request and the declared action", async () => {
+    const { deps, attributions } = makeDeps();
+    const result = await createFeesHandlers(deps)["fees.payment-record"]!(
+      ctx(accountant, { body: { invoiceId: "fiv_1", amountPaise: 1000, mode: "cash", ref: "", idempotencyKey: PAYMENT_KEY } }),
+    );
+    expect(result.status).toBe(201);
+    const persisted = result.audit?.persisted;
+    expect(persisted?.kind).toBe("in-transaction");
+    const receipt = persisted?.kind === "in-transaction" ? persisted.receipt : undefined;
+    expect(isDurableAuditReceipt(receipt)).toBe(true);
+    expect(receipt).toMatchObject({ module: "fees", ...FEES_AUDIT.paymentRecorded, requestId: "r" });
+    // Attribution comes from the authenticated principal and request id, never the body.
+    expect(attributions).toEqual([{ requestId: "r", actorType: "user", actorId: "u_acc" }]);
+  });
+
+  it("an adjustment declares its audit as persisted in-transaction", async () => {
+    const { deps, attributions } = makeDeps();
+    const result = await createFeesHandlers(deps)["fees.adjustment-add"]!(
+      ctx(accountant, { body: { invoiceId: "fiv_1", kind: "fine", amountPaise: 1000, reason: "late" } }),
+    );
+    expect(result.status).toBe(201);
+    const persisted = result.audit?.persisted;
+    expect(persisted?.kind).toBe("in-transaction");
+    expect(persisted?.kind === "in-transaction" && isDurableAuditReceipt(persisted.receipt)).toBe(true);
+    expect(attributions).toEqual([{ requestId: "r", actorType: "user", actorId: "u_acc" }]);
   });
 
   it("answers 409 when a refund exceeds the amount eligible for refund (S04 finding)", async () => {

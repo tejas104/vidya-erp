@@ -2,6 +2,7 @@ import type { z } from "zod";
 import type { Logger } from "../logger/logger";
 import type { AccessRequirement, Principal, OrgPath } from "../auth/types";
 import type { ActorType } from "../audit/types";
+import type { DurableAuditReceipt } from "../audit/durable-receipt";
 import type { LicenseEdition } from "../license/verify";
 
 /**
@@ -177,8 +178,35 @@ export interface RouteResult {
       readonly type: ActorType;
       readonly id: string | null;
     };
+    /**
+     * Declares that the handler already persisted the audit record, so
+     * defineRoute must not write a second one. Absent (the default for every
+     * module that has not adopted ADR-0026) means the ordinary post-handler
+     * audit write. See PersistedAudit for the only accepted forms.
+     */
+    readonly persisted?: PersistedAudit;
   };
 }
+
+/**
+ * Typed proof that the handler's own transaction covered the audit record
+ * (ADR-0026). defineRoute honours it only when it verifies the claim; any
+ * mismatch falls back to the ordinary audit write so the request can never
+ * end up unaudited.
+ */
+export type PersistedAudit =
+  /**
+   * The mutation and its audit row committed in one transaction. The receipt
+   * must have been issued by a TransactionalAuditLogger for THIS request and
+   * for exactly the action/resourceType this route declares.
+   */
+  | { readonly kind: "in-transaction"; readonly receipt: DurableAuditReceipt }
+  /**
+   * The request performed no mutation: it was an idempotent replay of one
+   * that was already committed together with its own audit row. Only for
+   * routes whose handler proves that (e.g. a matching idempotency key).
+   */
+  | { readonly kind: "idempotent-replay"; readonly resourceId: string };
 
 export type RouteHandler = (context: RouteContext) => Promise<RouteResult>;
 

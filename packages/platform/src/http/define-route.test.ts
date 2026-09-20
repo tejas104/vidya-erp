@@ -9,6 +9,7 @@ import type {
 import type { AuditEvent, AuditLogger } from "../audit/types";
 import { DenyAllAccessPolicy, DenyAllAuthenticator } from "../auth/deny-all";
 import { createMetrics } from "../metrics/metrics";
+import { isDurableAuditReceipt, issueDurableAuditReceipt } from "../audit/durable-receipt";
 import type { RouteHandler, RouteSpec } from "../contracts/module";
 import { createRateLimiter } from "../ratelimit/limiter";
 import { MemoryRateLimitStore } from "../ratelimit/test-support";
@@ -418,6 +419,116 @@ describe("defineRoute — body size cap", () => {
       }),
     );
     expect(response.status).toBe(200);
+  });
+});
+
+describe("defineRoute — transactional audit contract (ADR-0026)", () => {
+  const SPEC_AUDIT = { action: "demo.create", resourceType: "demo" } as const;
+  const post = (requestId = "req-1") =>
+    new Request("http://localhost/api/v1/demo", { method: "POST", headers: { "x-request-id": requestId } });
+  const setup = () => ({
+    deps: makeDeps({ authenticator: allowAuthenticator, accessPolicy: allowPolicy }),
+    spec: makeSpec({ method: "POST", audit: SPEC_AUDIT }),
+  });
+  const receiptFor = (overrides: Partial<{ module: string; action: string; resourceType: string; requestId: string | null }> = {}) =>
+    issueDurableAuditReceipt({
+      module: "demo", action: SPEC_AUDIT.action, resourceType: SPEC_AUDIT.resourceType, actorType: "user",
+      actorId: "user-1", resourceId: "d-1", requestId: "req-1", details: {}, ...overrides,
+    });
+
+  it("skips the post-handler write when the handler returns a matching platform receipt", async () => {
+    const { deps, spec } = setup();
+    const handler: RouteHandler = async () => ({
+      status: 201, body: {}, audit: { resourceId: "d-1", persisted: { kind: "in-transaction", receipt: receiptFor() } },
+    });
+    expect((await defineRoute(spec, handler, deps)(post())).status).toBe(201);
+    expect(deps.audit.events).toHaveLength(0);
+  });
+
+  it("ignores a forged receipt (same shape, not issued by the platform) and still audits — fail-closed", async () => {
+    const { deps, spec } = setup();
+    const forged = { module: "demo", action: "demo.create", resourceType: "demo", resourceId: "d-1", requestId: "req-1" };
+    expect(isDurableAuditReceipt(forged)).toBe(false);
+    const handler: RouteHandler = async () => ({
+      status: 201, body: {}, audit: { resourceId: "d-1", persisted: { kind: "in-transaction", receipt: forged } },
+    });
+    await defineRoute(spec, handler, deps)(post());
+    expect(deps.audit.events).toHaveLength(1);
+  });
+
+  it.each([
+    ["another module", { module: "other" }],
+    ["another action", { action: "demo.delete" }],
+    ["another resource type", { resourceType: "other" }],
+    ["another request", { requestId: "req-2" }],
+    ["no request id", { requestId: null }],
+  ])("ignores a genuine receipt issued for %s and still audits", async (_label, overrides) => {
+    const { deps, spec } = setup();
+    const handler: RouteHandler = async () => ({
+      status: 201, body: {}, audit: { resourceId: "d-1", persisted: { kind: "in-transaction", receipt: receiptFor(overrides) } },
+    });
+    await defineRoute(spec, handler, deps)(post());
+    expect(deps.audit.events).toHaveLength(1);
+  });
+
+  it("does not let a request header influence the decision: the receipt's request id must equal the resolved one", async () => {
+    const { deps, spec } = setup();
+    const handler: RouteHandler = async () => ({
+      status: 201, body: {}, audit: { persisted: { kind: "in-transaction", receipt: receiptFor({ requestId: "attacker-chosen" }) } },
+    });
+    await defineRoute(spec, handler, deps)(post("req-1"));
+    expect(deps.audit.events).toHaveLength(1);
+  });
+
+  it("honours the typed idempotent-replay form (no mutation, nothing new to audit)", async () => {
+    const { deps, spec } = setup();
+    const handler: RouteHandler = async () => ({
+      status: 200, body: {}, audit: { persisted: { kind: "idempotent-replay", resourceId: "d-1" } },
+    });
+    await defineRoute(spec, handler, deps)(post());
+    expect(deps.audit.events).toHaveLength(0);
+  });
+
+  it("still fails closed (500) when the ordinary write is needed and fails, even if a bad receipt was offered", async () => {
+    const { spec } = setup();
+    const deps = makeDeps({
+      authenticator: allowAuthenticator, accessPolicy: allowPolicy,
+      auditLogger: { record: async () => { throw new Error("audit store unavailable"); } },
+    });
+    const handler: RouteHandler = async () => ({
+      status: 201, body: {}, audit: { persisted: { kind: "in-transaction", receipt: receiptFor({ action: "demo.other" }) } },
+    });
+    expect((await defineRoute(spec, handler, deps)(post())).status).toBe(500);
+  });
+
+  it("leaves routes that have not adopted the mechanism unchanged: no `persisted` means the ordinary post-handler write", async () => {
+    const { deps, spec } = setup();
+    const handler: RouteHandler = async () => ({ status: 201, body: {}, audit: { resourceId: "d-1", details: { legacy: true } } });
+    await defineRoute(spec, handler, deps)(post());
+    expect(deps.audit.events).toHaveLength(1);
+    expect(deps.audit.events[0]).toMatchObject({ action: "demo.create", resourceId: "d-1", requestId: "req-1" });
+  });
+
+  it("does not audit a failed request even when a receipt is present", async () => {
+    const { deps, spec } = setup();
+    const handler: RouteHandler = async () => ({
+      status: 409, body: {}, audit: { persisted: { kind: "in-transaction", receipt: receiptFor() } },
+    });
+    await defineRoute(spec, handler, deps)(post());
+    expect(deps.audit.events).toHaveLength(0);
+  });
+});
+
+describe("issueDurableAuditReceipt / isDurableAuditReceipt", () => {
+  it("recognises only receipts the platform issued, by identity, and freezes them", () => {
+    const receipt = issueDurableAuditReceipt({
+      module: "m", action: "m.a", actorType: "user", actorId: "u", resourceType: "t", resourceId: "r", requestId: "q", details: {},
+    });
+    expect(isDurableAuditReceipt(receipt)).toBe(true);
+    expect(isDurableAuditReceipt({ ...receipt })).toBe(false);
+    expect(isDurableAuditReceipt(JSON.parse(JSON.stringify(receipt)))).toBe(false);
+    expect(isDurableAuditReceipt(null)).toBe(false);
+    expect(Object.isFrozen(receipt)).toBe(true);
   });
 });
 

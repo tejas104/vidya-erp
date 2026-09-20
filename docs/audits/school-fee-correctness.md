@@ -1,6 +1,9 @@
 # School fee correctness — S04 investigation and evidence report
 
-Date: 2026-09-16, second pass 2026-09-19 (F4, F5, OpenAPI drift, receipt
+**F5 (audit atomicity) status, S05 2026-09-21: fully fixed for fee payments
+and adjustments; mitigated only elsewhere — see F5 below.**
+
+Date: 2026-09-16, second pass 2026-09-19, S05 2026-09-21 (F4, F5, OpenAPI drift, receipt
 and display consistency — see "Second pass" below). Scope: `packages/modules/fees/` as it exists on
 `codex/school-r01-sonnet`, against strategy plan §5.7 (fees and minimum
 financial correctness) and §5.8 (online fee payments, read for context only
@@ -56,7 +59,7 @@ the amended [`handlers.test.ts`](../../packages/modules/fees/src/handlers.test.t
 | 4 | Receipt-number allocation under concurrency | Eight **real, concurrent** `recordPayment` calls against the same college produce receipt numbers `[1..8]` — no gaps, no duplicates — via the existing `for("update")` row lock on `fee_receipt_counters` (`fees-repo.int.test.ts`, "receipt numbering under real concurrency"). |
 | 6 | Partial-payment allocation | A payment less than the invoice amount correctly yields status `part`; a payment (or sum of payments) meeting or exceeding it yields `paid`. Covered by the pre-existing `money.test.ts` suite (unchanged, re-run clean). |
 | 6 | Invoice-generation idempotency (a form of retry safety) | `createInvoicesForStructures`' `(studentId, structureId)` unique index makes re-running invoice generation for the same pairs a no-op. Real-DB test: inserting the identical pair twice leaves exactly one row (`fees-repo.int.test.ts`, "invoice-generation idempotency"). |
-| 9 | Audit evidence (see also F4, F5) | Every state-changing fee route (`head-create`, `head-delete`, `structure-create`, `invoices-generate`, `payment-record`, `adjustment-add`) declares an `audit` action in `definition.ts`; `defineRoute` refuses to register a state-changing route without one (a build-time guarantee, `platform/src/http/define-route.ts:190-194`), and each fees handler returns the `resourceId`/`details` that guarantee needs. Confirmed by inspection of all six route declarations and by a direct check that `paymentRecord`'s return value carries a non-empty `audit.resourceId`. End-to-end "audit row actually written" is `defineRoute`'s own separately-verified guarantee (not re-proven here, since these tests call handlers directly and bypass that wrapper — see the test file's own note). |
+| 9 | Audit evidence (see also F4, F5) | Every state-changing fee route (`head-create`, `head-delete`, `structure-create`, `invoices-generate`, `payment-record`, `adjustment-add`) declares an `audit` action in `definition.ts`; `defineRoute` refuses to register a state-changing route without one (a build-time guarantee, `platform/src/http/define-route.ts:190-194`), and each fees handler returns the `resourceId`/`details` that guarantee needs. Confirmed by inspection of all six route declarations and by a direct check that `paymentRecord`'s return value carries a non-empty `audit.resourceId`. For `payment-record` and `adjustment-add` the audit row is now proven end to end against real PostgreSQL, atomically with the mutation (F5, S05). The other four routes still rely on `defineRoute`'s own post-handler guarantee, which these tests do not re-prove. |
 | 10 | Atomicity when a later operation fails | Forced a **real** unique-constraint collision on `fee_payments(college_id, receipt_no)` at the LAST step of `recordPayment`'s transaction (after the receipt counter had already been read-locked and was about to be advanced). The whole transaction rolled back: the counter still reads its pre-attempt value, and no orphan payment row exists (`fees-repo.int.test.ts`, "atomicity when a later operation fails"). |
 
 ## Reproduced and fixed defects
@@ -196,39 +199,78 @@ that the scoped read returns it — that is ADR-0025's own integration test
 (`tests/integration/audit-scope.int.test.ts`), which needs the shared
 harness (Redis) and was **not run** in this session.
 
-### F5 — audit write happens after the payment commits (platform gap, payment retry consequence mitigated)
+### F5 — audit write happened after the payment committed (FIXED for payments and adjustments by S05, ADR-0026)
 
-**Invariant:** Constitution rule 7 as implemented in `defineRoute`: "a
-failed audit write fails the request (fail-closed)."
+**Status: fully fixed for `fees.payment-record` and `fees.adjustment-add`.**
+Mitigated only, not fixed, for every other audited route in the platform (see
+"Remaining post-handler audit" below).
 
-**Defect:** `defineRoute` calls the handler first; `recordPayment` /
-`addAdjustment` commit their own transaction; only then is
-`auditLogger.record` called, on a separate connection. If that write fails,
-the client gets `500` but the payment, its receipt number and the invoice
-status change are already committed, with **no audit row**. Before the
-idempotency correction, a client that treated the 500 as "not recorded"
-could create a second payment on retry.
+**Invariant:** Constitution rule 7: a failed audit write fails the request
+(fail-closed) and the audited change does not stand.
 
-**Reproduction:** `fees-repo.int.test.ts`, "F5 … characterizes the current
-gap" — real `defineRoute` + real fees handler + real Postgres, only the
-audit sink throws: response `500`, yet `fee_payments` has 1 row and the
-receipt counter is at 1. Green on the **current** behavior, by design (a
-characterization test to flip when fixed).
+**Defect (pre-S05):** `defineRoute` called the handler, the fee transaction
+committed, and only then `auditLogger.record` ran on a separate connection. A
+failing sink answered `500` while the payment, its receipt number and the
+invoice status stayed committed with **no audit row**. The idempotency
+correction only made a *retry* safe; without a retry the audit row was lost.
 
-**Current mitigation:** the required payment idempotency key means a retry
-after this 500 returns and audits the original receipt instead of charging
-again. A real-route/real-Postgres regression forces the first audit write to
-fail, retries the same body against a working audit sink, and verifies HTTP
-200, one payment, one receipt number and a replay audit event.
+**Fix (S05):** [ADR-0026](../adr/0026-transactional-audit.md).
+- `TransactionalAuditLogger.recordInTransaction(tx, event)` (platform seam,
+  implemented by the system module through `SystemService.audit`) inserts the
+  audit row on the caller's transaction, so fees never touches a system table.
+- `recordPayment` and `addAdjustment` write the audit row as the **last step
+  of their own transaction**, with the org read from the invoice row locked in
+  that transaction, the actor and request id supplied by the handler from the
+  authenticated principal, and the amount/mode/ref/receipt/kind details.
+- The handler returns the typed `audit.persisted` proof; `defineRoute` skips
+  its own write only when the receipt is platform-issued and matches the
+  route's module, action, resource type and this request's id, otherwise it
+  falls back to the ordinary fail-closed write.
+- An identical keyed replay (200) commits nothing and writes no second
+  "payment recorded" event (`idempotent-replay`).
 
-**Remaining platform work:** a complete fix makes the audit insert part of the
-money transaction (e.g. an `AuditLogger.record(event, tx)` variant, or a
-handler-owned outbox row committed in the same tx). That changes the
-platform audit seam and `defineRoute`, which are shared platform code
-outside this assignment's ownership. Proposed follow-up: add a
-transaction-aware audit write to the platform seam, have fees write its
-audit row inside `recordPayment`/`addAdjustment`, and let `defineRoute`
-skip its post-handler write for routes that declare they audited in-tx.
+**Evidence — real PostgreSQL, real `defineRoute`, real system audit sink**
+(`tests/integration/fees-repo.int.test.ts`, 22 tests, 3 consecutive passes):
+- Audit failure injected **before** the audit insert and **after** it (so the
+  audit row itself must be rolled back), for a payment, a waiver and a refund:
+  HTTP 500; no payment/adjustment row; receipt counter row absent (rolled
+  back); invoice status unchanged (`pending`, or `paid` for the refund case);
+  zero audit rows for the college; a refund whose audit failed does not
+  consume refund eligibility.
+- The safe retry then creates exactly one payment (receipt `1`, counter `1`)
+  or adjustment, one audit row whose `resource_id` is the new record, and
+  `defineRoute`'s post-handler sink is called **zero** times.
+- Success rows carry `org` (collegeId, departmentId, classId, sectionId),
+  `actor_type`/`actor_id`, the request id sent in `x-request-id`, resource
+  id, and amount/mode/ref/receipt/idempotency-key or kind/reason details.
+- Replay: first 201, replay 200 with the original payment id and receipt
+  number, changed payload with the same key 409; still one payment, counter
+  `1`, one audit row. Three concurrent identical requests: statuses
+  `[200, 200, 201]`, one payment, one audit row.
+- Tenant retrieval: the real `system.audit-log` handler with the **real
+  `ScopeChecker`** (from `createIdentityCore`) returns the event to an admin of
+  that college and nothing to an admin of another college.
+- Mutation proof: writing the audit row on a separate connection instead of
+  the transaction fails 3 tests (every "after-write" rollback test); making
+  `defineRoute` ignore `persisted` fails 9 tests. Both restored, 22/22.
+- Platform unit tests (`define-route.test.ts`): a matching receipt skips the
+  ordinary write; a forged, wrong-module, wrong-action, wrong-resource-type,
+  other-request or null-request receipt is ignored and the event is still
+  audited; a bad receipt plus a failing sink still yields 500; a result
+  without `persisted` behaves exactly as before; a 4xx is never audited.
+
+**Limits of the claim (untested or out of scope):**
+- The receipt proves the audit insert ran on the transaction; it cannot
+  detect a `TransactionalAuditLogger` that issues receipts without inserting.
+  Only the system module's implementation may call `issueDurableAuditReceipt`
+  (a convention enforced by review and by the mutation tests above).
+- `idempotent-replay` is a second, narrower skip path that is not
+  machine-verified. A payment committed by a pre-S05 build whose post-commit
+  audit had failed is **not** re-audited when replayed.
+- The commit itself failing after a successful audit insert is handled by
+  PostgreSQL atomicity (both roll back); no test forces a `COMMIT` failure.
+- Fee head create/delete, structure create and invoice-generation runs still
+  use the post-handler audit (they carry no money movement).
 
 ### Contract drift — committed OpenAPI spec was stale after fc158c1 (fixed)
 
@@ -340,6 +382,18 @@ a bug relative to any existing promise:
 | `pnpm test` (all unit) | **92 files, 1067/1067 passed** |
 | `pnpm typecheck` | exit 0 |
 | `pnpm lint` (eslint + style checks) | exit 0 |
+| **S05 (2026-09-21)** | |
+| `pnpm exec vitest run --project unit packages/modules/fees packages/platform/src/http` | **97/97 passed** |
+| `pnpm exec vitest run --project unit --no-file-parallelism` (all unit) | **92 files, 1084/1084 passed** |
+| `pnpm exec vitest run --root . --config <scratch config: only tests/integration/fees-repo.int.test.ts, no globalSetup>` on local PostgreSQL 14.23, disposable `vidya_s04_fees_test`, migrated with the **system** and fees migrations | **22/22 passed**, three consecutive runs |
+| Mutation A: audit written on a separate connection (`recordInTransaction(db, …)`) | 3 failed / 19 passed; restored, 22/22 |
+| Mutation B: `defineRoute` ignores `persisted` | 9 failed / 13 passed; restored, 22/22 |
+| `pnpm typecheck` | exit 0 |
+| `pnpm lint` | exit 0 |
+| `pnpm openapi:check` | up to date (no route schema changed) |
+| `pnpm check:ownership` | 16 modules verified |
+| `pnpm test:ui` | 65 files, 285/285 passed |
+| `pnpm build` | exit 0 |
 | `pnpm test:integration tests/integration/fees-repo.int.test.ts` (official harness) | **not run — environment**: global setup throws `integration tests require REDIS_URL`; no Redis/shared harness here. Not counted as passing. |
 
 **On the integration-test harness:** this repository's shared
@@ -350,7 +404,7 @@ consistent with a Postgres version older than the migration assumes on this
 particular native install). Fixing that is out of this assignment's
 boundary (shared configuration/another module's migration). The fees
 integration test instead performs its **own** scratch-database creation and
-runs **only** the fees module's migration in its own `beforeAll` — it needs
+runs **only** the system (audit sink) and fees migrations in its own `beforeAll` — it needs
 no shared setup and was run via a temporary, uncommitted vitest config
 pointed at that one file. The committed test file itself has no dependency
 on that workaround; it would run identically under the shared harness once
@@ -361,17 +415,19 @@ the unrelated `analytics` migration issue is fixed for this environment.
 - Starting SHA (S03 commit, this assignment's predecessor): `9ac4630cd63774e571e84988fd04435d8609c1eb`
 - Fix + regression-test commit (F1, F3, evidence test file): `fc158c1f5f2f240e176e282140216bdc9e89a7a9`
 - Evidence report commit (first pass): `20e3ca4e0afe84769647531dcc31ee0e8a6138ed`
-- Second pass (F4 fix, F5 characterization, OpenAPI regeneration, this update): the commit directly on top of `20e3ca4`
+- Second pass (F4 fix, F5 characterization, OpenAPI regeneration): `25e928d67dd3a38d8ce36c8890a4806f7a348150`
+- Reviewed prerequisite (payment idempotency), cherry-picked from `b0b1a104a839d77a85ab675c866a1ccb92552291` as `4fc1e65`
+- S05 (transactional audit, ADR-0026, F5 fix): the commit directly on top of `4fc1e65`
 
 ## Remaining risks and limitations
 
 - **F2 is fixed for the current API and cashier UI.** Existing historical
   rows have null keys by design; direct database writers remain outside the
   HTTP contract and must supply their own controls.
-- **F5's platform atomicity gap remains live.** An audit-sink failure still
-  leaves a committed payment without an audit row until a keyed client retry
-  succeeds. The retry no longer creates a second monetary effect. Full
-  atomicity needs the platform audit seam change described above.
+- **F5 is fixed for fee payments and adjustments** (S05, ADR-0026); see the
+  limits listed under F5. Every other module's audited routes still write the
+  audit row after the handler commits and keep the original weakness until
+  they adopt the mechanism (remaining post-handler audit, below).
 - **No cheque/settlement modeling, no day-close report, no per-year receipt
   numbering** — all as described above.
 - The correction reviewed the cashier payment screen and its retry behavior.
@@ -385,3 +441,21 @@ the unrelated `analytics` migration issue is fixed for this environment.
 - The scratch database `vidya_s04_fees_test` (native Postgres,
   `localhost:5432`) was left in place after this investigation — disposable,
   synthetic data only, safe to drop at any time.
+
+## Remaining post-handler audit (not converted by S05)
+
+Only `fees.payment-record` and `fees.adjustment-add` use transactional audit.
+Everything else still writes the audit row in `defineRoute` after the handler
+has committed, so an audit-sink failure there returns 500 with the change
+already committed:
+
+- **fees:** `head-create`, `head-delete`, `structure-create`, `invoices-generate`
+  (no money movement).
+- **other modules** (audited-route declarations counted by inspection):
+  identity (13), people (19), syllabus (7), academics (6), school-academics
+  (6), coursework (5), results (5), exams (4), timetable (3), leave (2),
+  notices (2), reporting (2), analytics (1), system (1).
+
+Highest-value next candidates are the marks/results and school-term mutations,
+which are also institution-scoped and correctness-critical. Adoption steps are
+in ADR-0026.

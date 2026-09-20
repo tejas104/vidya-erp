@@ -12,7 +12,7 @@
 
 import {
   assertModuleWiring,
-  type AuditLogger,
+  type TransactionalAuditLogger,
   type Db,
   type LicenseStatus,
   type Metrics,
@@ -55,7 +55,7 @@ export type { AuditLogRecord, HeartbeatPayload, ClockDecision, SeatOverage };
 /** What other modules (and composition roots) may call on this module. */
 export interface SystemService {
   /** The application-wide audit sink (Constitution rule 7). */
-  readonly audit: AuditLogger;
+  readonly audit: TransactionalAuditLogger;
   /** Operational read-back of recent audit events, newest first. */
   readRecentAuditEvents(limit: number): Promise<AuditLogRecord[]>;
   /** One resource's change history (e.g. a mark's grade changes), newest first. */

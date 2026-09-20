@@ -1,5 +1,5 @@
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
-import type { AuditEvent, AuditLogger, Db } from "@vidya/platform";
+import { issueDurableAuditReceipt, type AuditEvent, type Db, type DurableAuditReceipt, type TransactionalAuditLogger } from "@vidya/platform";
 import { sysAuditLog, type SysAuditLogRow } from "../db/schema";
 
 export type AuditLogRecord = SysAuditLogRow;
@@ -9,22 +9,36 @@ export type AuditLogRecord = SysAuditLogRow;
  * into the append-only sys_audit_log table. Durable before resolve — the
  * insert has committed when record() returns.
  */
-export class SystemAuditLogger implements AuditLogger {
+export class SystemAuditLogger implements TransactionalAuditLogger {
   constructor(private readonly db: Db) {}
 
   async record(event: AuditEvent): Promise<void> {
-    await this.db.insert(sysAuditLog).values({
-      org: event.org ?? null,
-      module: event.module,
-      action: event.action,
-      actorType: event.actorType,
-      actorId: event.actorId,
-      resourceType: event.resourceType,
-      resourceId: event.resourceId,
-      requestId: event.requestId,
-      details: event.details,
-    });
+    await this.db.insert(sysAuditLog).values(auditRow(event));
   }
+
+  /**
+   * ADR-0026: the same insert, but on the caller's transaction so the
+   * mutation and its audit row commit or roll back together. A failure here
+   * rejects and the caller's transaction rolls back (fail-closed).
+   */
+  async recordInTransaction(tx: Db, event: AuditEvent): Promise<DurableAuditReceipt> {
+    await tx.insert(sysAuditLog).values(auditRow(event));
+    return issueDurableAuditReceipt(event);
+  }
+}
+
+function auditRow(event: AuditEvent) {
+  return {
+    org: event.org ?? null,
+    module: event.module,
+    action: event.action,
+    actorType: event.actorType,
+    actorId: event.actorId,
+    resourceType: event.resourceType,
+    resourceId: event.resourceId,
+    requestId: event.requestId,
+    details: event.details,
+  };
 }
 
 /** Filter before LIMIT so another institution cannot crowd out this page. */

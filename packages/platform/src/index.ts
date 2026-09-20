@@ -56,7 +56,17 @@ export { RoleRequirementPolicy } from "./auth/role-policy";
 
 export { type OrgDirectory } from "./contracts/org-directory";
 
-export { type ActorType, type AuditEvent, type AuditLogger } from "./audit/types";
+export {
+  type ActorType,
+  type AuditEvent,
+  type AuditLogger,
+  type TransactionalAuditLogger,
+} from "./audit/types";
+export {
+  isDurableAuditReceipt,
+  issueDurableAuditReceipt,
+  type DurableAuditReceipt,
+} from "./audit/durable-receipt";
 
 export {
   DEFAULT_HTTP_GUARDS,

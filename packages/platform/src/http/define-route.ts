@@ -1,6 +1,7 @@
 import type { ZodTypeAny } from "zod";
 import type { AccessPolicy, Authenticator, Principal } from "../auth/types";
 import type { AuditLogger } from "../audit/types";
+import { isDurableAuditReceipt } from "../audit/durable-receipt";
 import type { Logger } from "../logger/logger";
 import type { Metrics } from "../metrics/metrics";
 import {
@@ -153,6 +154,44 @@ function extractIdentifier(
     case "principal":
       return ctx.principal?.id;
   }
+}
+
+/**
+ * ADR-0026: true only when the handler proved, through the typed
+ * RouteResult.audit.persisted contract, that its own transaction already
+ * durably recorded this route's declared audit action for this request. The
+ * claim is verified here, never trusted: an unrecognised receipt, or one for
+ * a different module/action/resource type/request, is ignored and the
+ * ordinary fail-closed audit write still runs (a duplicate is recoverable, a
+ * missing audit row is not). Nothing in the request can influence this — the
+ * receipt is a server-side object recognised by identity.
+ */
+function auditAlreadyPersisted(
+  spec: RouteSpec,
+  requestId: string,
+  result: RouteResult,
+  log: Logger,
+): boolean {
+  const persisted = result.audit?.persisted;
+  if (persisted === undefined || spec.audit === undefined) return false;
+  if (persisted.kind === "idempotent-replay") {
+    log.info({ resourceId: persisted.resourceId }, "idempotent replay: no new audit event");
+    return true;
+  }
+  const receipt = persisted.receipt;
+  const matches =
+    isDurableAuditReceipt(receipt) &&
+    receipt.module === spec.module &&
+    receipt.action === spec.audit.action &&
+    receipt.resourceType === spec.audit.resourceType &&
+    receipt.requestId === requestId;
+  if (!matches) {
+    log.error(
+      { declaredAction: spec.audit.action },
+      "transactional audit receipt rejected; falling back to the post-handler audit write",
+    );
+  }
+  return matches;
 }
 
 function rateLimitedResponse(requestId: string, retryAfterSeconds: number): Response {
@@ -405,7 +444,8 @@ export function defineRoute(
       if (
         spec.audit !== undefined &&
         STATE_CHANGING_METHODS.has(spec.method) &&
-        result.status < 400
+        result.status < 400 &&
+        !auditAlreadyPersisted(spec, requestId, result, log)
       ) {
         const actorOverride = result.audit?.actor;
         await deps.auditLogger.record({

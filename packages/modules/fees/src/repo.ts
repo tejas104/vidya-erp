@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { and, asc, desc, eq, gte, inArray, lte } from "drizzle-orm";
-import type { Db } from "@vidya/platform";
+import type { Db, DurableAuditReceipt, OrgPath, TransactionalAuditLogger } from "@vidya/platform";
 import {
   feeAdjustments,
   feeGenerationRuns,
@@ -16,6 +16,7 @@ import {
   type FeePaymentRow,
   type FeeStructureRow,
 } from "./db/schema";
+import { FEES_AUDIT } from "./definition";
 import { computeLedger, computeStatus, nextReceiptNo, type AdjustmentKind, type InvoiceStatus, type PaymentMode } from "./money";
 
 function pgErrorCode(error: unknown): string | undefined {
@@ -98,12 +99,41 @@ export interface NewPayment {
   readonly receivedBy: string;
 }
 
+/**
+ * Who the in-transaction audit row is attributed to. Supplied by the handler
+ * from the authenticated principal and the request id, never from the body.
+ */
+export interface AuditAttribution {
+  readonly requestId: string;
+  readonly actorType: "user" | "service" | "system";
+  readonly actorId: string | null;
+}
+
 export interface NewAdjustment {
   readonly invoiceId: string;
   readonly kind: AdjustmentKind;
   readonly amountPaise: number;
   readonly reason: string;
   readonly actor: string;
+}
+
+export type RecordedPayment =
+  | { payment: FeePaymentRow; invoice: FeeInvoiceRow; replayed: false; auditReceipt: DurableAuditReceipt }
+  | { payment: FeePaymentRow; invoice: FeeInvoiceRow; replayed: true; auditReceipt: null };
+export interface RecordedAdjustment {
+  adjustment: FeeAdjustmentRow;
+  invoice: FeeInvoiceRow;
+  auditReceipt: DurableAuditReceipt;
+}
+
+/** The trusted institution scope, read from the invoice row locked in the transaction. */
+function invoiceOrg(invoice: FeeInvoiceRow): OrgPath {
+  return {
+    collegeId: invoice.collegeId,
+    departmentId: invoice.departmentId,
+    classId: invoice.classId,
+    sectionId: invoice.sectionId,
+  };
 }
 
 export interface FeesRepo {
@@ -143,13 +173,17 @@ export interface FeesRepo {
   paymentsForInvoice(invoiceId: string): Promise<FeePaymentRow[]>;
   paymentsInRange(collegeId: string, fromIso: string, toIso: string): Promise<FeePaymentRow[]>;
   /** tx: issues the next per-college receipt no, inserts the payment, recomputes + persists invoice status.
-   * Throws InvoiceNotFoundError / InvoiceWaivedError. */
-  recordPayment(input: NewPayment): Promise<{ payment: FeePaymentRow; invoice: FeeInvoiceRow; replayed: boolean }>;
+   * Throws InvoiceNotFoundError / InvoiceWaivedError.
+   * ADR-0026: the audit row is written on the SAME transaction as the last
+   * step; if it fails everything (payment, invoice status, receipt counter)
+   * rolls back. `auditReceipt` is null only for an idempotent replay, which
+   * commits nothing new and therefore audits nothing new. */
+  recordPayment(input: NewPayment, audit: AuditAttribution): Promise<RecordedPayment>;
 
   // adjustments
   adjustmentsForInvoice(invoiceId: string): Promise<FeeAdjustmentRow[]>;
   /** tx: inserts the adjustment, recomputes + persists invoice status. Throws InvoiceNotFoundError. */
-  addAdjustment(input: NewAdjustment): Promise<{ adjustment: FeeAdjustmentRow; invoice: FeeInvoiceRow }>;
+  addAdjustment(input: NewAdjustment, audit: AuditAttribution): Promise<RecordedAdjustment>;
 }
 
 /** Recomputes and persists an invoice's status from its current ledger (used after any payment/adjustment write). */
@@ -171,7 +205,7 @@ async function recomputeStatus(
   return rows[0]!;
 }
 
-export function createFeesRepo(db: Db): FeesRepo {
+export function createFeesRepo(db: Db, audit: TransactionalAuditLogger): FeesRepo {
   return {
     async createHead(collegeId, name) {
       try {
@@ -348,7 +382,7 @@ export function createFeesRepo(db: Db): FeesRepo {
         .orderBy(desc(feePayments.receivedAt));
     },
 
-    async recordPayment(input) {
+    async recordPayment(input, attribution) {
       try {
         return await db.transaction(async (tx) => {
           const invoiceRows = await tx.select().from(feeInvoices).where(eq(feeInvoices.id, input.invoiceId)).for("update");
@@ -376,7 +410,7 @@ export function createFeesRepo(db: Db): FeesRepo {
               existing.ref === input.ref &&
               existing.receivedBy === input.receivedBy;
             if (!sameRequest) throw new PaymentIdempotencyConflictError();
-            return { payment: existing, invoice, replayed: true };
+            return { payment: existing, invoice, replayed: true as const, auditReceipt: null };
           }
 
           if (invoice.status === "waived") throw new InvoiceWaivedError();
@@ -412,7 +446,30 @@ export function createFeesRepo(db: Db): FeesRepo {
             .returning();
           const payment = paymentRows[0]!;
           const updated = await recomputeStatus(tx as unknown as Db, invoice);
-          return { payment, invoice: updated, replayed: false };
+          // Last step, same transaction: a failure here rolls back the payment,
+          // the invoice status and the receipt-counter advance (ADR-0026).
+          const auditReceipt = await audit.recordInTransaction(tx as unknown as Db, {
+            org: invoiceOrg(invoice),
+            module: "fees",
+            action: FEES_AUDIT.paymentRecorded.action,
+            actorType: attribution.actorType,
+            actorId: attribution.actorId,
+            resourceType: FEES_AUDIT.paymentRecorded.resourceType,
+            resourceId: payment.id,
+            requestId: attribution.requestId,
+            details: {
+              routeId: "fees.payment-record",
+              status: 201,
+              invoiceId: invoice.id,
+              receiptNo: payment.receiptNo,
+              amountPaise: payment.amount,
+              mode: payment.mode,
+              ref: payment.ref,
+              idempotencyKey: input.idempotencyKey,
+              invoiceStatus: updated.status,
+            },
+          });
+          return { payment, invoice: updated, replayed: false as const, auditReceipt };
         });
       } catch (error) {
         if (pgErrorCode(error) === "23505" && pgErrorConstraint(error) === "fee_payments_idempotency_uq") {
@@ -430,7 +487,7 @@ export function createFeesRepo(db: Db): FeesRepo {
         .orderBy(desc(feeAdjustments.createdAt));
     },
 
-    async addAdjustment(input) {
+    async addAdjustment(input, attribution) {
       return db.transaction(async (tx) => {
         const invoiceRows = await tx.select().from(feeInvoices).where(eq(feeInvoices.id, input.invoiceId)).for("update");
         const invoice = invoiceRows[0];
@@ -471,7 +528,26 @@ export function createFeesRepo(db: Db): FeesRepo {
           .returning();
         const adjustment = rows[0]!;
         const updated = await recomputeStatus(tx as unknown as Db, invoice);
-        return { adjustment, invoice: updated };
+        const auditReceipt = await audit.recordInTransaction(tx as unknown as Db, {
+          org: invoiceOrg(invoice),
+          module: "fees",
+          action: FEES_AUDIT.adjustmentAdded.action,
+          actorType: attribution.actorType,
+          actorId: attribution.actorId,
+          resourceType: FEES_AUDIT.adjustmentAdded.resourceType,
+          resourceId: adjustment.id,
+          requestId: attribution.requestId,
+          details: {
+            routeId: "fees.adjustment-add",
+            status: 201,
+            invoiceId: invoice.id,
+            kind: adjustment.kind,
+            amountPaise: adjustment.amount,
+            reason: adjustment.reason,
+            invoiceStatus: updated.status,
+          },
+        });
+        return { adjustment, invoice: updated, auditReceipt };
       });
     },
   };

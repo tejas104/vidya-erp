@@ -8,6 +8,7 @@ import {
   InvoiceWaivedError,
   PaymentIdempotencyConflictError,
   RefundExceedsEligibleError,
+  type AuditAttribution,
   type FeesRepo,
 } from "./repo";
 import type {
@@ -26,6 +27,10 @@ export interface FeesHandlerDeps {
   readonly scopeChecker: ScopeChecker;
   /** Enqueues the invoice-generate worker job for a created run. */
   readonly enqueueGenerate: (payload: { runId: string }) => Promise<void>;
+}
+
+function attributionFor(requestId: string, principal: Principal): AuditAttribution {
+  return { requestId, actorType: principal.kind, actorId: principal.id };
 }
 
 function notFound(message = "not found") {
@@ -321,27 +326,29 @@ export function createFeesHandlers(deps: FeesHandlerDeps): Record<string, RouteH
     };
     if (!writeAllowed(principal, org)) return denied();
     try {
-      const { payment, invoice: updated, replayed } = await deps.repo.recordPayment({
-        invoiceId: invoice.id,
-        amountPaise: body.amountPaise,
-        mode: body.mode,
-        ref: body.ref,
-        idempotencyKey: body.idempotencyKey,
-        receivedBy: principal.id,
-      });
+      const recorded = await deps.repo.recordPayment(
+        {
+          invoiceId: invoice.id,
+          amountPaise: body.amountPaise,
+          mode: body.mode,
+          ref: body.ref,
+          idempotencyKey: body.idempotencyKey,
+          receivedBy: principal.id,
+        },
+        attributionFor(ctx.requestId, principal),
+      );
+      const { payment, invoice: updated } = recorded;
+      // ADR-0026: the audit row already committed with the payment (or, for
+      // a replay, with the original payment), so defineRoute must not add one.
       return {
-        status: replayed ? 200 : 201,
+        status: recorded.replayed ? 200 : 201,
         body: { payment: paymentView(payment), invoice: await singleInvoiceView(updated) },
         audit: {
           org,
           resourceId: payment.id,
-          details: {
-            invoiceId: invoice.id,
-            receiptNo: payment.receiptNo,
-            amountPaise: payment.amount,
-            mode: payment.mode,
-            replayed,
-          },
+          persisted: recorded.replayed
+            ? { kind: "idempotent-replay", resourceId: payment.id }
+            : { kind: "in-transaction", receipt: recorded.auditReceipt },
         },
       };
     } catch (error) {
@@ -363,20 +370,23 @@ export function createFeesHandlers(deps: FeesHandlerDeps): Record<string, RouteH
     };
     if (!writeAllowed(principal, org)) return denied();
     try {
-      const { adjustment, invoice: updated } = await deps.repo.addAdjustment({
-        invoiceId: invoice.id,
-        kind: body.kind,
-        amountPaise: body.amountPaise,
-        reason: body.reason,
-        actor: principal.id,
-      });
+      const { adjustment, invoice: updated, auditReceipt } = await deps.repo.addAdjustment(
+        {
+          invoiceId: invoice.id,
+          kind: body.kind,
+          amountPaise: body.amountPaise,
+          reason: body.reason,
+          actor: principal.id,
+        },
+        attributionFor(ctx.requestId, principal),
+      );
       return {
         status: 201,
         body: { adjustment: adjustmentView(adjustment), invoice: await singleInvoiceView(updated) },
         audit: {
           org,
           resourceId: adjustment.id,
-          details: { invoiceId: invoice.id, kind: adjustment.kind, amountPaise: adjustment.amount },
+          persisted: { kind: "in-transaction", receipt: auditReceipt },
         },
       };
     } catch (error) {

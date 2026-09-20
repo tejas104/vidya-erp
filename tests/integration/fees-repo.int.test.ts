@@ -29,6 +29,7 @@ import {
   migrateUp,
   type AuditLogger,
   type Db,
+  type TransactionalAuditLogger,
   type Principal,
   type RouteContext,
   type RouteHandler,
@@ -36,6 +37,8 @@ import {
 } from "@vidya/platform";
 import type { PeopleDirectory } from "@vidya/module-people";
 import { createFeesModule, feesModuleDefinition } from "@vidya/module-fees";
+import { createSystemModule } from "@vidya/module-system";
+import { createIdentityCore } from "@vidya/module-identity";
 import { modulePackageDir } from "../../scripts/registry";
 
 const SCRATCH_DB_NAME = process.env.FEES_AUDIT_DB_NAME ?? "vidya_s04_fees_test";
@@ -60,6 +63,21 @@ let handle: ReturnType<typeof createDb>;
 let db: Db;
 let pool: pg.Pool;
 let handlers: Record<string, RouteHandler>;
+
+type AuditFault = "none" | "before-write" | "after-write";
+let auditFault: AuditFault = "none";
+let system: ReturnType<typeof createSystemModule>;
+let realAudit: TransactionalAuditLogger;
+let realScopeChecker: ScopeChecker;
+const faultingAudit: TransactionalAuditLogger = {
+  record: (event) => realAudit.record(event),
+  recordInTransaction: async (tx, event) => {
+    if (auditFault === "before-write") throw new Error("audit sink unavailable");
+    const receipt = await realAudit.recordInTransaction(tx, event);
+    if (auditFault === "after-write") throw new Error("audit sink failed after its insert");
+    return receipt;
+  },
+};
 
 const accountant: Principal = { id: "u-accountant", kind: "user", displayName: "Accountant", roles: ["accountant"], scopes: [], grants: [], sessionId: "s" };
 
@@ -127,18 +145,42 @@ beforeAll(async () => {
   handle = pair;
   db = pair.db;
   pool = pair.pool;
+  // The real platform seam: system.service.audit is the production sink fees
+  // receives from every composition root. createIdentityCore only builds the
+  // (Redis-free) real ScopeChecker here; no session or password code runs.
+  realScopeChecker = createIdentityCore({ redis: null as never, session: { ttlHours: 1, idleMinutes: 1 } }).scopeChecker;
+  system = createSystemModule({
+    scopeChecker: realScopeChecker,
+    db,
+    metrics: createMetrics({ serviceName: "s05-fees-audit", defaultMetrics: false }),
+    serviceVersion: "integration",
+    isDraining: () => false,
+    infrastructureChecks: [],
+    license: () => ({ kind: "absent" }),
+    countActiveStudents: async () => 0,
+  });
+  realAudit = system.service.audit;
 
-  await migrateUp(pool, [{ module: "fees", dir: path.join(modulePackageDir("fees"), "migrations") }], logger);
+  // system owns sys_audit_log (append-only, TRUNCATE-blocked): the audit rows
+  // written by these tests are real and are isolated per test by college id.
+  await migrateUp(
+    pool,
+    [
+      { module: "system", dir: path.join(modulePackageDir("system"), "migrations") },
+      { module: "fees", dir: path.join(modulePackageDir("fees"), "migrations") },
+    ],
+    logger,
+  );
 
   // Clean slate: safe to truncate, this database exists only for this audit.
   await pool.query(
     "TRUNCATE fee_payments, fee_adjustments, fee_generation_runs, fee_invoices, fee_structures, fee_heads, fee_receipt_counters CASCADE",
   );
 
-  // Handlers are invoked directly (not through defineRoute), so this fake's
-  // `record` is never actually called — see the "audit evidence" test below
-  // for why. Only present because createFeesModule's deps require one.
-  const audit: AuditLogger = { record: async () => {} };
+  // ADR-0026: fees writes its payment/adjustment audit rows on its own
+  // transaction through the REAL system audit sink. `faultingAudit` only lets a
+  // test make that write fail (before or after the row is inserted).
+  const audit = faultingAudit;
   const scopeChecker: ScopeChecker = { check: () => ({ granted: true, reason: "audit-harness-always-grants" }) };
   const directory = {
     collegeExists: async () => true,
@@ -385,70 +427,262 @@ describe("review correction — duplicate payment submission", () => {
   });
 });
 
-describe("S04 — audit evidence for successful financial changes (verified invariant)", () => {
-  it("a successful payment records an audit event via the shared route pipeline's contract", async () => {
-    // NOTE: this handler-level call does not itself go through defineRoute
-    // (which is what actually invokes the AuditLogger for state-changing
-    // routes — see platform/src/http/define-route.ts). This test instead
-    // confirms the handler returns the `audit` envelope defineRoute needs
-    // to do so; end-to-end audit-on-write is defineRoute's own, separately
-    // verified guarantee (Constitution rule 7), not re-proven here.
+// ---------------------------------------------------------------------------
+// S05 — the money mutation and its audit row are one atomic outcome (ADR-0026)
+// ---------------------------------------------------------------------------
+
+/** Post-handler sink that only counts: proves defineRoute did NOT add a second audit row. */
+class CountingPostHandlerAudit implements AuditLogger {
+  calls = 0;
+  async record(event: Parameters<AuditLogger["record"]>[0]): Promise<void> {
+    this.calls += 1;
+    await realAudit.record(event);
+  }
+}
+
+type FeesRouteId = "fees.payment-record" | "fees.adjustment-add";
+const ROUTE_PATH: Record<FeesRouteId, string> = {
+  "fees.payment-record": "/api/v1/fees/payments",
+  "fees.adjustment-add": "/api/v1/fees/adjustments",
+};
+
+function feesRoute(id: FeesRouteId, postHandler: AuditLogger) {
+  const spec = feesModuleDefinition.routes.find((route) => route.id === id)!;
+  return defineRoute(spec, handlers[id]!, {
+    logger,
+    authenticator: { authenticate: async () => ({ authenticated: true, principal: accountant }) },
+    accessPolicy: { authorize: async () => ({ granted: true }) },
+    auditLogger: postHandler,
+    metrics: createMetrics({ serviceName: `s05-${id}`, defaultMetrics: false }),
+  });
+}
+
+function post(id: FeesRouteId, body: unknown, requestId: string = randomUUID()): Request {
+  return new Request(`http://localhost${ROUTE_PATH[id]}`, {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-request-id": requestId },
+    body: JSON.stringify(body),
+  });
+}
+
+async function auditRows(collegeId: string, action?: string) {
+  const { rows } = await pool.query(
+    `SELECT * FROM sys_audit_log WHERE org->>'collegeId' = $1 AND ($2::text IS NULL OR action = $2) ORDER BY id`,
+    [collegeId, action ?? null],
+  );
+  return rows as Array<{
+    module: string; action: string; actor_type: string; actor_id: string | null; resource_type: string;
+    resource_id: string | null; request_id: string | null; org: Record<string, string>; details: Record<string, unknown>;
+  }>;
+}
+
+async function invoiceStatus(invoiceId: string): Promise<string> {
+  const { rows } = await pool.query("SELECT status FROM fee_invoices WHERE id = $1", [invoiceId]);
+  return rows[0].status;
+}
+
+async function adjustmentCount(invoiceId: string): Promise<number> {
+  const { rows } = await pool.query("SELECT count(*)::int AS n FROM fee_adjustments WHERE invoice_id = $1", [invoiceId]);
+  return rows[0].n;
+}
+
+const ORG = (collegeId: string) => ({ collegeId, departmentId: "dep_x", classId: "cls_x", sectionId: "sec_x" });
+
+describe("S05 — successful payment and adjustment write exactly one audit row (F5)", () => {
+  it("a payment audits once, with trusted org, actor, request id, resource id and amount, and defineRoute adds nothing", async () => {
     const collegeId = `col_${randomUUID()}`;
     const invoiceId = await seedInvoice({ amount: 500_000, collegeId });
-    const result = await handlers["fees.payment-record"]!(reqCtx(accountant, { body: paymentBody(invoiceId, { amountPaise: 100_000 }) }));
-    expect(result.status).toBe(201);
-    expect(result.audit?.resourceId).toBeTruthy();
-    // F4: without org the row is invisible to institution audit history (ADR-0025).
-    expect(result.audit?.org).toEqual({ collegeId, departmentId: "dep_x", classId: "cls_x", sectionId: "sec_x" });
+    const postHandler = new CountingPostHandlerAudit();
+    const requestId = `req-${randomUUID()}`;
+    const body = paymentBody(invoiceId, { amountPaise: 100_000, mode: "upi", ref: "UTR-1" });
+    const response = await feesRoute("fees.payment-record", postHandler)(post("fees.payment-record", body, requestId));
+    expect(response.status).toBe(201);
+    const { payment } = (await response.json()) as { payment: { id: string; receiptNo: number } };
+
+    expect(postHandler.calls).toBe(0);
+    const rows = await auditRows(collegeId);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      module: "fees", action: "fees.payment-recorded", resource_type: "fee-payment", resource_id: payment.id,
+      actor_type: "user", actor_id: accountant.id, request_id: requestId, org: ORG(collegeId),
+    });
+    expect(rows[0]!.details).toMatchObject({
+      routeId: "fees.payment-record", status: 201, invoiceId, receiptNo: payment.receiptNo,
+      amountPaise: 100_000, mode: "upi", ref: "UTR-1", idempotencyKey: body.idempotencyKey, invoiceStatus: "part",
+    });
+  });
+
+  it("an adjustment audits once with the same guarantees", async () => {
+    const collegeId = `col_${randomUUID()}`;
+    const invoiceId = await seedInvoice({ amount: 500_000, collegeId });
+    const postHandler = new CountingPostHandlerAudit();
+    const requestId = `req-${randomUUID()}`;
+    const response = await feesRoute("fees.adjustment-add", postHandler)(
+      post("fees.adjustment-add", { invoiceId, kind: "scholarship", amountPaise: 50_000, reason: "merit" }, requestId),
+    );
+    expect(response.status).toBe(201);
+    const { adjustment } = (await response.json()) as { adjustment: { id: string } };
+
+    expect(postHandler.calls).toBe(0);
+    const rows = await auditRows(collegeId);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      module: "fees", action: "fees.adjustment-added", resource_type: "fee-adjustment", resource_id: adjustment.id,
+      actor_id: accountant.id, request_id: requestId, org: ORG(collegeId),
+    });
+    expect(rows[0]!.details).toMatchObject({ invoiceId, kind: "scholarship", amountPaise: 50_000, reason: "merit" });
+  });
+
+  it("the institution-scoped audit API (ADR-0025, real ScopeChecker) returns the event to its college's admin and hides it from another college's", async () => {
+    const collegeId = `col_${randomUUID()}`;
+    const invoiceId = await seedInvoice({ amount: 500_000, collegeId });
+    const response = await feesRoute("fees.payment-record", new CountingPostHandlerAudit())(
+      post("fees.payment-record", paymentBody(invoiceId)),
+    );
+    expect(response.status).toBe(201);
+
+    const adminOf = (college: string): Principal => ({
+      id: `u-admin-${college}`, kind: "user", displayName: "Admin", roles: ["admin"], scopes: [], sessionId: "s",
+      grants: [{ role: "admin", org: { collegeId: college } }],
+    });
+    const readAudit = async (principal: Principal) => {
+      const result = await system.handlers["system.audit-log"]!({
+        requestId: randomUUID(), logger, principal,
+        request: { params: undefined, query: { action: "fees.payment-recorded", limit: 200 }, body: undefined, headers: new Headers() },
+      });
+      expect(result.status).toBe(200);
+      return (result.body as { events: { org?: unknown; resourceType: string; details: { invoiceId?: string } }[] }).events;
+    };
+    const own = (await readAudit(adminOf(collegeId))).filter((event) => event.details.invoiceId === invoiceId);
+    expect(own).toHaveLength(1);
+    const foreign = (await readAudit(adminOf(`col_${randomUUID()}`))).filter((event) => event.details.invoiceId === invoiceId);
+    expect(foreign).toHaveLength(0);
   });
 });
 
-describe("review correction — recovery after post-commit audit failure", () => {
-  it("a failed audit write answers 500, then the same keyed retry audits the original receipt without a duplicate", async () => {
-    // Real defineRoute + real fees handler + real DB; only the audit sink fails.
-    // Pins CURRENT behavior so the follow-up (audit inside the money tx) has a
-    // test to flip — it is not an endorsement.
-    const spec = feesModuleDefinition.routes.find((route) => route.id === "fees.payment-record")!;
-    const route = defineRoute(spec, handlers["fees.payment-record"]!, {
-      logger,
-      authenticator: { authenticate: async () => ({ authenticated: true, principal: accountant }) },
-      accessPolicy: { authorize: async () => ({ granted: true }) },
-      auditLogger: { record: async () => { throw new Error("audit sink unavailable"); } },
-      metrics: createMetrics({ serviceName: "s04-fees", defaultMetrics: false }),
+describe("S05 — an audit failure rolls back the whole financial mutation (F5 fixed)", () => {
+  for (const fault of ["before-write", "after-write"] as const) {
+    it(`payment: audit failure (${fault}) leaves no payment, no receipt advance, no status change and no audit row; the keyed retry then succeeds exactly once`, async () => {
+      const collegeId = `col_${randomUUID()}`;
+      const invoiceId = await seedInvoice({ amount: 500_000, collegeId });
+      const body = paymentBody(invoiceId, { amountPaise: 100_000 });
+      const postHandler = new CountingPostHandlerAudit();
+      const route = feesRoute("fees.payment-record", postHandler);
+
+      auditFault = fault;
+      let failed: Response;
+      try {
+        failed = await route(post("fees.payment-record", body));
+      } finally {
+        auditFault = "none";
+      }
+      expect(failed.status).toBe(500);
+      expect(await paymentCount(invoiceId)).toBe(0);
+      expect(await receiptCounter(collegeId)).toBeNull(); // counter insert rolled back too
+      expect(await invoiceStatus(invoiceId)).toBe("pending");
+      expect(await auditRows(collegeId)).toHaveLength(0);
+      expect(postHandler.calls).toBe(0);
+
+      const retry = await route(post("fees.payment-record", body));
+      expect(retry.status).toBe(201);
+      const { payment } = (await retry.json()) as { payment: { id: string; receiptNo: number } };
+      expect(payment.receiptNo).toBe(1);
+      expect(await paymentCount(invoiceId)).toBe(1);
+      expect(await receiptCounter(collegeId)).toBe(1);
+      expect(await invoiceStatus(invoiceId)).toBe("part");
+      const rows = await auditRows(collegeId);
+      expect(rows).toHaveLength(1);
+      expect(rows[0]!.resource_id).toBe(payment.id);
     });
+  }
+
+  for (const fault of ["before-write", "after-write"] as const) {
+    it(`adjustment: audit failure (${fault}) leaves no adjustment, no invoice status change and no audit row; the retry then succeeds exactly once`, async () => {
+      const collegeId = `col_${randomUUID()}`;
+      const invoiceId = await seedInvoice({ amount: 500_000, collegeId });
+      const waiver = { invoiceId, kind: "waiver" as const, amountPaise: 500_000, reason: "hardship" };
+      const route = feesRoute("fees.adjustment-add", new CountingPostHandlerAudit());
+
+      auditFault = fault;
+      let failed: Response;
+      try {
+        failed = await route(post("fees.adjustment-add", waiver));
+      } finally {
+        auditFault = "none";
+      }
+      expect(failed.status).toBe(500);
+      expect(await adjustmentCount(invoiceId)).toBe(0);
+      expect(await invoiceStatus(invoiceId)).toBe("pending"); // a waiver would have flipped it to "waived"
+      expect(await auditRows(collegeId)).toHaveLength(0);
+
+      const retry = await route(post("fees.adjustment-add", waiver));
+      expect(retry.status).toBe(201);
+      expect(await adjustmentCount(invoiceId)).toBe(1);
+      expect(await invoiceStatus(invoiceId)).toBe("waived");
+      expect(await auditRows(collegeId, "fees.adjustment-added")).toHaveLength(1);
+    });
+  }
+
+  it("a refund whose audit fails is not recorded, so the eligible-refund ledger is unchanged", async () => {
     const collegeId = `col_${randomUUID()}`;
     const invoiceId = await seedInvoice({ amount: 500_000, collegeId });
-    const body = paymentBody(invoiceId, { amountPaise: 100_000 });
-    const response = await route(
-      new Request("http://localhost/api/v1/fees/payments", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(body),
-      }),
+    const pay = await feesRoute("fees.payment-record", new CountingPostHandlerAudit())(
+      post("fees.payment-record", paymentBody(invoiceId, { amountPaise: 500_000 })),
     );
-    expect(response.status).toBe(500);
-    expect(await paymentCount(invoiceId)).toBe(1);
-    expect(await receiptCounter(collegeId)).toBe(1);
+    expect(pay.status).toBe(201);
+    const refundRoute = feesRoute("fees.adjustment-add", new CountingPostHandlerAudit());
+    const refund = { invoiceId, kind: "refund" as const, amountPaise: 500_000, reason: "" };
 
-    const recorded: unknown[] = [];
-    const retryRoute = defineRoute(spec, handlers["fees.payment-record"]!, {
-      logger,
-      authenticator: { authenticate: async () => ({ authenticated: true, principal: accountant }) },
-      accessPolicy: { authorize: async () => ({ granted: true }) },
-      auditLogger: { record: async (event) => { recorded.push(event); } },
-      metrics: createMetrics({ serviceName: "s04-fees-retry", defaultMetrics: false }),
-    });
-    const retry = await retryRoute(
-      new Request("http://localhost/api/v1/fees/payments", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(body),
-      }),
-    );
-    expect(retry.status).toBe(200);
+    auditFault = "after-write";
+    try {
+      expect((await refundRoute(post("fees.adjustment-add", refund))).status).toBe(500);
+    } finally {
+      auditFault = "none";
+    }
+    expect(await adjustmentCount(invoiceId)).toBe(0);
+    expect(await invoiceStatus(invoiceId)).toBe("paid");
+    // Had the refund leaked past the failed audit, this full refund would now be rejected (409).
+    expect((await refundRoute(post("fees.adjustment-add", refund))).status).toBe(201);
+    expect(await auditRows(collegeId, "fees.adjustment-added")).toHaveLength(1);
+  });
+});
+
+describe("S05 — payment idempotency is preserved and replays are not audited as new payments", () => {
+  it("new payment 201; identical keyed replay 200 with the ORIGINAL receipt and no second audit row; changed payload 409", async () => {
+    const collegeId = `col_${randomUUID()}`;
+    const invoiceId = await seedInvoice({ amount: 500_000, collegeId });
+    const postHandler = new CountingPostHandlerAudit();
+    const route = feesRoute("fees.payment-record", postHandler);
+    const body = paymentBody(invoiceId, { amountPaise: 100_000 });
+
+    const first = await route(post("fees.payment-record", body));
+    expect(first.status).toBe(201);
+    const original = (await first.json()) as { payment: { id: string; receiptNo: number } };
+
+    const replay = await route(post("fees.payment-record", body));
+    expect(replay.status).toBe(200);
+    expect(((await replay.json()) as { payment: { id: string; receiptNo: number } }).payment).toMatchObject(original.payment);
+
+    const changed = await route(post("fees.payment-record", { ...body, amountPaise: 100_001 }));
+    expect(changed.status).toBe(409);
+
     expect(await paymentCount(invoiceId)).toBe(1);
     expect(await receiptCounter(collegeId)).toBe(1);
-    expect(recorded).toHaveLength(1);
-    expect(recorded[0]).toMatchObject({ action: "fees.payment-recorded", details: { receiptNo: 1, replayed: true } });
+    expect(postHandler.calls).toBe(0);
+    const rows = await auditRows(collegeId);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.resource_id).toBe(original.payment.id);
+  });
+
+  it("concurrent identical requests produce one payment, one receipt and one audit row", async () => {
+    const collegeId = `col_${randomUUID()}`;
+    const invoiceId = await seedInvoice({ amount: 500_000, collegeId });
+    const route = feesRoute("fees.payment-record", new CountingPostHandlerAudit());
+    const body = paymentBody(invoiceId, { amountPaise: 100_000 });
+    const responses = await Promise.all([1, 2, 3].map(() => route(post("fees.payment-record", body))));
+    expect(responses.map((response) => response.status).sort()).toEqual([200, 200, 201]);
+    expect(await paymentCount(invoiceId)).toBe(1);
+    expect(await receiptCounter(collegeId)).toBe(1);
+    expect(await auditRows(collegeId, "fees.payment-recorded")).toHaveLength(1);
   });
 });
