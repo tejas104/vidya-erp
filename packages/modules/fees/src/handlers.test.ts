@@ -8,12 +8,14 @@ import {
   DuplicateStructureError,
   HeadInUseError,
   InvoiceWaivedError,
+  PaymentIdempotencyConflictError,
   RefundExceedsEligibleError,
   type FeesRepo,
 } from "./repo";
 
 const logger = pino({ level: "silent" });
 const YEAR = "2026-27";
+const PAYMENT_KEY = "123e4567-e89b-42d3-a456-426614174000";
 
 const admin: Principal = { id: "u_adm", kind: "user", displayName: "a", roles: ["admin"], scopes: [], grants: [], sessionId: "s" };
 const accountant: Principal = { id: "u_acc", kind: "user", displayName: "b", roles: ["accountant"], scopes: [], grants: [], sessionId: "s" };
@@ -32,7 +34,7 @@ const invoiceRow = {
 };
 const paymentRow = {
   id: "fpy_1", invoiceId: "fiv_1", collegeId: "col_1", receiptNo: 7, amount: 50_000,
-  mode: "cash" as const, ref: "", receivedBy: "u_acc", receivedAt: new Date("2026-07-13T10:00:00Z"),
+  mode: "cash" as const, ref: "", idempotencyKey: PAYMENT_KEY, receivedBy: "u_acc", receivedAt: new Date("2026-07-13T10:00:00Z"),
 };
 
 interface Opts {
@@ -41,6 +43,8 @@ interface Opts {
   duplicateStructure?: boolean;
   waived?: boolean;
   refundExceedsEligible?: boolean;
+  paymentIdempotencyConflict?: boolean;
+  paymentReplayed?: boolean;
   studentLinked?: boolean;
   payments?: (typeof paymentRow)[];
   /** action → granted (default: everything granted) */
@@ -83,9 +87,11 @@ function makeDeps(opts: Opts = {}) {
     paymentsInRange: async () => [paymentRow, { ...paymentRow, id: "fpy_2", receiptNo: 8, amount: 25_000, mode: "upi" as const }],
     recordPayment: async (input: { amountPaise: number }) => {
       if (opts.waived) throw new InvoiceWaivedError();
+      if (opts.paymentIdempotencyConflict) throw new PaymentIdempotencyConflictError();
       return {
         payment: { ...paymentRow, amount: input.amountPaise },
         invoice: { ...invoiceRow, status: "paid" as const },
+        replayed: opts.paymentReplayed ?? false,
       };
     },
     addAdjustment: async (input: { kind: string; amountPaise: number }) => {
@@ -156,7 +162,7 @@ describe("fees handlers", () => {
   it("records a payment (201) with the issued receipt number and ledger view", async () => {
     const handlers = createFeesHandlers(makeDeps({ payments: [paymentRow] }).deps);
     const result = await handlers["fees.payment-record"]!(
-      ctx(accountant, { body: { invoiceId: "fiv_1", amountPaise: 50_000, mode: "cash", ref: "" } }),
+      ctx(accountant, { body: { invoiceId: "fiv_1", amountPaise: 50_000, mode: "cash", ref: "", idempotencyKey: PAYMENT_KEY } }),
     );
     expect(result.status).toBe(201);
     const body = result.body as { payment: { receiptNo: number }; invoice: { studentName: string; paidPaise: number } };
@@ -168,9 +174,24 @@ describe("fees handlers", () => {
   it("answers 409 when paying a waived invoice", async () => {
     const handlers = createFeesHandlers(makeDeps({ waived: true }).deps);
     const result = await handlers["fees.payment-record"]!(
-      ctx(accountant, { body: { invoiceId: "fiv_1", amountPaise: 1000, mode: "cash", ref: "" } }),
+      ctx(accountant, { body: { invoiceId: "fiv_1", amountPaise: 1000, mode: "cash", ref: "", idempotencyKey: PAYMENT_KEY } }),
     );
     expect(result.status).toBe(409);
+  });
+
+  it("returns 200 for an identical payment replay and 409 for key reuse with changed details", async () => {
+    const replay = createFeesHandlers(makeDeps({ paymentReplayed: true }).deps);
+    const replayed = await replay["fees.payment-record"]!(
+      ctx(accountant, { body: { invoiceId: "fiv_1", amountPaise: 1000, mode: "cash", ref: "", idempotencyKey: PAYMENT_KEY } }),
+    );
+    expect(replayed.status).toBe(200);
+    expect(replayed.audit?.details).toMatchObject({ replayed: true });
+
+    const conflict = createFeesHandlers(makeDeps({ paymentIdempotencyConflict: true }).deps);
+    const rejected = await conflict["fees.payment-record"]!(
+      ctx(accountant, { body: { invoiceId: "fiv_1", amountPaise: 1000, mode: "cash", ref: "", idempotencyKey: PAYMENT_KEY } }),
+    );
+    expect(rejected.status).toBe(409);
   });
 
   it("answers 409 when a refund exceeds the amount eligible for refund (S04 finding)", async () => {
@@ -192,7 +213,7 @@ describe("fees handlers", () => {
       ["fees.head-delete", ctx(admin, { params: { headId: "fhd_1" } }), { collegeId: "col_1" }],
       ["fees.structure-create", ctx(admin, { body: { classId: "cls_1", headId: "fhd_1", academicYear: YEAR, amountPaise: 50_000, dueOn: "2026-08-01", installmentNo: 1 } }), classOrg],
       ["fees.invoices-generate", ctx(admin, { body: { classId: "cls_1", academicYear: YEAR } }), classOrg],
-      ["fees.payment-record", ctx(accountant, { body: { invoiceId: "fiv_1", amountPaise: 1000, mode: "cash", ref: "" } }), invoiceOrg],
+      ["fees.payment-record", ctx(accountant, { body: { invoiceId: "fiv_1", amountPaise: 1000, mode: "cash", ref: "", idempotencyKey: PAYMENT_KEY } }), invoiceOrg],
       ["fees.adjustment-add", ctx(accountant, { body: { invoiceId: "fiv_1", kind: "fine", amountPaise: 1000, reason: "" } }), invoiceOrg],
     ];
     for (const [id, context, org] of cases) {
@@ -205,7 +226,7 @@ describe("fees handlers", () => {
   it("denies fees writes to a teacher even when reads are in scope", async () => {
     const handlers = createFeesHandlers(makeDeps({ scope: (action) => action === "read" }).deps);
     const result = await handlers["fees.payment-record"]!(
-      ctx(teacher, { body: { invoiceId: "fiv_1", amountPaise: 1000, mode: "cash", ref: "" } }),
+      ctx(teacher, { body: { invoiceId: "fiv_1", amountPaise: 1000, mode: "cash", ref: "", idempotencyKey: PAYMENT_KEY } }),
     );
     expect(result.status).toBe(403);
   });
@@ -213,7 +234,7 @@ describe("fees handlers", () => {
   it("lets admin write fees records on the role (grantAllows excludes fees writes for admin)", async () => {
     const handlers = createFeesHandlers(makeDeps({ scope: (action) => action === "read" }).deps);
     const result = await handlers["fees.payment-record"]!(
-      ctx(admin, { body: { invoiceId: "fiv_1", amountPaise: 1000, mode: "cash", ref: "" } }),
+      ctx(admin, { body: { invoiceId: "fiv_1", amountPaise: 1000, mode: "cash", ref: "", idempotencyKey: PAYMENT_KEY } }),
     );
     expect(result.status).toBe(201);
   });

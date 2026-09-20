@@ -928,7 +928,13 @@ export const api = {
     get<{ invoices: FeeInvoiceView[] }>(
       `/api/v1/fees/sections/${encodeURIComponent(sectionId)}/invoices?academicYear=${year}`,
     ),
-  feesRecordPayment: (body: { invoiceId: string; amountPaise: number; mode: PaymentMode; ref?: string }) =>
+  feesRecordPayment: (body: {
+    invoiceId: string;
+    amountPaise: number;
+    mode: PaymentMode;
+    ref?: string;
+    idempotencyKey: string;
+  }) =>
     post<{ payment: FeePaymentView; invoice: FeeInvoiceView }>("/api/v1/fees/payments", body),
   feesAddAdjustment: (body: { invoiceId: string; kind: AdjustmentKind; amountPaise: number; reason?: string }) =>
     post<{ adjustment: FeeAdjustmentView; invoice: FeeInvoiceView }>("/api/v1/fees/adjustments", body),

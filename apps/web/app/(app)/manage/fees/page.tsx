@@ -88,6 +88,7 @@ export default function FeesPage() {
   const [amount, setAmount] = useState("");
   const [mode, setMode] = useState<PaymentMode>("cash");
   const [payRef, setPayRef] = useState("");
+  const [paymentIdempotencyKey, setPaymentIdempotencyKey] = useState("");
   const [receipt, setReceipt] = useState<FeePaymentView | null>(null);
   // adjustment modal
   const [adjusting, setAdjusting] = useState<FeeInvoiceView | null>(null);
@@ -202,6 +203,7 @@ export default function FeesPage() {
     setAmount((invoice.duesPaise / 100).toFixed(2));
     setMode("cash");
     setPayRef("");
+    setPaymentIdempotencyKey(crypto.randomUUID());
   }
 
   async function recordPayment() {
@@ -210,7 +212,11 @@ export default function FeesPage() {
     setSaving(true);
     try {
       const { payment, invoice } = await api.feesRecordPayment({
-        invoiceId: paying.id, amountPaise: paise, mode, ...(payRef.trim() !== "" ? { ref: payRef.trim() } : {}),
+        invoiceId: paying.id,
+        amountPaise: paise,
+        mode,
+        ...(payRef.trim() !== "" ? { ref: payRef.trim() } : {}),
+        idempotencyKey: paymentIdempotencyKey,
       });
       applyInvoice(invoice);
       setPaying(invoice);
@@ -618,13 +624,35 @@ export default function FeesPage() {
               {paying?.headName} · dues <strong className="num">{formatPaise(paying?.duesPaise ?? 0)}</strong>
             </p>
             <div className={styles.formRow}>
-              <Input id="pay-amount" label="Amount (₹)" inputMode="decimal" value={amount} onChange={(event) => setAmount(event.target.value)} className={styles.amountField} />
+              <Input
+                id="pay-amount"
+                label="Amount (₹)"
+                inputMode="decimal"
+                value={amount}
+                onChange={(event) => {
+                  setAmount(event.target.value);
+                  setPaymentIdempotencyKey(crypto.randomUUID());
+                }}
+                className={styles.amountField}
+              />
               <Select
-                id="pay-mode" label="Mode" value={mode} onChange={(event) => setMode(event.target.value as PaymentMode)}
+                id="pay-mode" label="Mode" value={mode} onChange={(event) => {
+                  setMode(event.target.value as PaymentMode);
+                  setPaymentIdempotencyKey(crypto.randomUUID());
+                }}
                 options={MODES.map((m) => ({ value: m, label: m }))}
               />
             </div>
-            <Input id="pay-ref" label="Reference (optional)" placeholder="UPI ref / cheque no." value={payRef} onChange={(event) => setPayRef(event.target.value)} />
+            <Input
+              id="pay-ref"
+              label="Reference (optional)"
+              placeholder="UPI ref / cheque no."
+              value={payRef}
+              onChange={(event) => {
+                setPayRef(event.target.value);
+                setPaymentIdempotencyKey(crypto.randomUUID());
+              }}
+            />
           </div>
         )}
       </Modal>

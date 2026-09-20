@@ -21,6 +21,7 @@ export const paiseSchema = z.number().int().positive().max(MAX_PAISE_AMOUNT);
 export const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'date like "2026-07-11"');
 export const adjustmentKindSchema = z.enum(["scholarship", "fine", "refund", "waiver"]);
 export const paymentModeSchema = z.enum(["cash", "upi", "card", "bank", "gateway"]);
+export const paymentIdempotencyKeySchema = z.string().uuid();
 export const invoiceStatusSchema = z.enum(["pending", "part", "paid", "waived"]);
 
 const problemSchema = z.object({
@@ -275,16 +276,21 @@ const routes: RouteSpec[] = [
         amountPaise: paiseSchema,
         mode: paymentModeSchema,
         ref: z.string().trim().max(128).default(""),
+        idempotencyKey: paymentIdempotencyKeySchema,
       }),
     },
     audit: { action: "fees.payment-recorded", resourceType: "fee-payment" },
     responses: {
+      200: {
+        description: "Previously recorded payment returned for an identical retry",
+        schema: z.object({ payment: feePaymentViewSchema, invoice: feeInvoiceViewSchema }),
+      },
       201: {
         description: "Recorded",
         schema: z.object({ payment: feePaymentViewSchema, invoice: feeInvoiceViewSchema }),
       },
       404: { description: "No such invoice", schema: problemSchema },
-      409: { description: "Invoice is waived — no further payments accepted", schema: problemSchema },
+      409: { description: "Invoice is waived or the idempotency key was reused with different payment details", schema: problemSchema },
     },
   },
   {

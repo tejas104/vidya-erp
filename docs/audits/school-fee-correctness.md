@@ -124,57 +124,36 @@ Non-breaking: every previously-valid amount (anything a real fee could be)
 still validates identically; only values that would have crashed the
 server are now rejected with a clean `400` instead.
 
-**Regression evidence:** `definition.test.ts` (11 tests) — accepts ordinary
+**Regression evidence:** `definition.test.ts` — accepts ordinary
 amounts and the exact cap, rejects one paisa over the cap, rejects a value
 one past Postgres's actual `integer` ceiling, and confirms the cap itself
 sits under that ceiling with margin. Pre-existing behavior (rejects
 non-positive/non-integer amounts) reconfirmed unchanged.
 
-## Reproduced, not fixed — needs an approved schema change
+## Review correction (2026-09-20)
 
 ### F2 — duplicate/retried payment submission creates a second receipt
 
 **Promise:** "duplicate submission does not create a second receipt" (§5.7,
 Acceptance, verbatim).
 
-**Reproduction (real DB, current code, unmodified by this assignment):**
-submitting the identical `{invoiceId, amountPaise, mode, ref}` payment body
-twice in sequence — the same shape a client retry after a timeout, or a
-double-tapped submit button, would produce — succeeds both times, creating
-**two** `fee_payments` rows with **two different receipt numbers** for what
-was meant to be one real-world payment. `fees-repo.int.test.ts`, "duplicate
-submission" pins this exact behavior with a real database and is left
-**green on the CURRENT (defective) behavior** — it is a characterization
-test, not an endorsement; its assertions and comments say so explicitly.
+**Original reproduction:** submitting the same payment twice created two
+rows and two receipt numbers because the request had no durable identity.
 
-**Why this was not fixed this round:** the only sound way to recognize "this
-is the same submission, not a new payment" is a client-supplied idempotency
-token the server can deduplicate on. The current `fees.payment-record`
-request body (`invoiceId, amountPaise, mode, ref`) has no such field, and
-`ref` cannot safely stand in for one — it defaults to `""`, is not unique,
-and two *legitimate* cash payments on the same day plausibly share it. Doing
-this correctly needs an API field and a matching database uniqueness
-constraint, i.e. a schema and (additive, non-breaking) API change — both
-explicitly out of this assignment's boundary ("do not introduce schema
-migrations or breaking API changes... document the exact proposed change
-and leave that specific item for an approved follow-up").
+**Correction:** migration `fees/0001_payment_idempotency` adds a nullable
+column for historical compatibility and a partial unique index on
+`(college_id, idempotency_key)`. The payment API now requires a UUID key for
+every new request. The repository checks the key inside the invoice-locked
+transaction before allocating a receipt. An identical retry returns the
+original receipt with HTTP 200; reuse with different payment details returns
+409. The cashier UI creates a key for the payment payload, retains it across
+an unchanged retry, and rotates it when the amount, mode or reference changes.
 
-**Proposed follow-up (for approval, not implemented here):**
-1. Add a nullable `idempotency_key text` column to `fee_payments`, with a
-   **partial** unique index `UNIQUE (college_id, idempotency_key) WHERE
-   idempotency_key IS NOT NULL` (nullable so existing rows and clients that
-   don't yet send a key are unaffected — additive, non-breaking).
-2. Add an optional `idempotencyKey: z.string().min(1).max(128).optional()`
-   field to `fees.payment-record`'s request body (optional — additive, not
-   a breaking change to existing callers).
-3. In `recordPayment`, when a key is supplied: inside the same transaction,
-   before allocating a receipt number, check for an existing payment with
-   that `(collegeId, idempotencyKey)`. If found, return it as-is (no new
-   receipt, no new row) instead of proceeding — "one monetary effect with
-   stable retry response," matching §5.7's phrasing precisely and the
-   parallel promise in §5.8 for gateway webhooks.
-4. This is additive and backward compatible: a caller that never sends a
-   key gets exactly today's behavior (documented, not silently changed).
+**Evidence:** real-Postgres tests cover sequential and concurrent identical
+retries, changed-payload conflict, a single payment row and an unchanged
+receipt counter. The generated OpenAPI contract requires the UUID. Existing
+rows remain readable because the database column is nullable, while the
+current API prevents new unkeyed writes.
 
 ## Second pass (2026-09-19)
 
@@ -217,7 +196,7 @@ that the scoped read returns it — that is ADR-0025's own integration test
 (`tests/integration/audit-scope.int.test.ts`), which needs the shared
 harness (Redis) and was **not run** in this session.
 
-### F5 — audit write happens after the payment commits (reproduced, not fixed — platform boundary)
+### F5 — audit write happens after the payment commits (platform gap, payment retry consequence mitigated)
 
 **Invariant:** Constitution rule 7 as implemented in `defineRoute`: "a
 failed audit write fails the request (fail-closed)."
@@ -226,9 +205,9 @@ failed audit write fails the request (fail-closed)."
 `addAdjustment` commit their own transaction; only then is
 `auditLogger.record` called, on a separate connection. If that write fails,
 the client gets `500` but the payment, its receipt number and the invoice
-status change are already committed, with **no audit row**. A client that
-treats the 500 as "not recorded" and retries creates a second payment
-(compounding F2).
+status change are already committed, with **no audit row**. Before the
+idempotency correction, a client that treated the 500 as "not recorded"
+could create a second payment on retry.
 
 **Reproduction:** `fees-repo.int.test.ts`, "F5 … characterizes the current
 gap" — real `defineRoute` + real fees handler + real Postgres, only the
@@ -236,7 +215,13 @@ audit sink throws: response `500`, yet `fee_payments` has 1 row and the
 receipt counter is at 1. Green on the **current** behavior, by design (a
 characterization test to flip when fixed).
 
-**Why not fixed here:** a correct fix makes the audit insert part of the
+**Current mitigation:** the required payment idempotency key means a retry
+after this 500 returns and audits the original receipt instead of charging
+again. A real-route/real-Postgres regression forces the first audit write to
+fail, retries the same body against a working audit sink, and verifies HTTP
+200, one payment, one receipt number and a replay audit event.
+
+**Remaining platform work:** a complete fix makes the audit insert part of the
 money transaction (e.g. an `AuditLogger.record(event, tx)` variant, or a
 handler-owned outbox row committed in the same tx). That changes the
 platform audit seam and `defineRoute`, which are shared platform code
@@ -266,8 +251,8 @@ previously crashed with a 500 at INSERT time.
 - **Receipt PDFs:** none exist. The receipt is the web counterfoil
   (`apps/web/app/(app)/manage/fees/page.tsx`, printed via `window.print()`)
   rendering the API's `receiptNo` and `amountPaise` with the web
-  `formatPaise`/`formatPaiseInWords`. Frontend was out of scope and not
-  changed or tested here; the stored amount is what the counterfoil receives.
+  `formatPaise`/`formatPaiseInWords`. The review correction tests the cashier
+  retry behavior; print layout itself remains outside this audit.
 - **Stored vs displayed totals:** invoice `status` is persisted and
   `paidPaise`/`duesPaise` are recomputed live from the same ledger function
   (`computeLedger`); both writes recompute status under the invoice row
@@ -380,17 +365,17 @@ the unrelated `analytics` migration issue is fixed for this environment.
 
 ## Remaining risks and limitations
 
-- **F2 (duplicate submission) remains live in production behavior.** A
-  network retry or a double-submitted form still creates two receipts today.
-  This is now precisely documented and evidenced, with a scoped migration
-  proposal, but it is **not fixed**.
-- **F5 (audit after commit) remains live.** An audit-sink failure leaves a
-  committed payment with no audit row and a 500 that invites a retry.
-  Needs the platform audit seam change described above.
+- **F2 is fixed for the current API and cashier UI.** Existing historical
+  rows have null keys by design; direct database writers remain outside the
+  HTTP contract and must supply their own controls.
+- **F5's platform atomicity gap remains live.** An audit-sink failure still
+  leaves a committed payment without an audit row until a keyed client retry
+  succeeds. The retry no longer creates a second monetary effect. Full
+  atomicity needs the platform audit seam change described above.
 - **No cheque/settlement modeling, no day-close report, no per-year receipt
   numbering** — all as described above.
-- This review did not examine the frontend, did not review
-  `apps/web`'s fee screens, and did not test the invoice-generation worker
+- The correction reviewed the cashier payment screen and its retry behavior.
+  It did not test the invoice-generation worker
   job (`generate-job.ts`) end-to-end against a queue — only its underlying
   repo-level idempotency guarantee, directly.
 - Authorization coverage relies on the existing `handlers.test.ts` mock

@@ -104,12 +104,40 @@ describe("/manage/fees — the counter", () => {
     expect(screen.getByLabelText("Amount (₹)")).toHaveValue("500.00");
     fireEvent.click(screen.getByRole("button", { name: /record payment/i }));
     await waitFor(() =>
-      expect(api.feesRecordPayment).toHaveBeenCalledWith({ invoiceId: "inv_1", amountPaise: 50_000, mode: "cash" }),
+      expect(api.feesRecordPayment).toHaveBeenCalledWith(expect.objectContaining({
+        invoiceId: "inv_1",
+        amountPaise: 50_000,
+        mode: "cash",
+        idempotencyKey: expect.any(String),
+      })),
     );
     // the counterfoil: receipt number, amount in words
     expect(await screen.findByText("#101")).toBeInTheDocument();
     expect(screen.getByText("Rupees five hundred only")).toBeInTheDocument();
     expect(screen.getByText("Receipt #101 issued.")).toBeInTheDocument();
+  });
+
+  it("reuses the payment idempotency key when the cashier retries an unchanged failed request", async () => {
+    mock("feesRecordPayment")
+      .mockRejectedValueOnce(new ApiError(500, "Internal server error"))
+      .mockResolvedValueOnce({
+        payment: {
+          id: "pay_1", invoiceId: "inv_1", receiptNo: 101, amountPaise: 50_000,
+          mode: "cash", ref: "", receivedBy: "u_acct", receivedAt: "2026-07-13T10:00:00Z",
+        },
+        invoice: { ...overdueInvoice, status: "paid", paidPaise: 50_000, duesPaise: 0 },
+      });
+    await openLedger();
+    fireEvent.click(screen.getByRole("button", { name: /take payment/i }));
+    fireEvent.click(screen.getByRole("button", { name: /record payment/i }));
+    await screen.findByText("Internal server error");
+    fireEvent.click(screen.getByRole("button", { name: /record payment/i }));
+    await screen.findByText("#101");
+
+    const first = mock("feesRecordPayment").mock.calls[0]![0] as { idempotencyKey: string };
+    const retry = mock("feesRecordPayment").mock.calls[1]![0] as { idempotencyKey: string };
+    expect(first.idempotencyKey).toMatch(/^[0-9a-f-]{36}$/);
+    expect(retry.idempotencyKey).toBe(first.idempotencyKey);
   });
 
   it("surfaces the waived-invoice conflict as the server states it", async () => {

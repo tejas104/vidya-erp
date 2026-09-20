@@ -67,6 +67,20 @@ function reqCtx(principal: Principal, input: { body?: unknown; params?: unknown;
   return { requestId: randomUUID(), logger, principal, request: { params: input.params, query: input.query, body: input.body, headers: new Headers() } };
 }
 
+function paymentBody(
+  invoiceId: string,
+  overrides: Partial<{ amountPaise: number; mode: "cash" | "upi" | "card" | "bank" | "gateway"; ref: string; idempotencyKey: string }> = {},
+) {
+  return {
+    invoiceId,
+    amountPaise: 1_000,
+    mode: "cash" as const,
+    ref: "",
+    idempotencyKey: randomUUID(),
+    ...overrides,
+  };
+}
+
 /**
  * Inserts a synthetic fee_invoices row directly, plus the fee_heads and
  * fee_structures rows it FKs to — all three tables are fees-owned (no
@@ -151,7 +165,7 @@ describe("S04 — receipt numbering under real concurrency (verified invariant)"
 
     const results = await Promise.all(
       invoiceIds.map((invoiceId) =>
-        handlers["fees.payment-record"]!(reqCtx(accountant, { body: { invoiceId, amountPaise: 1_000, mode: "cash", ref: "" } })),
+        handlers["fees.payment-record"]!(reqCtx(accountant, { body: paymentBody(invoiceId) })),
       ),
     );
 
@@ -169,7 +183,7 @@ describe("S04 — atomicity when a later operation fails (verified invariant)", 
     const invoiceId = await seedInvoice({ collegeId, amount: 10_000_000 });
 
     // Prime the counter to 1 with a legitimate payment.
-    const first = await handlers["fees.payment-record"]!(reqCtx(accountant, { body: { invoiceId, amountPaise: 1_000, mode: "cash", ref: "" } }));
+    const first = await handlers["fees.payment-record"]!(reqCtx(accountant, { body: paymentBody(invoiceId) }));
     expect(first.status).toBe(201);
     expect(await receiptCounter(collegeId)).toBe(1);
 
@@ -193,7 +207,7 @@ describe("S04 — atomicity when a later operation fails (verified invariant)", 
     // clean domain error the repo/handler layer recognizes and names.
     let caught: unknown;
     try {
-      await handlers["fees.payment-record"]!(reqCtx(accountant, { body: { invoiceId, amountPaise: 1_000, mode: "cash", ref: "" } }));
+      await handlers["fees.payment-record"]!(reqCtx(accountant, { body: paymentBody(invoiceId) }));
     } catch (error) {
       caught = error;
     }
@@ -243,14 +257,14 @@ describe("S04 — invoice-generation idempotency (verified invariant, no double-
 describe("S04 — refund eligibility (F1: reproduced defect, now fixed)", () => {
   it("a refund within the amount actually paid is accepted", async () => {
     const invoiceId = await seedInvoice({ amount: 500_000 });
-    await handlers["fees.payment-record"]!(reqCtx(accountant, { body: { invoiceId, amountPaise: 300_000, mode: "cash", ref: "" } }));
+    await handlers["fees.payment-record"]!(reqCtx(accountant, { body: paymentBody(invoiceId, { amountPaise: 300_000 }) }));
     const result = await handlers["fees.adjustment-add"]!(reqCtx(accountant, { body: { invoiceId, kind: "refund", amountPaise: 100_000, reason: "" } }));
     expect(result.status).toBe(201);
   });
 
   it("a refund exceeding what was actually paid is now rejected (409), not silently accepted", async () => {
     const invoiceId = await seedInvoice({ amount: 500_000 });
-    await handlers["fees.payment-record"]!(reqCtx(accountant, { body: { invoiceId, amountPaise: 100_000, mode: "cash", ref: "" } }));
+    await handlers["fees.payment-record"]!(reqCtx(accountant, { body: paymentBody(invoiceId, { amountPaise: 100_000 }) }));
 
     const result = await handlers["fees.adjustment-add"]!(reqCtx(accountant, { body: { invoiceId, kind: "refund", amountPaise: 500_000, reason: "" } }));
     expect(result.status).toBe(409);
@@ -262,7 +276,7 @@ describe("S04 — refund eligibility (F1: reproduced defect, now fixed)", () => 
 
   it("cumulative refunds across multiple requests still cannot exceed total paid", async () => {
     const invoiceId = await seedInvoice({ amount: 500_000 });
-    await handlers["fees.payment-record"]!(reqCtx(accountant, { body: { invoiceId, amountPaise: 500_000, mode: "cash", ref: "" } }));
+    await handlers["fees.payment-record"]!(reqCtx(accountant, { body: paymentBody(invoiceId, { amountPaise: 500_000 }) }));
 
     const firstRefund = await handlers["fees.adjustment-add"]!(reqCtx(accountant, { body: { invoiceId, kind: "refund", amountPaise: 300_000, reason: "" } }));
     expect(firstRefund.status).toBe(201);
@@ -277,7 +291,7 @@ describe("S04 — refund eligibility (F1: reproduced defect, now fixed)", () => 
 
   it("two CONCURRENT refund requests against the same invoice never combine to exceed eligibility", async () => {
     const invoiceId = await seedInvoice({ amount: 500_000 });
-    await handlers["fees.payment-record"]!(reqCtx(accountant, { body: { invoiceId, amountPaise: 500_000, mode: "cash", ref: "" } }));
+    await handlers["fees.payment-record"]!(reqCtx(accountant, { body: paymentBody(invoiceId, { amountPaise: 500_000 }) }));
 
     // Two refunds of 300,000 each requested at the same instant; only one
     // can succeed without exceeding the 500,000 eligible — the invoice row
@@ -322,30 +336,52 @@ describe("S04 — tenant/institution containment (verified invariant, repo layer
     const invB = await seedInvoice({ collegeId: collegeB, amount: 10_000_000 });
 
     for (let i = 0; i < 3; i++) {
-      await handlers["fees.payment-record"]!(reqCtx(accountant, { body: { invoiceId: invA, amountPaise: 100, mode: "cash", ref: "" } }));
+      await handlers["fees.payment-record"]!(reqCtx(accountant, { body: paymentBody(invA, { amountPaise: 100 }) }));
     }
-    const resultB = await handlers["fees.payment-record"]!(reqCtx(accountant, { body: { invoiceId: invB, amountPaise: 100, mode: "cash", ref: "" } }));
+    const resultB = await handlers["fees.payment-record"]!(reqCtx(accountant, { body: paymentBody(invB, { amountPaise: 100 }) }));
     expect((resultB.body as { payment: { receiptNo: number } }).payment.receiptNo).toBe(1); // college B's own first receipt, unaffected by college A's 3
   });
 });
 
-describe("S04 — duplicate submission (F2: reproduced, NOT fixed — needs a schema change, see audit report)", () => {
-  it("characterizes the current gap: an identical payment submitted twice creates TWO receipts, not one", async () => {
+describe("review correction — duplicate payment submission", () => {
+  it("returns the original receipt for an identical retry", async () => {
     const invoiceId = await seedInvoice({ amount: 500_000 });
-    const body = { invoiceId, amountPaise: 500_000, mode: "cash" as const, ref: "same-client-retry" };
+    const body = paymentBody(invoiceId, { amountPaise: 500_000, ref: "same-client-retry" });
 
     const first = await handlers["fees.payment-record"]!(reqCtx(accountant, { body }));
     const second = await handlers["fees.payment-record"]!(reqCtx(accountant, { body })); // identical retry
 
     expect(first.status).toBe(201);
-    expect(second.status).toBe(201); // <- the gap: a true idempotent design would recognize the retry
+    expect(second.status).toBe(200);
     const firstReceipt = (first.body as { payment: { receiptNo: number } }).payment.receiptNo;
     const secondReceipt = (second.body as { payment: { receiptNo: number } }).payment.receiptNo;
-    expect(secondReceipt).not.toBe(firstReceipt); // two distinct receipts for what was meant to be one payment
-    expect(await paymentCount(invoiceId)).toBe(2);
-    // This is intentionally NOT asserted as `toBe(1)` — that would be
-    // asserting the fix exists. It doesn't yet; see docs/audits/
-    // school-fee-correctness.md for the proposed idempotency-key migration.
+    expect(secondReceipt).toBe(firstReceipt);
+    expect(await paymentCount(invoiceId)).toBe(1);
+  });
+
+  it("rejects reuse of a payment key with different details", async () => {
+    const invoiceId = await seedInvoice({ amount: 500_000 });
+    const idempotencyKey = randomUUID();
+    const first = await handlers["fees.payment-record"]!(reqCtx(accountant, {
+      body: paymentBody(invoiceId, { amountPaise: 100_000, idempotencyKey }),
+    }));
+    const changed = await handlers["fees.payment-record"]!(reqCtx(accountant, {
+      body: paymentBody(invoiceId, { amountPaise: 200_000, idempotencyKey }),
+    }));
+    expect(first.status).toBe(201);
+    expect(changed.status).toBe(409);
+    expect(await paymentCount(invoiceId)).toBe(1);
+  });
+
+  it("serializes concurrent identical retries into one receipt", async () => {
+    const invoiceId = await seedInvoice({ amount: 500_000 });
+    const body = paymentBody(invoiceId, { amountPaise: 100_000 });
+    const [first, second] = await Promise.all([
+      handlers["fees.payment-record"]!(reqCtx(accountant, { body })),
+      handlers["fees.payment-record"]!(reqCtx(accountant, { body })),
+    ]);
+    expect([first.status, second.status].sort()).toEqual([200, 201]);
+    expect(await paymentCount(invoiceId)).toBe(1);
   });
 });
 
@@ -359,7 +395,7 @@ describe("S04 — audit evidence for successful financial changes (verified inva
     // verified guarantee (Constitution rule 7), not re-proven here.
     const collegeId = `col_${randomUUID()}`;
     const invoiceId = await seedInvoice({ amount: 500_000, collegeId });
-    const result = await handlers["fees.payment-record"]!(reqCtx(accountant, { body: { invoiceId, amountPaise: 100_000, mode: "cash", ref: "" } }));
+    const result = await handlers["fees.payment-record"]!(reqCtx(accountant, { body: paymentBody(invoiceId, { amountPaise: 100_000 }) }));
     expect(result.status).toBe(201);
     expect(result.audit?.resourceId).toBeTruthy();
     // F4: without org the row is invisible to institution audit history (ADR-0025).
@@ -367,8 +403,8 @@ describe("S04 — audit evidence for successful financial changes (verified inva
   });
 });
 
-describe("S04 — audit write is outside the payment transaction (F5: reproduced, NOT fixed — platform boundary)", () => {
-  it("characterizes the current gap: a failed audit write answers 500 but the payment and its receipt stay committed", async () => {
+describe("review correction — recovery after post-commit audit failure", () => {
+  it("a failed audit write answers 500, then the same keyed retry audits the original receipt without a duplicate", async () => {
     // Real defineRoute + real fees handler + real DB; only the audit sink fails.
     // Pins CURRENT behavior so the follow-up (audit inside the money tx) has a
     // test to flip — it is not an endorsement.
@@ -382,15 +418,37 @@ describe("S04 — audit write is outside the payment transaction (F5: reproduced
     });
     const collegeId = `col_${randomUUID()}`;
     const invoiceId = await seedInvoice({ amount: 500_000, collegeId });
+    const body = paymentBody(invoiceId, { amountPaise: 100_000 });
     const response = await route(
       new Request("http://localhost/api/v1/fees/payments", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ invoiceId, amountPaise: 100_000, mode: "cash", ref: "" }),
+        body: JSON.stringify(body),
       }),
     );
     expect(response.status).toBe(500);
     expect(await paymentCount(invoiceId)).toBe(1);
     expect(await receiptCounter(collegeId)).toBe(1);
+
+    const recorded: unknown[] = [];
+    const retryRoute = defineRoute(spec, handlers["fees.payment-record"]!, {
+      logger,
+      authenticator: { authenticate: async () => ({ authenticated: true, principal: accountant }) },
+      accessPolicy: { authorize: async () => ({ granted: true }) },
+      auditLogger: { record: async (event) => { recorded.push(event); } },
+      metrics: createMetrics({ serviceName: "s04-fees-retry", defaultMetrics: false }),
+    });
+    const retry = await retryRoute(
+      new Request("http://localhost/api/v1/fees/payments", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      }),
+    );
+    expect(retry.status).toBe(200);
+    expect(await paymentCount(invoiceId)).toBe(1);
+    expect(await receiptCounter(collegeId)).toBe(1);
+    expect(recorded).toHaveLength(1);
+    expect(recorded[0]).toMatchObject({ action: "fees.payment-recorded", details: { receiptNo: 1, replayed: true } });
   });
 });

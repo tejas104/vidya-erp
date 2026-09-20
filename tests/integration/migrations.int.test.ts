@@ -154,6 +154,10 @@ const EXPECTATIONS: Record<string, MigrationExpectation> = {
       { table: "ppl_imports", column: "warnings" },
     ],
   },
+  "fees/0001_payment_idempotency": {
+    columns: [{ table: "fee_payments", column: "idempotency_key" }],
+    indexes: ["fee_payments_idempotency_uq"],
+  },
 
   "academics/0000_academics": {
     tables: ["acd_attendance_sessions", "acd_attendance_entries", "acd_assessments", "acd_marks"],

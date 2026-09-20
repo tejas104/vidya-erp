@@ -6,6 +6,7 @@ import {
   HeadInUseError,
   InvoiceNotFoundError,
   InvoiceWaivedError,
+  PaymentIdempotencyConflictError,
   RefundExceedsEligibleError,
   type FeesRepo,
 } from "./repo";
@@ -305,7 +306,13 @@ export function createFeesHandlers(deps: FeesHandlerDeps): Record<string, RouteH
 
   const paymentRecord: RouteHandler = async (ctx) => {
     const principal = ctx.principal as Principal;
-    const body = ctx.request.body as { invoiceId: string; amountPaise: number; mode: PaymentMode; ref: string };
+    const body = ctx.request.body as {
+      invoiceId: string;
+      amountPaise: number;
+      mode: PaymentMode;
+      ref: string;
+      idempotencyKey: string;
+    };
     const invoice = await deps.repo.getInvoice(body.invoiceId);
     if (invoice === null) return notFound("no such invoice");
     const org: OrgPath = {
@@ -314,25 +321,33 @@ export function createFeesHandlers(deps: FeesHandlerDeps): Record<string, RouteH
     };
     if (!writeAllowed(principal, org)) return denied();
     try {
-      const { payment, invoice: updated } = await deps.repo.recordPayment({
+      const { payment, invoice: updated, replayed } = await deps.repo.recordPayment({
         invoiceId: invoice.id,
         amountPaise: body.amountPaise,
         mode: body.mode,
         ref: body.ref,
+        idempotencyKey: body.idempotencyKey,
         receivedBy: principal.id,
       });
       return {
-        status: 201,
+        status: replayed ? 200 : 201,
         body: { payment: paymentView(payment), invoice: await singleInvoiceView(updated) },
         audit: {
           org,
           resourceId: payment.id,
-          details: { invoiceId: invoice.id, receiptNo: payment.receiptNo, amountPaise: payment.amount, mode: payment.mode },
+          details: {
+            invoiceId: invoice.id,
+            receiptNo: payment.receiptNo,
+            amountPaise: payment.amount,
+            mode: payment.mode,
+            replayed,
+          },
         },
       };
     } catch (error) {
       if (error instanceof InvoiceNotFoundError) return notFound("no such invoice");
       if (error instanceof InvoiceWaivedError) return { status: 409, body: { message: error.message } };
+      if (error instanceof PaymentIdempotencyConflictError) return { status: 409, body: { message: error.message } };
       throw error;
     }
   };

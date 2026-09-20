@@ -24,6 +24,12 @@ function pgErrorCode(error: unknown): string | undefined {
   return (error as { cause?: { code?: string } }).cause?.code;
 }
 
+function pgErrorConstraint(error: unknown): string | undefined {
+  const direct = (error as { constraint?: string }).constraint;
+  if (direct !== undefined) return direct;
+  return (error as { cause?: { constraint?: string } }).cause?.constraint;
+}
+
 export class DuplicateHeadError extends Error {
   constructor() {
     super("a fee head with this name already exists for this college");
@@ -60,6 +66,12 @@ export class RefundExceedsEligibleError extends Error {
     this.name = "RefundExceedsEligibleError";
   }
 }
+export class PaymentIdempotencyConflictError extends Error {
+  constructor() {
+    super("this idempotency key was already used for a different payment request");
+    this.name = "PaymentIdempotencyConflictError";
+  }
+}
 
 export interface NewStructure {
   readonly collegeId: string;
@@ -82,6 +94,7 @@ export interface NewPayment {
   readonly amountPaise: number;
   readonly mode: PaymentMode;
   readonly ref: string;
+  readonly idempotencyKey: string;
   readonly receivedBy: string;
 }
 
@@ -131,7 +144,7 @@ export interface FeesRepo {
   paymentsInRange(collegeId: string, fromIso: string, toIso: string): Promise<FeePaymentRow[]>;
   /** tx: issues the next per-college receipt no, inserts the payment, recomputes + persists invoice status.
    * Throws InvoiceNotFoundError / InvoiceWaivedError. */
-  recordPayment(input: NewPayment): Promise<{ payment: FeePaymentRow; invoice: FeeInvoiceRow }>;
+  recordPayment(input: NewPayment): Promise<{ payment: FeePaymentRow; invoice: FeeInvoiceRow; replayed: boolean }>;
 
   // adjustments
   adjustmentsForInvoice(invoiceId: string): Promise<FeeAdjustmentRow[]>;
@@ -336,45 +349,77 @@ export function createFeesRepo(db: Db): FeesRepo {
     },
 
     async recordPayment(input) {
-      return db.transaction(async (tx) => {
-        const invoiceRows = await tx.select().from(feeInvoices).where(eq(feeInvoices.id, input.invoiceId)).for("update");
-        const invoice = invoiceRows[0];
-        if (invoice === undefined) throw new InvoiceNotFoundError();
-        if (invoice.status === "waived") throw new InvoiceWaivedError();
+      try {
+        return await db.transaction(async (tx) => {
+          const invoiceRows = await tx.select().from(feeInvoices).where(eq(feeInvoices.id, input.invoiceId)).for("update");
+          const invoice = invoiceRows[0];
+          if (invoice === undefined) throw new InvoiceNotFoundError();
 
-        // The receipt counter: one row per college, incremented atomically —
-        // a concurrent second transaction blocks on this row's lock until
-        // the first commits, so receipt numbers are gap-free and unique
-        // (the +1 step itself is the pure, unit-tested money.nextReceiptNo).
-        await tx.insert(feeReceiptCounters).values({ collegeId: invoice.collegeId, lastIssued: 0 }).onConflictDoNothing();
-        const counterRows = await tx
-          .select()
-          .from(feeReceiptCounters)
-          .where(eq(feeReceiptCounters.collegeId, invoice.collegeId))
-          .for("update");
-        const receiptNo = nextReceiptNo(counterRows[0]!.lastIssued);
-        await tx
-          .update(feeReceiptCounters)
-          .set({ lastIssued: receiptNo })
-          .where(eq(feeReceiptCounters.collegeId, invoice.collegeId));
+          // The invoice lock serializes identical retries for the same invoice.
+          // A retry observes the committed first payment before allocating a
+          // second receipt number. The database unique index is the final guard
+          // for the same key racing across different invoices.
+          const existingRows = await tx
+            .select()
+            .from(feePayments)
+            .where(and(
+              eq(feePayments.collegeId, invoice.collegeId),
+              eq(feePayments.idempotencyKey, input.idempotencyKey),
+            ))
+            .limit(1);
+          const existing = existingRows[0];
+          if (existing !== undefined) {
+            const sameRequest =
+              existing.invoiceId === input.invoiceId &&
+              existing.amount === input.amountPaise &&
+              existing.mode === input.mode &&
+              existing.ref === input.ref &&
+              existing.receivedBy === input.receivedBy;
+            if (!sameRequest) throw new PaymentIdempotencyConflictError();
+            return { payment: existing, invoice, replayed: true };
+          }
 
-        const paymentRows = await tx
-          .insert(feePayments)
-          .values({
-            id: `fpy_${randomUUID()}`,
-            invoiceId: invoice.id,
-            collegeId: invoice.collegeId,
-            receiptNo,
-            amount: input.amountPaise,
-            mode: input.mode,
-            ref: input.ref,
-            receivedBy: input.receivedBy,
-          })
-          .returning();
-        const payment = paymentRows[0]!;
-        const updated = await recomputeStatus(tx as unknown as Db, invoice);
-        return { payment, invoice: updated };
-      });
+          if (invoice.status === "waived") throw new InvoiceWaivedError();
+
+          // The receipt counter: one row per college, incremented atomically —
+          // a concurrent second transaction blocks on this row's lock until
+          // the first commits, so receipt numbers are gap-free and unique.
+          await tx.insert(feeReceiptCounters).values({ collegeId: invoice.collegeId, lastIssued: 0 }).onConflictDoNothing();
+          const counterRows = await tx
+            .select()
+            .from(feeReceiptCounters)
+            .where(eq(feeReceiptCounters.collegeId, invoice.collegeId))
+            .for("update");
+          const receiptNo = nextReceiptNo(counterRows[0]!.lastIssued);
+          await tx
+            .update(feeReceiptCounters)
+            .set({ lastIssued: receiptNo })
+            .where(eq(feeReceiptCounters.collegeId, invoice.collegeId));
+
+          const paymentRows = await tx
+            .insert(feePayments)
+            .values({
+              id: `fpy_${randomUUID()}`,
+              invoiceId: invoice.id,
+              collegeId: invoice.collegeId,
+              receiptNo,
+              amount: input.amountPaise,
+              mode: input.mode,
+              ref: input.ref,
+              idempotencyKey: input.idempotencyKey,
+              receivedBy: input.receivedBy,
+            })
+            .returning();
+          const payment = paymentRows[0]!;
+          const updated = await recomputeStatus(tx as unknown as Db, invoice);
+          return { payment, invoice: updated, replayed: false };
+        });
+      } catch (error) {
+        if (pgErrorCode(error) === "23505" && pgErrorConstraint(error) === "fee_payments_idempotency_uq") {
+          throw new PaymentIdempotencyConflictError();
+        }
+        throw error;
+      }
     },
 
     async adjustmentsForInvoice(invoiceId) {

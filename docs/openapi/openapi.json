@@ -19488,18 +19488,166 @@
                     "type": "string",
                     "maxLength": 128,
                     "default": ""
+                  },
+                  "idempotencyKey": {
+                    "type": "string",
+                    "format": "uuid"
                   }
                 },
                 "required": [
                   "invoiceId",
                   "amountPaise",
-                  "mode"
+                  "mode",
+                  "idempotencyKey"
                 ]
               }
             }
           }
         },
         "responses": {
+          "200": {
+            "description": "Previously recorded payment returned for an identical retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "payment": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "invoiceId": {
+                          "type": "string"
+                        },
+                        "receiptNo": {
+                          "type": "number"
+                        },
+                        "amountPaise": {
+                          "type": "number"
+                        },
+                        "mode": {
+                          "type": "string",
+                          "enum": [
+                            "cash",
+                            "upi",
+                            "card",
+                            "bank",
+                            "gateway"
+                          ]
+                        },
+                        "ref": {
+                          "type": "string"
+                        },
+                        "receivedBy": {
+                          "type": "string"
+                        },
+                        "receivedAt": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "invoiceId",
+                        "receiptNo",
+                        "amountPaise",
+                        "mode",
+                        "ref",
+                        "receivedBy",
+                        "receivedAt"
+                      ]
+                    },
+                    "invoice": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "collegeId": {
+                          "type": "string"
+                        },
+                        "departmentId": {
+                          "type": "string"
+                        },
+                        "classId": {
+                          "type": "string"
+                        },
+                        "sectionId": {
+                          "type": "string"
+                        },
+                        "studentId": {
+                          "type": "string"
+                        },
+                        "studentName": {
+                          "type": "string"
+                        },
+                        "admissionNo": {
+                          "type": "string"
+                        },
+                        "structureId": {
+                          "type": "string"
+                        },
+                        "headId": {
+                          "type": "string"
+                        },
+                        "headName": {
+                          "type": "string"
+                        },
+                        "academicYear": {
+                          "type": "string"
+                        },
+                        "amountPaise": {
+                          "type": "number"
+                        },
+                        "dueOn": {
+                          "type": "string"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "pending",
+                            "part",
+                            "paid",
+                            "waived"
+                          ]
+                        },
+                        "paidPaise": {
+                          "type": "number"
+                        },
+                        "duesPaise": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "collegeId",
+                        "departmentId",
+                        "classId",
+                        "sectionId",
+                        "studentId",
+                        "studentName",
+                        "admissionNo",
+                        "structureId",
+                        "headId",
+                        "headName",
+                        "academicYear",
+                        "amountPaise",
+                        "dueOn",
+                        "status",
+                        "paidPaise",
+                        "duesPaise"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "payment",
+                    "invoice"
+                  ]
+                }
+              }
+            }
+          },
           "201": {
             "description": "Recorded",
             "content": {
@@ -19680,7 +19828,7 @@
             }
           },
           "409": {
-            "description": "Invoice is waived — no further payments accepted",
+            "description": "Invoice is waived or the idempotency key was reused with different payment details",
             "content": {
               "application/json": {
                 "schema": {

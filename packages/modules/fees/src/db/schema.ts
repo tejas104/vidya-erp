@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import { date, integer, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 
 /** fee_: heads, per-class structures, invoices, payments, adjustments.
@@ -72,10 +73,17 @@ export const feePayments = pgTable(
     amount: integer("amount").notNull(),
     mode: text("mode").$type<"cash" | "upi" | "card" | "bank" | "gateway">().notNull(),
     ref: text("ref").notNull().default(""),
+    /** Null only for payments created before migration 0001. */
+    idempotencyKey: text("idempotency_key"),
     receivedBy: text("received_by").notNull(),
     receivedAt: timestamp("received_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => [uniqueIndex("fee_payments_receipt_uq").on(table.collegeId, table.receiptNo)],
+  (table) => [
+    uniqueIndex("fee_payments_receipt_uq").on(table.collegeId, table.receiptNo),
+    uniqueIndex("fee_payments_idempotency_uq")
+      .on(table.collegeId, table.idempotencyKey)
+      .where(sql`${table.idempotencyKey} is not null`),
+  ],
 );
 export type FeePaymentRow = typeof feePayments.$inferSelect;
 

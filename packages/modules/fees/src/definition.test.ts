@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MAX_PAISE_AMOUNT, paiseSchema } from "./definition";
+import { feesModuleDefinition, MAX_PAISE_AMOUNT, paiseSchema } from "./definition";
 
 /**
  * S04 correctness finding — numeric bounds: `paiseSchema` previously allowed
@@ -30,5 +30,16 @@ describe("paiseSchema — numeric bounds (S04 finding)", () => {
 
   it.each([0, -1, -50_000, 1.5])("still rejects non-positive or non-integer amounts (pre-existing behavior, unchanged)", (amount) => {
     expect(paiseSchema.safeParse(amount).success).toBe(false);
+  });
+});
+
+describe("payment idempotency contract", () => {
+  const bodySchema = feesModuleDefinition.routes.find((route) => route.id === "fees.payment-record")!.request!.body!;
+
+  it("requires a UUID idempotency key for every new payment request", () => {
+    const base = { invoiceId: "fiv_1", amountPaise: 100, mode: "cash", ref: "" };
+    expect(bodySchema.safeParse(base).success).toBe(false);
+    expect(bodySchema.safeParse({ ...base, idempotencyKey: "not-a-uuid" }).success).toBe(false);
+    expect(bodySchema.safeParse({ ...base, idempotencyKey: "123e4567-e89b-42d3-a456-426614174000" }).success).toBe(true);
   });
 });
