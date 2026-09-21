@@ -48,7 +48,15 @@ function nextXff(): string {
 async function resetLoginThrottle(username: string): Promise<void> {
   const keys = [`ratelimit:login-user:${username}`, `idn:throttle:login:${username}`];
   try {
-    await execFileAsync("docker", ["compose", "exec", "-T", "redis", "redis-cli", "DEL", ...keys]);
+    const schoolProject = process.env.E2E_COMPOSE_PROJECT;
+    const schoolOverride = process.env.E2E_COMPOSE_OVERRIDE_FILE;
+    const schoolEnvFile = process.env.E2E_COMPOSE_ENV_FILE;
+    const composeArgs = schoolProject === undefined
+      ? ["compose"]
+      : schoolOverride === undefined || schoolEnvFile === undefined
+        ? (() => { throw new Error("E2E_COMPOSE_PROJECT requires E2E_COMPOSE_OVERRIDE_FILE and E2E_COMPOSE_ENV_FILE"); })()
+        : ["compose", "-p", schoolProject, "-f", "docker-compose.yml", "-f", schoolOverride, "--env-file", schoolEnvFile];
+    await execFileAsync("docker", [...composeArgs, "exec", "-T", "redis", "redis-cli", "DEL", ...keys]);
   } catch {
     // best-effort only — see comment above.
   }

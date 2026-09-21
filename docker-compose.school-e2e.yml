@@ -1,0 +1,48 @@
+# Disposable browser-test services only. This override must be used through
+# scripts/school-e2e.ts, which verifies the Compose project and resource labels
+# before it removes anything.
+services:
+  postgres:
+    environment:
+      POSTGRES_PASSWORD: school-e2e-pg-only
+      POSTGRES_DB: vidya_school_e2e
+    ports: !override
+      - "127.0.0.1:55435:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vidya -d vidya_school_e2e"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    volumes: !override
+      - school-e2e-pg-data:/var/lib/postgresql/data
+    labels:
+      com.vidya.school-e2e: "true"
+
+  redis:
+    command: ["redis-server", "--requirepass", "school-e2e-redis-only"]
+    environment:
+      REDISCLI_AUTH: school-e2e-redis-only
+    ports: !override
+      - "127.0.0.1:6385:6379"
+    labels:
+      com.vidya.school-e2e: "true"
+
+  minio:
+    environment:
+      MINIO_ROOT_USER: school-e2e-minio
+      MINIO_ROOT_PASSWORD: school-e2e-minio-secret
+    ports: !override
+      - "127.0.0.1:9010:9000"
+      - "127.0.0.1:9011:9001"
+    volumes: !override
+      - school-e2e-minio-data:/data
+    labels:
+      com.vidya.school-e2e: "true"
+
+volumes:
+  school-e2e-pg-data:
+    labels:
+      com.vidya.school-e2e: "true"
+  school-e2e-minio-data:
+    labels:
+      com.vidya.school-e2e: "true"

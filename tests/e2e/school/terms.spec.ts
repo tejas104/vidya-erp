@@ -21,6 +21,9 @@ test("school admin configures weights, closes a term, and reopens it with a reco
   await expect(help).not.toContainText("Entering marks");
   await help.getByRole("button", { name: "Close" }).click();
   await expect(help).not.toBeVisible();
+  await page.getByRole("button", { name: "Help" }).click();
+  await page.keyboard.press("Escape");
+  await expect(help).not.toBeVisible();
   await page.getByRole("button", { name: "Create term", exact: true }).click();
   let dialog = page.getByRole("dialog");
   const name = `Browser term ${Date.now()}`;
@@ -71,7 +74,15 @@ test("school management screens fit mobile in both themes", async ({ page }, tes
       await page.goto(path);
       await page.evaluate((value) => { document.documentElement.dataset.theme = value; }, theme);
       await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
-      if (path.endsWith("terms")) await expect(page.getByRole("button", { name: "Create term", exact: true })).toBeVisible();
+      if (path.endsWith("terms")) {
+        await expect(page.getByRole("button", { name: "Create term", exact: true })).toBeVisible();
+        await page.getByRole("button", { name: "Help" }).click();
+        const help = page.getByRole("dialog", { name: "Help" });
+        await expect(help.getByRole("heading", { name: "Academic terms and assessment types", level: 1 })).toBeVisible();
+        await expect(help).not.toContainText("Entering marks");
+        await page.keyboard.press("Escape");
+        await expect(help).not.toBeVisible();
+      }
       else await expect(page.getByLabel("Action", { exact: true })).toBeVisible();
       const fits = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
       expect(fits).toBe(true);

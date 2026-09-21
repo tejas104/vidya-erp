@@ -14,7 +14,7 @@ import { defineConfig, devices } from "@playwright/test";
  * CI / self-hosted: leave PLAYWRIGHT_BASE_URL unset and let webServer boot a
  * production server (the CI job migrates + seeds first).
  */
-const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3000";
+const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? `http://localhost:${process.env.PLAYWRIGHT_PORT ?? "3000"}`;
 
 /**
  * Edition suites (#13). An install's edition is fixed when the SERVER boots

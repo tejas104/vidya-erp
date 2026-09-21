@@ -34,7 +34,9 @@
     "check:docker-manifests": "tsx scripts/check-docker-workspace-manifests.ts",
     "compose:up": "docker compose up --build -d",
     "compose:down": "docker compose down",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:e2e:school": "tsx scripts/school-e2e.ts run",
+    "test:e2e:school:cleanup": "tsx scripts/school-e2e.ts cleanup"
   },
   "devDependencies": {
     "@asteasolutions/zod-to-openapi": "^7.3.0",

@@ -39,6 +39,9 @@ test("subject teacher creates a school assessment, saves grades and observes clo
     await expect(help).not.toContainText("Entering marks");
     await help.getByRole("button", { name: "Close" }).click();
     await expect(help).not.toBeVisible();
+    await page.getByRole("button", { name: "Help" }).click();
+    await page.keyboard.press("Escape");
+    await expect(help).not.toBeVisible();
     await page.getByLabel("Term").selectOption(termId);
     await page.getByLabel("Assessment name").fill("First test");
     await page.getByLabel("Assessment date").fill("2026-06-01");
@@ -52,6 +55,11 @@ test("subject teacher creates a school assessment, saves grades and observes clo
     await expect(page.locator(".shell-side")).not.toBeInViewport();
     for (const theme of ["light", "dark"]) {
       await page.evaluate((value) => { document.documentElement.dataset.theme = value; }, theme);
+      await page.getByRole("button", { name: "Help" }).click();
+      await expect(help.getByRole("heading", { name: "School assessments and marks", level: 1 })).toBeVisible();
+      await expect(help).not.toContainText("Entering marks");
+      await page.keyboard.press("Escape");
+      await expect(help).not.toBeVisible();
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
       await page.screenshot({ path: testInfo.outputPath(`${theme}-marks.png`), fullPage: true });
     }
