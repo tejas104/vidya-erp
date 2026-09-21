@@ -1,0 +1,19 @@
+.filters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-4); }
+.workspace { display: grid; grid-template-columns: minmax(15rem, .8fr) minmax(0, 1.5fr); gap: var(--space-5); margin-top: var(--space-5); align-items: start; }
+.roster, .preview { min-width: 0; }
+.studentList { display: grid; gap: var(--space-2); }
+.student, .studentActive { display: flex; width: 100%; justify-content: space-between; align-items: center; gap: var(--space-3); text-align: left; border: 1px solid var(--border); border-radius: var(--radius-2); padding: var(--space-3); background: var(--surface); color: inherit; cursor: pointer; }
+.student:hover, .student:focus-visible, .studentActive { border-color: var(--accent); outline: none; }
+.student span, .identity div { display: grid; gap: var(--space-1); }
+.student small, .identity span, .summary small { color: var(--muted); }
+.previewBody { display: grid; gap: var(--space-4); }
+.identity { display: flex; justify-content: space-between; gap: var(--space-3); padding-bottom: var(--space-3); border-bottom: 1px solid var(--border); }
+.subjects { display: grid; gap: var(--space-2); }
+.subject { display: flex; justify-content: space-between; gap: var(--space-4); padding: var(--space-2) 0; border-bottom: 1px solid var(--border); }
+.subject span:last-child { text-align: right; }
+.summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }
+.summary > div { display: grid; gap: var(--space-1); padding: var(--space-3); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-2); }
+.warnings { border-left: 3px solid var(--accent); padding: var(--space-3); background: var(--surface); }
+.warnings ul { margin: var(--space-2) 0 0; padding-left: var(--space-4); }
+.actions { display: flex; justify-content: flex-end; gap: var(--space-3); flex-wrap: wrap; }
+@media (max-width: 720px) { .filters, .workspace { grid-template-columns: 1fr; } .identity, .subject { align-items: flex-start; flex-direction: column; } .subject span:last-child { text-align: left; } }

@@ -55,6 +55,7 @@ export const NAV: NavEntry[] = [
   // --- results ---
   { href: "/manage/results", label: "Results", icon: "marks", group: "ACADEMICS", roles: ["admin", "principal"] },
   { href: "/manage/terms", label: "Academic terms", vocabularyKey: "academicTerms", icon: "attendance", group: "ACADEMICS", roles: ["admin", "principal"], editions: ["school"] },
+  { href: "/manage/report-cards", label: "Report cards", icon: "file", group: "REPORTS", roles: ["admin", "principal"], editions: ["school"] },
   { href: "/manage/backlogs", label: "Backlogs", icon: "marks", group: "ACADEMICS", roles: ["admin", "principal"] },
   // --- exams ---
   { href: "/manage/exams", label: "Exams", icon: "check", group: "ACADEMICS", roles: ["admin"] },

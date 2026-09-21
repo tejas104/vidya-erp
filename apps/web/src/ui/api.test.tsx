@@ -26,4 +26,23 @@ describe("api mutation helpers", () => {
     await expect(api.recordAttendance({ sectionId: "s", heldOn: "2026-06-01", slot: "day", academicYear: "2026-27", entries: [{ studentId: "x", status: "present" }] }))
       .rejects.toMatchObject({ status: 422, message: "Entries outside the roster" });
   });
+
+  it("uses the shared school report-card contract exactly", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ students: [] }), { headers: { "content-type": "application/json" } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ student: { id: "stu_1", fullName: "Meera Nair", admissionNo: "A-1" }, term: { id: "term_1", name: "Term 1", academicYear: "2026-27", startsOn: "2026-04-01", endsOn: "2026-09-30" }, subjects: [], overall: { percentage: null, grade: null, complete: false }, attendance: { eligibleDays: 0, presentEquivalentDays: null, percentage: null, complete: false, missingDates: [] }, warnings: [] }), { headers: { "content-type": "application/json" } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ snapshotId: "snap_1", generatedAt: "2026-09-21T00:00:00.000Z" }), { status: 201, headers: { "content-type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await api.schoolReportCardRoster("class_1", "term_1");
+    await api.schoolReportCardPreview({ studentId: "stu_1", termId: "term_1" });
+    await api.schoolGenerateReportCard({ studentId: "stu_1", termId: "term_1" });
+
+    expect(fetchMock.mock.calls[0]![0]).toBe("/api/v1/school/report-cards/classes/class_1?termId=term_1");
+    expect(fetchMock.mock.calls[1]![0]).toBe("/api/v1/school/report-cards/preview");
+    expect(fetchMock.mock.calls[1]![1]).toMatchObject({ method: "POST", body: JSON.stringify({ studentId: "stu_1", termId: "term_1" }) });
+    expect(fetchMock.mock.calls[2]![0]).toBe("/api/v1/school/report-cards");
+    expect(fetchMock.mock.calls[2]![1]).toMatchObject({ method: "POST", body: JSON.stringify({ studentId: "stu_1", termId: "term_1" }) });
+    expect(api.schoolReportCardDownloadUrl("snap_1")).toBe("/api/v1/school/report-cards/snap_1/download");
+  });
 });

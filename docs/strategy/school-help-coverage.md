@@ -1,6 +1,6 @@
 # School help coverage
 
-Updated for T03 on `codex/school-r01-terra`. This inventory uses the route-to-slug rule in `scripts/helpSlug.ts`: remove `/manage`, omit dynamic path segments, and join the remaining stable segments with hyphens. The compiler scans all route files, then selects the configured edition's map at runtime.
+Updated through T06 on `codex/school-r01-terra`. This inventory uses the route-to-slug rule in `scripts/helpSlug.ts`: remove `/manage`, omit dynamic path segments, and join the remaining stable segments with hyphens. The compiler scans all route files, then selects the configured edition's map at runtime.
 
 ## Authored and verified school articles
 
@@ -10,10 +10,11 @@ Updated for T03 on `codex/school-r01-terra`. This inventory uses the route-to-sl
 | `marks` | School assessment creation and marks entry | `SchoolMarksPage` and school-academics marks handlers: assigned-subject teacher scope, term-linked assessments, grade-scale snapshot, score validation, retained retry state, and read-only closed terms. |
 | `attendance` | Attendance recording for an assigned section or period | Attendance page: section/date roster, present/absent/late/excused controls, **Now** handoff, retry state, and save confirmation. |
 | `coursework` | Teacher assignment and study-material workflow | Coursework page and coursework handler ownership: assigned class/subject picker, assignment creation/evaluation, material upload, and guarded deletion. |
+| `report-cards` | Single-student report-card preview, generation, and PDF download | `SchoolReportCardsPage`: school administrator/principal scope, explicit incomplete-data warning and confirmation, snapshot state, retry states, and school-specific help binding. |
 
-These four documents use only the compiler's supported Markdown subset. They contain no screenshot placeholders because no T03 browser capture was made.
+These five documents use only the compiler's supported Markdown subset. They contain no screenshot placeholders because no T03 browser capture was made.
 
-`attendance`, `coursework`, `terms`, and the school implementation of `marks` render their matching `HelpButton` slugs. Focused UI tests verify that the school `terms` and `marks` entry points open their school articles and not college content.
+`attendance`, `coursework`, `terms`, the school implementation of `marks`, and `report-cards` render their matching `HelpButton` slugs. Focused UI tests verify that the school `terms`, `marks`, and `report-cards` entry points open their school articles and not college content.
 
 ## Active route and slug inventory not yet covered
 
@@ -37,7 +38,7 @@ These four documents use only the compiler's supported Markdown subset. They con
 | `now` | Active teacher shortcut; it has no help binding and is covered only as an attendance handoff. |
 | `org` | Organisation setup needs school administrative-data verification. |
 | `portal` | Student portal exists; no parent login or parent portal is claimed or documented. |
-| `reports` | Reporting screen is active, but school report-card creation and publication are not implemented here. |
+| `reports` | Reporting overview is active, but its school-specific operational guidance remains separate from the implemented report-card desk. |
 | `results` | Do not document report publication or weighted school result aggregation until those workflows are implemented. |
 | `students` | Shared student records require separate school enrollment and guardian-policy review. |
 | `syllabus` | Shared syllabus workflow needs school curriculum-policy verification. |

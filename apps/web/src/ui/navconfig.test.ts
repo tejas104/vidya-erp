@@ -8,6 +8,14 @@ describe("navConfig 8-domain regroup", () => {
     expect(links(["admin"], "college")).not.toContain("/manage/terms");
     expect(links(["teacher"], "school")).not.toContain("/manage/terms");
   });
+  it("shows Report cards only to school administrators and principals", () => {
+    const links = (roles: Parameters<typeof visibleNav>[0], edition: "college" | "school") => visibleNav(roles, edition).flatMap((group) => group.entries);
+    expect(links(["admin"], "school")).toEqual(expect.arrayContaining([expect.objectContaining({ href: "/manage/report-cards", label: "Report cards" })]));
+    expect(links(["principal"], "school")).toEqual(expect.arrayContaining([expect.objectContaining({ href: "/manage/report-cards" })]));
+    expect(links(["teacher"], "school")).not.toEqual(expect.arrayContaining([expect.objectContaining({ href: "/manage/report-cards" })]));
+    expect(links(["admin"], "college")).not.toEqual(expect.arrayContaining([expect.objectContaining({ href: "/manage/report-cards" })]));
+    expect(crumbsFor("/manage/report-cards", "school")).toEqual([{ label: "Reports" }, { label: "Report cards" }]);
+  });
   it("uses school terminology for term navigation and breadcrumbs without changing destinations", () => {
     const schoolTerms = visibleNav(["admin"], "school").flatMap((group) => group.entries).find((entry) => entry.href === "/manage/terms");
     expect(schoolTerms).toMatchObject({ label: "Academic Terms", href: "/manage/terms" });

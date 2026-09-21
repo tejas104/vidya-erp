@@ -89,6 +89,23 @@ export interface SchoolClassSetup {
   scales: { id: string; name: string }[];
 }
 
+export interface SchoolReportCardRosterStudent {
+  studentId: string;
+  fullName: string;
+  admissionNo: string;
+  snapshotId: string | null;
+  generatedAt: string | null;
+}
+
+export interface SchoolReportCardPreview {
+  student: { id: string; fullName: string; admissionNo: string };
+  term: { id: string; name: string; academicYear: string; startsOn: string; endsOn: string };
+  subjects: { subjectId: string; subjectName: string; percentage: number | null; grade: string | null; complete: boolean }[];
+  overall: { percentage: number | null; grade: string | null; complete: boolean };
+  attendance: { eligibleDays: number; presentEquivalentDays: number | null; percentage: number | null; complete: boolean; missingDates: string[] };
+  warnings: string[];
+}
+
 export interface MonthPoint {
   month: string;
   pct: number;
@@ -1047,6 +1064,14 @@ export const api = {
     put<{ types: SchoolAssessmentType[] }>(`/api/v1/school/terms/${encodeURIComponent(termId)}/assessment-types`, { types }),
   schoolTransitionTerm: (termId: string, action: "close" | "reopen", reason: string) =>
     post<SchoolTermView>(`/api/v1/school/terms/${encodeURIComponent(termId)}/${action}`, reason.trim() ? { reason: reason.trim() } : {}),
+  schoolReportCardRoster: (classId: string, termId: string) =>
+    get<{ students: SchoolReportCardRosterStudent[] }>(`/api/v1/school/report-cards/classes/${encodeURIComponent(classId)}?termId=${encodeURIComponent(termId)}`),
+  schoolReportCardPreview: (body: { studentId: string; termId: string }) =>
+    post<SchoolReportCardPreview>("/api/v1/school/report-cards/preview", body),
+  schoolGenerateReportCard: (body: { studentId: string; termId: string }) =>
+    post<{ snapshotId: string; generatedAt: string }>("/api/v1/school/report-cards", body),
+  schoolReportCardDownloadUrl: (snapshotId: string) =>
+    `/api/v1/school/report-cards/${encodeURIComponent(snapshotId)}/download`,
   async login(username: string, password: string): Promise<void> {
     const response = await fetch("/api/v1/identity/auth/login", {
       method: "POST",
