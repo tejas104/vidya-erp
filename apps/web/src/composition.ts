@@ -278,6 +278,8 @@ function buildWebRuntime(): WebRuntime {
       await peopleQueue.queue.add(IMPORT_JOB_NAME, payload);
     },
     edition: config.edition,
+    guardianAccounts: { createGuardianAccount: identity.service.createGuardianAccount },
+    guardianSelfAttestedLimit: config.guardians.selfAttestedLimit,
   });
   orgDirectoryRef.current = people.service.orgDirectory;
   studentCountRef.current = people.service.countActiveStudents;
@@ -448,6 +450,7 @@ function buildWebRuntime(): WebRuntime {
     peopleDirectory: people.service.directory,
     academicsRead: academics.service.readModel,
     timetableRead: timetable.service.readModel,
+    guardianAccess: people.service.guardianAccess,
   });
 
   // Every module built, then filtered by edition — construction is cheap and

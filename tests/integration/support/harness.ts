@@ -29,6 +29,7 @@ import { createSyllabusModule } from "@vidya/module-syllabus";
 import { createTimetableModule } from "@vidya/module-timetable";
 import { createSchoolAcademicsModule } from "@vidya/module-school-academics";
 import { createResultsModule } from "@vidya/module-results";
+import { createPortalModule } from "@vidya/module-portal";
 import { integrationDatabaseUrl } from "./db-url";
 
 export const ADMIN_USERNAME = "int-admin";
@@ -126,6 +127,7 @@ export function buildStack(edition: "college" | "school" = "college") {
     scopeChecker: core.scopeChecker,
     identityGrants: identity.service.derivedGrants,
     identity: { issueCredential: identity.service.issueCredential },
+    guardianAccounts: { createGuardianAccount: identity.service.createGuardianAccount },
     storage: { client: objectStorage, bucket: process.env.S3_BUCKET ?? "vidya-int" },
     enqueueImport: async (payload) => {
       enqueuedImports.push(payload);
@@ -208,6 +210,14 @@ export function buildStack(edition: "college" | "school" = "college") {
     peopleDirectory: people.service.directory,
   });
 
+  // ADR-0027: the family portal is exercised through the real route gate.
+  const portal = createPortalModule({
+    peopleDirectory: people.service.directory,
+    academicsRead: academics.service.readModel,
+    timetableRead: timetable.service.readModel,
+    guardianAccess: people.service.guardianAccess,
+  });
+
 
   const routeDeps: RouteDependencies = {
     logger,
@@ -218,7 +228,7 @@ export function buildStack(edition: "college" | "school" = "college") {
   };
   const specs = new Map<string, RouteSpec>();
   const handlers: Record<string, BoundRouteHandler> = {};
-  for (const module of [system, identity, people, academics, analytics, reporting, syllabus, timetable, schoolAcademics, results]) {
+  for (const module of [system, identity, people, academics, analytics, reporting, syllabus, timetable, schoolAcademics, results, portal]) {
     if (!moduleRunsOnEdition(module, edition)) continue;
     for (const route of module.definition.routes) {
       specs.set(route.id, route);

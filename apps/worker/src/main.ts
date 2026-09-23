@@ -164,6 +164,7 @@ async function main(): Promise<void> {
     scopeChecker: identityCore.scopeChecker,
     identityGrants: identity.service.derivedGrants,
     identity: { issueCredential: identity.service.issueCredential },
+    guardianAccounts: { createGuardianAccount: identity.service.createGuardianAccount },
     storage: { client: objectStorage, bucket: config.s3.bucket },
     enqueueImport: async (payload) => {
       await peopleQueue.queue.add(IMPORT_JOB_NAME, payload);
@@ -331,6 +332,7 @@ async function main(): Promise<void> {
     peopleDirectory: people.service.directory,
     academicsRead: academics.service.readModel,
     timetableRead: timetable.service.readModel,
+    guardianAccess: people.service.guardianAccess,
   });
 
   // Same edition filter as the web composition root, via the shared

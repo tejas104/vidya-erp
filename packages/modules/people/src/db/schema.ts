@@ -184,3 +184,67 @@ export type PplTeacherRow = typeof pplTeachers.$inferSelect;
 export type PplEnrollmentRow = typeof pplEnrollments.$inferSelect;
 export type PplAssignmentRow = typeof pplTeacherAssignments.$inferSelect;
 export type PplImportRow = typeof pplImports.$inferSelect;
+
+// ---------------------------------------------------------------------------
+// Guardians (ADR-0027) — see migrations/0006_guardians.sql for the invariants.
+// ---------------------------------------------------------------------------
+
+export const pplGuardians = pgTable("ppl_guardians", {
+  id: text("id").primaryKey(),
+  /** Opaque identity user id (account_kind 'guardian') — no cross-module FK. */
+  identityUserId: text("identity_user_id").notNull(),
+  fullName: text("full_name").notNull(),
+  primaryPhone: text("primary_phone"),
+  primaryEmail: text("primary_email"),
+  status: text("status").notNull().default("active"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [uniqueIndex("ppl_guardians_identity_idx").on(table.identityUserId)]);
+
+export const pplStudentGuardians = pgTable("ppl_student_guardians", {
+  id: text("id").primaryKey(),
+  guardianId: text("guardian_id").notNull().references(() => pplGuardians.id, { onDelete: "restrict" }),
+  studentId: text("student_id").notNull().references(() => pplStudents.id, { onDelete: "cascade" }),
+  collegeId: text("college_id").notNull(),
+  relationshipType: text("relationship_type").notNull(),
+  isPrimaryContact: boolean("is_primary_contact").notNull().default(false),
+  verificationState: text("verification_state").notNull(),
+  status: text("status").notNull(),
+  grantedCategories: text("granted_categories").array().notNull(),
+  restrictions: jsonb("restrictions").notNull().default([]),
+  validFrom: timestamp("valid_from", { withTimezone: true }).notNull().defaultNow(),
+  validUntil: timestamp("valid_until", { withTimezone: true }),
+  historicalAccessUntil: timestamp("historical_access_until", { withTimezone: true }),
+  statusReason: text("status_reason"),
+  statusChangedBy: text("status_changed_by"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("ppl_sg_pair_idx").on(table.guardianId, table.studentId),
+  index("ppl_sg_student_idx").on(table.studentId),
+]);
+
+export const pplGuardianInvitations = pgTable("ppl_guardian_invitations", {
+  id: text("id").primaryKey(),
+  studentId: text("student_id").notNull().references(() => pplStudents.id, { onDelete: "cascade" }),
+  collegeId: text("college_id").notNull(),
+  guardianName: text("guardian_name").notNull(),
+  relationshipType: text("relationship_type").notNull(),
+  contactMethod: text("contact_method").notNull(),
+  contactValue: text("contact_value").notNull(),
+  staffVerified: boolean("staff_verified").notNull().default(false),
+  codeHash: text("code_hash").notNull(),
+  status: text("status").notNull().default("pending"),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  issuedBy: text("issued_by").notNull(),
+  activatedRelationshipId: text("activated_relationship_id"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("ppl_gi_code_idx").on(table.codeHash),
+  index("ppl_gi_student_idx").on(table.studentId),
+]);
+
+export type PplGuardianRow = typeof pplGuardians.$inferSelect;
+export type PplStudentGuardianRow = typeof pplStudentGuardians.$inferSelect;
+export type PplGuardianInvitationRow = typeof pplGuardianInvitations.$inferSelect;

@@ -104,6 +104,7 @@ async function main(): Promise<void> {
       scopeChecker: core.scopeChecker,
       identityGrants: identity.service.derivedGrants,
       identity: { issueCredential: identity.service.issueCredential },
+      guardianAccounts: { createGuardianAccount: identity.service.createGuardianAccount },
       storage: { client: objectStorage, bucket: config.s3.bucket },
       enqueueImport: async (payload) => {
         await peopleQueue.queue.add(IMPORT_JOB_NAME, payload);

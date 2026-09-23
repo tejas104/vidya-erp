@@ -31,4 +31,16 @@ describe("route inventory", () => {
       .map((route) => `${route.id} (${route.method} ${route.path})`);
     expect(missing, `RouteSpecs with no route.ts:\n${missing.join("\n")}`).toEqual([]);
   });
+
+  // ADR-0027 Finding C: "any" admits guardians, so it is reserved for routes
+  // about the caller's own session. A new route using it must be added here
+  // deliberately, with a reason, never by default.
+  it("uses audience \"any\" only on the session self-service routes", () => {
+    const anyAudience = moduleDefinitions
+      .flatMap((def) => def.routes)
+      .filter((route) => !route.auth.public && route.auth.requirement.audience === "any")
+      .map((route) => route.id)
+      .sort();
+    expect(anyAudience).toEqual(["identity.logout", "identity.password-change", "identity.session"]);
+  });
 });

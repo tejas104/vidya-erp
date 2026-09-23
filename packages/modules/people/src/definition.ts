@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { UPLOAD_BODY_MAX_BYTES, type JobSpec, type ModuleDefinition, type RouteSpec } from "@vidya/platform";
+import { guardianRoutes } from "./guardians/definition";
 
 export const MODULE_NAME = "people";
 export const TABLE_PREFIX = "ppl_";
@@ -783,6 +784,6 @@ export const peopleModuleDefinition: ModuleDefinition = {
   name: MODULE_NAME,
   tablePrefix: TABLE_PREFIX,
   migrationsDir: "migrations",
-  routes,
+  routes: [...routes, ...guardianRoutes],
   jobs,
 };

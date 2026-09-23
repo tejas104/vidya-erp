@@ -7379,6 +7379,1029 @@
         }
       }
     },
+    "/api/v1/people/students/{studentId}/guardians": {
+      "get": {
+        "summary": "A pupil's guardians and pending invitations (staff)",
+        "description": "**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "people-guardians"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "studentId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Relationships (every status) and unexpired pending invitations",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "relationships": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "guardianName": {
+                            "type": "string"
+                          },
+                          "relationshipType": {
+                            "type": "string",
+                            "enum": [
+                              "parent",
+                              "legal-guardian",
+                              "other-authorized-contact"
+                            ]
+                          },
+                          "isPrimaryContact": {
+                            "type": "boolean"
+                          },
+                          "verificationState": {
+                            "type": "string",
+                            "enum": [
+                              "unverified",
+                              "self-attested",
+                              "staff-verified"
+                            ]
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "pending",
+                              "active",
+                              "restricted",
+                              "revoked",
+                              "expired"
+                            ]
+                          },
+                          "categories": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "statusReason": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "since": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "guardianName",
+                          "relationshipType",
+                          "isPrimaryContact",
+                          "verificationState",
+                          "status",
+                          "categories",
+                          "statusReason",
+                          "since"
+                        ]
+                      }
+                    },
+                    "invitations": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "guardianName": {
+                            "type": "string"
+                          },
+                          "relationshipType": {
+                            "type": "string",
+                            "enum": [
+                              "parent",
+                              "legal-guardian",
+                              "other-authorized-contact"
+                            ]
+                          },
+                          "contactMethod": {
+                            "type": "string",
+                            "enum": [
+                              "sms",
+                              "email"
+                            ]
+                          },
+                          "contactValue": {
+                            "type": "string"
+                          },
+                          "staffVerified": {
+                            "type": "boolean"
+                          },
+                          "expiresAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "guardianName",
+                          "relationshipType",
+                          "contactMethod",
+                          "contactValue",
+                          "staffVerified",
+                          "expiresAt"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "relationships",
+                    "invitations"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Scope check denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such student",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "message"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/people/students/{studentId}/guardian-invitations": {
+      "post": {
+        "summary": "Invite a guardian for a pupil (admin, or the class teacher)",
+        "description": "Returns a single-use code valid for 72 hours, exactly once: only its hash is stored, and it is never audited or logged. Staff hand it to the adult over the recorded contact channel. Re-issuing to the same contact invalidates the earlier code. `staffVerified` records that the member of staff has checked the adult's identity in person; without it, a third adult for one pupil, and any other-authorized-contact, waits for an administrator to verify them.\n\n**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "people-guardians"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "studentId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "guardianName": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  },
+                  "relationshipType": {
+                    "type": "string",
+                    "enum": [
+                      "parent",
+                      "legal-guardian",
+                      "other-authorized-contact"
+                    ]
+                  },
+                  "contactMethod": {
+                    "type": "string",
+                    "enum": [
+                      "sms",
+                      "email"
+                    ]
+                  },
+                  "contactValue": {
+                    "type": "string",
+                    "minLength": 3,
+                    "maxLength": 254
+                  },
+                  "staffVerified": {
+                    "type": "boolean",
+                    "default": false
+                  }
+                },
+                "required": [
+                  "guardianName",
+                  "relationshipType",
+                  "contactMethod",
+                  "contactValue"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Invitation issued; `code` is shown once",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "invitation": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "guardianName": {
+                          "type": "string"
+                        },
+                        "relationshipType": {
+                          "type": "string",
+                          "enum": [
+                            "parent",
+                            "legal-guardian",
+                            "other-authorized-contact"
+                          ]
+                        },
+                        "contactMethod": {
+                          "type": "string",
+                          "enum": [
+                            "sms",
+                            "email"
+                          ]
+                        },
+                        "contactValue": {
+                          "type": "string"
+                        },
+                        "staffVerified": {
+                          "type": "boolean"
+                        },
+                        "expiresAt": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "guardianName",
+                        "relationshipType",
+                        "contactMethod",
+                        "contactValue",
+                        "staffVerified",
+                        "expiresAt"
+                      ]
+                    },
+                    "code": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "invitation",
+                    "code"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Scope check denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such student",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "message"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/people/guardian-relationships/{relationshipId}/verify": {
+      "post": {
+        "summary": "Record staff verification of a guardian (admin)",
+        "description": "**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "people-guardians"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "relationshipId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Verified; a pending relationship becomes active",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "relationship": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "guardianName": {
+                          "type": "string"
+                        },
+                        "relationshipType": {
+                          "type": "string",
+                          "enum": [
+                            "parent",
+                            "legal-guardian",
+                            "other-authorized-contact"
+                          ]
+                        },
+                        "isPrimaryContact": {
+                          "type": "boolean"
+                        },
+                        "verificationState": {
+                          "type": "string",
+                          "enum": [
+                            "unverified",
+                            "self-attested",
+                            "staff-verified"
+                          ]
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "pending",
+                            "active",
+                            "restricted",
+                            "revoked",
+                            "expired"
+                          ]
+                        },
+                        "categories": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "statusReason": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "since": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "guardianName",
+                        "relationshipType",
+                        "isPrimaryContact",
+                        "verificationState",
+                        "status",
+                        "categories",
+                        "statusReason",
+                        "since"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "relationship"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Scope check denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such relationship",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The relationship is revoked",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "message"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/people/guardian-relationships/{relationshipId}/revoke": {
+      "post": {
+        "summary": "Revoke a guardian's access to one pupil (admin)",
+        "description": "Takes effect on the guardian's next request; their access to any other child is unaffected.\n\n**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "people-guardians"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "relationshipId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "reason": {
+                    "type": "string",
+                    "minLength": 3,
+                    "maxLength": 500
+                  }
+                },
+                "required": [
+                  "reason"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Revoked",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "relationship": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "guardianName": {
+                          "type": "string"
+                        },
+                        "relationshipType": {
+                          "type": "string",
+                          "enum": [
+                            "parent",
+                            "legal-guardian",
+                            "other-authorized-contact"
+                          ]
+                        },
+                        "isPrimaryContact": {
+                          "type": "boolean"
+                        },
+                        "verificationState": {
+                          "type": "string",
+                          "enum": [
+                            "unverified",
+                            "self-attested",
+                            "staff-verified"
+                          ]
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "pending",
+                            "active",
+                            "restricted",
+                            "revoked",
+                            "expired"
+                          ]
+                        },
+                        "categories": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "statusReason": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "since": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "guardianName",
+                        "relationshipType",
+                        "isPrimaryContact",
+                        "verificationState",
+                        "status",
+                        "categories",
+                        "statusReason",
+                        "since"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "relationship"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Scope check denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such relationship",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "message"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/people/guardian-invitations/activate": {
+      "post": {
+        "summary": "Redeem an invitation and create a guardian sign-in",
+        "description": "For an adult with no sign-in yet. Refusals are uniform (400) whatever the reason, so the endpoint cannot be used to learn whether a code exists, was used, or expired. Rate-limited per address.\n\n**Public route** (no authentication): the caller has no account yet — possession of the single-use invitation code is the credential",
+        "tags": [
+          "people-guardians"
+        ],
+        "security": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "type": "string",
+                    "minLength": 20,
+                    "maxLength": 40
+                  },
+                  "fullName": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  },
+                  "username": {
+                    "type": "string",
+                    "minLength": 3,
+                    "maxLength": 64,
+                    "pattern": "^[a-z0-9._@-]+$"
+                  },
+                  "password": {
+                    "type": "string",
+                    "minLength": 12,
+                    "maxLength": 256
+                  }
+                },
+                "required": [
+                  "code",
+                  "fullName",
+                  "username",
+                  "password"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Sign-in created and linked; sign in to continue",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "username": {
+                      "type": "string"
+                    },
+                    "child": {
+                      "type": "object",
+                      "properties": {
+                        "fullName": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "fullName"
+                      ]
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "active",
+                        "pending"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "username",
+                    "child",
+                    "status"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The code cannot be used",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Username already taken",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many attempts from this address",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "message"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/people/guardian-invitations/redeem": {
+      "post": {
+        "summary": "Link another child to the signed-in guardian",
+        "description": "**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "people-guardians"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "type": "string",
+                    "minLength": 20,
+                    "maxLength": 40
+                  }
+                },
+                "required": [
+                  "code"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Linked",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "child": {
+                      "type": "object",
+                      "properties": {
+                        "fullName": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "fullName"
+                      ]
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "active",
+                        "pending"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "child",
+                    "status"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The code cannot be used",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Access denied by the role/scope policy (problem+json)"
+          }
+        }
+      }
+    },
+    "/api/v1/people/guardian/children": {
+      "get": {
+        "summary": "The children the signed-in guardian is linked to",
+        "description": "The guardian's read-only view of their own relationships: status and the record categories each one covers. Revoked links are omitted.\n\n**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "people-guardians"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Linked children",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "children": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "studentId": {
+                            "type": "string"
+                          },
+                          "fullName": {
+                            "type": "string"
+                          },
+                          "admissionNo": {
+                            "type": "string"
+                          },
+                          "relationshipType": {
+                            "type": "string",
+                            "enum": [
+                              "parent",
+                              "legal-guardian",
+                              "other-authorized-contact"
+                            ]
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "pending",
+                              "active",
+                              "restricted",
+                              "revoked",
+                              "expired"
+                            ]
+                          },
+                          "categories": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "required": [
+                          "studentId",
+                          "fullName",
+                          "admissionNo",
+                          "relationshipType",
+                          "status",
+                          "categories"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "children"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Access denied by the role/scope policy (problem+json)"
+          }
+        }
+      }
+    },
     "/api/v1/academics/attendance/sessions": {
       "post": {
         "summary": "Record a session's attendance (subject teacher's period, or a class teacher's whole-section session)",
@@ -14863,6 +15886,591 @@
           },
           "404": {
             "description": "This sign-in is not linked to a student record",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/portal/children/{studentId}/attendance": {
+      "get": {
+        "summary": "A linked child's attendance summary (guardian)",
+        "description": "**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "portal-family"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "studentId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}$"
+            },
+            "required": true,
+            "name": "academicYear",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The child's records",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "counts": {
+                      "type": "object",
+                      "properties": {
+                        "present": {
+                          "type": "number"
+                        },
+                        "absent": {
+                          "type": "number"
+                        },
+                        "late": {
+                          "type": "number"
+                        },
+                        "excused": {
+                          "type": "number"
+                        }
+                      },
+                      "required": [
+                        "present",
+                        "absent",
+                        "late",
+                        "excused"
+                      ]
+                    },
+                    "pct": {
+                      "type": "number",
+                      "nullable": true
+                    },
+                    "monthly": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "month": {
+                            "type": "string"
+                          },
+                          "pct": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "month",
+                          "pct"
+                        ]
+                      }
+                    },
+                    "sessions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "heldOn": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "present",
+                              "absent",
+                              "late",
+                              "excused"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "heldOn",
+                          "status"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "counts",
+                    "pct",
+                    "monthly",
+                    "sessions"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "No relationship grants this category for this child",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/portal/children/{studentId}/marks": {
+      "get": {
+        "summary": "A linked child's marks by subject (guardian)",
+        "description": "**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "portal-family"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "studentId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}$"
+            },
+            "required": true,
+            "name": "academicYear",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The child's records",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "subjects": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "subjectId": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "avgPct": {
+                            "type": "number"
+                          },
+                          "marks": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "assessmentName": {
+                                  "type": "string"
+                                },
+                                "kind": {
+                                  "type": "string"
+                                },
+                                "pct": {
+                                  "type": "number"
+                                },
+                                "heldOn": {
+                                  "type": "string",
+                                  "nullable": true
+                                }
+                              },
+                              "required": [
+                                "assessmentName",
+                                "kind",
+                                "pct",
+                                "heldOn"
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "subjectId",
+                          "name",
+                          "avgPct",
+                          "marks"
+                        ]
+                      }
+                    },
+                    "overallPct": {
+                      "type": "number",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "subjects",
+                    "overallPct"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "No relationship grants this category for this child",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/portal/children/{studentId}/timetable": {
+      "get": {
+        "summary": "A linked child's weekly timetable (guardian)",
+        "description": "**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "portal-family"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "studentId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}$"
+            },
+            "required": true,
+            "name": "academicYear",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The child's records",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "periods": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "periodNo": {
+                            "type": "number"
+                          },
+                          "starts": {
+                            "type": "string"
+                          },
+                          "ends": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "periodNo",
+                          "starts",
+                          "ends"
+                        ]
+                      }
+                    },
+                    "entries": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "subjectName": {
+                            "type": "string"
+                          },
+                          "teacherName": {
+                            "type": "string"
+                          },
+                          "room": {
+                            "type": "string"
+                          },
+                          "dayOfWeek": {
+                            "type": "number"
+                          },
+                          "periodNo": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "subjectName",
+                          "teacherName",
+                          "room",
+                          "dayOfWeek",
+                          "periodNo"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "periods",
+                    "entries"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "No relationship grants this category for this child",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/portal/children/{studentId}/today": {
+      "get": {
+        "summary": "A linked child's periods today (guardian)",
+        "description": "**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "portal-family"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "studentId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}$"
+            },
+            "required": true,
+            "name": "academicYear",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The child's records",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "dayOfWeek": {
+                      "type": "number"
+                    },
+                    "periods": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "periodNo": {
+                            "type": "number"
+                          },
+                          "starts": {
+                            "type": "string"
+                          },
+                          "ends": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "periodNo",
+                          "starts",
+                          "ends"
+                        ]
+                      }
+                    },
+                    "entries": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "subjectName": {
+                            "type": "string"
+                          },
+                          "teacherName": {
+                            "type": "string"
+                          },
+                          "room": {
+                            "type": "string"
+                          },
+                          "dayOfWeek": {
+                            "type": "number"
+                          },
+                          "periodNo": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "subjectName",
+                          "teacherName",
+                          "room",
+                          "dayOfWeek",
+                          "periodNo"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "dayOfWeek",
+                    "periods",
+                    "entries"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "No relationship grants this category for this child",
             "content": {
               "application/json": {
                 "schema": {

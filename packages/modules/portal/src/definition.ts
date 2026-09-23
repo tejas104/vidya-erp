@@ -21,6 +21,16 @@ const problemSchema = z.object({
  */
 const STUDENT_ONLY = { public: false as const, requirement: { rolesAnyOf: ["student" as const] } };
 
+/**
+ * The family portal (ADR-0027): the SAME views, for a guardian, about one
+ * child named in the path. The route gate admits only guardian principals;
+ * the people module's GuardianAccessAdapter then decides, per request and per
+ * record category, whether this guardian may see this child. Refusals are a
+ * uniform 403 whatever the reason.
+ */
+const GUARDIAN_ONLY = { public: false as const, requirement: { audience: "guardian" as const } };
+const childParams = z.object({ studentId: z.string().min(1).max(64) });
+
 const meSchema = z.object({
   student: z.object({
     id: z.string(),
@@ -165,10 +175,34 @@ const routes: RouteSpec[] = [
   },
 ];
 
+const timetableResponseSchema = z.object({ periods: z.array(periodSchema), entries: z.array(timetableEntrySchema) });
+const todayResponseSchema = z.object({ dayOfWeek: z.number(), periods: z.array(periodSchema), entries: z.array(timetableEntrySchema) });
+const guardianDenied = { description: "No relationship grants this category for this child", schema: problemSchema };
+
+const childRoutes: RouteSpec[] = [
+  ["attendance", "attendance", attendanceSchema, "A linked child's attendance summary (guardian)"],
+  ["marks", "marks", marksSchema, "A linked child's marks by subject (guardian)"],
+  ["timetable", "timetable", timetableResponseSchema, "A linked child's weekly timetable (guardian)"],
+  ["today", "today", todayResponseSchema, "A linked child's periods today (guardian)"],
+].map(([segment, id, schema, summary]) => ({
+  id: `portal.child-${id as string}`,
+  module: MODULE_NAME,
+  method: "GET" as const,
+  path: `/api/v1/portal/children/{studentId}/${segment as string}`,
+  summary: summary as string,
+  tags: ["portal-family"],
+  auth: GUARDIAN_ONLY,
+  request: { params: childParams, query: yearQuery },
+  responses: {
+    200: { description: "The child's records", schema: schema as z.ZodTypeAny },
+    403: guardianDenied,
+  },
+}));
+
 export const portalModuleDefinition: ModuleDefinition = {
   name: MODULE_NAME,
   tablePrefix: TABLE_PREFIX,
   migrationsDir: "migrations",
-  routes,
+  routes: [...routes, ...childRoutes],
   jobs: [],
 };

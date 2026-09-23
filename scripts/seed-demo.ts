@@ -281,6 +281,7 @@ function buildStack() {
     scopeChecker: core.scopeChecker,
     identityGrants: identity.service.derivedGrants,
     identity: { issueCredential: identity.service.issueCredential },
+    guardianAccounts: { createGuardianAccount: identity.service.createGuardianAccount },
     storage: { client: objectStorage, bucket: config.s3.bucket },
     enqueueImport: async () => {
       /* the demo does not use bulk CSV import */

@@ -1,13 +1,21 @@
-import type { Principal, RouteHandler } from "@vidya/platform";
+import type { Principal, RouteContext, RouteHandler, RouteResult } from "@vidya/platform";
 import type { AcademicsReadModel } from "@vidya/module-academics";
-import type { PeopleDirectory } from "@vidya/module-people";
+import type { GuardianRecordCategory, PeopleDirectory, PeopleModuleService } from "@vidya/module-people";
 import type { TimetableReadModel } from "@vidya/module-timetable";
 
 export interface PortalHandlerDeps {
   readonly directory: PeopleDirectory;
   readonly academicsRead: AcademicsReadModel;
   readonly timetableRead: TimetableReadModel;
+  /** ADR-0027: the people module's guardian access decision. */
+  readonly guardianAccess: PeopleModuleService["guardianAccess"];
 }
+
+/** Whose records a portal view shows: resolved server-side, never trusted
+ *  from the request alone. */
+type Subject = { readonly studentId: string; readonly collegeId: string };
+type Resolver = (ctx: RouteContext) => Promise<Subject | RouteResult>;
+const isResult = (value: Subject | RouteResult): value is RouteResult => "status" in value;
 
 /** JS getDay() → Mon=1..Sat=6 (Sunday → 0 = no periods today). */
 function collegeDayOfWeek(date = new Date()): number {
@@ -29,6 +37,32 @@ export function createPortalHandlers(deps: PortalHandlerDeps): Record<string, Ro
   async function linkedStudent(principal: Principal) {
     return deps.directory.studentByIdentityUser(principal.id);
   }
+
+  /** A student sees their own record: the identity link is the authority. */
+  const self: Resolver = async (ctx) => {
+    const student = await linkedStudent(ctx.principal as Principal);
+    // Project to a Subject: the student record has its own `status` field,
+    // which must never be mistaken for a RouteResult by isResult().
+    return student === null ? notLinked() : { studentId: student.studentId, collegeId: student.collegeId };
+  };
+
+  /**
+   * A guardian sees a child's record only when the guardian access adapter
+   * grants this category for this child, decided fresh on every request.
+   * Every refusal is the same 403, so the response never says whether the
+   * pupil exists, is someone else's child, or is merely a withheld category.
+   */
+  const child =
+    (category: GuardianRecordCategory): Resolver =>
+    async (ctx) => {
+      const { studentId } = ctx.request.params as { studentId: string };
+      const { decision, student } = await deps.guardianAccess((ctx.principal as Principal).id, studentId, category);
+      if (!decision.granted || student === null) {
+        ctx.logger.warn({ reason: decision.reason }, "guardian access denied");
+        return { status: 403, body: { message: "access denied" } };
+      }
+      return { studentId: student.studentId, collegeId: student.collegeId };
+    };
 
   const me: RouteHandler = async (ctx) => {
     const student = await linkedStudent(ctx.principal as Principal);
@@ -63,11 +97,9 @@ export function createPortalHandlers(deps: PortalHandlerDeps): Record<string, Ro
     };
   };
 
-  const myAttendance: RouteHandler = async (ctx) => {
-    const student = await linkedStudent(ctx.principal as Principal);
-    if (student === null) {
-      return notLinked();
-    }
+  const attendance = (resolve: Resolver): RouteHandler => async (ctx) => {
+    const student = await resolve(ctx);
+    if (isResult(student)) return student;
     const query = ctx.request.query as { academicYear: string };
     const rows = await deps.academicsRead.studentAttendance(student.studentId, query.academicYear);
     const counts = { present: 0, absent: 0, late: 0, excused: 0 };
@@ -102,11 +134,9 @@ export function createPortalHandlers(deps: PortalHandlerDeps): Record<string, Ro
     };
   };
 
-  const myMarks: RouteHandler = async (ctx) => {
-    const student = await linkedStudent(ctx.principal as Principal);
-    if (student === null) {
-      return notLinked();
-    }
+  const marks = (resolve: Resolver): RouteHandler => async (ctx) => {
+    const student = await resolve(ctx);
+    if (isResult(student)) return student;
     const query = ctx.request.query as { academicYear: string };
     const rows = await deps.academicsRead.studentMarks(student.studentId, query.academicYear);
     const bySubject = new Map<
@@ -139,31 +169,26 @@ export function createPortalHandlers(deps: PortalHandlerDeps): Record<string, Ro
     return { status: 200, body: { subjects, overallPct } };
   };
 
-  /** The student's live section (via link + enrollment position), or null. */
-  async function ownSection(principal: Principal): Promise<{ sectionId: string; collegeId: string } | null> {
-    const student = await linkedStudent(principal);
-    if (student === null) return null;
+  /** The pupil's live section (via enrollment position); "" when unenrolled. */
+  async function sectionOf(resolve: Resolver, ctx: RouteContext): Promise<{ sectionId: string; collegeId: string } | RouteResult> {
+    const student = await resolve(ctx);
+    if (isResult(student)) return student;
     const position = await deps.directory.studentPosition(student.studentId);
-    if (position?.sectionId === undefined) return { sectionId: "", collegeId: student.collegeId };
-    return { sectionId: position.sectionId, collegeId: student.collegeId };
+    return { sectionId: position?.sectionId ?? "", collegeId: student.collegeId };
   }
 
-  const myTimetable: RouteHandler = async (ctx) => {
-    const own = await ownSection(ctx.principal as Principal);
-    if (own === null) {
-      return notLinked();
-    }
+  const timetable = (resolve: Resolver): RouteHandler => async (ctx) => {
+    const own = await sectionOf(resolve, ctx);
+    if ("status" in own) return own;
     const query = ctx.request.query as { academicYear: string };
     const periods = await deps.timetableRead.periods(own.collegeId);
     const entries = own.sectionId === "" ? [] : await deps.timetableRead.sectionGrid(own.sectionId, query.academicYear);
     return { status: 200, body: { periods, entries } };
   };
 
-  const myToday: RouteHandler = async (ctx) => {
-    const own = await ownSection(ctx.principal as Principal);
-    if (own === null) {
-      return notLinked();
-    }
+  const today = (resolve: Resolver): RouteHandler => async (ctx) => {
+    const own = await sectionOf(resolve, ctx);
+    if ("status" in own) return own;
     const query = ctx.request.query as { academicYear: string };
     const day = collegeDayOfWeek();
     const periods = await deps.timetableRead.periods(own.collegeId);
@@ -176,9 +201,13 @@ export function createPortalHandlers(deps: PortalHandlerDeps): Record<string, Ro
 
   return {
     "portal.me": me,
-    "portal.my-attendance": myAttendance,
-    "portal.my-marks": myMarks,
-    "portal.my-timetable": myTimetable,
-    "portal.my-today": myToday,
+    "portal.my-attendance": attendance(self),
+    "portal.my-marks": marks(self),
+    "portal.my-timetable": timetable(self),
+    "portal.my-today": today(self),
+    "portal.child-attendance": attendance(child("attendance")),
+    "portal.child-marks": marks(child("marks")),
+    "portal.child-timetable": timetable(child("timetable")),
+    "portal.child-today": today(child("timetable")),
   };
 }

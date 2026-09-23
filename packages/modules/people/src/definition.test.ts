@@ -20,9 +20,21 @@ describe("people module definition (contract conformance)", () => {
     expect(new Set(ids).size).toBe(ids.length);
   });
 
-  it("has NO public routes — people data always requires authentication", () => {
+  it("has ONE public route — guardian activation, where the code is the credential (ADR-0027)", () => {
+    const publicRoutes = peopleModuleDefinition.routes.filter((route) => route.auth.public).map((route) => route.id);
+    expect(publicRoutes).toEqual(["people.guardian-activate"]);
+    // …and it is rate-limited, because the code is guessable only by volume.
+    expect(peopleModuleDefinition.routes.find((route) => route.id === "people.guardian-activate")?.rateLimit).toBeDefined();
+  });
+
+  it("admits guardians only on routes that declare the guardian audience", () => {
+    const guardianRoutes = peopleModuleDefinition.routes
+      .filter((route) => !route.auth.public && route.auth.requirement.audience === "guardian")
+      .map((route) => route.id)
+      .sort();
+    expect(guardianRoutes).toEqual(["people.guardian-children", "people.guardian-redeem"]);
     for (const route of peopleModuleDefinition.routes) {
-      expect(route.auth.public, route.id).toBe(false);
+      if (!route.auth.public) expect(route.auth.requirement.audience, route.id).not.toBe("any");
     }
   });
 
@@ -43,9 +55,11 @@ describe("people module definition (contract conformance)", () => {
       "people.student-enroll",
       "people.document-upload",
       "people.document-delete",
+      // ADR-0027 Decision 8: a class teacher may invite for their own class.
+      "people.guardian-invitation-issue",
     ]);
     for (const route of peopleModuleDefinition.routes) {
-      if (!STATE_CHANGING_METHODS.has(route.method) || route.auth.public) {
+      if (!STATE_CHANGING_METHODS.has(route.method) || route.auth.public || route.auth.requirement.audience === "guardian") {
         continue;
       }
       const roles = route.auth.requirement.rolesAnyOf ?? [];

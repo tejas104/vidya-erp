@@ -41,6 +41,10 @@ import { AssignmentsService } from "./service/assignments-service";
 import { ImportService, type CredentialIssuer } from "./service/import-service";
 import { createPeopleHandlers } from "./api/handlers";
 import { createImportProcessor } from "./jobs/import-job";
+import { createGuardiansRepo } from "./guardians/repo";
+import { GuardianService, type GuardianAccountCreator, type StudentBrief } from "./guardians/service";
+import { createGuardianHandlers } from "./guardians/handlers";
+import type { GuardianAccessDecision, GuardianRecordCategory, PublicationState } from "./guardian-contract/types";
 import { createReconcileProcessor } from "./jobs/reconcile-job";
 
 export {
@@ -53,6 +57,8 @@ export {
 export { ASSIGNMENT_SOURCE_PREFIX } from "./service/assignments-service";
 export { IMPLICIT_DEPARTMENT_CODE, IMPLICIT_DEPARTMENT_NAME } from "./service/org-service";
 export type { CredentialIssuer } from "./service/import-service";
+export type { GuardianAccountCreator, StudentBrief } from "./guardians/service";
+export type { GuardianAccessDecision, GuardianRecordCategory, PublicationState } from "./guardian-contract/types";
 /** Shared username derivation (#11 B4) — the reporting module's per-class
  *  credential sheet reuses this so the scheme is identical everywhere. */
 export { usernameFromCode } from "./ids";
@@ -73,6 +79,10 @@ export interface PeopleModuleDeps {
   readonly enqueueImport: (payload: z.infer<typeof importJobPayloadSchema>) => Promise<void>;
   /** Drives the import-template CSV headers (#11 Task 1). Defaults to "college" like env.ts. */
   readonly edition?: AppConfig["edition"];
+  /** Identity's guardian sign-in creation (ADR-0027 invitation redemption). */
+  readonly guardianAccounts: GuardianAccountCreator;
+  /** ADR-0027 Decision 5 — see GUARDIAN_SELF_ATTESTED_LIMIT. Defaults to 2. */
+  readonly guardianSelfAttestedLimit?: number;
 }
 
 /**
@@ -154,6 +164,19 @@ export interface PeopleModuleService {
    * False when the student id does not exist.
    */
   linkStudentIdentity(studentId: string, identityUserId: string): Promise<boolean>;
+  /**
+   * ADR-0027: THE question every guardian-facing read in another module asks.
+   * Built fresh from the database on every call (Decision 2) and answered by
+   * the pure GuardianAccessAdapter. `student` is returned only when access is
+   * granted, and a pupil the guardian has no relationship with is never
+   * looked up — so the answer cannot be used to probe whether a pupil exists.
+   */
+  guardianAccess(
+    identityUserId: string,
+    studentId: string,
+    category: GuardianRecordCategory,
+    publicationState?: PublicationState,
+  ): Promise<{ decision: GuardianAccessDecision; student: StudentBrief | null }>;
 }
 
 export function createPeopleModule(deps: PeopleModuleDeps): RuntimeModule<PeopleModuleService> {
@@ -163,6 +186,16 @@ export function createPeopleModule(deps: PeopleModuleDeps): RuntimeModule<People
 
   const org = new OrgService({ repo: orgRepo, audit: deps.audit });
   const people = new PeopleService({ repo: peopleRepo, orgRepo });
+  const studentBrief = async (studentId: string): Promise<StudentBrief | null> => {
+    const row = await peopleRepo.getStudent(studentId);
+    return row === null ? null : { studentId: row.id, collegeId: row.collegeId, fullName: row.fullName, admissionNo: row.admissionNo };
+  };
+  const guardians = new GuardianService({
+    repo: createGuardiansRepo(deps.db),
+    student: studentBrief,
+    accounts: deps.guardianAccounts,
+    selfAttestedLimit: deps.guardianSelfAttestedLimit ?? 2,
+  });
   const assignments = new AssignmentsService({
     repo: peopleRepo,
     orgRepo,
@@ -205,7 +238,17 @@ export function createPeopleModule(deps: PeopleModuleDeps): RuntimeModule<People
 
   const module: RuntimeModule<PeopleModuleService> = {
     definition: peopleModuleDefinition,
-    handlers: createPeopleHandlers({
+    handlers: {
+      ...createGuardianHandlers({
+        guardians,
+        scopeChecker: deps.scopeChecker,
+        student: studentBrief,
+        studentPosition: async (studentId) => {
+          const student = await peopleRepo.getStudent(studentId);
+          return student === null ? null : people.studentOrgPosition(student);
+        },
+      }),
+      ...createPeopleHandlers({
       org,
       people,
       assignments,
@@ -216,6 +259,7 @@ export function createPeopleModule(deps: PeopleModuleDeps): RuntimeModule<People
       edition,
       identity: deps.identity,
     }),
+    },
     jobProcessors: {
       [IMPORT_JOB_NAME]: createImportProcessor(imports),
       [RECONCILE_JOB_NAME]: createReconcileProcessor(assignments),
@@ -333,6 +377,8 @@ export function createPeopleModule(deps: PeopleModuleDeps): RuntimeModule<People
       ensureImplicitDepartment: (collegeId) => org.ensureImplicitDepartment(collegeId),
       linkStudentIdentity: async (studentId, identityUserId) =>
         (await people.linkStudentIdentity(studentId, identityUserId)) !== null,
+      guardianAccess: (identityUserId, studentId, category, publicationState) =>
+        guardians.access(identityUserId, "read", studentId, category, publicationState),
     },
   };
   assertModuleWiring(module);

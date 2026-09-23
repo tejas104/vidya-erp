@@ -130,6 +130,14 @@ const envSchema = z.object({
    * app is edition-aware yet.
    */
   VIDYA_EDITION: z.enum(["college", "school"]).default("college"),
+
+  /**
+   * ADR-0027 Decision 5: how many adults per pupil may reach active access on
+   * self-attestation alone. Beyond this, a guardian waits for an
+   * administrator to verify them. 0 = every guardian is staff-verified. An
+   * other-authorized-contact always needs staff verification, whatever this is.
+   */
+  GUARDIAN_SELF_ATTESTED_LIMIT: z.coerce.number().int().min(0).max(10).default(2),
 });
 
 export interface AppConfig {
@@ -201,6 +209,7 @@ export interface AppConfig {
     readonly marksThreshold: number;
   };
   readonly edition: "college" | "school";
+  readonly guardians: { readonly selfAttestedLimit: number };
 }
 
 export class ConfigError extends Error {
@@ -299,5 +308,6 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
       marksThreshold: env.ANALYTICS_MARKS_THRESHOLD,
     },
     edition: env.VIDYA_EDITION,
+    guardians: { selfAttestedLimit: env.GUARDIAN_SELF_ATTESTED_LIMIT },
   };
 }

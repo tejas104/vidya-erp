@@ -18,12 +18,14 @@ const studentPrincipal: Principal = {
   sessionId: "s",
 };
 
-function ctx(principal: Principal, query: unknown = {}): RouteContext {
+const guardianPrincipal: Principal = { ...studentPrincipal, id: "usr_parent", kind: "guardian", roles: [] };
+
+function ctx(principal: Principal, query: unknown = {}, params: unknown = {}): RouteContext {
   return {
     requestId: "req-1",
     logger,
     principal,
-    request: { params: {}, query, body: undefined, headers: new Headers() },
+    request: { params, query, body: undefined, headers: new Headers() },
   };
 }
 
@@ -69,7 +71,13 @@ function makeDeps(opts: { linked: boolean }) {
     roomDay: async () => [],
   };
 
-  return { directory, academicsRead, timetableRead };
+  // The parent of stu_1 may see attendance and timetable, not marks.
+  const guardianAccess = async (identityUserId: string, studentId: string, category: string) =>
+    identityUserId === "usr_parent" && studentId === "stu_1" && category !== "marks"
+      ? { decision: { granted: true, reason: "granted:active-relationship" as const }, student: { studentId, collegeId: "col_1", fullName: "Aarav Sharma", admissionNo: "FYCS-001" } }
+      : { decision: { granted: false, reason: "denied:category-not-granted" as const }, student: null };
+
+  return { directory, academicsRead, timetableRead, guardianAccess };
 }
 
 describe("portal handlers (self-scoped via the identity link)", () => {
@@ -111,5 +119,34 @@ describe("portal handlers (self-scoped via the identity link)", () => {
     expect(body.subjects[0]!.avgPct).toBe(70);
     expect(body.subjects[0]!.marks).toHaveLength(2);
     expect(body.overallPct).toBe(70);
+  });
+});
+
+describe("family portal handlers (ADR-0027)", () => {
+  const query = { academicYear: YEAR };
+
+  it("shows a guardian the categories the adapter grants for their child", async () => {
+    const handlers = createPortalHandlers(makeDeps({ linked: true }));
+    const attendance = await handlers["portal.child-attendance"]!(ctx(guardianPrincipal, query, { studentId: "stu_1" }));
+    expect(attendance.status).toBe(200);
+    expect((attendance.body as { counts: Record<string, number> }).counts.present).toBe(1);
+    const timetable = await handlers["portal.child-timetable"]!(ctx(guardianPrincipal, query, { studentId: "stu_1" }));
+    expect((timetable.body as { entries: unknown[] }).entries).toHaveLength(1);
+  });
+
+  it("refuses a withheld category and an unrelated child with the same 403", async () => {
+    const handlers = createPortalHandlers(makeDeps({ linked: true }));
+    const marks = await handlers["portal.child-marks"]!(ctx(guardianPrincipal, query, { studentId: "stu_1" }));
+    const stranger = await handlers["portal.child-attendance"]!(ctx(guardianPrincipal, query, { studentId: "stu_9" }));
+    expect([marks.status, stranger.status]).toEqual([403, 403]);
+    expect(marks.body).toEqual(stranger.body);
+  });
+
+  it("never lets the self routes be driven by a path parameter", async () => {
+    // A student passing another pupil's id still sees only their own record.
+    const handlers = createPortalHandlers(makeDeps({ linked: true }));
+    const result = await handlers["portal.my-attendance"]!(ctx(studentPrincipal, query, { studentId: "stu_9" }));
+    expect(result.status).toBe(200);
+    expect((result.body as { counts: Record<string, number> }).counts.present).toBe(1);
   });
 });
