@@ -12,6 +12,7 @@ import { ReportButton } from "@/ui/ReportButton";
 import { DeniedState } from "@/ui/DeniedState";
 import { AsyncState } from "@/ui/AsyncState";
 import { HelpButton } from "@/ui/help/HelpButton";
+import { GuardiansPanel } from "@/ui/GuardiansPanel";
 import { PageHeader } from "@vidya/ui-system";
 import styles from "./page.module.css";
 
@@ -81,6 +82,12 @@ export default function StudentPage({ params }: { params: Promise<{ studentId: s
       ) : null}
 
       {load.state === "ok" ? <StudentBody data={load.data} year={year} /> : null}
+
+      {/* Guardians carry their own authorization (ADR-0027), so they are not
+          gated on the analytics read above: an administrator who cannot see
+          a pupil's performance must still be able to manage their guardians.
+          The panel hides itself for anyone outside the pupil's scope. */}
+      {load.state !== "loading" && load.state !== "not-found" ? <GuardiansPanel studentId={studentId} /> : null}
     </>
   );
 }

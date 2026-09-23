@@ -9,6 +9,9 @@ export type Role = "admin" | "principal" | "hod" | "class_teacher" | "teacher" |
 
 export interface Session {
   userId: string;
+  /** ADR-0027: "guardian" sessions hold no roles and live in /family.
+   *  Absent (an older server) means staff. */
+  kind?: "staff" | "guardian";
   displayName: string;
   roles: Role[];
   grants: unknown[];
@@ -698,6 +701,38 @@ const patch = <T>(path: string, body: Json) => send<T>("PATCH", path, body);
 const put = <T>(path: string, body: Json) => send<T>("PUT", path, body);
 const del = <T>(path: string) => send<T>("DELETE", path);
 
+// --- guardians (ADR-0027) ---
+export type GuardianRelationshipType = "parent" | "legal-guardian" | "other-authorized-contact";
+export type GuardianRelationshipStatus = "pending" | "active" | "restricted" | "revoked" | "expired";
+export interface GuardianChild {
+  studentId: string;
+  fullName: string;
+  admissionNo: string;
+  relationshipType: GuardianRelationshipType;
+  status: GuardianRelationshipStatus;
+  categories: string[];
+}
+export interface GuardianRelationshipView {
+  id: string;
+  guardianName: string;
+  relationshipType: GuardianRelationshipType;
+  isPrimaryContact: boolean;
+  verificationState: "unverified" | "self-attested" | "staff-verified";
+  status: GuardianRelationshipStatus;
+  categories: string[];
+  statusReason: string | null;
+  since: string;
+}
+export interface GuardianInvitationView {
+  id: string;
+  guardianName: string;
+  relationshipType: GuardianRelationshipType;
+  contactMethod: "sms" | "email";
+  contactValue: string;
+  staffVerified: boolean;
+  expiresAt: string;
+}
+
 /** Academic year rolls over in June (matches the server's academicYearForDate). */
 export function currentAcademicYear(now: Date = new Date()): string {
   const year = now.getFullYear();
@@ -870,6 +905,36 @@ export const api = {
     get<{ periods: TtPeriod[]; entries: TtEntry[] }>(`/api/v1/portal/timetable?academicYear=${year}`),
   portalToday: (year: string) =>
     get<{ dayOfWeek: number; periods: TtPeriod[]; entries: TtEntry[] }>(`/api/v1/portal/today?academicYear=${year}`),
+  // --- guardians (ADR-0027) ---
+  guardianChildren: () => get<{ children: GuardianChild[] }>("/api/v1/people/guardian/children"),
+  childAttendance: (studentId: string, year: string) =>
+    get<PortalAttendance>(`/api/v1/portal/children/${encodeURIComponent(studentId)}/attendance?academicYear=${year}`),
+  childMarks: (studentId: string, year: string) =>
+    get<PortalMarks>(`/api/v1/portal/children/${encodeURIComponent(studentId)}/marks?academicYear=${year}`),
+  childToday: (studentId: string, year: string) =>
+    get<{ dayOfWeek: number; periods: TtPeriod[]; entries: TtEntry[] }>(
+      `/api/v1/portal/children/${encodeURIComponent(studentId)}/today?academicYear=${year}`,
+    ),
+  guardianActivate: (body: { code: string; fullName: string; username: string; password: string }) =>
+    post<{ username: string; child: { fullName: string }; status: "active" | "pending" }>("/api/v1/people/guardian-invitations/activate", body),
+  guardianRedeem: (code: string) =>
+    post<{ child: { fullName: string }; status: "active" | "pending" }>("/api/v1/people/guardian-invitations/redeem", { code }),
+  studentGuardians: (studentId: string) =>
+    get<{ relationships: GuardianRelationshipView[]; invitations: GuardianInvitationView[] }>(
+      `/api/v1/people/students/${encodeURIComponent(studentId)}/guardians`,
+    ),
+  inviteGuardian: (
+    studentId: string,
+    body: { guardianName: string; relationshipType: GuardianRelationshipType; contactMethod: "sms" | "email"; contactValue: string; staffVerified: boolean },
+  ) =>
+    post<{ invitation: GuardianInvitationView; code: string }>(
+      `/api/v1/people/students/${encodeURIComponent(studentId)}/guardian-invitations`,
+      body,
+    ),
+  verifyGuardian: (relationshipId: string) =>
+    post<{ relationship: GuardianRelationshipView }>(`/api/v1/people/guardian-relationships/${encodeURIComponent(relationshipId)}/verify`, {}),
+  revokeGuardian: (relationshipId: string, reason: string) =>
+    post<{ relationship: GuardianRelationshipView }>(`/api/v1/people/guardian-relationships/${encodeURIComponent(relationshipId)}/revoke`, { reason }),
   // --- timetable ---
   ttPeriodsGet: (collegeId: string) =>
     get<{ periods: TtPeriod[] }>(`/api/v1/timetable/colleges/${encodeURIComponent(collegeId)}/periods`),

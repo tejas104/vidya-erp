@@ -7,13 +7,18 @@ import styles from "./login.module.css";
 
 export const dynamic = "force-dynamic";
 
-type Role = "student" | "staff";
+type Role = "student" | "parent" | "staff";
 
 const COPY: Record<Role, { eyebrow: string; lede: string; hint: string }> = {
   student: {
     eyebrow: "Student portal",
     lede: "See your attendance, marks and notices for the term.",
     hint: "Use the sign-in your college linked to your record.",
+  },
+  parent: {
+    eyebrow: "Parent sign-in",
+    lede: "See your child's attendance, marks and timetable.",
+    hint: "Use the username you chose when you set up your account.",
   },
   staff: {
     eyebrow: "Staff sign-in",
@@ -105,7 +110,7 @@ export default function LoginPage() {
 
         <div className={styles.card}>
           <div className={styles.seg} role="tablist" aria-label="Who is signing in">
-            {(["student", "staff"] as Role[]).map((r) => (
+            {(["student", "parent", "staff"] as Role[]).map((r) => (
               <button
                 key={r}
                 type="button"
@@ -114,7 +119,7 @@ export default function LoginPage() {
                 data-on={role === r ? "" : undefined}
                 onClick={() => setRole(r)}
               >
-                {r === "student" ? "Student" : "Staff"}
+                {r === "student" ? "Student" : r === "parent" ? "Parent" : "Staff"}
               </button>
             ))}
           </div>
@@ -154,6 +159,12 @@ export default function LoginPage() {
               {busy ? "Signing in…" : "Sign in"}
             </Button>
           </form>
+
+          {role === "parent" ? (
+            <p className={styles.hint}>
+              New here? <a href="/activate">Set up your parent account</a> with the invitation code the school gave you.
+            </p>
+          ) : null}
 
           {IS_DEV ? (
             <div className={styles.demos}>

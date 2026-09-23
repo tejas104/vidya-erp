@@ -14,9 +14,14 @@ import { HelpEditionProvider } from "./help/HelpEditionContext";
 export function AppShell({ session, year, children, edition = "college" }: { session: Session; year?: string; children: ReactNode; edition?: Edition }) {
   const [drawer, setDrawer] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  // ADR-0027: a guardian gets the same shell without any staff surface — no
+  // rail, search, licence banner or install prompt. The server refuses them
+  // those routes anyway; this keeps the screen from offering dead ends.
+  const family = session.kind === "guardian";
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
+      if (family) return;
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
         setSearchOpen(true);
@@ -24,14 +29,14 @@ export function AppShell({ session, year, children, edition = "college" }: { ses
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
+  }, [family]);
 
   return (
     <ToastProvider>
       <HelpEditionProvider edition={edition}>
         <div className="shell">
-          <Sidebar roles={session.roles} edition={edition} open={drawer} onClose={() => setDrawer(false)} />
-          {drawer ? <div className="shell-drawer-scrim" onMouseDown={() => setDrawer(false)} /> : null}
+          {family ? null : <Sidebar roles={session.roles} edition={edition} open={drawer} onClose={() => setDrawer(false)} />}
+          {drawer && !family ? <div className="shell-drawer-scrim" onMouseDown={() => setDrawer(false)} /> : null}
           <div className="shell-body">
             <Topbar
               displayName={session.displayName}
@@ -39,15 +44,20 @@ export function AppShell({ session, year, children, edition = "college" }: { ses
               edition={edition}
               onMenu={() => setDrawer((open) => !open)}
               onSearch={() => setSearchOpen(true)}
+              family={family}
             />
-            <LicenseBanner roles={session.roles} />
+            {family ? null : <LicenseBanner roles={session.roles} />}
             <main id="main" className="page shell-page">
               <Breadcrumbs edition={edition} />
               {children}
             </main>
           </div>
-          <SearchPalette open={searchOpen} onClose={() => setSearchOpen(false)} roles={session.roles} edition={edition} />
-          <InstallPrompt roles={session.roles} />
+          {family ? null : (
+            <>
+              <SearchPalette open={searchOpen} onClose={() => setSearchOpen(false)} roles={session.roles} edition={edition} />
+              <InstallPrompt roles={session.roles} />
+            </>
+          )}
         </div>
       </HelpEditionProvider>
     </ToastProvider>

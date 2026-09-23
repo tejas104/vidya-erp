@@ -15,7 +15,15 @@ export default function AppLayout({ children, edition = "college" }: { children:
     setGate({ state: "loading" });
     api
       .session()
-      .then((session) => setGate({ state: "ok", session }))
+      .then((session) => {
+        // ADR-0027: a guardian's whole app is /family; any other path (the
+        // post-login /dashboard included) would only render refusals.
+        if (session.kind === "guardian" && !window.location.pathname.startsWith("/family")) {
+          window.location.replace("/family");
+          return;
+        }
+        setGate({ state: "ok", session });
+      })
       .catch((caught) => {
         if (caught instanceof ApiError && caught.status === 401) {
           window.location.href = "/login";

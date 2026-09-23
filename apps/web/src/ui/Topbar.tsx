@@ -12,12 +12,15 @@ export function Topbar({
   edition = "college",
   onMenu,
   onSearch,
+  family = false,
 }: {
   displayName: string;
   year?: string;
   edition?: Edition;
   onMenu: () => void;
   onSearch?: () => void;
+  /** ADR-0027 guardian session: no staff menu, search or notifications. */
+  family?: boolean;
 }) {
   const [theme, setTheme] = useState<"light" | "dark" | null>(null);
   const vocabulary = vocabularyFor(edition);
@@ -45,15 +48,23 @@ export function Topbar({
 
   return (
     <header className="shell-top">
-      <button type="button" className="ui-iconbtn shell-hamburger" aria-label="Open menu" onClick={onMenu}>
-        <Icon name="menu" />
-      </button>
-      <button type="button" className="shell-search-btn" aria-label="Search" onClick={onSearch}>
-        <Icon name="search" size={16} />
-        <span>Search… ⌘K</span>
-      </button>
+      {family ? (
+        <a href="/family" className="wordmark shell-top-wordmark">
+          vidya<span>.</span>
+        </a>
+      ) : (
+        <>
+          <button type="button" className="ui-iconbtn shell-hamburger" aria-label="Open menu" onClick={onMenu}>
+            <Icon name="menu" />
+          </button>
+          <button type="button" className="shell-search-btn" aria-label="Search" onClick={onSearch}>
+            <Icon name="search" size={16} />
+            <span>Search… ⌘K</span>
+          </button>
+        </>
+      )}
       {year !== undefined ? <span className="shell-top-year num" aria-label={`${vocabulary.academicYear} ${year}`}>AY {year}</span> : null}
-      <NotificationBell />
+      {family ? null : <NotificationBell />}
       <Menu
         label={displayName}
         items={[

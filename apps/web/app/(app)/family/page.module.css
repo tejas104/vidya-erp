@@ -1,0 +1,48 @@
+.switcher {
+  margin-bottom: var(--space-5);
+}
+
+.periods {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.period {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+  border-top: var(--rule-width) solid var(--rule);
+  font-size: var(--text-14);
+}
+
+.period:first-child {
+  border-top: 0;
+}
+
+.muted {
+  color: var(--ink-3);
+}
+
+.linkForm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-3);
+}
+
+.linkForm > :first-child {
+  flex: 1 1 280px;
+}
+
+.ok {
+  margin: var(--space-3) 0 0;
+  color: var(--good);
+}
+
+.error {
+  margin: var(--space-3) 0 0;
+  color: var(--bad);
+}

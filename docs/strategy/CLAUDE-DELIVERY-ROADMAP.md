@@ -107,8 +107,8 @@ parent can be given access safely.
 |---|---|---|---|
 | 1.1 | **Immutable school report-card backend** | **DONE** (`4684044`) | Evidence below. |
 | 1.2 | Live school browser proof | **DONE for T04 journeys** | First real execution — see below. A report-card journey is added and pending its own run. |
-| 1.3 | Guardian identity + authorization ADR | `BLOCKED → design` | Gate-04: needs an ADR covering authentication shape, relationship revocation, policy defaults and the identity/people boundary **before** implementation. Hard blocker for 1.4. |
-| 1.4 | Parent portal essentials | `PLANNED` | Depends on 1.3. Reuse `portal` (`ptl_`) read models behind a guardian resolver — do not fork a parent module. |
+| 1.3 | Guardian identity + authorization ADR | `DONE` | ADR-0027 accepted by the owner 2026-09-23; implemented in `bd7a3db` and `60f3a66`. |
+| 1.4 | Parent portal essentials | `DONE (first slice)` | Invitation → activation → family portal (attendance, marks, timetable) reusing `portal` read models behind people's guardian access decision. See "Slice 1.3/1.4 — delivered" below for what is deferred. |
 | 1.5 | Promotion / detention / transfer | `PLANNED` | Auditable batch with preview; reversible per student; no hard delete of enrollment history. |
 | 1.6 | Certificates (TC, bonafide) | `PLANNED` | Generated from record state, numbered and audited — not free-text templates. |
 | 1.7 | Bulk marks import | `PLANNED` | Reuse the people-import dry-run + downloadable error-report pattern. |
@@ -264,6 +264,35 @@ until it has actually run.
 
 ---
 
+### Slice 1.3/1.4 — delivered
+
+Commits `bd7a3db` (principal + route gate), `60f3a66` (tables, lifecycle,
+family API) and the family UI commit that follows them.
+
+Evidence: 1501 unit + UI tests; 138 integration tests over real Postgres, 13
+of them guardian cases, including a guardian being refused on routes written
+before guardians existed; 5/5 school browser journeys, the new one driving
+invite → activate → sign in → family portal → refused by the staff API.
+
+Found while building, recorded in ADR-0027 as Finding C: 73 routes admitted
+"any authenticated principal", so a guardian would have passed the route gate
+on all of them. Closed at the gate (`AccessRequirement.audience`, default
+staff), not per route.
+
+Also found: the student record page is built on the analytics read, which
+refuses the administrator. The guardians panel is mounted independently of
+it; the page itself remains a Student 360 gap.
+
+Deliberately deferred, each its own slice:
+
+| Deferred | Why it is safe to defer |
+|---|---|
+| Delivering the code by SMS/email | Staff hand the code over today; ADR-0027 Decision 7 left the vendor open. |
+| Editing restrictions and per-relationship categories | Stored and enforced by the adapter already; there is no UI to set them. |
+| Setting `historicalAccessUntil` on transfer/graduation (Decision 9) | No transfer/graduation workflow exists yet to hang it on. |
+| Parent views of fees, notices, homework, report cards | The categories exist and are enforced; the read routes are not built. Report cards must pass `publicationState`. |
+| Reaping a guardian login left without a relationship after a lost activation race | Such an account holds no authority; marked `ponytail:` in the service. |
+
 ## Phase 2 — Paid-pilot school core
 
 Objective: a school can run a full term on Vidya without a spreadsheet beside it.
@@ -326,7 +355,8 @@ API. All `DEFERRED` until the school edition is sellable.
 
 | Risk | Severity | State |
 |---|---|---|
-| **Guardian identity** — authentication shape, revocation semantics and the identity/people boundary are undecided. Blocks every parent surface. | High | Open. ADR required before any implementation. |
+| **Guardian identity** — authentication shape, revocation semantics and the identity/people boundary. | High | Closed by ADR-0027 and slices 1.3/1.4. |
+| **Student record depends on analytics scope** — `/students/[id]` renders "Outside your scope" for an administrator because it loads the analytics performance read. | Medium | Open. Student 360 (UI direction slice 2) should load the record from people, with analytics as one panel. |
 | **No live browser evidence has ever been executed** for school journeys. The harness exists; a listed Playwright test is not a pass. | High | Open. Gate-04 named this a release-evidence item, not polish. |
 | **No SaaS control plane exists.** The product is not sellable as SaaS until Phase 3. | High | Open, scheduled Phase 3. |
 | **Integration suite shares Redis with the owner's running stack**, causing a false failure in the BullMQ test. | Low | Diagnosed; mitigated with a dedicated Redis db index. Recorded above. |

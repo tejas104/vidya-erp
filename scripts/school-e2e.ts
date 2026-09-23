@@ -135,7 +135,7 @@ async function run(): Promise<void> {
     await command("pnpm", ["exec", "tsx", "scripts/seed-school-e2e.ts"], testEnv);
     await command("pnpm", ["compile:help"], testEnv);
     await command("pnpm", ["--filter", "@vidya/web", "build"], testEnv);
-    await command("pnpm", ["exec", "playwright", "test", "tests/e2e/school/terms.spec.ts", "tests/e2e/school/marks.spec.ts", "tests/e2e/school/report-cards.spec.ts", "--workers=1"], testEnv);
+    await command("pnpm", ["exec", "playwright", "test", "tests/e2e/school/terms.spec.ts", "tests/e2e/school/marks.spec.ts", "tests/e2e/school/report-cards.spec.ts", "tests/e2e/school/guardian.spec.ts", "--workers=1"], testEnv);
   } finally {
     await cleanup();
   }
