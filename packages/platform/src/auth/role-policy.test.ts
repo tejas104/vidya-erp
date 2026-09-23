@@ -18,7 +18,7 @@ function principal(overrides: Partial<Principal> = {}): Principal {
 }
 
 describe("RoleRequirementPolicy", () => {
-  it("grants when no requirement is declared (any authenticated principal)", async () => {
+  it("grants when no requirement is declared (any authenticated staff principal)", async () => {
     expect((await policy.authorize(principal(), {})).granted).toBe(true);
     expect(
       (await policy.authorize(principal(), { rolesAnyOf: [], scopesAllOf: [] })).granted,
@@ -60,5 +60,32 @@ describe("RoleRequirementPolicy", () => {
       rolesAnyOf: ["teacher"],
     });
     expect(decision.granted).toBe(false);
+  });
+
+  describe("audience (ADR-0027)", () => {
+    const guardian = principal({ kind: "guardian", roles: [], grants: [] });
+
+    it("refuses a guardian on a route with an empty requirement", async () => {
+      expect(await policy.authorize(guardian, {})).toEqual({ granted: false, reason: "route audience is staff" });
+    });
+
+    it("refuses a guardian on an explicitly staff route, whatever its role list", async () => {
+      expect((await policy.authorize(guardian, { audience: "staff" })).granted).toBe(false);
+      expect((await policy.authorize(guardian, { rolesAnyOf: [] })).granted).toBe(false);
+    });
+
+    it("admits a guardian only on a guardian-audience route", async () => {
+      expect((await policy.authorize(guardian, { audience: "guardian" })).granted).toBe(true);
+    });
+
+    it("admits every principal kind on an \"any\" route (session self-service only)", async () => {
+      expect((await policy.authorize(guardian, { audience: "any" })).granted).toBe(true);
+      expect((await policy.authorize(principal(), { audience: "any" })).granted).toBe(true);
+    });
+
+    it("refuses staff and service principals on a guardian-audience route", async () => {
+      expect((await policy.authorize(principal({ roles: ["admin"] }), { audience: "guardian" })).granted).toBe(false);
+      expect((await policy.authorize(principal({ kind: "service", roles: [] }), { audience: "guardian" })).granted).toBe(false);
+    });
   });
 });

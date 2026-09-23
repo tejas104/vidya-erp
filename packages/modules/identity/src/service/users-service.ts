@@ -113,6 +113,7 @@ export class UsersService {
     roles: readonly Role[];
     createdBy: string;
     status?: "active" | "must_reset";
+    accountKind?: "staff" | "guardian";
   }): Promise<UserView> {
     const passwordHash = await this.deps.hasher.hash(input.temporaryPassword);
     const record = await this.deps.repo.create({
@@ -123,6 +124,7 @@ export class UsersService {
       collegeId: input.collegeId,
       roles: input.roles,
       createdBy: input.createdBy,
+      ...(input.accountKind !== undefined ? { accountKind: input.accountKind } : {}),
     });
     return this.toView(record);
   }

@@ -28,7 +28,7 @@ import type {
   UsersRepo,
   UserStatus,
 } from "../src/repo/users-repo";
-import { RoleNotHeldError, UsernameTakenError } from "../src/repo/users-repo";
+import { GuardianAccountError, RoleNotHeldError, UsernameTakenError, type AccountKind } from "../src/repo/users-repo";
 
 /** Seed shape: provenance fields optional, filled with manual defaults. */
 export type SeedGrant = Omit<StoredGrant, "userId" | "source" | "sourceRef"> & {
@@ -181,6 +181,7 @@ interface StoredUser {
   passwordHash: string;
   status: UserStatus;
   collegeId: string;
+  accountKind: AccountKind;
   createdAt: Date;
   roles: Role[];
   grants: StoredGrant[];
@@ -198,6 +199,7 @@ export class FakeUsersRepo implements UsersRepo {
     collegeId?: string;
     roles?: Role[];
     grants?: SeedGrant[];
+    accountKind?: AccountKind;
   }): StoredUser {
     const id = user.id ?? randomUUID();
     const stored: StoredUser = {
@@ -207,6 +209,7 @@ export class FakeUsersRepo implements UsersRepo {
       passwordHash: user.passwordHash,
       status: user.status ?? "active",
       collegeId: user.collegeId ?? "col-1",
+      accountKind: user.accountKind ?? "staff",
       createdAt: new Date(),
       roles: user.roles ?? [],
       grants: (user.grants ?? []).map((grant) => ({
@@ -224,7 +227,11 @@ export class FakeUsersRepo implements UsersRepo {
     if (await this.findByUsername(user.username)) {
       throw new UsernameTakenError(user.username);
     }
+    if (user.accountKind === "guardian" && user.roles.length > 0) {
+      throw new GuardianAccountError();
+    }
     return this.seed({
+      accountKind: user.accountKind ?? "staff",
       username: user.username,
       displayName: user.displayName,
       passwordHash: user.passwordHash,
@@ -283,7 +290,14 @@ export class FakeUsersRepo implements UsersRepo {
     return [...(this.byId.get(userId)?.roles ?? [])].sort();
   }
 
+  private assertStaff(userId: string): void {
+    if (this.byId.get(userId)?.accountKind === "guardian") {
+      throw new GuardianAccountError();
+    }
+  }
+
   async setRoles(userId: string, roles: readonly Role[], _grantedBy: string): Promise<void> {
+    if (roles.length > 0) this.assertStaff(userId);
     const user = this.byId.get(userId);
     if (user !== undefined) {
       user.roles = [...roles];
@@ -293,6 +307,7 @@ export class FakeUsersRepo implements UsersRepo {
   }
 
   async addRole(userId: string, role: Role, _grantedBy: string): Promise<void> {
+    this.assertStaff(userId);
     const user = this.byId.get(userId);
     if (user !== undefined && !user.roles.includes(role)) {
       user.roles.push(role);
@@ -350,6 +365,7 @@ export class FakeUsersRepo implements UsersRepo {
   }
 
   async addGrant(userId: string, grant: NewGrant): Promise<StoredGrant> {
+    this.assertStaff(userId);
     const user = this.byId.get(userId);
     if (user === undefined || !user.roles.includes(grant.role)) {
       throw new RoleNotHeldError(grant.role);

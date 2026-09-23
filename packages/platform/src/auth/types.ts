@@ -95,10 +95,19 @@ export interface ScopeChecker {
 // Authentication
 // ---------------------------------------------------------------------------
 
-/** The authenticated caller. */
+/**
+ * The authenticated caller.
+ *
+ * `kind: "guardian"` (ADR-0027 Decision 1) is a parent or other adult linked
+ * to pupils. A guardian principal ALWAYS carries empty `roles` and `grants`:
+ * every bit of its authority flows through the people module's
+ * GuardianAccessAdapter, never through ScopeChecker. The route gate
+ * (AccessRequirement.audience) refuses guardians on every route that has not
+ * explicitly opted in, including routes open to "any authenticated principal".
+ */
 export interface Principal {
   readonly id: string;
-  readonly kind: "user" | "service";
+  readonly kind: "user" | "service" | "guardian";
   readonly displayName: string | null;
   /** Role memberships, e.g. ["teacher"]. */
   readonly roles: readonly Role[];
@@ -141,9 +150,21 @@ export interface Authenticator {
 
 /**
  * Per-route access requirement, declared statically on each RouteSpec.
- * Empty requirement = any authenticated principal.
+ * Empty requirement = any authenticated STAFF principal (see `audience`).
  */
 export interface AccessRequirement {
+  /**
+   * Who the route serves. "staff" (the default when omitted) admits user and
+   * service principals and REFUSES guardians — so an empty requirement means
+   * "any authenticated staff principal", never "any authenticated person".
+   * "guardian" admits guardian principals only (ADR-0027). Deny-by-default in
+   * both directions: a guardian cannot reach a staff route by it having
+   * forgotten a role list, and staff cannot reach a parent route.
+   * "any" admits every authenticated principal; it is for the handful of
+   * routes about the session itself (whoami, logout, change own password)
+   * and must never be used on a route that returns institutional records.
+   */
+  readonly audience?: "staff" | "guardian" | "any";
   /** Principal must hold at least one of these roles. */
   readonly rolesAnyOf?: readonly Role[];
   /** Principal must hold every one of these coarse scope strings. */

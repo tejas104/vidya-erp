@@ -100,3 +100,30 @@ describe("CredentialService.issueCredential", () => {
     expect(JSON.stringify(audit.events)).not.toContain(issued.temporaryPassword);
   });
 });
+
+describe("CredentialService.createGuardianAccount (ADR-0027)", () => {
+  const guardian = { username: "parent.rao", displayName: "Meera Rao", collegeId: "col-1", password: "a-long-chosen-passphrase" };
+
+  it("creates an active, role-less guardian account that can log in with the chosen password", async () => {
+    const { service, repo, auth } = makeService();
+    const created = await service.createGuardianAccount(guardian);
+    const user = await repo.findById(created.userId);
+    expect(user).toMatchObject({ status: "active", accountKind: "guardian" });
+    expect(await repo.getRoles(created.userId)).toEqual([]);
+    expect(JSON.stringify(user)).not.toContain(guardian.password);
+    const login = await auth.login(guardian.username, guardian.password, "1.2.3.4");
+    expect(login.outcome).toBe("success");
+  });
+
+  it("refuses to give a guardian account a staff role or a grant afterwards", async () => {
+    const { service, repo } = makeService();
+    const created = await service.createGuardianAccount(guardian);
+    await expect(repo.setRoles(created.userId, ["admin"], "admin-1")).rejects.toThrow(/guardian/);
+    await expect(repo.addRole(created.userId, "teacher", "derivation")).rejects.toThrow(/guardian/);
+    await expect(
+      repo.addGrant(created.userId, { role: "admin", org: { collegeId: "col-1" }, grantedBy: "admin-1" }),
+    ).rejects.toThrow(/guardian/);
+    // clearing roles stays allowed — it cannot add authority
+    await expect(repo.setRoles(created.userId, [], "admin-1")).resolves.toBeUndefined();
+  });
+});

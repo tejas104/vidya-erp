@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { and, asc, desc, eq, gte, inArray, lte } from "drizzle-orm";
-import type { Db, DurableAuditReceipt, OrgPath, TransactionalAuditLogger } from "@vidya/platform";
+import type { ActorType, Db, DurableAuditReceipt, OrgPath, TransactionalAuditLogger } from "@vidya/platform";
 import {
   feeAdjustments,
   feeGenerationRuns,
@@ -105,7 +105,7 @@ export interface NewPayment {
  */
 export interface AuditAttribution {
   readonly requestId: string;
-  readonly actorType: "user" | "service" | "system";
+  readonly actorType: ActorType;
   readonly actorId: string | null;
 }
 

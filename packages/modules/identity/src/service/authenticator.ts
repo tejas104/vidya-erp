@@ -9,9 +9,18 @@ import { parseCookies, type CookiePolicy } from "./cookies";
  * in the session snapshot; authority changes invalidate sessions instead.
  */
 export class SessionAuthenticator implements Authenticator {
+  /**
+   * `accountKindOf` resolves ADR-0027's guardian principals. It is consulted
+   * ONLY for a session holding no roles and no grants — the one shape a
+   * guardian session can have — so staff requests keep zero database reads.
+   * Omitted (tests, or before wiring) ⇒ every session is a "user", which is
+   * fail-closed: a role-less "user" holds no authority, and guardian-audience
+   * routes refuse it.
+   */
   constructor(
     private readonly sessions: SessionManager,
     private readonly cookiePolicy: CookiePolicy,
+    private readonly accountKindOf?: (userId: string) => Promise<"staff" | "guardian" | null>,
   ) {}
 
   async authenticate(request: AuthnRequest): Promise<AuthnDecision> {
@@ -24,11 +33,16 @@ export class SessionAuthenticator implements Authenticator {
     if (record === null) {
       return { authenticated: false, reason: "session invalid or expired" };
     }
+    const isGuardian =
+      this.accountKindOf !== undefined &&
+      record.roles.length === 0 &&
+      record.grants.length === 0 &&
+      (await this.accountKindOf(record.userId)) === "guardian";
     return {
       authenticated: true,
       principal: {
         id: record.userId,
-        kind: "user",
+        kind: isGuardian ? "guardian" : "user",
         displayName: record.displayName,
         roles: record.roles,
         scopes: [],

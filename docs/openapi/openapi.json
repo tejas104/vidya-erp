@@ -978,6 +978,13 @@
                     "userId": {
                       "type": "string"
                     },
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "staff",
+                        "guardian"
+                      ]
+                    },
                     "displayName": {
                       "type": "string"
                     },
@@ -1046,6 +1053,7 @@
                   },
                   "required": [
                     "userId",
+                    "kind",
                     "displayName",
                     "roles",
                     "grants"
@@ -2263,6 +2271,36 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "Guardian accounts cannot hold staff roles (ADR-0027)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
           }
         }
       }
@@ -2448,7 +2486,7 @@
             }
           },
           "409": {
-            "description": "User does not hold the grant's role",
+            "description": "User does not hold the grant's role, or is a guardian account (ADR-0027)",
             "content": {
               "application/json": {
                 "schema": {

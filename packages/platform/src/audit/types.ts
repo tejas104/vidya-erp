@@ -9,7 +9,7 @@
 import type { OrgPath } from "../auth/types";
 import type { Db } from "../db/client";
 import type { DurableAuditReceipt } from "./durable-receipt";
-export type ActorType = "user" | "service" | "system";
+export type ActorType = "user" | "service" | "system" | "guardian";
 
 export interface AuditEvent {
   /** Resolved resource scope, supplied by trusted server code. Absent means operational-only. */

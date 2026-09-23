@@ -18,6 +18,12 @@ export class RoleRequirementPolicy implements AccessPolicy {
     principal: Principal,
     requirement: AccessRequirement,
   ): Promise<AuthzDecision> {
+    // Audience first (ADR-0027): decided on principal kind alone, before any
+    // role check, so neither side depends on the other's role list being set.
+    const audience = requirement.audience ?? "staff";
+    if (audience !== "any" && (principal.kind === "guardian") !== (audience === "guardian")) {
+      return { granted: false, reason: `route audience is ${audience}` };
+    }
     if (requirement.rolesAnyOf !== undefined && requirement.rolesAnyOf.length > 0) {
       const held = requirement.rolesAnyOf.some((role) => principal.roles.includes(role));
       if (!held) {

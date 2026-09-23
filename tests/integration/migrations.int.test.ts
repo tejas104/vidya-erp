@@ -84,6 +84,11 @@ const EXPECTATIONS: Record<string, MigrationExpectation> = {
     columns: [{ table: "sys_audit_log", column: "org" }],
     indexes: ["sys_audit_log_org_id_idx"],
   },
+  "system/0004_guardian_actor": {
+    constraintDiffs: [
+      { table: "sys_audit_log", constraint: "sys_audit_log_actor_type_check", addedText: "guardian" },
+    ],
+  },
 
   "identity/0000_identity": {
     tables: ["idn_users", "idn_user_roles", "idn_scope_grants", "idn_reset_tokens"],
@@ -113,6 +118,9 @@ const EXPECTATIONS: Record<string, MigrationExpectation> = {
         addedText: "accountant",
       },
     ],
+  },
+  "identity/0005_guardian_accounts": {
+    columns: [{ table: "idn_users", column: "account_kind" }],
   },
 
   "people/0000_people": {

@@ -15,7 +15,7 @@ import {
   UsersService,
 } from "../service/users-service";
 import type { GrantVerificationService } from "../service/grant-verification";
-import { RoleNotHeldError, UsernameTakenError } from "../repo/users-repo";
+import { GuardianAccountError, RoleNotHeldError, UsernameTakenError } from "../repo/users-repo";
 import { buildSessionCookie, clearSessionCookie, type CookiePolicy } from "../service/cookies";
 
 export interface IdentityHandlerDeps {
@@ -144,6 +144,7 @@ export function createIdentityHandlers(deps: IdentityHandlerDeps): Record<string
       status: 200,
       body: {
         userId: principal.id,
+        kind: principal.kind === "guardian" ? "guardian" : "staff",
         displayName: principal.displayName ?? "",
         roles: principal.roles,
         grants: principal.grants,
@@ -328,7 +329,15 @@ export function createIdentityHandlers(deps: IdentityHandlerDeps): Record<string
     if (!scope.ok) {
       return scope.result;
     }
-    const change = await deps.users.setRoles(params.userId, body.roles, principal.id);
+    let change;
+    try {
+      change = await deps.users.setRoles(params.userId, body.roles, principal.id);
+    } catch (error) {
+      if (error instanceof GuardianAccountError) {
+        return { status: 409, body: { message: error.message } };
+      }
+      throw error;
+    }
     if (change === null) {
       return notFound();
     }
@@ -386,7 +395,7 @@ export function createIdentityHandlers(deps: IdentityHandlerDeps): Record<string
         },
       };
     } catch (error) {
-      if (error instanceof RoleNotHeldError) {
+      if (error instanceof RoleNotHeldError || error instanceof GuardianAccountError) {
         return { status: 409, body: { message: error.message } };
       }
       if (error instanceof InvalidOrgPathError) {

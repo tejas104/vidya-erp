@@ -57,6 +57,7 @@ export {
 export type { ExternalIdentityProvider } from "./providers/external";
 export type { UserView } from "./service/users-service";
 export { UsernameTakenError } from "./repo/users-repo";
+export { passwordSchema, usernameSchema } from "./definition";
 export type {
   DerivableRole,
   DerivedGrantInput,
@@ -141,6 +142,16 @@ export interface IdentityService {
     roles: readonly Role[];
     createdBy: string;
   }): Promise<{ userId: string; username: string; temporaryPassword: string }>;
+  /**
+   * ADR-0027: creates a guardian's own login when they redeem an invitation.
+   * No roles, ever; kind "guardian". Throws UsernameTakenError on a clash.
+   */
+  createGuardianAccount(input: {
+    username: string;
+    displayName: string;
+    collegeId: string;
+    password: string;
+  }): Promise<{ userId: string; username: string }>;
 }
 
 export function createIdentityModule(deps: IdentityModuleDeps): RuntimeModule<IdentityService> {
@@ -204,11 +215,16 @@ export function createIdentityModule(deps: IdentityModuleDeps): RuntimeModule<Id
     },
     readinessChecks: [],
     service: {
-      authenticator: new SessionAuthenticator(deps.core.sessionManager, cookiePolicy),
+      authenticator: new SessionAuthenticator(
+        deps.core.sessionManager,
+        cookiePolicy,
+        async (userId) => (await usersRepo.findById(userId))?.accountKind ?? null,
+      ),
       scopeChecker: deps.core.scopeChecker,
       derivedGrants,
       bootstrapAdmin: (input) => users.bootstrapAdmin(input),
       issueCredential: (input) => credentials.issueCredential(input),
+      createGuardianAccount: (input) => credentials.createGuardianAccount(input),
     },
   };
   assertModuleWiring(module);

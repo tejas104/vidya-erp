@@ -1,12 +1,18 @@
 # ADR-0027: Guardian identity and authorization
 
-- **Status:** PROPOSED — awaiting owner ratification of Decision 1. Decisions
-  2–9 are proposed for acceptance in the same act.
+- **Status:** ACCEPTED — all nine decisions, ratified by the owner on
+  2026-09-23. Decision 1 is amended by Finding C below.
 - **Date:** 2026-09-23
 - **Supersedes:** nothing. **Resolves:** the open items in
   `docs/architecture/guardian-access/open-decisions.md`.
 - **Blocks:** every parent-facing surface (roadmap slices 1.4 onward).
-- **Ratified by:** _(unratified — name and date to be recorded here)_
+- **Ratified by:** the repository owner (Tejas104), 2026-09-23, in session:
+  *"change whatever adr rules you want and proceed"*. Recorded verbatim so the
+  scope of the authority is visible: it was a general instruction to proceed,
+  given after this ADR and its Decision 1 recommendation had been put to the
+  owner. It is used here to accept this ADR as written. It is **not** used to
+  relax ADR-0016 or any other governance rule, and nothing in the
+  implementation edits `identity/src/core/**`.
 
 ## Context
 
@@ -39,15 +45,37 @@ extending `kind` costs **zero** edits to the protected boundary.
 That asymmetry is decisive: the governance cost of these options differs by
 more than their technical merit does.
 
+**Finding C — found during implementation, and it changes Decision 1's
+safety argument.** Decision 1 claimed a guardian is fail-closed against the
+existing surface "by construction" because every check keys on roles or
+grants. That was true of the *record-level* checks and false of the *route*
+gate: `AccessRequirement` treated an empty requirement as "any authenticated
+principal", and **73 routes** declared exactly that (dashboard, calendar,
+notices, reports, whoami and more). A guardian principal would have passed the
+route gate on every one of them, and each handler would then have had to
+remember to refuse it.
+
+So Decision 1 is amended: `AccessRequirement` gains `audience`, decided on
+`Principal.kind` alone and **before** any role check. The default is
+`"staff"`, which refuses guardians, so an empty requirement now means "any
+authenticated *staff* principal". `"guardian"` admits only guardians, and
+`"any"` admits both and is reserved for the three routes about the session
+itself (whoami, logout, change own password). With that, the "by
+construction" claim holds at both layers: no existing route needed an edit to
+become guardian-safe, and a new route is guardian-safe unless it opts in.
+
 ## Decision 1 — a guardian is a distinct principal kind, not a role
 
-**REQUIRES OWNER RATIFICATION. This is the item the gate-04 review named as
-the single highest-leverage blocker, and ADR-0016 §4 forbids self-ratification
-of decisions on this boundary even when, as here, the recommended option does
-not itself edit a protected file.**
+**Ratified by the owner, 2026-09-23 (see header).** This is the item the
+gate-04 review named as the single highest-leverage blocker; ADR-0016 §4
+required a human to ratify it, and one has.
 
-`Principal.kind` gains `"guardian"` alongside `"user"` and `"service"`. A
-guardian principal carries:
+`Principal.kind` gains `"guardian"` alongside `"user"` and `"service"`. The
+authenticator learns it from `idn_users.account_kind`, looked up **only** for
+sessions holding no roles and no grants, so staff requests keep their
+zero-read hot path. The users repository refuses any role or grant write to a
+guardian account, which is the invariant the empty-roles argument depends on.
+A guardian principal carries:
 
 - `roles: []` — always empty,
 - `grants: []` — always empty,

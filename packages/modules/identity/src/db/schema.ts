@@ -26,6 +26,8 @@ export const idnUsers = pgTable(
     passwordHash: text("password_hash").notNull(),
     status: text("status").notNull().default("must_reset"),
     collegeId: text("college_id").notNull(),
+    /** "staff" | "guardian" — ADR-0027. Guardians never hold roles or grants. */
+    accountKind: text("account_kind").notNull().default("staff"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

@@ -120,6 +120,8 @@ export const userViewSchema = z.object({
 
 export const sessionViewSchema = z.object({
   userId: z.string(),
+  /** ADR-0027: "guardian" sessions carry no roles and are served by the family portal. */
+  kind: z.enum(["staff", "guardian"]),
   displayName: z.string(),
   roles: z.array(roleSchema),
   grants: z.array(
@@ -151,6 +153,9 @@ const userIdParams = z.object({ userId: z.string().min(1).max(64) });
 
 const ADMIN_ONLY = { public: false as const, requirement: { rolesAnyOf: ["admin" as const] } };
 const ANY_AUTHENTICATED = { public: false as const, requirement: {} };
+// Session self-service (whoami, logout, change own password): the only
+// identity routes a guardian principal may call — ADR-0027.
+const OWN_SESSION = { public: false as const, requirement: { audience: "any" as const } };
 
 const routes: RouteSpec[] = [
   {
@@ -188,7 +193,7 @@ const routes: RouteSpec[] = [
     path: "/api/v1/identity/auth/logout",
     summary: "Log out (invalidate the current session)",
     tags: ["identity"],
-    auth: ANY_AUTHENTICATED,
+    auth: OWN_SESSION,
     audit: { action: "identity.logout", resourceType: "session" },
     responses: {
       200: { description: "Session invalidated; cookie cleared", schema: z.object({ ok: z.literal(true) }) },
@@ -201,7 +206,7 @@ const routes: RouteSpec[] = [
     path: "/api/v1/identity/auth/session",
     summary: "Describe the current session (whoami)",
     tags: ["identity"],
-    auth: ANY_AUTHENTICATED,
+    auth: OWN_SESSION,
     responses: { 200: { description: "Current principal", schema: sessionViewSchema } },
   },
   {
@@ -212,7 +217,7 @@ const routes: RouteSpec[] = [
     summary: "Change own password",
     description: "Requires the current password. Invalidates every session of the user.",
     tags: ["identity"],
-    auth: ANY_AUTHENTICATED,
+    auth: OWN_SESSION,
     request: {
       body: z.object({ currentPassword: z.string().min(1).max(256), newPassword: passwordSchema }),
     },
@@ -346,6 +351,7 @@ const routes: RouteSpec[] = [
     responses: {
       200: { description: "New role set", schema: z.object({ roles: z.array(roleSchema) }) },
       404: { description: "No such user", schema: problemSchema },
+      409: { description: "Guardian accounts cannot hold staff roles (ADR-0027)", schema: problemSchema },
     },
   },
   {
@@ -363,7 +369,7 @@ const routes: RouteSpec[] = [
     responses: {
       201: { description: "Grant created", schema: grantViewSchema },
       404: { description: "No such user", schema: problemSchema },
-      409: { description: "User does not hold the grant's role", schema: problemSchema },
+      409: { description: "User does not hold the grant's role, or is a guardian account (ADR-0027)", schema: problemSchema },
     },
   },
   {

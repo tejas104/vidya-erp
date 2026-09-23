@@ -4,6 +4,8 @@ import type { Db, OrgPath, Role, ScopeGrant } from "@vidya/platform";
 import { idnScopeGrants, idnUserRoles, idnUsers, type IdnUserRow } from "../db/schema";
 
 export type UserStatus = "active" | "disabled" | "must_reset";
+/** ADR-0027: a guardian account signs in like staff but never holds roles or grants. */
+export type AccountKind = "staff" | "guardian";
 
 export interface UserRecord {
   readonly id: string;
@@ -12,6 +14,7 @@ export interface UserRecord {
   readonly passwordHash: string;
   readonly status: UserStatus;
   readonly collegeId: string;
+  readonly accountKind: AccountKind;
   readonly createdAt: Date;
 }
 
@@ -46,6 +49,14 @@ export class UsernameTakenError extends Error {
   }
 }
 
+/** Thrown when a role or grant is written to a guardian account (ADR-0027). */
+export class GuardianAccountError extends Error {
+  constructor() {
+    super("guardian accounts cannot hold staff roles or scope grants");
+    this.name = "GuardianAccountError";
+  }
+}
+
 export class RoleNotHeldError extends Error {
   constructor(role: Role) {
     super(`user does not hold role "${role}"`);
@@ -66,6 +77,8 @@ export interface UsersRepo {
     collegeId: string;
     roles: readonly Role[];
     createdBy: string | null;
+    /** Defaults to "staff". A guardian account must be created with no roles. */
+    accountKind?: AccountKind;
   }): Promise<UserRecord>;
   findByUsername(username: string): Promise<UserRecord | null>;
   findById(id: string): Promise<UserRecord | null>;
@@ -99,6 +112,7 @@ function toRecord(row: IdnUserRow): UserRecord {
     passwordHash: row.passwordHash,
     status: row.status as UserStatus,
     collegeId: row.collegeId,
+    accountKind: row.accountKind as AccountKind,
     createdAt: row.createdAt,
   };
 }
@@ -136,10 +150,30 @@ function pgErrorCode(error: unknown): string | undefined {
   return (error as { cause?: { code?: string } }).cause?.code;
 }
 
+/**
+ * The one place every role and grant write passes through (users service,
+ * grant derivation, bootstrap), so the guardian invariant is held here rather
+ * than at each caller. Reads inside the caller's transaction when given one.
+ */
+async function assertStaffAccount(executor: Pick<Db, "select">, userId: string): Promise<void> {
+  const rows = await executor
+    .select({ accountKind: idnUsers.accountKind })
+    .from(idnUsers)
+    .where(eq(idnUsers.id, userId))
+    .limit(1);
+  if (rows[0]?.accountKind === "guardian") {
+    throw new GuardianAccountError();
+  }
+}
+
 export function createUsersRepo(db: Db): UsersRepo {
   return {
     async create(user) {
       const id = randomUUID();
+      const accountKind = user.accountKind ?? "staff";
+      if (accountKind === "guardian" && user.roles.length > 0) {
+        throw new GuardianAccountError();
+      }
       try {
         await db.transaction(async (tx) => {
           await tx.insert(idnUsers).values({
@@ -149,6 +183,7 @@ export function createUsersRepo(db: Db): UsersRepo {
             passwordHash: user.passwordHash,
             status: user.status,
             collegeId: user.collegeId,
+            accountKind,
           });
           if (user.roles.length > 0) {
             await tx.insert(idnUserRoles).values(
@@ -225,6 +260,9 @@ export function createUsersRepo(db: Db): UsersRepo {
 
     async setRoles(userId, roles, grantedBy) {
       await db.transaction(async (tx) => {
+        if (roles.length > 0) {
+          await assertStaffAccount(tx, userId);
+        }
         await tx.delete(idnUserRoles).where(eq(idnUserRoles.userId, userId));
         if (roles.length > 0) {
           await tx.insert(idnUserRoles).values(
@@ -235,6 +273,7 @@ export function createUsersRepo(db: Db): UsersRepo {
     },
 
     async addRole(userId, role, grantedBy) {
+      await assertStaffAccount(db, userId);
       await db
         .insert(idnUserRoles)
         .values({ userId, role, grantedBy })
@@ -296,6 +335,7 @@ export function createUsersRepo(db: Db): UsersRepo {
     async addGrant(userId, grant) {
       const id = randomUUID();
       const source = grant.source ?? "manual";
+      await assertStaffAccount(db, userId);
       try {
         await db.insert(idnScopeGrants).values({
           id,

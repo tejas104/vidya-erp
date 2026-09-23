@@ -56,4 +56,36 @@ describe("SessionAuthenticator", () => {
       expect(decision.principal.grants).toHaveLength(1);
     }
   });
+
+  describe("guardian principals (ADR-0027)", () => {
+    const kinds = new Map<string, "staff" | "guardian">([["g1", "guardian"], ["u1", "staff"]]);
+    let lookups = 0;
+    const accountKindOf = async (userId: string) => {
+      lookups += 1;
+      return kinds.get(userId) ?? null;
+    };
+
+    it("marks a role-less, grant-less guardian account as kind guardian", async () => {
+      const sessions = new FakeSessionManager();
+      const issued = await sessions.issue({ userId: "g1", displayName: "Parent", roles: [], grants: [] });
+      const decision = await new SessionAuthenticator(sessions, policy, accountKindOf).authenticate(request(`vidya_session=${issued.token}`));
+      expect(decision.authenticated && decision.principal).toMatchObject({ kind: "guardian", roles: [], grants: [] });
+    });
+
+    it("leaves a role-less staff account as kind user", async () => {
+      const sessions = new FakeSessionManager();
+      const issued = await sessions.issue({ userId: "u1", displayName: "Clerk", roles: [], grants: [] });
+      const decision = await new SessionAuthenticator(sessions, policy, accountKindOf).authenticate(request(`vidya_session=${issued.token}`));
+      expect(decision.authenticated && decision.principal.kind).toBe("user");
+    });
+
+    it("never looks up a session that holds roles — staff requests stay read-free", async () => {
+      const sessions = new FakeSessionManager();
+      const issued = await sessions.issue({ userId: "g1", displayName: "X", roles: ["teacher"], grants: [] });
+      lookups = 0;
+      const decision = await new SessionAuthenticator(sessions, policy, accountKindOf).authenticate(request(`vidya_session=${issued.token}`));
+      expect(lookups).toBe(0);
+      expect(decision.authenticated && decision.principal.kind).toBe("user");
+    });
+  });
 });

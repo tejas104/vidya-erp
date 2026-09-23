@@ -55,4 +55,30 @@ export class CredentialService {
     });
     return { userId: created.id, username: created.username, temporaryPassword };
   }
+
+  /**
+   * ADR-0027: the login a guardian creates for themselves when redeeming an
+   * invitation. Unlike issueCredential, the password is the guardian's own
+   * choice (they typed it; staff never see it), the account holds no roles —
+   * the repo refuses any — and its kind is "guardian", which is what makes
+   * the authenticator issue a guardian principal for it.
+   */
+  async createGuardianAccount(input: {
+    username: string;
+    displayName: string;
+    collegeId: string;
+    password: string;
+  }): Promise<{ userId: string; username: string }> {
+    const created = await this.deps.users.createUser({
+      username: input.username,
+      displayName: input.displayName,
+      collegeId: input.collegeId,
+      temporaryPassword: input.password,
+      roles: [],
+      createdBy: "guardian-invitation",
+      status: "active",
+      accountKind: "guardian",
+    });
+    return { userId: created.id, username: created.username };
+  }
 }
