@@ -181,6 +181,13 @@ const EXPECTATIONS: Record<string, MigrationExpectation> = {
       { table: "rpt_reports", constraint: "rpt_reports_kind_check", addedText: "hall-ticket" },
     ],
   },
+  "reporting/0003_school_report_cards": {
+    tables: ["rpt_school_report_cards"],
+    indexes: [
+      "rpt_school_report_cards_student_term_idx",
+      "rpt_school_report_cards_class_term_idx",
+    ],
+  },
 
   "timetable/0000_timetable": { tables: ["ttb_periods", "ttb_entries"] },
   "coursework/0000_coursework": {

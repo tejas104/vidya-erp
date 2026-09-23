@@ -32,3 +32,52 @@ export const rptReports = pgTable(
 );
 
 export type RptReportRow = typeof rptReports.$inferSelect;
+
+/**
+ * INTERNAL to the reporting module. Immutable school report-card snapshots,
+ * "rpt_" prefix (Constitution rule 2; CI-checked).
+ *
+ * A snapshot is the PERMANENT record of what a report card said when it was
+ * generated. `payload` holds the fully-computed academic content — subject
+ * percentages, grades, the overall figure, the attendance summary, the
+ * warnings shown to the generating user, and the engine/policy versions that
+ * produced them. The PDF is rendered FROM this payload and never by
+ * recomputation, so reprinting a year later reproduces the original document
+ * even if marks were corrected afterwards.
+ *
+ * Immutability is enforced in the database by a trigger (see the paired
+ * migration), not merely by this module declining to write an UPDATE.
+ * Correcting a report card means generating a NEW snapshot; the superseded
+ * row stays exactly as issued. Nothing is ever hard-deleted.
+ *
+ * The stored org path is what the download handler re-checks the caller's
+ * CURRENT scope against — the snapshot id is never the access control
+ * (ADR-0020).
+ */
+export const rptSchoolReportCards = pgTable(
+  "rpt_school_report_cards",
+  {
+    id: text("id").primaryKey(),
+    studentId: text("student_id").notNull(),
+    termId: text("term_id").notNull(),
+    academicYear: text("academic_year").notNull(),
+    collegeId: text("college_id").notNull(),
+    departmentId: text("department_id").notNull(),
+    classId: text("class_id").notNull(),
+    sectionId: text("section_id"),
+    /** The frozen, fully-computed report-card content. */
+    payload: jsonb("payload").notNull(),
+    generatedBy: text("generated_by").notNull(),
+    generatedAt: timestamp("generated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("rpt_school_report_cards_student_term_idx").on(
+      table.studentId,
+      table.termId,
+      table.generatedAt,
+    ),
+    index("rpt_school_report_cards_class_term_idx").on(table.classId, table.termId),
+  ],
+);
+
+export type RptSchoolReportCardRow = typeof rptSchoolReportCards.$inferSelect;

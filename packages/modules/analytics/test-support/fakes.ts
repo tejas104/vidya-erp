@@ -85,6 +85,22 @@ export class FakeAcademicsRead implements AcademicsReadModel {
     return { rows, nextAfter: rows.length === limit ? (rows[rows.length - 1]?.markId ?? null) : null };
   }
 
+  /** Analytics never calls this — it belongs to the school report-card path.
+   *  Implemented from the same `attendance` fixture so the fake stays a
+   *  faithful stand-in rather than throwing if a future test reaches it. */
+  async sectionAttendanceWindow(sectionId: string, from: string, to: string) {
+    const byDate = new Map<string, { studentId: string; status: AttendanceRecordView["status"] }[]>();
+    for (const row of this.attendance) {
+      if (row.position.sectionId !== sectionId || row.heldOn < from || row.heldOn > to) continue;
+      const bucket = byDate.get(row.heldOn) ?? [];
+      bucket.push({ studentId: row.studentId, status: row.status });
+      byDate.set(row.heldOn, bucket);
+    }
+    return [...byDate.entries()]
+      .map(([heldOn, entries]) => ({ heldOn, entries }))
+      .sort((left, right) => left.heldOn.localeCompare(right.heldOn));
+  }
+
   async studentAttendance(studentId: string, academicYear?: string) {
     return this.attendance.filter(
       (row) =>

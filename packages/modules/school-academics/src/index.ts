@@ -23,11 +23,48 @@ import { createAssessmentTypesHandlers } from "./assessment-types-handlers";
 import { createSchoolMarksRepo } from "./marks-repo";
 import { createSchoolMarksHandlers } from "./marks-handlers";
 import type { SchoolGradeScales } from "./marks-contracts";
+import {
+  createSchoolAcademicsReadModel,
+  type SchoolAcademicsReadModel,
+} from "./report-source";
 
 export {
   MODULE_NAME as SCHOOL_ACADEMICS_MODULE_NAME,
   schoolAcademicsModuleDefinition,
 } from "./definition";
+
+// The S01 weighted-result engine, published as this module's calculation
+// contract. Other modules (reporting's report cards) MUST consume this rather
+// than re-implementing the arithmetic or reading `sca_` tables — gate-04's
+// standing instruction. The engine itself stays pure and storage-free.
+export {
+  calculateWeightedResult,
+  ENGINE_VERSION as SCHOOL_RESULT_ENGINE_VERSION,
+  POLICY_VERSION as SCHOOL_RESULT_POLICY_VERSION,
+} from "./aggregation";
+export type {
+  AssessmentDefinition,
+  AssessmentEntry,
+  AssessmentEntryStatus,
+  AssessmentTypeWeight,
+  CalculationOutcome,
+  CalculationPolicy,
+  CalculationResult,
+  TypeContribution,
+  WithinTypeAggregation,
+} from "./aggregation";
+
+// The read model that supplies trusted source facts for that engine.
+export {
+  DEFAULT_WITHIN_TYPE_AGGREGATION,
+  schoolCalculationPolicy,
+} from "./report-source";
+export type {
+  SchoolAcademicsReadModel,
+  SchoolSubjectSource,
+  SchoolTermRecord,
+  SchoolTermResultSource,
+} from "./report-source";
 
 export interface SchoolAcademicsModuleDeps {
   readonly db: Db;
@@ -36,12 +73,18 @@ export interface SchoolAcademicsModuleDeps {
   readonly gradeScales: SchoolGradeScales;
 }
 
+/** The school-academics public service: the term-result read model that the
+ *  reporting module builds report cards from (S01 integration seam). */
+export interface SchoolAcademicsService {
+  readonly readModel: SchoolAcademicsReadModel;
+}
+
 export function createSchoolAcademicsModule(
   deps: SchoolAcademicsModuleDeps,
-): RuntimeModule<Record<string, never>> {
+): RuntimeModule<SchoolAcademicsService> {
   const repo = createTermsRepo(deps.db);
   const types = createAssessmentTypesRepo(deps.db);
-  const module: RuntimeModule<Record<string, never>> = {
+  const module: RuntimeModule<SchoolAcademicsService> = {
     definition: schoolAcademicsModuleDefinition,
     handlers: { ...createSchoolAcademicsHandlers({
       repo,
@@ -51,7 +94,7 @@ export function createSchoolAcademicsModule(
     ...createSchoolMarksHandlers({ repo: createSchoolMarksRepo(deps.db), terms: repo, types, directory: deps.peopleDirectory, gradeScales: deps.gradeScales, scopeChecker: deps.scopeChecker }) },
     jobProcessors: {},
     readinessChecks: [],
-    service: {},
+    service: { readModel: createSchoolAcademicsReadModel(deps.db) },
   };
   assertModuleWiring(module);
   return module;

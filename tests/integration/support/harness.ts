@@ -171,9 +171,16 @@ export function buildStack(edition: "college" | "school" = "college") {
     },
   });
 
+  // results, then school-academics, then reporting: reporting composes the
+  // school term-result read model with academics' attendance read model.
+  const results = createResultsModule({ db, audit: system.service.audit, peopleDirectory: people.service.directory, marksReadModel: academics.service.readModel, scopeChecker: core.scopeChecker });
+  const schoolAcademics = createSchoolAcademicsModule({ db, peopleDirectory: people.service.directory, scopeChecker: core.scopeChecker, gradeScales: results.service.repo });
+
   const enqueuedReports: { reportId: string; source: string }[] = [];
   const reporting = createReportingModule({
     db,
+    schoolAcademicsRead: schoolAcademics.service.readModel,
+    academicsRead: academics.service.readModel,
     metrics,
     audit: system.service.audit,
     analyticsRead: analytics.service.readModel,
@@ -201,8 +208,6 @@ export function buildStack(edition: "college" | "school" = "college") {
     peopleDirectory: people.service.directory,
   });
 
-  const results = createResultsModule({ db, audit: system.service.audit, peopleDirectory: people.service.directory, marksReadModel: academics.service.readModel, scopeChecker: core.scopeChecker });
-  const schoolAcademics = createSchoolAcademicsModule({ db, peopleDirectory: people.service.directory, scopeChecker: core.scopeChecker, gradeScales: results.service.repo });
 
   const routeDeps: RouteDependencies = {
     logger,

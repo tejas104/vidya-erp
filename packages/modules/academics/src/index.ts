@@ -37,6 +37,29 @@ export {
   MODULE_NAME as ACADEMICS_MODULE_NAME,
   academicsModuleDefinition,
 } from "./definition";
+// The S02 attendance-summary engine, published as this module's attendance
+// calculation contract. Report cards consume this rather than deriving an
+// attendance percentage of their own — gate-04's standing instruction.
+export { summarizeAttendance } from "./school-attendance-summary";
+export {
+  ENGINE_VERSION as SCHOOL_ATTENDANCE_ENGINE_VERSION,
+  POLICY_VERSION as SCHOOL_ATTENDANCE_POLICY_VERSION,
+} from "./school-attendance-summary";
+export type {
+  AttendancePolicy,
+  AttendanceRecord,
+  AttendanceSummaryOutcome,
+  AttendanceSummaryRequest,
+  AttendanceSummaryResult,
+  DateInterval,
+  EnrollmentInterval,
+  ExcusedTreatment,
+  HalfDayTreatment,
+  LateTreatment,
+  RecordedAttendanceStatus,
+  SchoolCalendar,
+} from "./school-attendance-summary";
+
 export { attendanceRef, marksRef } from "./resource-refs";
 export type { AttendancePosition, AssessmentPosition } from "./resource-refs";
 export type { AuditHistoryEntry } from "./api/handlers";
@@ -70,6 +93,17 @@ export interface MarkRecordView {
   readonly position: AssessmentPosition;
 }
 
+/** One day on which a register was taken for a section, with every entry
+ *  recorded against it. A date that appears here IS an instructional day for
+ *  that section, by evidence — the school held a class and took a register.
+ *  A student enrolled in the section who has no entry on such a day is a
+ *  MISSING record (the register was never completed for them), which is a
+ *  different fact from the pupil being absent. */
+export interface SectionAttendanceDay {
+  readonly heldOn: string;
+  readonly entries: readonly { readonly studentId: string; readonly status: AttendanceRecordView["status"] }[];
+}
+
 export interface AcademicsReadModel {
   /** Keyset page over a year's attendance entries (nightly rollup build). */
   attendancePage(
@@ -86,6 +120,17 @@ export interface AcademicsReadModel {
   /** One student's records, for live (per-record-filtered) views. */
   studentAttendance(studentId: string, academicYear?: string): Promise<AttendanceRecordView[]>;
   studentMarks(studentId: string, academicYear?: string): Promise<MarkRecordView[]>;
+  /**
+   * Every register taken for a section between two inclusive dates, with all
+   * entries. The attendance source for a school report card: the caller
+   * derives one student's records and missing days from it, so "pupil absent"
+   * and "register never submitted" stay distinguishable (S02's contract).
+   */
+  sectionAttendanceWindow(
+    sectionId: string,
+    from: string,
+    to: string,
+  ): Promise<SectionAttendanceDay[]>;
   /** A section's most recent sessions with present-%, newest first (register strip). */
   sectionRecentDensity(
     sectionId: string,
@@ -200,6 +245,31 @@ export function createAcademicsModule(
             ...(academicYear !== undefined ? { academicYear } : {}),
           });
           return rows.map(({ mark, assessment }) => toMarkView(mark, assessment));
+        },
+        async sectionAttendanceWindow(sectionId, from, to) {
+          // `listSessions` returns each session with all of its entries. The
+          // limit is a hard bound rather than a page, so it is set beyond what
+          // a term can reach: a section running 8 periods a day every day of a
+          // 365-day year yields 2,920 sessions, and a term is a fraction of a
+          // year. Truncation here would silently understate expected days and
+          // overstate attendance, which is the one thing a report card must
+          // not do — so the bound is deliberately unreachable rather than
+          // merely generous.
+          const rows = await attendanceRepo.listSessions(sectionId, { from, to, limit: 10_000 });
+          const byDate = new Map<string, { studentId: string; status: AttendanceRecordView["status"] }[]>();
+          for (const { session, entries } of rows) {
+            const bucket = byDate.get(session.heldOn) ?? [];
+            for (const entry of entries) {
+              bucket.push({
+                studentId: entry.studentId,
+                status: entry.status as AttendanceRecordView["status"],
+              });
+            }
+            byDate.set(session.heldOn, bucket);
+          }
+          return [...byDate.entries()]
+            .map(([heldOn, entries]) => ({ heldOn, entries }))
+            .sort((left, right) => left.heldOn.localeCompare(right.heldOn));
         },
         sectionRecentDensity: (sectionId, limit) =>
           attendanceRepo.recentSessionDensity(sectionId, limit),

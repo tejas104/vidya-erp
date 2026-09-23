@@ -28,6 +28,8 @@ import {
   type ScopeChecker,
 } from "@vidya/platform";
 import type { AnalyticsReadModel } from "@vidya/module-analytics";
+import type { AcademicsReadModel } from "@vidya/module-academics";
+import type { SchoolAcademicsReadModel } from "@vidya/module-school-academics";
 import type { PeopleDirectory } from "@vidya/module-people";
 import { z } from "zod";
 import { REPORT_JOB_NAME, reportJobPayloadSchema, reportingModuleDefinition } from "./definition";
@@ -36,6 +38,9 @@ import { createReportsRepo } from "./repo/reports-repo";
 import { ReportService } from "./service/report-service";
 import { createReportingHandlers, type CredentialIssuer } from "./api/handlers";
 import { createReportProcessor } from "./jobs/report-generate";
+import { createReportCardRepo } from "./school/report-card-repo";
+import { ReportCardBuilder } from "./school/report-card-service";
+import { createSchoolReportCardHandlers } from "./school/report-card-handlers";
 
 export {
   REPORT_JOB_NAME,
@@ -48,6 +53,8 @@ export {
 // {academics,analytics,exams,results} <- people import cycle.
 export { csvDocument, csvRow, escapeCsvCell, isFormulaInjection };
 export type { ReportSources } from "./report-data";
+export { SNAPSHOT_VERSION as SCHOOL_REPORT_CARD_SNAPSHOT_VERSION } from "./school/report-card-contract";
+export type { ReportCardPreview, ReportCardSnapshot } from "./school/report-card-contract";
 
 export interface ReportingModuleDeps {
   readonly db: Db;
@@ -65,6 +72,11 @@ export interface ReportingModuleDeps {
   readonly peopleDirectory: PeopleDirectory;
   readonly linkStudentIdentity: (studentId: string, identityUserId: string) => Promise<boolean>;
   readonly identity: CredentialIssuer;
+  /** School report cards: the two calculation engines' read models, reached
+   *  through their owning modules' public APIs. Report cards are built by
+   *  composing them — never by querying `sca_`/`acd_` tables from here. */
+  readonly schoolAcademicsRead: SchoolAcademicsReadModel;
+  readonly academicsRead: AcademicsReadModel;
 }
 
 export type ReportingService = Record<string, never>;
@@ -103,14 +115,27 @@ export function createReportingModule(deps: ReportingModuleDeps): RuntimeModule<
 
   const module: RuntimeModule<ReportingService> = {
     definition: reportingModuleDefinition,
-    handlers: createReportingHandlers({
-      service,
-      enqueue: deps.enqueueReport,
-      scopeChecker: deps.scopeChecker,
-      peopleDirectory: deps.peopleDirectory,
-      linkStudentIdentity: deps.linkStudentIdentity,
-      identity: deps.identity,
-    }),
+    handlers: {
+      ...createReportingHandlers({
+        service,
+        enqueue: deps.enqueueReport,
+        scopeChecker: deps.scopeChecker,
+        peopleDirectory: deps.peopleDirectory,
+        linkStudentIdentity: deps.linkStudentIdentity,
+        identity: deps.identity,
+      }),
+      ...createSchoolReportCardHandlers({
+        builder: new ReportCardBuilder({
+          schoolAcademics: deps.schoolAcademicsRead,
+          academics: deps.academicsRead,
+          directory: deps.peopleDirectory,
+        }),
+        repo: createReportCardRepo(deps.db),
+        schoolAcademics: deps.schoolAcademicsRead,
+        directory: deps.peopleDirectory,
+        scopeChecker: deps.scopeChecker,
+      }),
+    },
     jobProcessors: {
       [REPORT_JOB_NAME]: createReportProcessor(service),
     },

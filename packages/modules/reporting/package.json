@@ -16,6 +16,7 @@
     "@vidya/module-results": "workspace:*",
     "@vidya/module-exams": "workspace:*",
     "@vidya/module-academics": "workspace:*",
+    "@vidya/module-school-academics": "workspace:*",
     "@vidya/module-people": "workspace:*",
     "@vidya/module-identity": "workspace:*",
     "@vidya/platform": "workspace:*",

@@ -252,8 +252,24 @@ async function main(): Promise<void> {
     redisUrl: config.redis.url,
   });
   lifecycle.onShutdown("reporting-queue", () => reportingQueue.close());
+  // Built BEFORE reporting: reporting's school report-card routes compose this
+  // module's term-result read model with academics' attendance read model.
+  // Its migrations run on every edition (ADR-0024), so on a college install
+  // the `sca_` tables simply stay empty and those routes answer 404.
+  // --- school-academics --- (no jobs; included for registry <-> composition
+  // parity, and so the edition filter below sees the same list the web
+  // composition root does.)
+  const schoolAcademics = createSchoolAcademicsModule({
+    gradeScales: results.service.repo,
+    db,
+    scopeChecker: identityCore.scopeChecker,
+    peopleDirectory: people.service.directory,
+  });
+
   const reporting = createReportingModule({
     db,
+    schoolAcademicsRead: schoolAcademics.service.readModel,
+    academicsRead: academics.service.readModel,
     metrics,
     audit: system.service.audit,
     analyticsRead: analytics.service.readModel,
@@ -307,16 +323,6 @@ async function main(): Promise<void> {
   const notices = createNoticesModule({
     db,
     audit: system.service.audit,
-    scopeChecker: identityCore.scopeChecker,
-    peopleDirectory: people.service.directory,
-  });
-
-  // --- school-academics --- (no jobs; included for registry <-> composition
-  // parity, and so the edition filter below sees the same list the web
-  // composition root does.)
-  const schoolAcademics = createSchoolAcademicsModule({
-    gradeScales: results.service.repo,
-    db,
     scopeChecker: identityCore.scopeChecker,
     peopleDirectory: people.service.directory,
   });

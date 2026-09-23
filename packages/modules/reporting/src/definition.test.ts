@@ -8,9 +8,14 @@ describe("reporting module definition (contract conformance)", () => {
     expect(reportingModuleDefinition.name).toBe("reporting");
   });
 
-  it("versions every route under /api/v1/reports and keeps them all authenticated", () => {
+  it("versions every route under one of its two families and keeps them all authenticated", () => {
+    // reporting serves two deliberately distinct families: the queued
+    // /api/v1/reports export flow, and /api/v1/school/report-cards, whose
+    // artifact is a permanent academic record rather than a transient export.
+    // Nothing else may appear here — a third prefix means a route landed in
+    // the wrong module.
     for (const route of reportingModuleDefinition.routes) {
-      expect(route.path).toMatch(/^\/api\/v1\/reports/);
+      expect(route.path, route.id).toMatch(/^\/api\/v1\/(reports|school\/report-cards)/);
       expect(route.auth.public, route.id).toBe(false);
     }
   });
@@ -19,15 +24,28 @@ describe("reporting module definition (contract conformance)", () => {
     const stateChanging = reportingModuleDefinition.routes.filter((route) =>
       STATE_CHANGING_METHODS.has(route.method),
     );
-    // reporting.request (the queued flow) and reporting.class-credentials
-    // (#11 B4's synchronous credential sheet) — both must declare an audit action.
     expect(stateChanging.map((route) => route.id).sort()).toEqual([
       "reporting.class-credentials",
       "reporting.request",
+      "reporting.school-report-card-generate",
+      "reporting.school-report-card-preview",
     ]);
+    // Constitution rule 7, enforced at bind time by defineRoute: a POST is a
+    // write by convention and must be auditable. The report-card preview
+    // persists nothing, but it still discloses a pupil's entire academic
+    // standing, so auditing it is correct rather than merely compliant.
     for (const route of stateChanging) {
-      expect(route.audit).toBeDefined();
+      expect(route.audit, route.id).toBeDefined();
     }
+  });
+
+  it("audits the report-card download, because issuing the document is a disclosure", () => {
+    const download = reportingModuleDefinition.routes.find(
+      (route) => route.id === "reporting.school-report-card-download",
+    );
+    // A GET, so the state-changing rule above does not reach it — but a
+    // report card leaving the building is exactly what ADR-0020 audits.
+    expect(download?.audit?.action).toBe("reporting.school-report-card-downloaded");
   });
 
   it("declares the generation job", () => {

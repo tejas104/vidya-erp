@@ -1,0 +1,419 @@
+import { randomUUID } from "node:crypto";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { buildStack, type Stack } from "./support/harness";
+
+/**
+ * School report cards against real Postgres, real authentication and the real
+ * scope checker.
+ *
+ * What only a real database can prove, and is therefore proved here rather
+ * than with mocks: that a snapshot is IMMUTABLE (the table refuses UPDATE and
+ * DELETE), that regenerating appends rather than overwrites, that the stored
+ * payload is what the PDF renders from, and that authorization is resolved
+ * server-side so a caller cannot reach another class's pupil by id.
+ */
+
+let stack: Stack;
+let admin: string;
+let outsider: string;
+let teacher: string;
+let collegeId: string;
+let classId: string;
+let otherClassId: string;
+let sectionId: string;
+let subjectId: string;
+let termId: string;
+let typeId: string;
+let scaleId: string;
+let studentId: string;
+let otherStudentId: string;
+let assessmentId: string;
+
+const suffix = randomUUID().slice(0, 8);
+const academicYear = "2026-27";
+const bands = [
+  { minPct: 80, grade: "A", points: 10 },
+  { minPct: 40, grade: "B", points: 5 },
+  { minPct: 0, grade: "F", points: 0 },
+];
+
+async function create(route: string, body: unknown, params?: Record<string, string>) {
+  const response = await stack.call(route, { cookie: admin, body, params });
+  expect(response.status, `${route}: ${await response.clone().text()}`).toBe(201);
+  return (await response.json()) as { id: string };
+}
+
+/** A signed-in user. `assignments` decides what they may reach: an empty list
+ *  leaves them authenticated but with no grant over this college's classes. */
+async function provisionUser(
+  prefix: string,
+  assignments: { kind: "subject_teacher" | "class_teacher"; subjectId?: string }[],
+): Promise<string> {
+  const username = `${prefix}-${randomUUID().slice(0, 8)}`;
+  const user = await create("identity.user-create", {
+    username,
+    displayName: username,
+    collegeId,
+    temporaryPassword: "temporary-pass-123",
+    roles: [],
+  });
+  const reset = await stack.call("identity.password-reset-init", {
+    cookie: admin,
+    params: { userId: user.id },
+  });
+  const { token } = (await reset.json()) as { token: string };
+  expect(
+    (
+      await stack.call("identity.password-reset-confirm", {
+        body: { token, newPassword: "report-card-pass-123" },
+      })
+    ).status,
+  ).toBe(200);
+
+  if (assignments.length > 0) {
+    const person = await create("people.teacher-create", { collegeId, staffNo: username, fullName: username });
+    expect(
+      (
+        await stack.call("people.teacher-link-identity", {
+          cookie: admin,
+          params: { teacherId: person.id },
+          body: { identityUserId: user.id },
+        })
+      ).status,
+    ).toBe(200);
+    for (const assignment of assignments) {
+      await create("people.assignment-create", { classId, academicYear, ...assignment }, { teacherId: person.id });
+    }
+  }
+  return stack.login(username, "report-card-pass-123");
+}
+
+beforeAll(async () => {
+  stack = buildStack("school");
+  const bootstrap = await stack.bootstrap();
+  admin = bootstrap.adminCookie;
+  collegeId = bootstrap.collegeId;
+  const { departmentId } = await stack.people.service.ensureImplicitDepartment(collegeId);
+
+  classId = (await create("people.class-create", { departmentId, name: `Std ${suffix}`, code: `RC-${suffix}` })).id;
+  otherClassId = (await create("people.class-create", { departmentId, name: `Std other ${suffix}`, code: `RCO-${suffix}` })).id;
+  sectionId = (await create("people.section-create", { classId, name: "A" })).id;
+  const otherSectionId = (await create("people.section-create", { classId: otherClassId, name: "A" })).id;
+  subjectId = (await create("people.subject-create", { departmentId, name: `Math ${suffix}`, code: `RC-M-${suffix}` })).id;
+
+  studentId = (await create("people.student-create", { collegeId, admissionNo: `RC-${suffix}`, fullName: "Asha Kulkarni" })).id;
+  otherStudentId = (await create("people.student-create", { collegeId, admissionNo: `RCO-${suffix}`, fullName: "Ravi Deshmukh" })).id;
+  expect(
+    (await stack.call("people.student-enroll", { cookie: admin, body: { sectionId, academicYear }, params: { studentId } })).status,
+  ).toBe(200);
+  expect(
+    (await stack.call("people.student-enroll", { cookie: admin, body: { sectionId: otherSectionId, academicYear }, params: { studentId: otherStudentId } })).status,
+  ).toBe(200);
+
+  termId = (await create("school-academics.create", {
+    collegeId,
+    name: `Term ${suffix}`,
+    academicYear,
+    startsOn: "2026-06-01",
+    endsOn: "2026-06-05",
+  })).id;
+  const configured = await stack.call("school-academics.types-set", {
+    cookie: admin,
+    params: { termId },
+    body: { types: [{ name: "Exam", weight: 100 }] },
+  });
+  expect(configured.status).toBe(200);
+  typeId = ((await configured.json()) as { types: { id: string }[] }).types[0]!.id;
+  scaleId = (await create("results.scale-create", { collegeId, name: `Scale ${suffix}`, bands })).id;
+
+  // The class's own teacher: subject_teacher to own the assessment and its
+  // marks, class_teacher to take a whole-section register.
+  teacher = await provisionUser("rc-tch", [
+    { kind: "subject_teacher", subjectId },
+    { kind: "class_teacher" },
+  ]);
+  const assessment = await stack.call("school-academics.assessment-create", {
+    cookie: teacher,
+    body: { classId, subjectId, termId, typeId, scaleId, name: "Unit test", maxScore: 20, heldOn: "2026-06-02" },
+  });
+  expect(assessment.status, await assessment.clone().text()).toBe(201);
+  assessmentId = ((await assessment.json()) as { id: string }).id;
+
+  outsider = await provisionUser("rc-out", []);
+});
+
+afterAll(async () => {
+  await stack?.close();
+});
+
+const preview = (cookie: string, student = studentId) =>
+  stack.call("reporting.school-report-card-preview", { cookie, body: { studentId: student, termId } });
+const generate = (cookie: string, student = studentId) =>
+  stack.call("reporting.school-report-card-generate", { cookie, body: { studentId: student, termId } });
+const roster = (cookie: string, cls = classId) =>
+  stack.call("reporting.school-report-card-roster", { cookie, params: { classId: cls }, query: { termId } });
+
+describe("School report cards over real Postgres", () => {
+  it("requires authentication on every route", async () => {
+    const statuses = (
+      await Promise.all([
+        roster(""),
+        preview(""),
+        generate(""),
+        stack.call("reporting.school-report-card-download", { params: { snapshotId: "src_missing" } }),
+      ])
+    ).map((response) => response.status);
+    expect(statuses).toEqual([401, 401, 401, 401]);
+  });
+
+  it("refuses a caller with no grant over the class", async () => {
+    expect((await roster(outsider)).status).toBe(403);
+    expect((await preview(outsider)).status).toBe(403);
+    expect((await generate(outsider)).status).toBe(403);
+  });
+
+  it("previews a pupil with no marks as incomplete, never as zero", async () => {
+    const response = await preview(admin);
+    expect(response.status).toBe(200);
+    const card = (await response.json()) as {
+      subjects: { subjectId: string; percentage: number | null; complete: boolean }[];
+      overall: { percentage: number | null; complete: boolean };
+      warnings: string[];
+    };
+
+    expect(card.subjects).toHaveLength(1);
+    expect(card.subjects[0]!.complete).toBe(false);
+    expect(card.subjects[0]!.percentage).toBeNull();
+    expect(card.overall.percentage).toBeNull();
+    expect(card.warnings.length).toBeGreaterThan(0);
+  });
+
+  it("computes from stored marks and attendance once they exist", async () => {
+    expect(
+      (
+        await stack.call("school-academics.marks-enter", {
+          cookie: teacher,
+          params: { assessmentId },
+          body: { entries: [{ studentId, score: 18 }] },
+        })
+      ).status,
+    ).toBe(200);
+
+    // Two registers inside the term window: present, then absent.
+    for (const [heldOn, status] of [["2026-06-02", "present"], ["2026-06-03", "absent"]] as const) {
+      const recorded = await stack.call("academics.attendance-record", {
+        cookie: teacher,
+        body: { sectionId, heldOn, slot: "day", academicYear, entries: [{ studentId, status }] },
+      });
+      expect(recorded.status, await recorded.clone().text()).toBe(201);
+    }
+
+    const card = (await (await preview(admin)).json()) as {
+      subjects: { percentage: number | null; grade: string | null; complete: boolean }[];
+      overall: { percentage: number | null; grade: string | null; complete: boolean };
+      attendance: { eligibleDays: number; percentage: number | null; complete: boolean };
+    };
+
+    // 18/20 = 90%, one type at 100% weight, band A.
+    expect(card.subjects[0]!.complete).toBe(true);
+    expect(card.subjects[0]!.percentage).toBe(90);
+    expect(card.subjects[0]!.grade).toBe("A");
+    expect(card.overall.percentage).toBe(90);
+    // One present of two registered days.
+    expect(card.attendance.complete).toBe(true);
+    expect(card.attendance.eligibleDays).toBe(2);
+    expect(card.attendance.percentage).toBe(50);
+  });
+
+  it("issues a snapshot, audits it, and shows it on the roster", async () => {
+    const response = await generate(admin);
+    expect(response.status, await response.clone().text()).toBe(201);
+    const issued = (await response.json()) as { snapshotId: string; generatedAt: string };
+    expect(issued.snapshotId).toMatch(/^src_/);
+
+    const listed = (await (await roster(admin)).json()) as {
+      students: { studentId: string; snapshotId: string | null; admissionNo: string }[];
+    };
+    const row = listed.students.find((student) => student.studentId === studentId);
+    expect(row?.snapshotId).toBe(issued.snapshotId);
+    expect(row?.admissionNo).toBe(`RC-${suffix}`);
+
+    const audit = await stack.pool.query(
+      "SELECT action FROM sys_audit_log WHERE action = $1 AND resource_id = $2",
+      ["reporting.school-report-card-generated", studentId],
+    );
+    expect(audit.rows.length).toBeGreaterThan(0);
+  });
+
+  it("REFUSES to update or delete an issued snapshot, in the database itself", async () => {
+    const issued = (await (await generate(admin)).json()) as { snapshotId: string };
+
+    // The application never issues these statements; the point is that the
+    // database would reject them even if something did.
+    await expect(
+      stack.pool.query("UPDATE rpt_school_report_cards SET payload = '{}'::jsonb WHERE id = $1", [
+        issued.snapshotId,
+      ]),
+    ).rejects.toThrow(/append-only/);
+
+    await expect(
+      stack.pool.query("DELETE FROM rpt_school_report_cards WHERE id = $1", [issued.snapshotId]),
+    ).rejects.toThrow(/append-only/);
+
+    const still = await stack.pool.query("SELECT id FROM rpt_school_report_cards WHERE id = $1", [
+      issued.snapshotId,
+    ]);
+    expect(still.rows).toHaveLength(1);
+  });
+
+  it("appends a new snapshot when marks change, leaving the old one exactly as issued", async () => {
+    const first = (await (await generate(admin)).json()) as { snapshotId: string };
+    const beforePdf = await stack.call("reporting.school-report-card-download", {
+      cookie: admin,
+      params: { snapshotId: first.snapshotId },
+    });
+    expect(beforePdf.status).toBe(200);
+    const beforeBytes = Buffer.from(await beforePdf.arrayBuffer());
+
+    // Correct the mark downward, then issue again.
+    expect(
+      (
+        await stack.call("school-academics.marks-enter", {
+          cookie: teacher,
+          params: { assessmentId },
+          body: { entries: [{ studentId, score: 10 }] },
+        })
+      ).status,
+    ).toBe(200);
+
+    const second = (await (await generate(admin)).json()) as { snapshotId: string };
+    expect(second.snapshotId).not.toBe(first.snapshotId);
+
+    // The NEW snapshot reflects the correction: 10/20 = 50%.
+    const latest = (await (await preview(admin)).json()) as { subjects: { percentage: number | null }[] };
+    expect(latest.subjects[0]!.percentage).toBe(50);
+
+    // The OLD snapshot's document is unchanged — this is the whole point.
+    const afterPdf = await stack.call("reporting.school-report-card-download", {
+      cookie: admin,
+      params: { snapshotId: first.snapshotId },
+    });
+    const afterBytes = Buffer.from(await afterPdf.arrayBuffer());
+    expect(afterBytes.equals(beforeBytes)).toBe(true);
+
+    const stored = await stack.pool.query<{ pct: string }>(
+      "SELECT payload->'subjects'->0->>'percentage' AS pct FROM rpt_school_report_cards WHERE id = $1",
+      [first.snapshotId],
+    );
+    expect(stored.rows[0]!.pct).toBe("90");
+  });
+
+  it("downloads a real PDF, and refuses a caller outside the snapshot's scope", async () => {
+    const issued = (await (await generate(admin)).json()) as { snapshotId: string };
+
+    const ok = await stack.call("reporting.school-report-card-download", {
+      cookie: admin,
+      params: { snapshotId: issued.snapshotId },
+    });
+    expect(ok.status).toBe(200);
+    expect(ok.headers.get("content-type")).toContain("application/pdf");
+    const bytes = Buffer.from(await ok.arrayBuffer());
+    expect(bytes.subarray(0, 5).toString("latin1")).toBe("%PDF-");
+
+    // A guessed snapshot id is not authority: authorization uses the org path
+    // recorded on the row, re-checked against the caller's current scope.
+    const denied = await stack.call("reporting.school-report-card-download", {
+      cookie: outsider,
+      params: { snapshotId: issued.snapshotId },
+    });
+    expect(denied.status).toBe(403);
+
+    const missing = await stack.call("reporting.school-report-card-download", {
+      cookie: admin,
+      params: { snapshotId: "src_does-not-exist" },
+    });
+    expect(missing.status).toBe(404);
+  });
+
+  it("rejects a term that belongs to a different school, and an unknown term", async () => {
+    const otherCollege = await stack.people.service.bootstrapCollege({
+      name: `Other school ${suffix}`,
+      code: `OS-${suffix}`,
+    });
+    const { departmentId: otherDepartmentId } = await stack.people.service.ensureImplicitDepartment(
+      otherCollege.collegeId,
+    );
+
+    // Seeded with a direct INSERT rather than through the API on purpose: the
+    // admin's grants cover only their own college, so school-academics.create
+    // correctly answers 403 for a foreign one. That refusal is the isolation
+    // working; this fixture exists to prove the REPORT-CARD route refuses the
+    // cross-school term too, instead of silently reporting on it.
+    const foreignTermId = `sct_foreign_${suffix}`;
+    await stack.pool.query(
+      `INSERT INTO sca_terms (id, college_id, department_id, name, academic_year, starts_on, ends_on, status)
+       VALUES ($1, $2, $3, $4, $5, '2026-06-01', '2026-06-05', 'open')`,
+      [foreignTermId, otherCollege.collegeId, otherDepartmentId, `Foreign term ${suffix}`, academicYear],
+    );
+
+    const mismatched = await stack.call("reporting.school-report-card-preview", {
+      cookie: admin,
+      body: { studentId, termId: foreignTermId },
+    });
+    expect(mismatched.status).toBe(422);
+
+    const generated = await stack.call("reporting.school-report-card-generate", {
+      cookie: admin,
+      body: { studentId, termId: foreignTermId },
+    });
+    expect(generated.status).toBe(422);
+
+    const unknown = await stack.call("reporting.school-report-card-preview", {
+      cookie: admin,
+      body: { studentId, termId: "term_missing" },
+    });
+    expect(unknown.status).toBe(404);
+  });
+
+  it("reports an unenrolled pupil as 422 to an entitled caller, but 403 to anyone else", async () => {
+    const loose = await create("people.student-create", {
+      collegeId,
+      admissionNo: `RCL-${suffix}`,
+      fullName: "Unenrolled Pupil",
+    });
+
+    const entitled = await stack.call("reporting.school-report-card-preview", {
+      cookie: admin,
+      body: { studentId: loose.id, termId },
+    });
+    expect(entitled.status).toBe(422);
+
+    // The unenrolled answer must not be reachable without authorization:
+    // otherwise walking ids distinguishes "no such pupil" from "exists but
+    // unenrolled", which is a membership oracle over the student roll.
+    const unentitled = await stack.call("reporting.school-report-card-preview", {
+      cookie: outsider,
+      body: { studentId: loose.id, termId },
+    });
+    expect(unentitled.status).toBe(403);
+
+    const unknown = await stack.call("reporting.school-report-card-preview", {
+      cookie: outsider,
+      body: { studentId: "stu_does-not-exist", termId },
+    });
+    // An id that exists-but-unenrolled and one that does not exist must look
+    // the same to an unauthorized caller... except that a truly absent record
+    // cannot be authorized against at all, so 404 is unavoidable there. What
+    // matters is that 422 — the informative answer — is never given away.
+    expect(unknown.status).toBe(404);
+    expect(unentitled.status).not.toBe(422);
+  });
+
+  it("lists another class's roster without leaking this class's snapshots", async () => {
+    const listed = (await (await roster(admin, otherClassId)).json()) as {
+      students: { studentId: string; snapshotId: string | null }[];
+    };
+    expect(listed.students.map((student) => student.studentId)).toEqual([otherStudentId]);
+    expect(listed.students[0]!.snapshotId).toBeNull();
+  });
+});

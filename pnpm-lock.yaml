@@ -578,6 +578,9 @@ importers:
       '@vidya/module-results':
         specifier: workspace:*
         version: link:../results
+      '@vidya/module-school-academics':
+        specifier: workspace:*
+        version: link:../school-academics
       '@vidya/platform':
         specifier: workspace:*
         version: link:../../platform

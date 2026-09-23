@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { JobSpec, ModuleDefinition, RouteSpec } from "@vidya/platform";
+import { reportCardPreviewSchema, rosterStudentSchema } from "./school/report-card-contract";
 
 export const MODULE_NAME = "reporting";
 export const TABLE_PREFIX = "rpt_";
@@ -145,6 +146,92 @@ const routes: RouteSpec[] = [
       403: { description: "Not the requester, or outside current scope", schema: problemSchema },
       404: { description: "No such report", schema: problemSchema },
       409: { description: "Report is not ready yet", schema: problemSchema },
+    },
+  },
+  // -------------------------------------------------------------------------
+  // School report cards (immutable snapshots).
+  //
+  // A separate route family from the queued /api/v1/reports flow above: these
+  // are synchronous and their artifact is a permanent academic record, not a
+  // transient export. Every one of the four resolves the target's real org
+  // path on the server and scope-checks it — the class id in a path and the
+  // snapshot id in a download URL are identifiers, never authority.
+  // -------------------------------------------------------------------------
+  {
+    id: "reporting.school-report-card-roster",
+    module: MODULE_NAME,
+    method: "GET",
+    path: "/api/v1/school/report-cards/classes/{classId}",
+    summary: "A class roster with each pupil's latest report-card snapshot for a term",
+    description:
+      "Scope-checked against the resolved class. Returns every enrolled pupil with the id and timestamp of their most recent snapshot for this term, or nulls when none has been generated.",
+    tags: ["reporting", "school"],
+    auth: ANY_AUTHENTICATED,
+    request: {
+      params: z.object({ classId: idSchema }),
+      query: z.object({ termId: idSchema }),
+    },
+    responses: {
+      200: { description: "Roster with snapshot state", schema: z.object({ students: z.array(rosterStudentSchema) }) },
+      403: { description: "The class is outside the caller's scope", schema: problemSchema },
+      404: { description: "No such class or term", schema: problemSchema },
+      422: { description: "The term does not belong to this class's school", schema: problemSchema },
+    },
+  },
+  {
+    id: "reporting.school-report-card-preview",
+    module: MODULE_NAME,
+    method: "POST",
+    path: "/api/v1/school/report-cards/preview",
+    summary: "Compute a pupil's report card without storing anything",
+    description:
+      "Computes exactly what generation would store, so the user approves the figures they will issue. It persists no report card — but it is still a POST that discloses a pupil's entire academic standing, so it is audited like any other disclosure (ADR-0020, Constitution rule 7).",
+    tags: ["reporting", "school"],
+    auth: ANY_AUTHENTICATED,
+    request: { body: z.object({ studentId: idSchema, termId: idSchema }) },
+    audit: { action: "reporting.school-report-card-previewed", resourceType: "student" },
+    responses: {
+      200: { description: "The computed report card", schema: reportCardPreviewSchema },
+      403: { description: "The pupil is outside the caller's scope", schema: problemSchema },
+      404: { description: "No such pupil or term", schema: problemSchema },
+      422: { description: "The pupil is not enrolled in a class for this term", schema: problemSchema },
+    },
+  },
+  {
+    id: "reporting.school-report-card-generate",
+    module: MODULE_NAME,
+    method: "POST",
+    path: "/api/v1/school/report-cards",
+    summary: "Issue an immutable report-card snapshot",
+    description:
+      "Persists the computed report card as a permanent, append-only record and audits the issue. Generating again does NOT overwrite: it appends a new snapshot and leaves the superseded one exactly as issued, so a report card a family already holds can always be reproduced.",
+    tags: ["reporting", "school"],
+    auth: ANY_AUTHENTICATED,
+    request: { body: z.object({ studentId: idSchema, termId: idSchema }) },
+    audit: { action: "reporting.school-report-card-generated", resourceType: "student" },
+    responses: {
+      201: { description: "Snapshot issued", schema: z.object({ snapshotId: z.string(), generatedAt: z.string() }) },
+      403: { description: "The pupil is outside the caller's scope", schema: problemSchema },
+      404: { description: "No such pupil or term", schema: problemSchema },
+      422: { description: "The pupil is not enrolled in a class for this term", schema: problemSchema },
+    },
+  },
+  {
+    id: "reporting.school-report-card-download",
+    module: MODULE_NAME,
+    method: "GET",
+    path: "/api/v1/school/report-cards/{snapshotId}/download",
+    summary: "Render a stored snapshot as PDF (scope-checked, not URL-secret)",
+    description:
+      "Renders FROM the stored snapshot and never by recomputation, so the document is byte-stable against later mark corrections. Authorized against the caller's CURRENT scope using the org path recorded on the snapshot — a guessed snapshot id, or a caller whose scope was revoked, gets 403 before any bytes are produced. Every download is audited (ADR-0020).",
+    tags: ["reporting", "school"],
+    auth: ANY_AUTHENTICATED,
+    request: { params: z.object({ snapshotId: idSchema }) },
+    audit: { action: "reporting.school-report-card-downloaded", resourceType: "report" },
+    responses: {
+      200: { description: "The report-card PDF", contentType: "application/pdf" },
+      403: { description: "Outside the caller's current scope", schema: problemSchema },
+      404: { description: "No such snapshot", schema: problemSchema },
     },
   },
 ];
