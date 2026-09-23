@@ -4,7 +4,7 @@ import { usePathname } from "next/navigation";
 import type { Role } from "./api";
 import type { Edition } from "./editionVocabulary";
 import { Icon } from "./Icon";
-import { domainLabel, visibleNav, type NavEntry } from "./navConfig";
+import { domainLabel, visibleNav, SETUP_GROUP, type NavEntry } from "./navConfig";
 
 const COLLAPSE_KEY = "vidya-nav-collapsed";
 
@@ -66,7 +66,7 @@ export function Sidebar({ roles, open, onClose, edition = "college" }: { roles: 
               {entries.map(renderLink)}
             </div>
           ) : (
-            <div key={group} className="shell-nav-group">
+            <div key={group} className={group === SETUP_GROUP ? "shell-nav-group shell-nav-group--setup" : "shell-nav-group"}>
               <button
                 type="button"
                 className="shell-nav-title"

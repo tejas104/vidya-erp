@@ -86,21 +86,39 @@ These are not yet built. Each is a vertical slice under the existing
 Definition of Done, and each is listed in
 [CLAUDE-DELIVERY-ROADMAP.md](CLAUDE-DELIVERY-ROADMAP.md).
 
-### 1. Workspace navigation
+### 1. Workspace navigation — **shipped**
 
-Regroup the rail by job, not by module, and split setup from daily work:
+The rail is regrouped by job, not by module. `DOMAIN_ORDER` is now
+`TOP → STUDENTS → ACADEMICS → MONEY → PEOPLE → REVIEW → SETUP`:
 
-- **Today** — home, my timetable, attendance, homework.
-- **Pupils** — Student 360, admissions, enrolment, documents.
-- **Academics** — marks, report cards, exams, syllabus, results.
-- **Money** — fees, collections, defaulters.
-- **People & comms** — staff, leave, notices.
-- **Review** — analytics, reports.
-- **Setup** — org structure, terms, users, system. Visually separated and
-  lower, because it is touched at the start of a year and rarely after.
+- **TOP** (untitled, top of the rail) — dashboard, Now, my timetable,
+  attendance, coursework, my classes. What a teacher opens every morning,
+  one tap from anywhere.
+- **Students** — the pupil record, the accountant's read-only directory, and
+  the student import that populates it.
+- **Academics** — calendar, marks, syllabus, results, report cards, backlogs,
+  exams.
+- **Money** — fees.
+- **People & comms** — teachers, staff import, leave, notices.
+- **Review** — reports, analytics. Look back; never change.
+- **Setup** — organisation, terms, timetable, users, system. Rendered last
+  under a `--setup` divider rule, because it is touched at the start of a year
+  and rarely after.
 
-Nothing is renamed at the route level; this is a grouping and ordering change
-in the rail, plus edition-aware labels that are already supported.
+Not a single route, label or role list changed — only `group` values, the
+order and one CSS rule. Two deliberate deviations from the sketch above:
+
+- The group is **Students**, not "Pupils": every entry and screen in the app
+  already says Students, and a "Pupils" header over a "Students" link is the
+  kind of inconsistency this document exists to remove.
+- **Terms moved to Setup**, not Academics. It is start-of-year configuration,
+  which is exactly the split this regroup is for. Its breadcrumb followed.
+
+One regression was caught and fixed in the same change: the search index
+excluded the whole `TOP` group, which was harmless when TOP held only landing
+pages but would have made a teacher's attendance, marks and coursework
+unsearchable once they moved there. It now excludes `/dashboard` and `/portal`
+by href, with a test pinning that.
 
 ### 2. Student 360 as the centre of gravity
 

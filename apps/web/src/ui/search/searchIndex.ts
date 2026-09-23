@@ -73,8 +73,14 @@ export async function buildIndex(
   const key = `${edition}:${keyOf(roles)}`;
   if (cache && cache.key === key) return cache.entries;
 
-  const pages: IndexEntry[] = visibleNav(roles, edition).filter((group) => group.group !== "TOP")
-    .flatMap((group) => group.entries).map((e) => ({ kind: "page", label: e.label, href: e.href }));
+  // Exclude the two landing pages by href, not by group: post-regroup TOP also
+  // holds a teacher's real destinations (attendance, marks, coursework), and
+  // filtering the whole group would make them unsearchable.
+  const LANDING = new Set(["/dashboard", "/portal"]);
+  const pages: IndexEntry[] = visibleNav(roles, edition)
+    .flatMap((group) => group.entries)
+    .filter((e) => !LANDING.has(e.href))
+    .map((e) => ({ kind: "page", label: e.label, href: e.href }));
 
   const { colleges } = await apiLike.colleges();
   const sections = (

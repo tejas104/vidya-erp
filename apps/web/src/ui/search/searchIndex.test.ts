@@ -49,6 +49,17 @@ describe("buildIndex", () => {
     const college = await buildIndex(apiLike, ["admin"], undefined, "college");
     expect(college.some((entry) => entry.href === "/manage/terms")).toBe(false);
   });
+  it("indexes a teacher's daily destinations but not the landing pages", async () => {
+    const idx = await buildIndex(apiLike, ["teacher"]);
+    // post-regroup these live in TOP alongside /dashboard; filtering the group
+    // rather than the landing hrefs would make them unsearchable
+    for (const href of ["/manage/attendance", "/manage/marks", "/manage/coursework"]) {
+      expect(idx.some((e) => e.kind === "page" && e.href === href)).toBe(true);
+    }
+    expect(idx.some((e) => e.href === "/dashboard")).toBe(false);
+    expect(idx.some((e) => e.href === "/portal")).toBe(false);
+  });
+
   it("indexes pages (role-filtered) + students projected WITHOUT PII", async () => {
     const idx = await buildIndex(apiLike, ["admin"]);
     const st = idx.find((e) => e.kind === "student")!;

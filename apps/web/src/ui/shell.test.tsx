@@ -41,17 +41,20 @@ describe("Sidebar (role-gated)", () => {
     render(<Sidebar roles={["principal"]} open={false} onClose={() => {}} />);
     expect(screen.getByRole("link", { name: /dashboard/i })).toHaveAttribute("aria-current", "page");
   });
-  it("an admin sees People (org/students/teachers/import) and Administration (users)", () => {
+  it("an admin sees Students, People & comms and a separated Setup group", () => {
     render(<Sidebar roles={["admin"]} open={false} onClose={() => {}} />);
-    expect(screen.getByRole("button", { name: "People" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Administration" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Students" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "People & comms" })).toBeInTheDocument();
+    // Setup carries the divider class that pushes once-a-year work below daily work
+    const setup = screen.getByRole("button", { name: "Setup" });
+    expect(setup.parentElement).toHaveClass("shell-nav-group--setup");
     expect(screen.getByRole("link", { name: /organisation/i })).toBeInTheDocument();
     // exact names — "Students"/"Teachers" would otherwise also match the
     // Import Students/Import Staff links added below
     expect(screen.getByRole("link", { name: "Students" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Teachers" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /users/i })).toBeInTheDocument();
-    // the old single "Import" entry is now two dedicated PEOPLE screens
+    // the old single "Import" entry is now two dedicated screens
     expect(screen.getByRole("link", { name: "Import Students" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Import Staff" })).toBeInTheDocument();
   });
