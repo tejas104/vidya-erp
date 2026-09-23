@@ -10,7 +10,7 @@ import type { SchoolAcademicsReadModel } from "@vidya/module-school-academics";
 import { ReportCardBuildError, type ReportCardBuilder } from "./report-card-service";
 import { renderReportCardPdf } from "./report-card-pdf";
 import type { ReportCardRepo } from "./report-card-repo";
-import { reportCardSnapshotSchema, type ReportCardSnapshot } from "./report-card-contract";
+import { parseStoredSnapshot } from "./report-card-contract";
 
 /**
  * Transport for school report cards. Thin by design: it resolves the target's
@@ -247,17 +247,17 @@ export function createSchoolReportCardHandlers(
       return fail(403, "access denied");
     }
 
-    // The stored payload is re-validated before rendering: a row written by an
-    // older or future snapshot version must fail loudly rather than render a
-    // half-populated document.
-    const parsed = reportCardSnapshotSchema.safeParse(row.payload);
-    if (!parsed.success) {
+    // Re-validated before rendering, by the version recorded ON THE ROW — so a
+    // card issued under an earlier snapshot version keeps rendering after a
+    // version bump. Only a version this build has no parser for fails, and it
+    // fails loudly rather than rendering a half-populated document.
+    const snapshot = parseStoredSnapshot(row.payload);
+    if (snapshot === null) {
       return fail(
         409,
         "This report card was issued in a format this version cannot render. Generate a new snapshot.",
       );
     }
-    const snapshot: ReportCardSnapshot = parsed.data;
 
     return {
       status: 200,

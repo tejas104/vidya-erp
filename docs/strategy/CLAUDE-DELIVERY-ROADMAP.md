@@ -105,8 +105,8 @@ parent can be given access safely.
 
 | # | Slice | Status | Blocker / note |
 |---|---|---|---|
-| 1.1 | **Immutable school report-card backend** | **IN PROGRESS** | Active slice. Frontend contract already pinned by `SchoolReportCardsPage`. |
-| 1.2 | Live school browser proof | `NEXT` | Harness exists (`a05598d`: `docker-compose.school-e2e.yml`, `scripts/school-e2e.ts`). Gate-04 recorded that no live run has ever been executed. Must not be claimed until run. |
+| 1.1 | **Immutable school report-card backend** | **DONE** (`4684044`) | Evidence below. |
+| 1.2 | Live school browser proof | **DONE for T04 journeys** | First real execution — see below. A report-card journey is added and pending its own run. |
 | 1.3 | Guardian identity + authorization ADR | `BLOCKED → design` | Gate-04: needs an ADR covering authentication shape, relationship revocation, policy defaults and the identity/people boundary **before** implementation. Hard blocker for 1.4. |
 | 1.4 | Parent portal essentials | `PLANNED` | Depends on 1.3. Reuse `portal` (`ptl_`) read models behind a guardian resolver — do not fork a parent module. |
 | 1.5 | Promotion / detention / transfer | `PLANNED` | Auditable batch with preview; reversible per student; no hard delete of enrollment history. |
@@ -146,6 +146,121 @@ card.
 - The PDF renders **from the stored snapshot**, never by recomputation.
 - The calculation engines are **not** duplicated and no other module's tables are
   queried directly.
+
+### Slice 1.1 — delivered (commit `4684044`)
+
+**Routes** (OpenAPI grew 141 → 145; all four match the contract in
+`apps/web/src/ui/api.ts` exactly):
+
+| Route | Authorization |
+|---|---|
+| `GET /api/v1/school/report-cards/classes/{classId}` | resolved class path, `read` |
+| `POST /api/v1/school/report-cards/preview` | pupil position from enrollment, `read`, audited |
+| `POST /api/v1/school/report-cards` | pupil position from enrollment, `read`, audited |
+| `GET /api/v1/school/report-cards/{snapshotId}/download` | org path stored on the snapshot, re-checked against current scope, audited |
+
+**Engine composition (no duplication).** S01 and S02 are now published through
+their owning modules' public APIs, with two new read models supplying source
+facts: `SchoolAcademicsReadModel.termResultSource` (`sca_`) and
+`AcademicsReadModel.sectionAttendanceWindow` (`acd_`). Reporting performs no
+academic arithmetic and touches no other module's tables.
+
+**Decisions recorded, not buried.**
+
+- Generation and download authorize on **`read`, not `create`**. The approved
+  role/scope matrix (ADR-0010, human-owned core) grants `create` only on
+  `identity` and `people`, so *no* role could issue a report card under a
+  `create` check — including the class teacher whose job it is. This matches
+  the existing queued `/api/v1/reports` flow, which also gates on the authority
+  to read the records it discloses. The core was **not** modified.
+- The **preview is audited**. Constitution rule 7 (enforced at bind time by
+  `defineRoute`) requires every POST to declare an audit action, and a preview
+  discloses a pupil's entire academic standing, so this is correct rather than
+  merely compliant.
+- **Attendance policy is a constant, not a setting**: late counts as present,
+  excused leaves the denominator, half-day earns half credit; within-type
+  aggregation is `earned-points`. All four are recorded on every snapshot's
+  provenance, so introducing a per-term setting later cannot make an
+  already-issued card ambiguous.
+- **Instructional days are derived from evidence** — a date on which the
+  section's register was taken. There is still no explicit school-calendar
+  authority (see risks); this is the defensible interim source and it keeps
+  "register never submitted" distinct from "pupil absent".
+- The routes live on `reporting` (`rpt_`), which has no edition gate, so they
+  exist on a college install too. Migrations run on every edition by design
+  (ADR-0024), so `sca_` is present-but-empty there and the routes answer 404.
+
+**Two corrections found in self-review of the diff, both fixed in the commit:**
+
+1. *Security.* An unenrolled pupil returned 422 **before** any scope check,
+   letting an unauthorized caller distinguish "no such pupil" (404) from
+   "exists but unenrolled" (422) by walking ids — a membership oracle over the
+   student roll. Now authorized against the resolved college first; regression
+   test added.
+2. *Correctness.* The attendance session bound (2,000) was reachable by a real
+   term, which would have silently understated expected days and **overstated**
+   attendance — the exact failure this slice exists to prevent. Raised beyond
+   what a term can produce, with the arithmetic recorded in the code.
+
+A third was found by a failing test rather than review: pdfkit stamps a live
+`/CreationDate`, so reprints were not byte-identical and a reprint claimed
+today as its creation date. `CreationDate` is now pinned to the issue time.
+
+**Evidence** (all on `4684044`):
+
+| Gate | Result |
+|---|---|
+| `pnpm typecheck` | PASS |
+| `pnpm lint` | PASS |
+| `pnpm openapi:check` | PASS |
+| `pnpm check:ownership` | PASS (16 prefixes) |
+| `pnpm build` | PASS — all four routes present in the build output |
+| `pnpm test` | PASS — **1109** (was 1089) |
+| `pnpm test:ui` | PASS — 301 |
+| `pnpm test:integration` | PASS — **125** (was 114) |
+| Migration `reporting/0003` up → down → up | PASS on real Postgres via the migration harness |
+
+Proved against **real Postgres**, not mocks: the database refuses `UPDATE` and
+`DELETE` on an issued snapshot (trigger, `restrict_violation`); a reprint of a
+superseded snapshot is **byte-identical** after a mark correction while a new
+snapshot reflects it; a cross-school term is refused 422; a guessed snapshot id
+is refused 403 before any bytes are produced; an unauthorized caller gets 403
+rather than the informative 422.
+
+**Not claimed.** No live browser journey had been executed at the time of this
+commit, so no browser evidence is asserted for it. Parent-facing download, bulk
+generation, report-card templates and branding are out of scope.
+
+### Slice 1.2 — live school browser proof
+
+Gate-04 recorded that the school journeys had been **listed** but never run,
+and named this release evidence rather than polish. They have now been
+**executed**.
+
+`pnpm test:e2e:school` was run against the isolated disposable stack the
+harness provisions (Compose project `vidya-school-e2e`; Postgres `:55435` /
+`vidya_school_e2e`, Redis `:6385`, MinIO `:9010`, production web server
+`:3115` — all separate from local development, from the integration database
+and from the owner's running stack).
+
+Result: **3 tests passed in 19.6s**, in a real Chromium against a production
+`VIDYA_EDITION=school` build.
+
+| Journey | Result |
+|---|---|
+| `marks.spec.ts` — subject teacher creates an assessment, saves grades, observes closure | ok (5.2s) |
+| `terms.spec.ts` — school admin configures weights, closes a term, reopens with a recorded reason | ok (3.5s) |
+| `terms.spec.ts` — school management screens fit mobile in both themes | ok (2.6s) |
+
+The run also confirmed `reporting/0003_school_report_cards` applies cleanly in
+a fresh database (35 migrations applied), and the runner's cleanup reported
+that only labelled test resources were removed.
+
+**Scope of this evidence, stated precisely.** These are the T04 journeys. They
+do **not** exercise report cards — the runner's spec list predates that work.
+`tests/e2e/school/report-cards.spec.ts` has been written and registered in
+`scripts/school-e2e.ts`; its execution is tracked separately and is not claimed
+until it has actually run.
 
 ---
 
@@ -216,5 +331,6 @@ API. All `DEFERRED` until the school edition is sellable.
 | **No SaaS control plane exists.** The product is not sellable as SaaS until Phase 3. | High | Open, scheduled Phase 3. |
 | **Integration suite shares Redis with the owner's running stack**, causing a false failure in the BullMQ test. | Low | Diagnosed; mitigated with a dedicated Redis db index. Recorded above. |
 | **Help coverage is thin** — 26 school screens and 16 college screens have no help doc. | Medium | Open; closed incrementally per slice. |
+| **The report-card desk cannot be opened by a class teacher.** The page bootstraps from `/api/v1/people/colleges`, which lists only colleges the caller can read *at college level*; a class-scoped teacher gets an empty list and the screen renders its error state. The backend authorizes report cards at the pupil's resolved position, so a class teacher is entitled to issue one — the screen, not the API, narrows the audience. | Medium | Open. Found by the live browser journey, not by a unit test. Fixing it means either widening what the page bootstraps from or scoping the desk to its real audience deliberately; both are product decisions, not a patch. |
 | **No validation with real school users yet.** Every competitive row is `Unvalidated`. | High | Open. Parity claims must not be made until this changes. |
 | Medical/health data is advertised by the benchmark but has no privacy gating in Vidya. | Medium | Correctly deferred until gating exists. |

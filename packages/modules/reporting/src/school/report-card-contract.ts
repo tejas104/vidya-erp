@@ -80,6 +80,31 @@ export const reportCardSnapshotSchema = reportCardPreviewSchema.extend({
 
 export type ReportCardSnapshot = z.infer<typeof reportCardSnapshotSchema>;
 
+/**
+ * Parsers for EVERY snapshot version ever written, keyed by the version
+ * string stored on the row.
+ *
+ * A new version ADDS an entry here; it never replaces one. Validating a
+ * stored row against only the current version would make bumping the version
+ * silently un-renderable every report card already issued — which is exactly
+ * the promise this table exists to keep. An unknown version is a loud failure
+ * (the download answers 409) rather than a half-populated document.
+ */
+export const SNAPSHOT_PARSERS: Readonly<Record<string, z.ZodType<ReportCardSnapshot>>> = {
+  [SNAPSHOT_VERSION]: reportCardSnapshotSchema,
+};
+
+/** The stored payload parsed by its own recorded version, or null if that
+ *  version is not one this build knows how to render. */
+export function parseStoredSnapshot(payload: unknown): ReportCardSnapshot | null {
+  const version = (payload as { snapshotVersion?: unknown } | null)?.snapshotVersion;
+  if (typeof version !== "string") return null;
+  const parser = SNAPSHOT_PARSERS[version];
+  if (parser === undefined) return null;
+  const parsed = parser.safeParse(payload);
+  return parsed.success ? parsed.data : null;
+}
+
 export const rosterStudentSchema = z.object({
   studentId: z.string(),
   fullName: z.string(),
