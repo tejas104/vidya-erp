@@ -337,7 +337,7 @@ export default function DashboardPage() {
       <PageHeader
         eyebrow={session.roles.join(" · ")}
         title={`Good day, ${session.displayName.split(" ")[0]}.`}
-        lede="Every figure here is drawn only from records you're allowed to read. Rooms outside your scope simply don't appear."
+        lede="What needs you today, then the figures — all scoped to the records you can read."
         help={<HelpButton slug="dashboard" />}
       />
 
@@ -345,8 +345,11 @@ export default function DashboardPage() {
         <OnboardingChecklist role="admin" userId={session.userId} />
       ) : null}
 
-      {/* --- notices --- */}
-      <Noticeboard />
+      {/* ORDER IS THE DESIGN HERE. A home page someone opens every morning
+          leads with what is waiting on THEM, then today's work, then the
+          exceptions worth chasing. The noticeboard is reference reading, so
+          it sits at the bottom rather than pushing the decisions below the
+          fold — it used to be first. */}
 
       {/* --- leave: waiting-on-you card --- */}
       {leaveWaiting !== null && leaveWaiting > 0 ? (
@@ -460,6 +463,9 @@ export default function DashboardPage() {
             </div>
           )}
         </section>
+
+        {/* --- notices: reference reading, deliberately last --- */}
+        <Noticeboard />
     </>
   );
 }
