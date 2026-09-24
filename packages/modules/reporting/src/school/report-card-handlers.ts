@@ -49,6 +49,39 @@ export interface ReportCardHandlerDeps {
 export function createSchoolReportCardHandlers(
   deps: ReportCardHandlerDeps,
 ): Record<string, RouteHandler> {
+  const deskScope: RouteHandler = async (ctx) => {
+    const principal = ctx.principal as Principal;
+    const candidates = new Set<string>();
+    for (const grant of principal.grants) {
+      if (grant.org.classId) {
+        candidates.add(grant.org.classId);
+      } else if (grant.org.departmentId) {
+        for (const item of await deps.directory.classesOfDepartment(grant.org.departmentId)) candidates.add(item.classId);
+      } else {
+        for (const department of await deps.directory.departmentsOfCollege(grant.org.collegeId)) {
+          for (const item of await deps.directory.classesOfDepartment(department.departmentId)) candidates.add(item.classId);
+        }
+      }
+    }
+
+    const authorized: { id: string; collegeId: string }[] = [];
+    for (const id of candidates) {
+      const org = await deps.directory.classPath(id);
+      if (org && deps.scopeChecker.check(principal, "read", classRef(org)).granted) {
+        authorized.push({ id, collegeId: org.collegeId });
+      }
+    }
+    const names = await deps.directory.namesFor(authorized.map((item) => item.id));
+    const classes = authorized.map((item) => ({ ...item, name: names.get(item.id) ?? item.id }))
+      .sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
+    const collegeIds = [...new Set(classes.map((item) => item.collegeId))];
+    const terms = (await deps.schoolAcademics.listTermsForColleges(collegeIds))
+      .filter((term) => collegeIds.includes(term.collegeId))
+      .map(({ id, collegeId, name, academicYear }) => ({ id, collegeId, name, academicYear }))
+      .sort((a, b) => b.academicYear.localeCompare(a.academicYear) || a.name.localeCompare(b.name));
+    return { status: 200, body: { classes, terms } };
+  };
+
   /**
    * Resolves a pupil to the position a report card may be issued against, and
    * authorizes the caller for `action` on it. Returns a failure response
@@ -272,6 +305,7 @@ export function createSchoolReportCardHandlers(
   };
 
   return {
+    "reporting.school-report-card-desk-scope": deskScope,
     "reporting.school-report-card-roster": roster,
     "reporting.school-report-card-preview": preview,
     "reporting.school-report-card-generate": generate,

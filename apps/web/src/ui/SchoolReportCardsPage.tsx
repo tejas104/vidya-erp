@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button, Card, EmptyState, Modal, PageHeader, Select, Skeleton, StatusBadge } from "@vidya/ui-system";
-import { ApiError, api, currentAcademicYear, type OrgTree, type SchoolReportCardPreview, type SchoolReportCardRosterStudent, type SchoolTermView } from "./api";
+import { ApiError, api, currentAcademicYear, type SchoolReportCardDeskScope, type SchoolReportCardPreview, type SchoolReportCardRosterStudent } from "./api";
 import { HelpButton } from "./help/HelpButton";
 import styles from "./SchoolReportCardsPage.module.css";
 
@@ -17,8 +17,7 @@ function percent(value: number | null): string { return value === null ? "Not av
 
 export function SchoolReportCardsPage() {
   const [load, setLoad] = useState<LoadState>("loading");
-  const [tree, setTree] = useState<OrgTree | null>(null);
-  const [terms, setTerms] = useState<SchoolTermView[]>([]);
+  const [scope, setScope] = useState<SchoolReportCardDeskScope | null>(null);
   const [year, setYear] = useState(currentAcademicYear);
   const [termId, setTermId] = useState("");
   const [classId, setClassId] = useState("");
@@ -29,40 +28,45 @@ export function SchoolReportCardsPage() {
   const [confirmIncomplete, setConfirmIncomplete] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const rosterRequest = useRef(0);
+  const previewRequest = useRef(0);
 
   useEffect(() => {
     let active = true;
     void (async () => {
       try {
-        const { colleges } = await api.colleges();
-        if (!colleges[0]) throw new Error("No school is available.");
-        const [nextTree, termResponse] = await Promise.all([api.collegeTree(colleges[0].id), api.schoolTerms()]);
+        const nextScope = await api.schoolReportCardDeskScope();
         if (!active) return;
-        setTree(nextTree); setTerms(termResponse.terms); setLoad("ready");
+        setScope(nextScope); setLoad("ready");
       } catch (error) { if (active) setLoad(errorState(error)); }
     })();
     return () => { active = false; };
   }, []);
 
-  const years = useMemo(() => Array.from(new Set([year, ...terms.map((term) => term.academicYear)])).sort().reverse(), [year, terms]);
-  const visibleTerms = terms.filter((term) => term.academicYear === year);
-  const classes = tree?.departments.flatMap((department) => department.classes) ?? [];
+  const years = useMemo(() => Array.from(new Set([year, ...(scope?.terms ?? []).map((term) => term.academicYear)])).sort().reverse(), [year, scope]);
+  const visibleTerms = (scope?.terms ?? []).filter((term) => term.academicYear === year);
+  const selectedTerm = visibleTerms.find((term) => term.id === termId);
+  const classes = (scope?.classes ?? []).filter((item) => !selectedTerm || item.collegeId === selectedTerm.collegeId);
 
   useEffect(() => {
     if (termId !== "" && !visibleTerms.some((term) => term.id === termId)) setTermId("");
   }, [termId, visibleTerms]);
 
   async function loadRoster(nextClassId = classId, nextTermId = termId) {
+    const request = ++rosterRequest.current;
+    ++previewRequest.current;
+    setSelected(null); setPreview(null); setPreviewState("idle"); setActionError(null);
     if (!nextClassId || !nextTermId) { setRoster({ kind: "idle" }); return; }
-    setRoster({ kind: "loading" }); setSelected(null); setPreview(null); setPreviewState("idle"); setActionError(null);
-    try { setRoster({ kind: "ready", students: (await api.schoolReportCardRoster(nextClassId, nextTermId)).students }); }
-    catch (error) { setRoster({ kind: errorState(error) }); }
+    setRoster({ kind: "loading" });
+    try { const result = await api.schoolReportCardRoster(nextClassId, nextTermId); if (request === rosterRequest.current) setRoster({ kind: "ready", students: result.students }); }
+    catch (error) { if (request === rosterRequest.current) setRoster({ kind: errorState(error) }); }
   }
   async function openPreview(student: SchoolReportCardRosterStudent) {
     if (!termId) return;
+    const request = ++previewRequest.current;
     setSelected(student); setPreview(null); setPreviewState("loading"); setActionError(null);
-    try { setPreview(await api.schoolReportCardPreview({ studentId: student.studentId, termId })); setPreviewState("idle"); }
-    catch (error) { setPreviewState(errorState(error)); }
+    try { const result = await api.schoolReportCardPreview({ studentId: student.studentId, termId }); if (request === previewRequest.current) { setPreview(result); setPreviewState("idle"); } }
+    catch (error) { if (request === previewRequest.current) setPreviewState(errorState(error)); }
   }
   async function generate() {
     if (!selected || !preview || generating) return;
@@ -78,14 +82,14 @@ export function SchoolReportCardsPage() {
 
   if (load === "loading") return <Skeleton height={18} />;
   if (load === "denied") return <EmptyState title="Report cards are restricted." body="Ask a school administrator for report-card access." />;
-  if (load === "error" || tree === null) return <EmptyState title="Couldn't load report cards." body="Check the connection, then retry." action={{ label: "Retry", onClick: () => window.location.reload() }} />;
+  if (load === "error" || scope === null) return <EmptyState title="Couldn't load report cards." body="Check the connection, then retry." action={{ label: "Retry", onClick: () => window.location.reload() }} />;
 
   return <>
     <PageHeader eyebrow="School records" title="Report card desk" lede="Review one student at a time before creating a permanent report-card snapshot." help={<HelpButton slug="report-cards" />} />
     <div className={styles.filters}><Card>
-      <Select id="report-year" label="Academic Year" value={year} onChange={(event) => { setYear(event.target.value); setTermId(""); setRoster({ kind: "idle" }); }} options={years.map((value) => ({ value, label: value }))} />
-      <Select id="report-term" label="Term" value={termId} onChange={(event) => { setTermId(event.target.value); void loadRoster(classId, event.target.value); }} options={[{ value: "", label: visibleTerms.length ? "Choose a term…" : "No terms for this year" }, ...visibleTerms.map((term) => ({ value: term.id, label: term.name }))]} />
-      <Select id="report-class" label="Class" value={classId} onChange={(event) => { setClassId(event.target.value); void loadRoster(event.target.value, termId); }} options={[{ value: "", label: "Choose a class…" }, ...classes.map((item) => ({ value: item.id, label: item.name }))]} />
+      <Select id="report-year" label="Academic Year" value={year} onChange={(event) => { setYear(event.target.value); setTermId(""); void loadRoster(classId, ""); }} options={years.map((value) => ({ value, label: value }))} />
+      <Select id="report-term" label="Term" value={termId} onChange={(event) => { const nextTerm = visibleTerms.find((term) => term.id === event.target.value); const nextClassId = nextTerm && scope.classes.find((item) => item.id === classId)?.collegeId !== nextTerm.collegeId ? "" : classId; setClassId(nextClassId); setTermId(event.target.value); void loadRoster(nextClassId, event.target.value); }} options={[{ value: "", label: visibleTerms.length ? "Choose a term…" : "No terms for this year" }, ...visibleTerms.map((term) => ({ value: term.id, label: term.name }))]} />
+      <Select id="report-class" label="Class" value={classId} onChange={(event) => { setClassId(event.target.value); void loadRoster(event.target.value, termId); }} options={[{ value: "", label: classes.length ? "Choose a class…" : "No classes available" }, ...classes.map((item) => ({ value: item.id, label: item.name }))]} />
     </Card></div>
     <section className={styles.workspace} aria-label="Report card workspace">
       <div className={styles.roster}><Card>

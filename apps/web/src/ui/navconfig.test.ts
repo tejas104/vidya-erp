@@ -8,10 +8,11 @@ describe("navConfig job-shaped regroup", () => {
     expect(links(["admin"], "college")).not.toContain("/manage/terms");
     expect(links(["teacher"], "school")).not.toContain("/manage/terms");
   });
-  it("shows Report cards only to school administrators and principals", () => {
+  it("shows Report cards to school administrators, principals, and class teachers", () => {
     const links = (roles: Parameters<typeof visibleNav>[0], edition: "college" | "school") => visibleNav(roles, edition).flatMap((group) => group.entries);
     expect(links(["admin"], "school")).toEqual(expect.arrayContaining([expect.objectContaining({ href: "/manage/report-cards", label: "Report cards" })]));
     expect(links(["principal"], "school")).toEqual(expect.arrayContaining([expect.objectContaining({ href: "/manage/report-cards" })]));
+    expect(links(["class_teacher"], "school")).toEqual(expect.arrayContaining([expect.objectContaining({ href: "/manage/report-cards" })]));
     expect(links(["teacher"], "school")).not.toEqual(expect.arrayContaining([expect.objectContaining({ href: "/manage/report-cards" })]));
     expect(links(["admin"], "college")).not.toEqual(expect.arrayContaining([expect.objectContaining({ href: "/manage/report-cards" })]));
     expect(crumbsFor("/manage/report-cards", "school")).toEqual([{ label: "Academics" }, { label: "Report cards" }]);

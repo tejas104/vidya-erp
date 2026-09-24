@@ -324,6 +324,10 @@ export interface StudentView extends StudentProfile {
   identityUserId: string | null;
   enrollment: { sectionId: string; academicYear: string } | null;
 }
+export interface SchoolReportCardDeskScope {
+  classes: { id: string; collegeId: string; name: string }[];
+  terms: { id: string; collegeId: string; name: string; academicYear: string }[];
+}
 export interface StudentDetailView extends Omit<StudentView, "enrollment"> {
   enrollment: {
     sectionId: string; sectionName: string; classId: string | null;
@@ -1154,6 +1158,7 @@ export const api = {
     put<{ types: SchoolAssessmentType[] }>(`/api/v1/school/terms/${encodeURIComponent(termId)}/assessment-types`, { types }),
   schoolTransitionTerm: (termId: string, action: "close" | "reopen", reason: string) =>
     post<SchoolTermView>(`/api/v1/school/terms/${encodeURIComponent(termId)}/${action}`, reason.trim() ? { reason: reason.trim() } : {}),
+  schoolReportCardDeskScope: () => get<SchoolReportCardDeskScope>("/api/v1/school/report-cards/desk-scope"),
   schoolReportCardRoster: (classId: string, termId: string) =>
     get<{ students: SchoolReportCardRosterStudent[] }>(`/api/v1/school/report-cards/classes/${encodeURIComponent(classId)}?termId=${encodeURIComponent(termId)}`),
   schoolReportCardPreview: (body: { studentId: string; termId: string }) =>

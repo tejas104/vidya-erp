@@ -2,23 +2,19 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { ToastProvider } from "@vidya/ui-system";
 import { SchoolReportCardsPage } from "./SchoolReportCardsPage";
-import { ApiError, api, type OrgTree, type SchoolReportCardPreview, type SchoolTermView } from "./api";
+import { ApiError, api, type SchoolReportCardPreview } from "./api";
 import { HelpEditionProvider } from "./help/HelpEditionContext";
 
 vi.mock("./api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./api")>();
-  return { ...actual, api: { ...actual.api, colleges: vi.fn(), collegeTree: vi.fn(), schoolTerms: vi.fn(), schoolReportCardRoster: vi.fn(), schoolReportCardPreview: vi.fn(), schoolGenerateReportCard: vi.fn(), schoolReportCardDownloadUrl: vi.fn((snapshotId: string) => `/api/v1/school/report-cards/${snapshotId}/download`) } };
+  return { ...actual, api: { ...actual.api, schoolReportCardDeskScope: vi.fn(), schoolReportCardRoster: vi.fn(), schoolReportCardPreview: vi.fn(), schoolGenerateReportCard: vi.fn(), schoolReportCardDownloadUrl: vi.fn((snapshotId: string) => `/api/v1/school/report-cards/${snapshotId}/download`) } };
 });
 
-const tree: OrgTree = { college: { id: "col_1", name: "Northgate School", code: "NS" }, departments: [{ id: "dep_1", collegeId: "col_1", name: "Senior school", code: "SS", classes: [{ id: "class_1", departmentId: "dep_1", name: "Class 8A", code: "8A", sections: [] }], subjects: [] }] };
-const term: SchoolTermView = { id: "term_1", collegeId: "col_1", name: "Term 1", academicYear: "2026-27", startsOn: "2026-04-01", endsOn: "2026-09-30", status: "closed", closedAt: null, closedBy: null, closedReason: null };
 const completePreview: SchoolReportCardPreview = { student: { id: "stu_1", fullName: "Meera Nair", admissionNo: "NG-001" }, term: { id: "term_1", name: "Term 1", academicYear: "2026-27", startsOn: "2026-04-01", endsOn: "2026-09-30" }, subjects: [{ subjectId: "sub_1", subjectName: "Mathematics", percentage: 82, grade: "A", complete: true }], overall: { percentage: 82, grade: "A", complete: true }, attendance: { eligibleDays: 90, presentEquivalentDays: 86, percentage: 95.6, complete: true, missingDates: [] }, warnings: [] };
 
 beforeEach(() => {
   vi.resetAllMocks();
-  vi.mocked(api.colleges).mockResolvedValue({ colleges: [{ id: "col_1", name: "Northgate School", code: "NS" }] });
-  vi.mocked(api.collegeTree).mockResolvedValue(tree);
-  vi.mocked(api.schoolTerms).mockResolvedValue({ terms: [term] });
+  vi.mocked(api.schoolReportCardDeskScope).mockResolvedValue({ classes: [{ id: "class_1", collegeId: "col_1", name: "Class 8A" }], terms: [{ id: "term_1", collegeId: "col_1", name: "Term 1", academicYear: "2026-27" }] });
   vi.mocked(api.schoolReportCardRoster).mockResolvedValue({ students: [{ studentId: "stu_1", fullName: "Meera Nair", admissionNo: "NG-001", snapshotId: null, generatedAt: null }] });
   vi.mocked(api.schoolReportCardPreview).mockResolvedValue(completePreview);
   vi.mocked(api.schoolGenerateReportCard).mockResolvedValue({ snapshotId: "snap_1", generatedAt: "2026-09-21T00:00:00.000Z" });
@@ -44,6 +40,18 @@ async function chooseStudent() {
 }
 
 describe("School report-card desk", () => {
+  it("uses the scoped class choices and keeps classes from another school out of the selected term", async () => {
+    vi.mocked(api.schoolReportCardDeskScope).mockResolvedValue({
+      classes: [{ id: "class_1", collegeId: "col_1", name: "Class 8A" }, { id: "class_2", collegeId: "col_2", name: "Class 9B" }],
+      terms: [{ id: "term_1", collegeId: "col_1", name: "Term 1", academicYear: "2026-27" }],
+    });
+    renderPage();
+    await screen.findByRole("heading", { name: "Report card desk" });
+    fireEvent.change(screen.getByLabelText("Term"), { target: { value: "term_1" } });
+    expect(screen.getByRole("option", { name: "Class 8A" })).toBeVisible();
+    expect(screen.queryByRole("option", { name: "Class 9B" })).not.toBeInTheDocument();
+  });
+
   it("previews a student, generates a snapshot once, and exposes its PDF", async () => {
     await chooseStudent();
     fireEvent.click(screen.getByRole("button", { name: "Generate report card" }));

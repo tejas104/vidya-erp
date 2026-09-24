@@ -83,6 +83,8 @@ export interface SchoolTermResultSource {
 
 export interface SchoolAcademicsReadModel {
   getTerm(termId: string): Promise<SchoolTermRecord | null>;
+  /** School terms for a caller-selected set of already authorized schools. */
+  listTermsForColleges(collegeIds: readonly string[]): Promise<SchoolTermRecord[]>;
   /**
    * Every assessment in `classId` for `termId`, grouped by subject, with this
    * student's stored marks attached. Subjects with no assessments at all do
@@ -134,6 +136,12 @@ export function createSchoolAcademicsReadModel(db: Db): SchoolAcademicsReadModel
     async getTerm(termId) {
       const [row] = await db.select().from(schTerms).where(eq(schTerms.id, termId)).limit(1);
       return row ? termRecord(row) : null;
+    },
+
+    async listTermsForColleges(collegeIds) {
+      if (collegeIds.length === 0) return [];
+      const rows = await db.select().from(schTerms).where(inArray(schTerms.collegeId, [...collegeIds]));
+      return rows.map(termRecord);
     },
 
     async termResultSource(studentId, classId, termId) {

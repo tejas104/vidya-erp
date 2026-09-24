@@ -13,13 +13,9 @@ import { apiSession, browserLogin } from "../support/fixtures";
  * that quietly turns a missing mark into a zero is the failure this feature
  * exists to prevent, so the browser must be shown refusing to do it.
  *
- * DRIVEN AS THE SCHOOL ADMINISTRATOR, deliberately. The desk opens by listing
- * the colleges the caller can READ at college level (`/api/v1/people/colleges`),
- * so a class-scoped teacher receives an empty list and the page renders its
- * error state. The backend authorizes report cards at the pupil's position, so
- * a class teacher *could* issue one — the screen, not the API, is what
- * currently narrows the audience. Recorded as an open finding in
- * docs/strategy/CLAUDE-DELIVERY-ROADMAP.md rather than papered over here.
+ * The administrator issues the first snapshot, then the class teacher uses
+ * the same desk and sees only their assigned class. This checks the browser
+ * bootstrap as well as the server's per-pupil authorization.
  */
 test("examination in-charge previews, is warned about missing marks, then issues a report card", async ({ page, baseURL }, testInfo) => {
   const admin = await apiSession(baseURL!, {
@@ -154,6 +150,18 @@ test("examination in-charge previews, is warned about missing marks, then issues
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
       await page.screenshot({ path: testInfo.outputPath(`${theme}-report-cards.png`), fullPage: true });
     }
+
+    await page.context().clearCookies();
+    await browserLogin(page, { username, password });
+    await page.goto("/manage/report-cards");
+    await expect(page.getByRole("heading", { name: "Report card desk", level: 1 })).toBeVisible();
+    await page.getByLabel("Term").selectOption(termId);
+    const classPicker = page.getByLabel("Class");
+    await expect(classPicker.locator("option")).toHaveCount(2);
+    await classPicker.selectOption(classId);
+    await page.getByRole("button", { name: /Asha Browser/ }).click();
+    await expect(page.getByRole("link", { name: "Download PDF" })).toBeVisible();
+    await page.screenshot({ path: testInfo.outputPath("class-teacher-report-card-desk.png"), fullPage: true });
 
     await teacher.dispose();
   } finally {

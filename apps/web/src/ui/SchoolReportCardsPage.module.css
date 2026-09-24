@@ -3,8 +3,9 @@
 .roster, .preview { min-width: 0; }
 .studentList { display: grid; gap: var(--space-2); }
 .student, .studentActive { display: flex; width: 100%; justify-content: space-between; align-items: center; gap: var(--space-3); text-align: left; border: 1px solid var(--border); border-radius: var(--radius-2); padding: var(--space-3); background: var(--surface); color: inherit; cursor: pointer; }
-.student:hover, .student:focus-visible, .studentActive { border-color: var(--accent); outline: none; }
-.student span, .identity div { display: grid; gap: var(--space-1); }
+.student:hover, .studentActive { border-color: var(--accent); }
+.student:focus-visible, .studentActive:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.student > span, .studentActive > span, .identity div { display: grid; gap: var(--space-1); min-width: 0; }
 .student small, .identity span, .summary small { color: var(--muted); }
 .previewBody { display: grid; gap: var(--space-4); }
 .identity { display: flex; justify-content: space-between; gap: var(--space-3); padding-bottom: var(--space-3); border-bottom: 1px solid var(--border); }

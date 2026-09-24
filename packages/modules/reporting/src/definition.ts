@@ -158,6 +158,22 @@ const routes: RouteSpec[] = [
   // snapshot id in a download URL are identifiers, never authority.
   // -------------------------------------------------------------------------
   {
+    id: "reporting.school-report-card-desk-scope",
+    module: MODULE_NAME,
+    method: "GET",
+    path: "/api/v1/school/report-cards/desk-scope",
+    summary: "Classes and terms available to the report-card desk",
+    description: "Class choices are resolved from current grants and checked against each stored class path. Terms are returned only for schools with a readable class. The response never includes a school-wide organization tree.",
+    tags: ["reporting", "school"],
+    auth: ANY_AUTHENTICATED,
+    responses: {
+      200: { description: "Report-card desk choices", schema: z.object({
+        classes: z.array(z.object({ id: z.string(), collegeId: z.string(), name: z.string() })),
+        terms: z.array(z.object({ id: z.string(), collegeId: z.string(), name: z.string(), academicYear: z.string() })),
+      }) },
+    },
+  },
+  {
     id: "reporting.school-report-card-roster",
     module: MODULE_NAME,
     method: "GET",

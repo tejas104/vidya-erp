@@ -157,13 +157,29 @@ describe("School report cards over real Postgres", () => {
   it("requires authentication on every route", async () => {
     const statuses = (
       await Promise.all([
+        stack.call("reporting.school-report-card-desk-scope"),
         roster(""),
         preview(""),
         generate(""),
         stack.call("reporting.school-report-card-download", { params: { snapshotId: "src_missing" } }),
       ])
     ).map((response) => response.status);
-    expect(statuses).toEqual([401, 401, 401, 401]);
+    expect(statuses).toEqual([401, 401, 401, 401, 401]);
+  });
+
+  it("builds the desk from current class scope without disclosing another class", async () => {
+    const response = await stack.call("reporting.school-report-card-desk-scope", { cookie: teacher });
+    expect(response.status).toBe(200);
+    const scope = (await response.json()) as { classes: { id: string; name: string }[]; terms: { id: string }[] };
+    expect(scope.classes).toEqual([{ id: classId, collegeId, name: `Std ${suffix}` }]);
+    expect(scope.terms.map((term) => term.id)).toContain(termId);
+
+    const outside = await stack.call("reporting.school-report-card-desk-scope", { cookie: outsider });
+    expect(outside.status).toBe(200);
+    expect(await outside.json()).toEqual({ classes: [], terms: [] });
+
+    const adminScope = (await (await stack.call("reporting.school-report-card-desk-scope", { cookie: admin })).json()) as { classes: { id: string }[] };
+    expect(adminScope.classes.map((item) => item.id)).toEqual(expect.arrayContaining([classId, otherClassId]));
   });
 
   it("refuses a caller with no grant over the class", async () => {

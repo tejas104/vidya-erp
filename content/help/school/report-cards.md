@@ -1,6 +1,6 @@
 # Preparing school report cards
 
-Use **Report cards** when an administrator or principal needs to review one student's marks and attendance before creating a downloadable report-card snapshot.
+Use **Report cards** to review one student's marks and attendance before creating a downloadable report-card snapshot. Administrators and principals can choose from their school's classes; a class teacher sees only classes within their assigned scope.
 
 ## Steps
 
@@ -10,4 +10,4 @@ Use **Report cards** when an administrator or principal needs to review one stud
 4. Select **Generate report card** only after reviewing the preview. If the preview is incomplete, confirm deliberately in the warning dialog.
 5. When generation succeeds, **Download PDF** becomes available for that student's snapshot.
 
-If loading or generation fails, use **Retry** or try again without losing the chosen year, term, class, or student.
+If loading the roster or preview fails, use **Retry** without losing the chosen scope. If generation fails, read the message and try again after checking the preview.

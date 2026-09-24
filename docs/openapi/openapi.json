@@ -14801,6 +14801,93 @@
         }
       }
     },
+    "/api/v1/school/report-cards/desk-scope": {
+      "get": {
+        "summary": "Classes and terms available to the report-card desk",
+        "description": "Class choices are resolved from current grants and checked against each stored class path. Terms are returned only for schools with a readable class. The response never includes a school-wide organization tree.\n\n**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "reporting",
+          "school"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Report-card desk choices",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "classes": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "collegeId": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "collegeId",
+                          "name"
+                        ]
+                      }
+                    },
+                    "terms": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "collegeId": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "academicYear": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "collegeId",
+                          "name",
+                          "academicYear"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "classes",
+                    "terms"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Access denied by the role/scope policy (problem+json)"
+          }
+        }
+      }
+    },
     "/api/v1/school/report-cards/classes/{classId}": {
       "get": {
         "summary": "A class roster with each pupil's latest report-card snapshot for a term",

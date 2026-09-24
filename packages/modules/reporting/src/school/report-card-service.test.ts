@@ -60,6 +60,7 @@ function buildSources(opts: {
 }) {
   const schoolAcademics: SchoolAcademicsReadModel = {
     getTerm: async () => TERM,
+    listTermsForColleges: async () => [TERM],
     termResultSource: async () => (opts.source === undefined ? source() : opts.source),
   };
   const academics = {
