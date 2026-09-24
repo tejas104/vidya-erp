@@ -33,4 +33,11 @@ describe("Table", () => {
     expect(screen.getByText("₹500").className).toMatch(/right/);
     expect(screen.getByRole("columnheader", { name: "Name" }).className).toBe("");
   });
+
+  it("makes a long table a named keyboard-scrollable region", () => {
+    render(<Table columns={[{ key: "name", header: "Student" }]} rows={[{ name: "Asha" }]} scrollable={{ label: "Student roster" }} />);
+    expect(screen.getByRole("region", { name: "Student roster" })).toHaveAttribute("tabindex", "0");
+    expect(screen.getByRole("table")).toContainElement(screen.getByText("Asha"));
+    expect(screen.getByText("Scroll sideways to see all columns.")).toBeInTheDocument();
+  });
 });

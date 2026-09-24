@@ -305,7 +305,7 @@ export default function StudentsPage() {
                 />
               }
             >
-              <Table columns={columns} rows={rows} />
+              <Table columns={columns} rows={rows} scrollable={{ label: "Student roster" }} />
             </AsyncState>
           </div>
         </>

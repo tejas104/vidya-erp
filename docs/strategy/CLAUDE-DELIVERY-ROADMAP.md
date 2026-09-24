@@ -7,7 +7,7 @@ changes — this is a living record, not a plan written once.
 - Worktree: `D:\ATLAS\.worktrees\claude-school-product`
 - Base: `a9d5fc16f075b86474050fbefd4f0860ac21f006` (gate-04 reviewed checkpoint)
 - Integration commit: `0ddf80cc3ab8ff1ecc1b663fd0e6d152badeb161`
-- Last revised: 2026-09-24 (N0 guardian review and N1 Student 360 checkpoint)
+- Last revised: 2026-09-24 (N0/N1 complete; ERP-wide UI direction added)
 
 Companion documents: [COMPETITIVE-PARITY-MATRIX.md](COMPETITIVE-PARITY-MATRIX.md),
 `DELIVERY-AND-REVIEW-REQUIREMENTS.md`, `VIDYA-SCHOOL-FIRST-SAAS-PLAN.md`.
@@ -303,6 +303,7 @@ reason; add slices freely when evidence demands it.
 |---|---|---|---|---|
 | **N0** | Independent adversarial review of `c530ba8..c199589` — **DONE** | Concurrency, scope, and account-kind fixes below; full gates green. | all touched | — |
 | **N1** | Student 360 v1 — **DONE** | People-owned profile and history, independently loaded tabs, and six school browser journeys pass. | web; `people` and `system` audit index | N0 |
+| **N-UI1** | School workbench foundation — **IN PROGRESS** | Owner requested an ERP-wide UI redesign. Start with a named, keyboard-usable long-table pattern in the student roster, accountant directory and fee ledger; continue by role and screen under [SCHOOL-EXPERIENCE-REDESIGN.md](SCHOOL-EXPERIENCE-REDESIGN.md). | `ui-system`, web | N1 |
 | **N2** | Report-card desk for class teachers | Open risk: the audience that issues report cards cannot open the screen. | web; `people` directory | — |
 | **N3** | Parent views: report cards, fees, notices | Categories are enforced but unreadable; parents need exactly these three next. Requires a publish-to-parents decision for report cards. | `portal`, `reporting`, `fees`, `notices` | N0 |
 | **N4** | Bulk marks import (1.7) | Highest-frequency pain for staff after attendance. | `school-academics`, worker | — |
@@ -380,6 +381,37 @@ This needs an explicit response-state contract before clients interpret an
 empty academic read as proof that no record exists. The Documents tab provides
 read/download; authorized upload and removal remain on the student management
 screen. These do not alter the server's existing permissions.
+
+### N-UI1 school workbench foundation — first checkpoint
+
+The owner widened the UI brief on 2026-09-24: redesign the full school ERP
+around public Alma, EdPlus and Vidyalaya references, with permission to revise
+earlier UI rules. The clean-room job map, component contract and rollout are
+recorded in [SCHOOL-EXPERIENCE-REDESIGN.md](SCHOOL-EXPERIENCE-REDESIGN.md).
+The previous blanket ban on palette, type and shell changes in
+[SCHOOL-UI-DIRECTION.md](SCHOOL-UI-DIRECTION.md) is superseded; any such change
+still needs paired accessibility and browser evidence. The school-first and
+server-authorization contracts remain in force.
+
+This checkpoint fixes one repeated operational pattern. The shared `Table`
+has a named, keyboard-focusable bounded scroll region whose header actually
+sticks as a long roster moves. Its data rows have a 44 px minimum, narrow
+screens keep columns wide enough to read, and a visible hint explains sideways
+scrolling. The student roster, accountant directory and invoice ledger use it.
+The labelled browser stack passed **7/7** journeys, including a 20-student
+roster that checked sticky positioning, a focused region, compact rows and no
+document overflow at 390 px. Its resources were removed by the ownership-
+checked cleanup. The component UI check passed 3/3. This is a foundation
+checkpoint; task headers, saved filters, bulk actions, role workspaces and
+family redesign remain open in the redesign plan.
+
+Final code-tree gates: typecheck, lint, OpenAPI check, ownership/TODO/Docker
+checks and production build passed; unit **98 files / 1,199 tests**, UI
+**69 files / 309 tests**, and disposable integration **21 files / 145 tests**
+passed. The new browser roster journey uses 20 pupils and checks a bounded
+vertical scroll, sticky column header, keyboard focus, horizontal mobile
+scroll, compact data row and no document overflow. The 7/7 browser pass and
+labelled cleanup were repeated after the responsive width correction.
 
 Cross-cutting improvements, done alongside slices rather than as a phase:
 

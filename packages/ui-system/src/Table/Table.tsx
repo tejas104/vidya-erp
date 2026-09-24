@@ -15,14 +15,22 @@ export function Table<T>({
   rows,
   sort,
   onSortChange,
+  scrollable,
 }: {
   columns: TableColumn<T>[];
   rows: T[];
   sort?: { key: string; dir: "asc" | "desc" };
   onSortChange?: (key: string) => void;
+  /** Give long data sets a named, keyboard-scrollable viewport with a sticky header. */
+  scrollable?: { label: string };
 }) {
-  return (
-    <div className={styles.wrap}>
+  return <>
+    <div
+      className={`${styles.wrap}${scrollable ? ` ${styles.scrollable}` : ""}`}
+      role={scrollable ? "region" : undefined}
+      aria-label={scrollable?.label}
+      tabIndex={scrollable ? 0 : undefined}
+    >
       <table className={styles.table}>
         <thead>
           <tr>
@@ -62,5 +70,6 @@ export function Table<T>({
         </tbody>
       </table>
     </div>
-  );
+    {scrollable ? <p className={styles.scrollHint}>Scroll sideways to see all columns.</p> : null}
+  </>;
 }

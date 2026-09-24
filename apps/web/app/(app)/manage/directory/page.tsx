@@ -145,7 +145,7 @@ export default function DirectoryPage() {
               isEmpty={roster !== null && roster.length === 0}
               empty={<EmptyState title="No students enrolled here." />}
             >
-              <Table columns={columns} rows={rows} />
+              <Table columns={columns} rows={rows} scrollable={{ label: "Student directory" }} />
             </AsyncState>
           </div>
         </>

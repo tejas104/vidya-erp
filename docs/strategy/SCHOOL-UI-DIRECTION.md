@@ -1,5 +1,12 @@
 # Vidya school UI direction
 
+**2026-09-24 update:** The owner has asked for an ERP-wide design change using
+Alma, EdPlus and Vidyalaya as clean-room references, and explicitly permits
+changing prior UI rules. [SCHOOL-EXPERIENCE-REDESIGN.md](SCHOOL-EXPERIENCE-REDESIGN.md)
+is the current direction. The decisions below explain the 2026-09-23 baseline;
+its blanket ban on palette, type and shell changes is superseded by the new
+evidence and accessibility gate.
+
 Written 2026-09-23, against the running application rather than from
 imagination: the current shell, navigation and admin home were inspected in a
 browser before any of this was decided.

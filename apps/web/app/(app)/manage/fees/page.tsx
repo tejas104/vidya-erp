@@ -485,7 +485,7 @@ export default function FeesPage() {
             isEmpty={visible.length === 0}
             empty={<EmptyState title={`No invoices for ${year}.`} body="Invoices appear once they are generated for this section's class." />}
           >
-            <Table columns={ledgerColumns} rows={ledgerRows} />
+            <Table columns={ledgerColumns} rows={ledgerRows} scrollable={{ label: "Invoice ledger" }} />
           </AsyncState>
         )}
       </section>

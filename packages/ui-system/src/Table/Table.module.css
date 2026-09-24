@@ -1,8 +1,13 @@
 .wrap { overflow-x: auto; }
+.scrollable { max-height: 70vh; overflow: auto; overscroll-behavior: contain; }
+.scrollable:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.scrollable .table { width: max-content; min-width: 100%; }
+.scrollable .table th, .scrollable .table td { white-space: nowrap; }
+.scrollHint { display: none; }
 .table { width: 100%; border-collapse: collapse; font-size: var(--text-14); }
-.table thead { position: sticky; top: 0; background: var(--paper-raised); }
+.table thead { position: sticky; top: 0; z-index: 1; background: var(--paper-raised); }
 .table th {
-  height: 40px;
+  height: 44px;
   text-align: left;
   font-family: var(--font-figure);
   font-weight: 500;
@@ -14,7 +19,7 @@
   border-bottom: 1px solid var(--rule-strong);
 }
 .table td {
-  height: 40px;
+  height: 44px;
   padding: 0 var(--space-3);
   border-bottom: 1px solid var(--rule);
 }
@@ -23,7 +28,10 @@
   font: inherit;
   background: none;
   border: none;
+  min-height: 44px;
   padding: 0;
+  display: inline-flex;
+  align-items: center;
   color: inherit;
   cursor: pointer;
   text-transform: inherit;
@@ -31,3 +39,6 @@
 }
 .figure { font-family: var(--font-figure); font-variant-numeric: tabular-nums; }
 .right { text-align: right; }
+@media (max-width: 760px) {
+  .scrollHint { display: block; margin: var(--space-2) 0 0; color: var(--ink-2); font-size: var(--text-12); }
+}
