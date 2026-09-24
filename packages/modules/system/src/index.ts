@@ -63,6 +63,7 @@ export interface SystemService {
     resourceType: string,
     resourceId: string,
     limit: number,
+    beforeId?: number,
   ): Promise<AuditLogRecord[]>;
   /** Recent events for one action college-wide, newest first (e.g. a corrections queue). */
   readAuditEventsByAction(action: string, limit: number): Promise<AuditLogRecord[]>;
@@ -122,8 +123,8 @@ export function createSystemModule(deps: SystemModuleDeps): RuntimeModule<System
     service: {
       audit,
       readRecentAuditEvents: recentAuditEvents,
-      readAuditEventsForResource: (resourceType: string, resourceId: string, limit: number) =>
-        readAuditEventsForResource(deps.db, resourceType, resourceId, limit),
+      readAuditEventsForResource: (resourceType: string, resourceId: string, limit: number, beforeId?: number) =>
+        readAuditEventsForResource(deps.db, resourceType, resourceId, limit, beforeId),
       readAuditEventsByAction: auditEventsByAction,
       observeClock: (now: Date) => clockWatermark.observe(now),
     },

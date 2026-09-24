@@ -16,7 +16,7 @@ import {
   putObjectBytes,
 } from "@vidya/platform";
 import { UsernameTakenError } from "@vidya/module-identity";
-import { DOCUMENT_MAX_BYTES } from "../definition";
+import { DOCUMENT_MAX_BYTES, studentStatusSchema } from "../definition";
 import { usernameFromCode } from "../ids";
 import type { OrgService } from "../service/org-service";
 import { PeopleService, UnknownReferenceError } from "../service/people-service";
@@ -47,6 +47,18 @@ export interface PeopleHandlerDeps {
   readonly edition: AppConfig["edition"];
   /** Identity's credential issuance (#11 B4: the individual staff action). */
   readonly identity: CredentialIssuer;
+  /** System module's public audit read, keyed by immutable event id. */
+  readonly readAudit: (
+    resourceType: string, resourceId: string, limit: number, beforeId?: number,
+  ) => Promise<PeopleAuditEntry[]>;
+}
+
+export interface PeopleAuditEntry {
+  readonly id: number;
+  readonly action: string;
+  readonly actorId: string | null;
+  readonly occurredAt: Date;
+  readonly details: unknown;
 }
 
 function denied(ctx: RouteContext, reason: string): RouteResult {
@@ -477,7 +489,62 @@ export function createPeopleHandlers(deps: PeopleHandlerDeps): Record<string, Ro
       return scope.result;
     }
     const enrollment = await deps.people.latestActiveEnrollment(student.id);
-    return { status: 200, body: studentView(student, enrollment) };
+    const display = enrollment === null ? null : await deps.people.enrollmentDisplay(enrollment);
+    return { status: 200, body: {
+      ...studentView(student, enrollment),
+      enrollment: display === null ? null : {
+        sectionId: display.sectionId,
+        sectionName: display.sectionName,
+        classId: display.classId,
+        className: display.className,
+        academicYear: display.academicYear,
+      },
+    } };
+  };
+
+  const studentHistory: RouteHandler = async (ctx) => {
+    const principal = ctx.principal as Principal;
+    const { studentId } = ctx.request.params as { studentId: string };
+    const student = await deps.people.getStudent(studentId);
+    if (student === null) return notFound();
+    const position = await deps.people.studentOrgPosition(student);
+    const scope = checkScope(deps.scopeChecker, ctx, principal, "read", {
+      module: "people", resourceType: "student", org: position,
+    });
+    if (!scope.ok) return scope.result;
+
+    const rows = await deps.people.listEnrollments(studentId);
+    const enrollments = await Promise.all(rows.map((row) => deps.people.enrollmentDisplay(row)));
+    async function allEvents(resourceType: string, resourceId: string): Promise<PeopleAuditEntry[]> {
+      const events: PeopleAuditEntry[] = [];
+      let beforeId: number | undefined;
+      for (;;) {
+        const page = await deps.readAudit(resourceType, resourceId, 1000, beforeId);
+        events.push(...page);
+        if (page.length < 1000) break;
+        beforeId = page[page.length - 1]!.id;
+      }
+      return events;
+    }
+    const eventGroups = await Promise.all([
+      allEvents("student", studentId),
+      ...rows.map((row) => allEvents("enrollment", row.id)),
+    ]);
+    const rawEvents = eventGroups.flat().sort((a, b) => b.id - a.id);
+    const events = rawEvents.map((event) => ({
+      action: event.action,
+      actorId: event.actorId,
+      occurredAt: event.occurredAt.toISOString(),
+    }));
+    const statusChanges = rawEvents.flatMap((event) => {
+      if (event.action !== "people.student-updated" || typeof event.details !== "object" || event.details === null) return [];
+      const detail = event.details as { before?: { status?: unknown }; after?: { status?: unknown } };
+      const from = studentStatusSchema.safeParse(detail.before?.status);
+      const to = studentStatusSchema.safeParse(detail.after?.status);
+      if (!from.success || !to.success || from.data === to.data) return [];
+      return [{ from: from.data, to: to.data, occurredAt: event.occurredAt.toISOString(), actorId: event.actorId }];
+    });
+    return { status: 200, body: { enrollments, statusChanges, events } };
   };
 
   const studentUpdate: RouteHandler = async (ctx) => {
@@ -1189,6 +1256,7 @@ export function createPeopleHandlers(deps: PeopleHandlerDeps): Record<string, Ro
     "people.org-delete": orgDelete,
     "people.student-create": studentCreate,
     "people.student-get": studentGet,
+    "people.student-history": studentHistory,
     "people.student-update": studentUpdate,
     "people.student-link-identity": studentLinkIdentity,
     "people.student-enroll": studentEnroll,

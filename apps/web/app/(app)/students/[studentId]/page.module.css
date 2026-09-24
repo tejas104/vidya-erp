@@ -26,3 +26,68 @@
 .subjectPct {
   font-size: var(--text-20);
 }
+.tabPanel {
+  margin-top: var(--space-5);
+}
+.tabsScroller {
+  max-width: 100%;
+  overflow-x: auto;
+}
+.tabsScroller [role="tablist"] {
+  min-width: max-content;
+}
+.tabsScroller [role="tab"] {
+  white-space: nowrap;
+}
+.profileCard {
+  margin-bottom: var(--space-5);
+}
+.profileCard h2 {
+  margin-bottom: var(--space-4);
+}
+.profileGrid {
+  display: grid;
+  grid-template-columns: minmax(8rem, 1fr) minmax(12rem, 3fr);
+  gap: var(--space-3) var(--space-5);
+  margin: 0;
+}
+.profileGrid dt {
+  color: var(--ink-3);
+}
+.profileGrid dd {
+  margin: 0;
+}
+.explainer {
+  color: var(--ink-3);
+  margin-bottom: var(--space-4);
+}
+.countRow {
+  display: flex;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-5);
+}
+.panelList {
+  display: grid;
+  gap: var(--space-3);
+}
+.panelList > div {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+.panelList > div > :last-child {
+  margin-left: auto;
+}
+.historySections {
+  display: grid;
+  gap: var(--space-6);
+}
+.historySections h2 {
+  margin-bottom: var(--space-3);
+}
+@media (max-width: 640px) {
+  .profileGrid { grid-template-columns: 1fr; gap: var(--space-2); }
+  .profileGrid dd { margin-bottom: var(--space-3); }
+}

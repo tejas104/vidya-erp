@@ -118,6 +118,8 @@ export interface PeopleRepo {
   /** The student's live enrollment for a year (at most one, by partial unique). */
   activeEnrollment(studentId: string, academicYear: string): Promise<PplEnrollmentRow | null>;
   latestActiveEnrollment(studentId: string): Promise<PplEnrollmentRow | null>;
+  /** All enrollment rows, including withdrawn records, for the pupil history. */
+  listEnrollments(studentId: string): Promise<PplEnrollmentRow[]>;
   withdrawEnrollment(enrollmentId: string): Promise<void>;
   createEnrollment(input: {
     studentId: string;
@@ -370,6 +372,12 @@ export function createPeopleRepo(db: Db): PeopleRepo {
         .where(and(eq(pplEnrollments.studentId, studentId), eq(pplEnrollments.status, "enrolled")))
         .orderBy(asc(pplEnrollments.academicYear));
       return rows[rows.length - 1] ?? null;
+    },
+
+    async listEnrollments(studentId) {
+      return db.select().from(pplEnrollments)
+        .where(eq(pplEnrollments.studentId, studentId))
+        .orderBy(asc(pplEnrollments.createdAt), asc(pplEnrollments.id));
     },
 
     async withdrawEnrollment(enrollmentId) {

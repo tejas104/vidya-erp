@@ -38,6 +38,7 @@ export const sysAuditLog = pgTable(
   (table) => [
     index("sys_audit_log_occurred_at_idx").on(table.occurredAt),
     index("sys_audit_log_action_idx").on(table.action),
+    index("sys_audit_log_resource_history_idx").on(table.resourceType, table.resourceId, table.id.desc()),
   ],
 );
 

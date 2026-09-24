@@ -324,6 +324,24 @@ export interface StudentView extends StudentProfile {
   identityUserId: string | null;
   enrollment: { sectionId: string; academicYear: string } | null;
 }
+export interface StudentDetailView extends Omit<StudentView, "enrollment"> {
+  enrollment: {
+    sectionId: string; sectionName: string; classId: string | null;
+    className: string; academicYear: string;
+  } | null;
+}
+export interface StudentHistory {
+  enrollments: {
+    id: string; sectionId: string; sectionName: string; classId: string | null;
+    className: string; academicYear: string; status: string; createdAt: string; updatedAt: string;
+  }[];
+  statusChanges: { from: StudentStatus; to: StudentStatus; occurredAt: string; actorId: string | null }[];
+  events: { action: string; actorId: string | null; occurredAt: string }[];
+}
+export interface StudentAttendance {
+  sessions: { sessionId: string; sectionId: string; heldOn: string; slot: string; status: AttendanceStatus }[];
+  counts: { present: number; absent: number; late: number; excused: number };
+}
 export interface TeacherView {
   id: string; collegeId: string; staffNo: string; fullName: string;
   status: "active" | "inactive"; identityUserId: string | null;
@@ -812,6 +830,8 @@ export const api = {
     get<{ marks: StudentMarksRow[] }>(
       `/api/v1/academics/students/${encodeURIComponent(studentId)}/marks?academicYear=${year}`,
     ),
+  studentAttendance: (studentId: string, year: string) =>
+    get<StudentAttendance>(`/api/v1/academics/students/${encodeURIComponent(studentId)}/attendance?academicYear=${year}`),
   // people — org
   colleges: () => get<{ colleges: CollegeView[] }>("/api/v1/people/colleges"),
   collegeTree: (collegeId: string) => get<OrgTree>(`/api/v1/people/colleges/${encodeURIComponent(collegeId)}/tree`),
@@ -827,6 +847,10 @@ export const api = {
   deleteOrgUnit: (unitType: OrgUnitType, unitId: string) =>
     del<{ ok: true }>(`/api/v1/people/org/${unitType}/${encodeURIComponent(unitId)}`),
   // people — students
+  studentGet: (studentId: string) =>
+    get<StudentDetailView>(`/api/v1/people/students/${encodeURIComponent(studentId)}`),
+  studentHistory: (studentId: string) =>
+    get<StudentHistory>(`/api/v1/people/students/${encodeURIComponent(studentId)}/history`),
   // student documents (2.5)
   docList: (studentId: string) =>
     get<{ documents: StudentDocument[] }>(`/api/v1/people/students/${encodeURIComponent(studentId)}/documents`),

@@ -282,6 +282,10 @@ function buildStack() {
     identityGrants: identity.service.derivedGrants,
     identity: { issueCredential: identity.service.issueCredential },
     guardianAccounts: { createGuardianAccount: identity.service.createGuardianAccount },
+    readAudit: async (resourceType, resourceId, limit, beforeId) =>
+      (await system.service.readAuditEventsForResource(resourceType, resourceId, limit, beforeId)).map(
+        (row) => ({ id: row.id, action: row.action, actorId: row.actorId, occurredAt: row.occurredAt, details: row.details }),
+      ),
     storage: { client: objectStorage, bucket: config.s3.bucket },
     enqueueImport: async () => {
       /* the demo does not use bulk CSV import */

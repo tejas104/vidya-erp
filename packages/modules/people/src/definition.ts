@@ -109,6 +109,41 @@ export const studentViewSchema = z.object({
     .nullable(),
 });
 
+export const studentDetailSchema = studentViewSchema.extend({
+  enrollment: z.object({
+    sectionId: z.string(),
+    sectionName: z.string(),
+    classId: z.string().nullable(),
+    className: z.string(),
+    academicYear: z.string(),
+  }).nullable(),
+});
+
+const studentHistorySchema = z.object({
+  enrollments: z.array(z.object({
+    id: z.string(),
+    sectionId: z.string(),
+    sectionName: z.string(),
+    classId: z.string().nullable(),
+    className: z.string(),
+    academicYear: z.string(),
+    status: z.string(),
+    createdAt: z.string(),
+    updatedAt: z.string(),
+  })),
+  statusChanges: z.array(z.object({
+    from: studentStatusSchema,
+    to: studentStatusSchema,
+    occurredAt: z.string(),
+    actorId: z.string().nullable(),
+  })),
+  events: z.array(z.object({
+    action: z.string(),
+    actorId: z.string().nullable(),
+    occurredAt: z.string(),
+  })),
+});
+
 export const teacherViewSchema = z.object({
   id: z.string(),
   collegeId: z.string(),
@@ -334,7 +369,22 @@ const routes: RouteSpec[] = [
     auth: ANY_AUTHENTICATED,
     request: { params: z.object({ studentId: idSchema }) },
     responses: {
-      200: { description: "The student", schema: studentViewSchema },
+      200: { description: "The student with current class and section names", schema: studentDetailSchema },
+      403: { description: "Scope check denied", schema: problemSchema },
+      404: { description: "No such student", schema: problemSchema },
+    },
+  },
+  {
+    id: "people.student-history",
+    module: MODULE_NAME,
+    method: "GET",
+    path: "/api/v1/people/students/{studentId}/history",
+    summary: "Read a student's enrollments, status changes, and audit history",
+    tags: ["people-students"],
+    auth: ANY_AUTHENTICATED,
+    request: { params: z.object({ studentId: idSchema }) },
+    responses: {
+      200: { description: "Student history", schema: studentHistorySchema },
       403: { description: "Scope check denied", schema: problemSchema },
       404: { description: "No such student", schema: problemSchema },
     },

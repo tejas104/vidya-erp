@@ -73,7 +73,7 @@ comparative claims about the reference vendors.
 - **Missing** — not present.
 - **Deferred** — deliberately not built yet, with the reason recorded.
 
-The 2026-09-24 inventory contains 177 RouteSpecs and 16 owned table prefixes
+The 2026-09-24 N1 inventory contains 178 RouteSpecs and 16 owned table prefixes
 (`sys_ idn_ ppl_ acd_ anl_ rpt_ ptl_ ttb_ cwk_ syl_ fee_ ntc_ res_ exm_ lvs_
 sca_`). Feature states below must be rechecked against code before release;
 they are not established by a plan document.

@@ -128,6 +128,10 @@ export function buildStack(edition: "college" | "school" = "college") {
     identityGrants: identity.service.derivedGrants,
     identity: { issueCredential: identity.service.issueCredential },
     guardianAccounts: { createGuardianAccount: identity.service.createGuardianAccount },
+    readAudit: async (resourceType, resourceId, limit, beforeId) =>
+      (await system.service.readAuditEventsForResource(resourceType, resourceId, limit, beforeId)).map(
+        (row) => ({ id: row.id, action: row.action, actorId: row.actorId, occurredAt: row.occurredAt, details: row.details }),
+      ),
     storage: { client: objectStorage, bucket: process.env.S3_BUCKET ?? "vidya-int" },
     enqueueImport: async (payload) => {
       enqueuedImports.push(payload);

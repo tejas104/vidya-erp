@@ -130,6 +130,26 @@ export class PeopleService {
     return this.deps.repo.latestActiveEnrollment(studentId);
   }
 
+  listEnrollments(studentId: string): Promise<PplEnrollmentRow[]> {
+    return this.deps.repo.listEnrollments(studentId);
+  }
+
+  async enrollmentDisplay(enrollment: PplEnrollmentRow) {
+    const section = await this.deps.orgRepo.getSection(enrollment.sectionId);
+    const klass = section === null ? null : await this.deps.orgRepo.getClass(section.classId);
+    return {
+      id: enrollment.id,
+      sectionId: enrollment.sectionId,
+      sectionName: section?.name ?? "Unknown section",
+      classId: section?.classId ?? null,
+      className: klass?.name ?? "Unknown class",
+      academicYear: enrollment.academicYear,
+      status: enrollment.status,
+      createdAt: enrollment.createdAt.toISOString(),
+      updatedAt: enrollment.updatedAt.toISOString(),
+    };
+  }
+
   async createTeacher(input: {
     collegeId: string;
     staffNo: string;

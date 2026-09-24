@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, lt, sql } from "drizzle-orm";
 import { issueDurableAuditReceipt, type AuditEvent, type Db, type DurableAuditReceipt, type TransactionalAuditLogger } from "@vidya/platform";
 import { sysAuditLog, type SysAuditLogRow } from "../db/schema";
 
@@ -92,14 +92,22 @@ export async function readAuditEventsForResource(
   resourceType: string,
   resourceId: string,
   limit: number,
+  beforeId?: number,
 ): Promise<AuditLogRecord[]> {
   if (!Number.isInteger(limit) || limit < 1 || limit > 1000) {
     throw new RangeError("limit must be an integer between 1 and 1000");
   }
+  if (beforeId !== undefined && (!Number.isSafeInteger(beforeId) || beforeId < 1)) {
+    throw new RangeError("beforeId must be a positive safe integer");
+  }
   return db
     .select()
     .from(sysAuditLog)
-    .where(and(eq(sysAuditLog.resourceType, resourceType), eq(sysAuditLog.resourceId, resourceId)))
+    .where(and(
+      eq(sysAuditLog.resourceType, resourceType),
+      eq(sysAuditLog.resourceId, resourceId),
+      beforeId === undefined ? undefined : lt(sysAuditLog.id, beforeId),
+    ))
     .orderBy(desc(sysAuditLog.id))
     .limit(limit);
 }

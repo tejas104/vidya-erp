@@ -167,6 +167,10 @@ export function StudentSlideOver({
             <div className={styles.meta}>{student.rollNo} · {student.section}</div>
           </div>
 
+          <a className="linklike" href={`/students/${encodeURIComponent(student.studentId)}`}>
+            Open full student record
+          </a>
+
           <Tabs tabs={TABS} active={tab} onChange={setTab} />
 
           <div className={styles.panel} role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`} tabIndex={0}>

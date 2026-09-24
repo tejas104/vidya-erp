@@ -483,6 +483,12 @@ export class InMemoryPeopleRepo implements PeopleRepo {
     return active[active.length - 1] ?? null;
   }
 
+  async listEnrollments(studentId: string): Promise<PplEnrollmentRow[]> {
+    return [...this.enrollments.values()]
+      .filter((enrollment) => enrollment.studentId === studentId)
+      .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id));
+  }
+
   async withdrawEnrollment(enrollmentId: string): Promise<void> {
     const enrollment = this.enrollments.get(enrollmentId);
     if (enrollment !== undefined) {

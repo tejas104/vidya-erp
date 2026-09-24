@@ -1,0 +1,1 @@
+DROP INDEX sys_audit_log_resource_history_idx;

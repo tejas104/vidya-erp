@@ -33,6 +33,8 @@ test("administrator invites a parent, who activates, signs in and sees only thei
   // 1. The administrator invites the parent from the pupil's record.
   await browserLogin(page, adminCreds);
   await page.goto(`/students/${studentId}`);
+  await expect(page.getByRole("heading", { name: "Asha Family" })).toBeVisible();
+  await page.getByRole("tab", { name: "Family" }).click();
   const guardians = page.getByRole("region", { name: "Guardians" });
   await expect(guardians.getByText("No guardians linked.")).toBeVisible();
   await guardians.getByLabel("Guardian's name").fill("Meera Family");
@@ -88,6 +90,7 @@ test("administrator invites a parent, who activates, signs in and sees only thei
 
   // 6. And the administrator now sees the parent as an active guardian.
   await page.reload();
+  await page.getByRole("tab", { name: "Family" }).click();
   await expect(guardians.getByText("Meera Family")).toBeVisible();
   await expect(guardians.getByText("Active")).toBeVisible();
 

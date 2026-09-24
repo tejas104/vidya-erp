@@ -7,7 +7,7 @@ changes — this is a living record, not a plan written once.
 - Worktree: `D:\ATLAS\.worktrees\claude-school-product`
 - Base: `a9d5fc16f075b86474050fbefd4f0860ac21f006` (gate-04 reviewed checkpoint)
 - Integration commit: `0ddf80cc3ab8ff1ecc1b663fd0e6d152badeb161`
-- Last revised: 2026-09-24 (N0 guardian review completed; see [ASTRA-HANDOFF.md](ASTRA-HANDOFF.md))
+- Last revised: 2026-09-24 (N0 guardian review and N1 Student 360 checkpoint)
 
 Companion documents: [COMPETITIVE-PARITY-MATRIX.md](COMPETITIVE-PARITY-MATRIX.md),
 `DELIVERY-AND-REVIEW-REQUIREMENTS.md`, `VIDYA-SCHOOL-FIRST-SAAS-PLAN.md`.
@@ -302,7 +302,7 @@ reason; add slices freely when evidence demands it.
 | # | Slice | Why now | Owning module(s) | Depends on |
 |---|---|---|---|---|
 | **N0** | Independent adversarial review of `c530ba8..c199589` — **DONE** | Concurrency, scope, and account-kind fixes below; full gates green. | all touched | — |
-| **N1** | Student 360 v1 | Closes the open "record depends on analytics" risk; every screen links here; the family tab already exists. | web; `people` (new history read) | N0 |
+| **N1** | Student 360 v1 — **DONE** | People-owned profile and history, independently loaded tabs, and six school browser journeys pass. | web; `people` and `system` audit index | N0 |
 | **N2** | Report-card desk for class teachers | Open risk: the audience that issues report cards cannot open the screen. | web; `people` directory | — |
 | **N3** | Parent views: report cards, fees, notices | Categories are enforced but unreadable; parents need exactly these three next. Requires a publish-to-parents decision for report cards. | `portal`, `reporting`, `fees`, `notices` | N0 |
 | **N4** | Bulk marks import (1.7) | Highest-frequency pain for staff after attendance. | `school-academics`, worker | — |
@@ -343,6 +343,43 @@ N0 verification on the corrected tree: `pnpm typecheck`, `pnpm lint`,
 143 tests. The focused guardian integration suite passed 18/18 on real
 PostgreSQL. No browser journey was added for this backend/security review;
 N1 adds the new Student 360 journey.
+
+### N1 Student 360 v1 — implementation and verification
+
+The profile now loads from `people.student-get`, including class and section
+names, independently of analytics. Summary, Academics, Attendance, Finance,
+Documents, Family and History each load their own source with local loading,
+error, retry and denial states. The selected tab stays in `?tab=`. The new
+`people.student-history` route checks read scope at the pupil's current org
+position, returns every enrollment row (including withdrawn rows), derives
+status changes from student audit events, and reads student and enrollment
+events through the system module's public port. The response exposes event
+action, actor and time, but never raw audit details. Keyset paging and the new
+`sys_audit_log_resource_history_idx` support resource history as audit volume
+grows; the index has a paired down migration and an up/down/up integration gate.
+Class-roster drawers and the accountant directory now link to the record;
+search and at-risk links already did. School student help is included.
+
+Verification: `pnpm typecheck`, `pnpm lint`, `pnpm openapi:check`, all three
+repository check scripts, and `pnpm build` passed. `pnpm test` passed 98 files /
+1,199 tests; `pnpm test:ui` passed 69 files / 308 tests; the full disposable
+`pnpm test:integration` passed 21 files / 145 tests, including the resource
+cursor audit read and migration up/down/up check. The labelled disposable
+school browser stack ran **6/6** journeys, including the new Student 360
+journey, and removed only its own resources. At 390 px, the Student 360 page
+had no document overflow, a settled sidebar outside the viewport, and the
+selected deep-linked tab visible in the horizontal tab strip. The
+first browser attempt had a strict locator matching both the header and
+History row; the corrected selector and per-tab content waits passed.
+
+Known boundary: the Academics and Attendance source routes are row-filtered and
+may answer 200 with an empty array when no rows are visible. The accountant
+screen displays “Not in your scope” based on the account's role, but the API
+does not itself distinguish “no data” from “no scoped data” in that case.
+This needs an explicit response-state contract before clients interpret an
+empty academic read as proof that no record exists. The Documents tab provides
+read/download; authorized upload and removal remain on the student management
+screen. These do not alter the server's existing permissions.
 
 Cross-cutting improvements, done alongside slices rather than as a phase:
 
@@ -417,7 +454,7 @@ API. All `DEFERRED` until the school edition is sellable.
 | Risk | Severity | State |
 |---|---|---|
 | **Guardian identity** — authentication shape, revocation semantics and the identity/people boundary. | High | Closed by ADR-0027 and slices 1.3/1.4. |
-| **Student record depends on analytics scope** — `/students/[id]` renders "Outside your scope" for an administrator because it loads the analytics performance read. | Medium | Open. Student 360 (UI direction slice 2) should load the record from people, with analytics as one panel. |
+| **Student record depends on analytics scope** — `/students/[id]` rendered "Outside your scope" for an administrator because it loaded the analytics performance read. | Medium | Closed in N1. The profile and header load from `people`; analytics is isolated to its own tab. The admin denial regression is covered by a UI test. |
 | **No live browser evidence has ever been executed** for school journeys. | High | Closed 2026-09-23: 5 journeys executed and passing. The runner's spec list is hardcoded — see N-X1. |
 | **No SaaS control plane exists.** The product is not sellable as SaaS until Phase 3. | High | Open, scheduled Phase 3. |
 | **Integration suite shares Redis with the owner's running stack**, causing a false failure in the BullMQ test. | Low | Diagnosed; mitigated with a dedicated Redis db index. Recorded above. |

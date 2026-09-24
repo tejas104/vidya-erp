@@ -107,6 +107,7 @@ export default function DirectoryPage() {
     guardian: row.guardianName ?? "—",
     actions: (
       <span className={styles.rowActions}>
+        <a className="linklike" href={`/students/${encodeURIComponent(row.id)}?tab=finance`}>Open record</a>
         <Button variant="ghost" onClick={() => setPeeking(row)}>View</Button>
         <button type="button" className="linklike" onClick={() => setViewing(row)}>
           View documents

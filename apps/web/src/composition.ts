@@ -280,6 +280,10 @@ function buildWebRuntime(): WebRuntime {
     edition: config.edition,
     guardianAccounts: { createGuardianAccount: identity.service.createGuardianAccount },
     guardianSelfAttestedLimit: config.guardians.selfAttestedLimit,
+    readAudit: async (resourceType, resourceId, limit, beforeId) =>
+      (await system.service.readAuditEventsForResource(resourceType, resourceId, limit, beforeId)).map(
+        (row) => ({ id: row.id, action: row.action, actorId: row.actorId, occurredAt: row.occurredAt, details: row.details }),
+      ),
   });
   orgDirectoryRef.current = people.service.orgDirectory;
   studentCountRef.current = people.service.countActiveStudents;

@@ -89,6 +89,9 @@ const EXPECTATIONS: Record<string, MigrationExpectation> = {
       { table: "sys_audit_log", constraint: "sys_audit_log_actor_type_check", addedText: "guardian" },
     ],
   },
+  "system/0005_audit_resource_history": {
+    indexes: ["sys_audit_log_resource_history_idx"],
+  },
 
   "identity/0000_identity": {
     tables: ["idn_users", "idn_user_roles", "idn_scope_grants", "idn_reset_tokens"],

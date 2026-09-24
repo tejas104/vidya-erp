@@ -4339,7 +4339,7 @@
         ],
         "responses": {
           "200": {
-            "description": "The student",
+            "description": "The student with current class and section names",
             "content": {
               "application/json": {
                 "schema": {
@@ -4396,12 +4396,25 @@
                         "sectionId": {
                           "type": "string"
                         },
+                        "sectionName": {
+                          "type": "string"
+                        },
+                        "classId": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "className": {
+                          "type": "string"
+                        },
                         "academicYear": {
                           "type": "string"
                         }
                       },
                       "required": [
                         "sectionId",
+                        "sectionName",
+                        "classId",
+                        "className",
                         "academicYear"
                       ]
                     }
@@ -4653,6 +4666,229 @@
           },
           "403": {
             "description": "Access denied by the role/scope policy (problem+json)"
+          },
+          "404": {
+            "description": "No such student",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/people/students/{studentId}/history": {
+      "get": {
+        "summary": "Read a student's enrollments, status changes, and audit history",
+        "description": "**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "people-students"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "studentId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Student history",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "enrollments": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "sectionId": {
+                            "type": "string"
+                          },
+                          "sectionName": {
+                            "type": "string"
+                          },
+                          "classId": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "className": {
+                            "type": "string"
+                          },
+                          "academicYear": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string"
+                          },
+                          "createdAt": {
+                            "type": "string"
+                          },
+                          "updatedAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "sectionId",
+                          "sectionName",
+                          "classId",
+                          "className",
+                          "academicYear",
+                          "status",
+                          "createdAt",
+                          "updatedAt"
+                        ]
+                      }
+                    },
+                    "statusChanges": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "from": {
+                            "type": "string",
+                            "enum": [
+                              "active",
+                              "inactive",
+                              "backlog",
+                              "year_back",
+                              "transferred",
+                              "dropped",
+                              "alumni"
+                            ]
+                          },
+                          "to": {
+                            "type": "string",
+                            "enum": [
+                              "active",
+                              "inactive",
+                              "backlog",
+                              "year_back",
+                              "transferred",
+                              "dropped",
+                              "alumni"
+                            ]
+                          },
+                          "occurredAt": {
+                            "type": "string"
+                          },
+                          "actorId": {
+                            "type": "string",
+                            "nullable": true
+                          }
+                        },
+                        "required": [
+                          "from",
+                          "to",
+                          "occurredAt",
+                          "actorId"
+                        ]
+                      }
+                    },
+                    "events": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "action": {
+                            "type": "string"
+                          },
+                          "actorId": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "occurredAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "action",
+                          "actorId",
+                          "occurredAt"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "enrollments",
+                    "statusChanges",
+                    "events"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Scope check denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
           },
           "404": {
             "description": "No such student",

@@ -165,6 +165,10 @@ async function main(): Promise<void> {
     identityGrants: identity.service.derivedGrants,
     identity: { issueCredential: identity.service.issueCredential },
     guardianAccounts: { createGuardianAccount: identity.service.createGuardianAccount },
+    readAudit: async (resourceType, resourceId, limit, beforeId) =>
+      (await system.service.readAuditEventsForResource(resourceType, resourceId, limit, beforeId)).map(
+        (row) => ({ id: row.id, action: row.action, actorId: row.actorId, occurredAt: row.occurredAt, details: row.details }),
+      ),
     storage: { client: objectStorage, bucket: config.s3.bucket },
     enqueueImport: async (payload) => {
       await peopleQueue.queue.add(IMPORT_JOB_NAME, payload);

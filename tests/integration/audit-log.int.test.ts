@@ -56,6 +56,25 @@ describe("audit log seam against real Postgres", () => {
     expect(found?.occurredAt).toBeInstanceOf(Date);
   });
 
+  it("pages one resource by event id without repeating newer rows", async () => {
+    const marker = randomUUID();
+    for (const sequence of [1, 2, 3]) {
+      await system.service.audit.record({
+        module: "system", action: "system.history-check", actorType: "service",
+        actorId: "integration-suite", resourceType: "audit-history", resourceId: marker,
+        requestId: marker,
+        details: { sequence },
+      });
+    }
+    const first = await system.service.readAuditEventsForResource("audit-history", marker, 2);
+    expect(first).toHaveLength(2);
+    expect(first[0]!.id).toBeGreaterThan(first[1]!.id);
+    const second = await system.service.readAuditEventsForResource("audit-history", marker, 2, first[1]!.id);
+    expect(second).toHaveLength(1);
+    expect(second[0]!.id).toBeLessThan(first[1]!.id);
+    expect([...first, ...second].map((event) => (event.details as { sequence: number }).sequence)).toEqual([3, 2, 1]);
+  });
+
   it("rejects UPDATE — the table is append-only at the database level", async () => {
     await expect(
       pool.query("UPDATE sys_audit_log SET action = 'tampered' WHERE id IN (SELECT id FROM sys_audit_log LIMIT 1)"),

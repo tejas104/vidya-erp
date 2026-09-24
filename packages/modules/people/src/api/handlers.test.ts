@@ -75,6 +75,7 @@ async function makeHarness(opts: { identity?: CredentialIssuer; edition?: "colle
     },
     edition: opts.edition ?? "college",
     identity,
+    readAudit: async () => [],
   };
   return {
     handlers: createPeopleHandlers(deps),

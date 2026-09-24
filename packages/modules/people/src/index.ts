@@ -39,7 +39,7 @@ import { OrgService } from "./service/org-service";
 import { PeopleService } from "./service/people-service";
 import { AssignmentsService } from "./service/assignments-service";
 import { ImportService, type CredentialIssuer } from "./service/import-service";
-import { createPeopleHandlers } from "./api/handlers";
+import { createPeopleHandlers, type PeopleAuditEntry } from "./api/handlers";
 import { createImportProcessor } from "./jobs/import-job";
 import { createGuardiansRepo } from "./guardians/repo";
 import { GuardianService, type GuardianAccountCreator, type StudentBrief } from "./guardians/service";
@@ -83,6 +83,10 @@ export interface PeopleModuleDeps {
   readonly guardianAccounts: GuardianAccountCreator;
   /** ADR-0027 Decision 5 — see GUARDIAN_SELF_ATTESTED_LIMIT. Defaults to 2. */
   readonly guardianSelfAttestedLimit?: number;
+  /** System-owned audit history for the student record; no direct sys_ reads. */
+  readonly readAudit: (
+    resourceType: string, resourceId: string, limit: number, beforeId?: number,
+  ) => Promise<PeopleAuditEntry[]>;
 }
 
 /**
@@ -258,6 +262,7 @@ export function createPeopleModule(deps: PeopleModuleDeps): RuntimeModule<People
       enqueueImport: deps.enqueueImport,
       edition,
       identity: deps.identity,
+      readAudit: deps.readAudit,
     }),
     },
     jobProcessors: {
