@@ -176,7 +176,24 @@ export default function PortalPage({ view = "overview" }: { view?: PortalView })
   const { me, attendance, marks, timetable, today, assignments, materials, fees, results, exams, syllabus } = load;
   const show = (section: PortalView) => edition !== "school" || view === section;
   const todayIso = new Date().toISOString().slice(0, 10);
+  const shortDate = (iso: string) => new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short", timeZone: "UTC" }).format(new Date(`${iso}T12:00:00Z`));
   const totalDues = fees === null ? 0 : fees.reduce((sum, invoice) => sum + invoice.duesPaise, 0);
+  const nextSteps = [
+    ...assignments.filter((assignment) => !assignment.mySubmission).map((assignment) => ({
+      key: `assignment-${assignment.id}`, date: assignment.dueOn, label: assignment.title,
+      detail: `${assignment.subjectName} assignment`, href: "/portal/assignments", action: "Open assignment",
+    })),
+    ...(fees ?? []).filter((invoice) => invoice.duesPaise > 0).map((invoice) => ({
+      key: `fee-${invoice.id}`, date: invoice.dueOn, label: `${invoice.headName} payment`,
+      detail: `${formatPaise(invoice.duesPaise)} due`, href: "/portal/fees", action: "View fee",
+    })),
+    ...(exams ?? []).filter((exam) => exam.onDate >= todayIso).map((exam) => ({
+      key: `exam-${exam.id}`, date: exam.onDate, label: `${exam.subjectName} exam`,
+      detail: exam.seriesName, href: "/portal/exams", action: "View exam",
+    })),
+  ].sort((a, b) => a.date.localeCompare(b.date))
+    .filter((item, index, items) => items.findIndex((candidate) => candidate.href === item.href) === index)
+    .slice(0, 3);
   const gridCell = (day: number, periodNo: number) =>
     timetable.entries.find((entry) => entry.dayOfWeek === day && entry.periodNo === periodNo);
   const sessionColumns: TableColumn<SessionRow>[] = [
@@ -201,7 +218,7 @@ export default function PortalPage({ view = "overview" }: { view?: PortalView })
         help={<HelpButton slug="portal" />}
       />
 
-      {show("overview") ? <OnboardingChecklist role="student" studentEdition={edition} /> : null}
+      {show("overview") && edition !== "school" ? <OnboardingChecklist role="student" studentEdition={edition} /> : null}
 
       {show("overview") ? <section className="stats" aria-label="My figures" style={{ marginBottom: "var(--space-5)" }}>
         <StatTile
@@ -216,6 +233,16 @@ export default function PortalPage({ view = "overview" }: { view?: PortalView })
           muted={marks.overallPct === null}
         /> : null}
         {Object.values(attendance.counts).some((count) => count > 0) ? <StatTile value={String(attendance.counts.absent)} label="Days absent" /> : null}
+      </section> : null}
+
+      {edition === "school" && view === "overview" ? <section className={styles.nextSteps} aria-label="Your next steps">
+        <div className="section-head"><h2>Coming up</h2><span className="stat-sub">Nearest deadlines</span></div>
+        {nextSteps.length === 0 ? <p className={styles.nextStepsEmpty}>No upcoming work in the available records. Check your notices for school updates.</p> :
+          <ol>{nextSteps.map((item) => <li key={item.key}>
+            <time className={styles.stepDate} dateTime={item.date}>{item.date < todayIso ? `Overdue · ${shortDate(item.date)}` : shortDate(item.date)}</time>
+            <span className={styles.stepText}><strong>{item.label}</strong><small>{item.detail}</small></span>
+            <a href={item.href} aria-label={`${item.action}: ${item.label}`}>{item.action} <span aria-hidden="true">→</span></a>
+          </li>)}</ol>}
       </section> : null}
 
       {edition === "school" && view === "overview" ? <nav className={styles.quickGrid} aria-label="Explore your school workspace">

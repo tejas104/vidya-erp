@@ -48,6 +48,22 @@
   gap: var(--space-3);
   margin-bottom: var(--space-5);
 }
+.nextSteps { margin: 0 0 var(--space-5); }
+.nextSteps ol { padding: 0; margin: 0; list-style: none; border: 1px solid var(--rule); border-radius: var(--radius); background: var(--surface); overflow: hidden; }
+.nextSteps li { display: grid; grid-template-columns: 8rem minmax(0, 1fr) auto; gap: var(--space-4); align-items: center; padding: var(--space-3) var(--space-4); }
+.nextSteps li + li { border-top: 1px solid var(--rule); }
+.stepDate { color: var(--brand); font-family: var(--font-mono); font-size: var(--text-12); font-weight: 700; }
+.stepText { display: grid; gap: var(--space-1); min-width: 0; }
+.stepText strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stepText small { color: var(--ink-2); }
+.nextSteps a { white-space: nowrap; color: var(--brand); font-weight: 700; text-decoration: none; }
+.nextSteps a:hover { text-decoration: underline; }
+.nextSteps a:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.nextStepsEmpty { padding: var(--space-4); margin: 0; border: 1px solid var(--rule); border-radius: var(--radius); color: var(--ink-2); }
+@media (max-width: 640px) {
+  .nextSteps li { grid-template-columns: minmax(0, 1fr); gap: var(--space-1); }
+  .nextSteps a { margin-top: var(--space-1); }
+}
 .quickGrid a {
   display: grid;
   gap: var(--space-2);

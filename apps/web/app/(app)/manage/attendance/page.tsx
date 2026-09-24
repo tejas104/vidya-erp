@@ -198,7 +198,7 @@ export default function AttendancePage() {
                 <StatusBadge status="neutral">{existingSession?.counts.excused ?? excusedN} excused</StatusBadge>
                 <span className={styles.summaryNote}>{rosterList.length} pupils in this section</span>
               </div>
-              <div className={styles.searchRow}><Input id="att-search" label="Find a pupil" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Name or admission number" /><span>{visibleRoster.length} shown</span></div>
+              <div className={styles.searchRow}><Input id="att-search" label="Find a pupil" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Name or admission number" /><span>{visibleRoster.length} of {rosterList.length} shown · Search only filters the list</span></div>
               {existingSession && !savedSession ? <p className={styles.savedMessage}>{savedSessionError ? "Couldn't load pupil statuses for this saved register. Reload the page to retry." : "Loading saved pupil statuses…"}</p> : visibleRoster.length === 0 ? <EmptyState title="No pupils match" body="Clear the search to see the full register." /> :
               <ul className={styles.rows}>
                 {visibleRoster.map((s) => {
@@ -211,7 +211,7 @@ export default function AttendancePage() {
                     <span className={styles.avatar} style={{ background: av.gradient, color: av.ink }} aria-hidden="true">{initials(s.fullName)}</span>
                     <span className={styles.person}><strong>{s.fullName}</strong><small>{s.admissionNo}</small></span>
                     {existingSession ? <span className={styles.savedStatus} data-status={status}>{status}</span> : <div className={styles.controls}>
-                      <button type="button" className={styles.statusButton} data-status={cur} aria-pressed={pressed} aria-label={`${s.fullName}, roll ${s.admissionNo} — ${cur}`} onClick={() => setMarks((current) => ({ ...current, [s.id]: toggleAbsent(current[s.id] ?? "present") }))}>
+                      <button type="button" className={styles.statusButton} data-status={cur} aria-pressed={pressed} aria-label={`${s.fullName}, roll ${s.admissionNo} — ${cur}; mark ${cur === "present" ? "absent" : "present"}`} title={`Mark ${s.fullName} ${cur === "present" ? "absent" : "present"}`} onClick={() => setMarks((current) => ({ ...current, [s.id]: toggleAbsent(current[s.id] ?? "present") }))}>
                         {cur === "absent" ? <Icon name="close" size={14} /> : <Icon name="check" size={14} />}{cur}
                       </button>
                       <select className={styles.secondary} aria-label={`Mark ${s.fullName} late or excused`} value={cur === "late" || cur === "excused" ? cur : ""} onChange={(event) => setMarks((current) => ({ ...current, [s.id]: fromSecondary(event.target.value) }))}>

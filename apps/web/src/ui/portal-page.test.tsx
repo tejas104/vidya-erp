@@ -98,8 +98,17 @@ beforeEach(() => {
 
 describe("/portal (student self-view)", () => {
   it("keeps the school overview brief and opens focused student pages", async () => {
+    (api.cwkMyAssignments as ReturnType<typeof vi.fn>).mockResolvedValue({ assignments: [
+      { id: "as_1", title: "Chapter review", subjectName: "Mathematics", dueOn: "2099-10-01", mySubmission: null },
+      { id: "as_2", title: "Lab notes", subjectName: "Science", dueOn: "2099-10-03", mySubmission: null },
+    ] });
     const view = render(<ToastProvider><HelpEditionProvider edition="school"><PortalPage /></HelpEditionProvider></ToastProvider>);
     expect(await screen.findByRole("navigation", { name: "Explore your school workspace" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Coming up" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "View fee: Tuition payment" })).toHaveAttribute("href", "/portal/fees");
+    expect(screen.getAllByRole("link", { name: /Open assignment:/ })).toHaveLength(1);
+    expect(screen.getByRole("link", { name: "View exam: Data Structures exam" })).toHaveAttribute("href", "/portal/exams");
+    expect(screen.queryByRole("heading", { name: "Get started" })).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Timetable Classes and teachers/ })).toHaveAttribute("href", "/portal/schedule");
     expect(screen.queryByRole("heading", { name: "My exams" })).not.toBeInTheDocument();
     view.rerender(<ToastProvider><HelpEditionProvider edition="school"><PortalPage view="exams" /></HelpEditionProvider></ToastProvider>);

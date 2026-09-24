@@ -32,15 +32,19 @@ restarts them without reseeding. The browser verification writes screenshots to
 | Class teacher | `school-demo-class-teacher` | `school-demo-class-pass-2026` |
 | Principal | `school-demo-principal` | `school-demo-principal-pass-2026` |
 | Student | `school-demo-student` | `school-demo-student-pass-2026` |
+| Standard 9 student | `school-demo-student-9a` | `school-demo-student-9a-pass-2026` |
 | Family | `school-demo-family` | `school-demo-family-pass-2026` |
 
 All records, names, passwords, payment references, and contact addresses are
 fictional. The fixture covers Standard 8 A and B and Standard 9 A with 40 pupils,
-two subjects, a six day timetable, four attendance dates with present, absent,
-late and excused entries, syllabus coverage, several assignments and a study file,
-closed Term 1 marks, a published report card PDF, future exams, a class notice,
-two event notices, a pending staff leave request, and generated invoices with a partial payment. Term 2 remains open for a live
-marks demonstration.
+four subjects, section timetables, dated registers with present, absent, late
+and excused entries, syllabus coverage, assignments and a study file. It has
+closed Term 1 marks and a published report card for Asha, plus open Term 2
+assessments with recorded marks across both standards for teacher review.
+The open term deliberately withholds those newer marks from pupils until the
+school closes it. There are future exams for both standards, event notices,
+a pending staff leave request, and 40 generated invoices spanning unpaid,
+partially paid, fully paid, and scholarship adjusted examples.
 
 The role dashboards use scoped attendance rollups rebuilt by the seed. Term
 marks and report cards open their school records directly; the older generic
@@ -58,9 +62,10 @@ analytics marks rollup is not presented as a school grade figure.
 4. Sign in as subject teacher: inspect the teaching dashboard, My timetable,
    subject-scoped class register, Attendance, Syllabus, Coursework, and Marks.
    On a phone width, switch timetable days.
-5. Sign in as student: use the My day, Learning, and My records navigation
+5. Sign in as either Standard 8 or Standard 9 student: use the My day, Learning, and My records navigation
    sections to open the timetable, assignments, marks, exams, syllabus,
-   attendance, fees, and notices as separate pages.
+   attendance, fees, and notices as separate pages. The Standard 9 marks page
+   shows the intentional unpublished-term state.
 6. Sign in as family: inspect the child, published report card PDF, fees,
    attendance, and school notice. The family account must receive 403 from
    staff APIs.
@@ -69,7 +74,7 @@ The demo runs in school edition. An amber no-licence notice is expected because
 hosted licensing is being developed separately. This localhost fixture does
 not establish internet deployment readiness or real school acceptance.
 
-The browser check signs into all six roles from the same login page at desktop and 390 px width,
+The browser check signs into the staff, family, and two pupil accounts from the same login page at desktop and 390 px width,
 checks the teacher directory and school Results, reads a saved attendance register,
 changes an unsaved pupil status, opens every student navigation page and the mobile menu,
 downloads the sample study PDF, switches mobile timetable days, reads the family PDF, confirms the family

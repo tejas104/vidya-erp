@@ -12,6 +12,7 @@ const accounts = [
   { role: "teacher", username: "school-demo-teacher", password: "school-demo-teacher-pass-2026", landing: "/dashboard", heading: "Your teaching day." },
   { role: "family", username: "school-demo-family", password: "school-demo-family-pass-2026", landing: "/family", heading: "Asha Sharma" },
   { role: "student", username: "school-demo-student", password: "school-demo-student-pass-2026", landing: "/portal", heading: "Hello, Asha." },
+  { role: "student-9a", username: "school-demo-student-9a", password: "school-demo-student-9a-pass-2026", landing: "/portal", heading: "Hello, Aditi." },
 ] as const;
 
 async function login(page: Page, username: string, password: string): Promise<void> {
@@ -165,7 +166,7 @@ async function main(): Promise<void> {
           if (staff.status() !== 403) throw new Error(`Family staff access returned ${staff.status()}, expected 403`);
           const teacherDirectory = await page.request.get("/api/v1/people/teachers?collegeId=col_unknown");
           if (teacherDirectory.status() !== 403) throw new Error(`Family teacher directory returned ${teacherDirectory.status()}, expected 403`);
-        } else {
+        } else if (account.role === "student") {
           await page.getByRole("navigation", { name: "Explore your school workspace" }).waitFor();
           await page.getByRole("link", { name: "Timetable", exact: true }).waitFor();
           await page.screenshot({ path: join(output, "student-overview.png"), fullPage: true });
@@ -194,6 +195,27 @@ async function main(): Promise<void> {
             }
             await page.screenshot({ path: join(output, `student-${route}.png`), fullPage: true });
           }
+        } else {
+          await page.getByRole("heading", { name: "Coming up" }).waitFor();
+          await page.getByText("Explore cells around us").waitFor();
+          await page.screenshot({ path: join(output, "student-9a-overview.png"), fullPage: true });
+          for (const [route, heading, evidence] of [
+            ["schedule", "My timetable", "Mathematics 9"],
+            ["assignments", "Assignments & materials", "Explore cells around us"],
+            ["exams", "My exams", "Mathematics 9"],
+            ["syllabus", "What we're learning", "Matter and living systems"],
+            ["attendance", "My attendance", "Recent attendance"],
+            ["fees", "My fees", "Tuition"],
+            ["notices", "School notices", "Term 2 family meeting"],
+          ] as const) {
+            await page.goto(`/portal/${route}`);
+            await page.getByRole("heading", { name: heading, level: 1 }).waitFor();
+            await page.getByText(evidence).first().waitFor();
+            await page.screenshot({ path: join(output, `student-9a-${route}.png`), fullPage: true });
+          }
+          await page.goto("/portal/marks");
+          await page.getByRole("heading", { name: "My marks", level: 1 }).waitFor();
+          await page.screenshot({ path: join(output, "student-9a-marks.png"), fullPage: true });
         }
         await page.setViewportSize({ width: 390, height: 844 });
         await page.reload();
@@ -213,10 +235,15 @@ async function main(): Promise<void> {
         }
         if (account.role === "family") await page.getByText("Welcome to Standard 8").waitFor();
         if (account.role === "student") await page.getByText("Welcome to Standard 8").waitFor();
+        if (account.role === "student-9a") await page.getByRole("heading", { name: "My marks", level: 1 }).waitFor();
         const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
         if (overflow) throw new Error(`${account.role} landing overflows a 390px viewport`);
         await page.screenshot({ path: join(output, `${account.role}-mobile.png`), fullPage: true });
-        if (account.role === "student") {
+        if (account.role === "student" || account.role === "student-9a") {
+          await page.goto("/portal");
+          await page.getByRole("heading", { name: "Coming up" }).waitFor();
+          if (await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)) throw new Error(`${account.role} overview overflows a 390px viewport`);
+          await page.screenshot({ path: join(output, `${account.role}-overview-mobile.png`), fullPage: true });
           await page.getByRole("button", { name: "Open menu" }).click();
           await page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: "Timetable" }).waitFor();
           await page.waitForFunction(() => getComputedStyle(document.querySelector(".shell-side")!).transform === "none");
