@@ -7,7 +7,7 @@ changes — this is a living record, not a plan written once.
 - Worktree: `D:\ATLAS\.worktrees\claude-school-product`
 - Base: `a9d5fc16f075b86474050fbefd4f0860ac21f006` (gate-04 reviewed checkpoint)
 - Integration commit: `0ddf80cc3ab8ff1ecc1b663fd0e6d152badeb161`
-- Last revised: 2026-09-23
+- Last revised: 2026-09-24 (handed to Codex Astra — see [ASTRA-HANDOFF.md](ASTRA-HANDOFF.md))
 
 Companion documents: [COMPETITIVE-PARITY-MATRIX.md](COMPETITIVE-PARITY-MATRIX.md),
 `DELIVERY-AND-REVIEW-REQUIREMENTS.md`, `VIDYA-SCHOOL-FIRST-SAAS-PLAN.md`.
@@ -106,7 +106,7 @@ parent can be given access safely.
 | # | Slice | Status | Blocker / note |
 |---|---|---|---|
 | 1.1 | **Immutable school report-card backend** | **DONE** (`4684044`) | Evidence below. |
-| 1.2 | Live school browser proof | **DONE for T04 journeys** | First real execution — see below. A report-card journey is added and pending its own run. |
+| 1.2 | Live school browser proof | **DONE** | 5/5 journeys pass on the isolated stack (terms ×2, marks, report cards, guardian). |
 | 1.3 | Guardian identity + authorization ADR | `DONE` | ADR-0027 accepted by the owner 2026-09-23; implemented in `bd7a3db` and `60f3a66`. |
 | 1.4 | Parent portal essentials | `DONE (first slice)` | Invitation → activation → family portal (attendance, marks, timetable) reusing `portal` read models behind people's guardian access decision. See "Slice 1.3/1.4 — delivered" below for what is deferred. |
 | 1.5 | Promotion / detention / transfer | `PLANNED` | Auditable batch with preview; reversible per student; no hard delete of enrollment history. |
@@ -293,6 +293,36 @@ Deliberately deferred, each its own slice:
 | Parent views of fees, notices, homework, report cards | The categories exist and are enforced; the read routes are not built. Report cards must pass `publicationState`. |
 | Reaping a guardian login left without a relationship after a lost activation race | Such an account holds no authority; marked `ponytail:` in the service. |
 
+## Next plan — ordered slices (from 2026-09-24)
+
+This is the working order for the next owner. Each slice is dependency-complete
+and must meet the 12-point Definition of Done. Reorder only with a recorded
+reason; add slices freely when evidence demands it.
+
+| # | Slice | Why now | Owning module(s) | Depends on |
+|---|---|---|---|---|
+| **N0** | Independent adversarial review of `c530ba8..c199589` | The guardian work widened the platform auth surface; it has had self-review only. | all touched | — |
+| **N1** | Student 360 v1 | Closes the open "record depends on analytics" risk; every screen links here; the family tab already exists. | web; `people` (new history read) | N0 |
+| **N2** | Report-card desk for class teachers | Open risk: the audience that issues report cards cannot open the screen. | web; `people` directory | — |
+| **N3** | Parent views: report cards, fees, notices | Categories are enforced but unreadable; parents need exactly these three next. Requires a publish-to-parents decision for report cards. | `portal`, `reporting`, `fees`, `notices` | N0 |
+| **N4** | Bulk marks import (1.7) | Highest-frequency pain for staff after attendance. | `school-academics`, worker | — |
+| **N5** | Attendance shortfall workflow (1.8) | S02 exists and is unused outside report cards. | `academics`, `analytics` | — |
+| **N6** | Promotion / detention / transfer (1.5) | Year-end is unavoidable; also sets `historicalAccessUntil` (ADR-0027 Decision 9). | `people`, `school-academics` | N1 |
+| **N7** | Certificates: TC and bonafide (1.6) | A TC requires a recorded exit, so it follows N6. | `reporting`, `people` | N6 |
+| **N8** | Fee-defaulter workflow depth (1.9) | Printable notices and follow-up state on the existing `defaulters` route. | `fees` | — |
+| **N9** | Guardian invitation delivery (SMS/email adapter) | Removes the manual code hand-off; needs a provider decision from the owner. | `notices` or a new `ntf_` adapter | owner vendor choice |
+| **N10** | ADR-0028 draft: SaaS control plane and tenant isolation | Phase 3 is the largest unstarted risk; the boundary must be designed before Phase 2 builds on assumptions. Design only. | docs | — |
+
+Cross-cutting improvements, done alongside slices rather than as a phase:
+
+| # | Improvement | Note |
+|---|---|---|
+| N-X1 | Glob the school e2e spec list instead of hardcoding it | `scripts/school-e2e.ts` (~line 138) silently ignores new spec files. |
+| N-X2 | Inline-style cleanup (UI direction slice 5) | `style={{…}}` in pages escapes `check-scale.mjs`. Migrate a page when a slice touches it. |
+| N-X3 | One dense table pattern (UI direction slice 3) | Sticky header, saved filters, bulk bar, "none" vs "not recorded". |
+| N-X4 | Help docs per slice | 26 school screens lack help; `family`, `activate` among them. |
+| N-X5 | Flaky UI test | `apps/web/src/ui/attendance-page.test.tsx` failed once under a loaded full run and passed 3/3 alone. Diagnose timing; do not add retries. |
+
 ## Phase 2 — Paid-pilot school core
 
 Objective: a school can run a full term on Vidya without a spreadsheet beside it.
@@ -357,7 +387,7 @@ API. All `DEFERRED` until the school edition is sellable.
 |---|---|---|
 | **Guardian identity** — authentication shape, revocation semantics and the identity/people boundary. | High | Closed by ADR-0027 and slices 1.3/1.4. |
 | **Student record depends on analytics scope** — `/students/[id]` renders "Outside your scope" for an administrator because it loads the analytics performance read. | Medium | Open. Student 360 (UI direction slice 2) should load the record from people, with analytics as one panel. |
-| **No live browser evidence has ever been executed** for school journeys. The harness exists; a listed Playwright test is not a pass. | High | Open. Gate-04 named this a release-evidence item, not polish. |
+| **No live browser evidence has ever been executed** for school journeys. | High | Closed 2026-09-23: 5 journeys executed and passing. The runner's spec list is hardcoded — see N-X1. |
 | **No SaaS control plane exists.** The product is not sellable as SaaS until Phase 3. | High | Open, scheduled Phase 3. |
 | **Integration suite shares Redis with the owner's running stack**, causing a false failure in the BullMQ test. | Low | Diagnosed; mitigated with a dedicated Redis db index. Recorded above. |
 | **Help coverage is thin** — 26 school screens and 16 college screens have no help doc. | Medium | Open; closed incrementally per slice. |
