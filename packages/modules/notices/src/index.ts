@@ -14,7 +14,7 @@ import {
   type RuntimeModule,
   type ScopeChecker,
 } from "@vidya/platform";
-import type { PeopleDirectory } from "@vidya/module-people";
+import type { PeopleDirectory, PeopleModuleService } from "@vidya/module-people";
 import { noticesModuleDefinition } from "./definition";
 import { createNoticesHandlers } from "./handlers";
 import { createNoticesRepo } from "./repo";
@@ -25,6 +25,7 @@ export interface NoticesModuleDeps {
   readonly db: Db;
   readonly audit: AuditLogger;
   readonly peopleDirectory: PeopleDirectory;
+  readonly guardianAccess: PeopleModuleService["guardianAccess"];
   readonly scopeChecker: ScopeChecker;
 }
 
@@ -36,6 +37,7 @@ export function createNoticesModule(deps: NoticesModuleDeps): RuntimeModule<Reco
       repo,
       directory: deps.peopleDirectory,
       scopeChecker: deps.scopeChecker,
+      guardianAccess: deps.guardianAccess,
     }),
     jobProcessors: {},
     readinessChecks: [],

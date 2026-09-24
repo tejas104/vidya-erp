@@ -437,6 +437,7 @@ function buildWebRuntime(): WebRuntime {
     audit: system.service.audit,
     scopeChecker: identityCore.scopeChecker,
     peopleDirectory: people.service.directory,
+    guardianAccess: people.service.guardianAccess,
     enqueueGenerate: async (payload) => {
       await feesQueue.queue.add(INVOICE_GENERATE_JOB_NAME, payload);
     },
@@ -448,6 +449,7 @@ function buildWebRuntime(): WebRuntime {
     audit: system.service.audit,
     scopeChecker: identityCore.scopeChecker,
     peopleDirectory: people.service.directory,
+    guardianAccess: people.service.guardianAccess,
   });
 
   const portal = createPortalModule({

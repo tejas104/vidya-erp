@@ -7,6 +7,8 @@ import {
   ApiError,
   currentAcademicYear,
   type GuardianChild,
+  type ChildFeeInvoice,
+  type ChildNotice,
   type PortalAttendance,
   type PortalMarks,
   type TtEntry,
@@ -14,6 +16,8 @@ import {
 } from "@/ui/api";
 import { AsyncState } from "@/ui/AsyncState";
 import { StatTile, SubjectBars } from "@/ui/charts";
+import { formatPaise } from "@/ui/money";
+import { HelpButton } from "@/ui/help/HelpButton";
 import styles from "./page.module.css";
 
 export const dynamic = "force-dynamic";
@@ -71,6 +75,7 @@ export default function FamilyPage() {
         eyebrow="Family"
         title={child?.fullName ?? "Your children"}
         lede={child !== null ? `Admission no. ${child.admissionNo} · ${year}` : undefined}
+        help={<HelpButton slug="family" />}
       />
 
       {list.children.length > 1 ? (
@@ -96,7 +101,11 @@ export default function FamilyPage() {
       ) : child.status !== "active" && child.status !== "restricted" ? (
         <EmptyState title="This link is no longer active." body="Contact the school office if you think this is a mistake." />
       ) : (
-        <ChildView key={child.studentId} child={child} year={year} />
+        <>
+          <ChildView key={child.studentId} child={child} year={year} />
+          {child.categories.includes("fees") ? <ChildFees key={`fees:${child.studentId}`} studentId={child.studentId} /> : null}
+          {child.categories.includes("notices") ? <ChildNotices key={`notices:${child.studentId}`} studentId={child.studentId} /> : null}
+        </>
       )}
 
       <LinkAnotherChild onLinked={load} />
@@ -204,8 +213,56 @@ function ChildView({ child, year }: { child: GuardianChild; year: string }) {
           </Card>
         </section>
       ) : null}
+
     </>
   );
+}
+
+function useChildData<T>(request: () => Promise<T>) {
+  const [state, setState] = useState<{ kind: "loading" } | { kind: "error" } | { kind: "ready"; value: T }>({ kind: "loading" });
+  const [version, setVersion] = useState(0);
+  useEffect(() => {
+    let active = true;
+    setState({ kind: "loading" });
+    request().then((value) => { if (active) setState({ kind: "ready", value }); })
+      .catch(() => { if (active) setState({ kind: "error" }); });
+    return () => { active = false; };
+  }, [request, version]);
+  return { state, retry: () => setVersion((current) => current + 1) };
+}
+
+function ChildFees({ studentId }: { studentId: string }) {
+  const request = useCallback(() => api.childFees(studentId), [studentId]);
+  const { state, retry } = useChildData(request);
+  const invoices: ChildFeeInvoice[] = state.kind === "ready" ? state.value.invoices : [];
+  const due = invoices.reduce((sum, invoice) => sum + invoice.duesPaise, 0);
+  return <section className="section" aria-label="Fees">
+    <div className="section-head"><h2>Fees</h2>{state.kind === "ready" && invoices.length ? <strong className="num">{formatPaise(due)} due</strong> : null}</div>
+    <AsyncState loading={state.kind === "loading"} error={state.kind === "error"} onRetry={retry} errorMessage="Couldn't load fees for this child.">
+      {invoices.length === 0 ? <EmptyState title="No invoices yet." body="School fees will appear here when issued." /> :
+        <Card><ul className={styles.recordList}>{invoices.map((invoice) => <li key={invoice.id} className={styles.record}>
+          <div className={styles.recordTop}><div><strong>{invoice.headName}</strong><small>{invoice.academicYear} · Due {invoice.dueOn}</small></div><StatusBadge status={invoice.duesPaise > 0 ? "warn" : "good"}>{invoice.status}</StatusBadge></div>
+          <div className={styles.feeAmounts}><span>Total <strong className="num">{formatPaise(invoice.amountPaise)}</strong></span><span>Paid <strong className="num">{formatPaise(invoice.paidPaise)}</strong></span><span>Due <strong className="num">{formatPaise(invoice.duesPaise)}</strong></span></div>
+          {invoice.payments.length ? <details><summary>Receipts ({invoice.payments.length})</summary><ul className={styles.receipts}>{invoice.payments.map((payment) => <li key={payment.receiptNo}>#{payment.receiptNo} · {formatPaise(payment.amountPaise)} · {payment.receivedAt.slice(0, 10)}</li>)}</ul></details> : null}
+        </li>)}</ul></Card>}
+    </AsyncState>
+  </section>;
+}
+
+function ChildNotices({ studentId }: { studentId: string }) {
+  const request = useCallback(() => api.childNotices(studentId), [studentId]);
+  const { state, retry } = useChildData(request);
+  const notices: ChildNotice[] = state.kind === "ready" ? state.value.notices : [];
+  return <section className="section" aria-label="School notices">
+    <div className="section-head"><h2>School notices</h2></div>
+    <AsyncState loading={state.kind === "loading"} error={state.kind === "error"} onRetry={retry} errorMessage="Couldn't load notices for this child.">
+      {notices.length === 0 ? <EmptyState title="No current notices." body="School and class notices will appear here when published." /> :
+        <Card><ul className={styles.recordList}>{notices.map((notice) => <li key={notice.id} className={styles.record}>
+          <div className={styles.recordTop}><strong>{notice.title}</strong><small>{notice.eventDate ?? notice.publishAt.slice(0, 10)}</small></div>
+          <p>{notice.body}</p>
+        </li>)}</ul></Card>}
+    </AsyncState>
+  </section>;
 }
 
 function LinkAnotherChild({ onLinked }: { onLinked: () => void }) {

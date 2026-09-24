@@ -26,6 +26,25 @@
   color: var(--ink-3);
 }
 
+.recordList, .receipts {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.record { padding: var(--space-4) 0; border-top: var(--rule-width) solid var(--rule); }
+.record:first-child { border-top: 0; padding-top: 0; }
+.record:last-child { padding-bottom: 0; }
+.recordTop { display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: var(--space-3); }
+.recordTop > div { display: grid; gap: var(--space-1); }
+.recordTop small { color: var(--ink-3); }
+.record p { white-space: pre-wrap; margin: var(--space-3) 0 0; }
+.feeAmounts { display: flex; flex-wrap: wrap; gap: var(--space-4); margin: var(--space-3) 0; }
+.feeAmounts > span { display: grid; gap: var(--space-1); color: var(--ink-2); }
+.feeAmounts strong { color: var(--ink); }
+.receipts { margin-top: var(--space-2); color: var(--ink-2); }
+.receipts li { padding: var(--space-1) 0; }
+
 .linkForm {
   display: flex;
   flex-wrap: wrap;

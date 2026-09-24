@@ -1,5 +1,5 @@
 import type { OrgPath, Principal, RouteHandler, ScopeChecker } from "@vidya/platform";
-import type { PeopleDirectory } from "@vidya/module-people";
+import type { PeopleDirectory, PeopleModuleService } from "@vidya/module-people";
 import {
   DuplicateHeadError,
   DuplicateStructureError,
@@ -25,6 +25,7 @@ export interface FeesHandlerDeps {
   readonly repo: FeesRepo;
   readonly directory: PeopleDirectory;
   readonly scopeChecker: ScopeChecker;
+  readonly guardianAccess: PeopleModuleService["guardianAccess"];
   /** Enqueues the invoice-generate worker job for a created run. */
   readonly enqueueGenerate: (payload: { runId: string }) => Promise<void>;
 }
@@ -414,6 +415,29 @@ export function createFeesHandlers(deps: FeesHandlerDeps): Record<string, RouteH
     };
   };
 
+  const childFees: RouteHandler = async (ctx) => {
+    const studentId = (ctx.request.params as { studentId: string }).studentId;
+    const { decision, student } = await deps.guardianAccess((ctx.principal as Principal).id, studentId, "fees");
+    if (!decision.granted || student === null) return denied();
+    const entries = await invoiceViews(await deps.repo.invoicesForStudent(student.studentId));
+    return { status: 200, body: { invoices: entries.map(({ view, payments }) => ({
+      id: view.id,
+      headName: view.headName,
+      academicYear: view.academicYear,
+      amountPaise: view.amountPaise,
+      dueOn: view.dueOn,
+      status: view.status,
+      paidPaise: view.paidPaise,
+      duesPaise: view.duesPaise,
+      payments: payments.map((payment) => ({
+        receiptNo: payment.receiptNo,
+        amountPaise: payment.amount,
+        mode: payment.mode,
+        receivedAt: payment.receivedAt.toISOString(),
+      })),
+    })) } };
+  };
+
   const collectionSummary: RouteHandler = async (ctx) => {
     const principal = ctx.principal as Principal;
     const query = ctx.request.query as { collegeId: string; from: string; to: string };
@@ -464,6 +488,7 @@ export function createFeesHandlers(deps: FeesHandlerDeps): Record<string, RouteH
     "fees.payment-record": paymentRecord,
     "fees.adjustment-add": adjustmentAdd,
     "fees.my-fees": myFees,
+    "fees.child-fees": childFees,
     "fees.collection-summary": collectionSummary,
     "fees.defaulters": defaulters,
   };

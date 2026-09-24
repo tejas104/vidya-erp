@@ -79,7 +79,9 @@ function makeDeps() {
     studentPosition: async () => ({ collegeId: "col_1", departmentId: "dep_1", classId: "cls_1", sectionId: "sec_1" }),
     namesFor: async (ids: readonly string[]) => new Map(ids.map((id) => [id, `n:${id}`])),
   } as unknown as PeopleDirectory;
-  return { repo, directory, scopeChecker: fakeScopeChecker(), now: () => NOW };
+  return { repo, directory, scopeChecker: fakeScopeChecker(), now: () => NOW,
+    guardianAccess: async () => ({ decision: { granted: true as const, reason: "granted:active-relationship" as const }, student: { studentId: "stu_1", collegeId: "col_1", fullName: "A", admissionNo: "X-001" } }),
+  };
 }
 
 async function visibleTitles(p: Principal): Promise<string[]> {
@@ -112,6 +114,28 @@ describe("notices.visible — the audience matrix", () => {
     expect(await visibleTitles(admin)).toEqual([
       "college", "staff", "department:dep_1", "class:cls_1", "class:cls_2",
     ]);
+  });
+});
+
+describe("notices.child-visible", () => {
+  const guardian = { ...student, id: "g_1", kind: "guardian" as const, roles: [] };
+  it("shows live school and own-class notices without staff or sibling-class content", async () => {
+    const result = await createNoticesHandlers(makeDeps())["notices.child-visible"]!(ctx(guardian, { params: { studentId: "stu_1" } }));
+    expect(result.status).toBe(200);
+    const rows = (result.body as { notices: { id: string }[] }).notices;
+    expect(rows.map((row) => row.id)).toEqual(["n1", "n3", "n4", "n5"]);
+    expect(JSON.stringify(rows)).not.toContain("createdBy");
+  });
+  it("does not show class notices for a child without a live enrollment", async () => {
+    const deps = makeDeps();
+    const handlers = createNoticesHandlers({ ...deps, directory: { ...deps.directory, studentPosition: async () => null } });
+    const result = await handlers["notices.child-visible"]!(ctx(guardian, { params: { studentId: "stu_1" } }));
+    expect((result.body as { notices: { id: string }[] }).notices.map((row) => row.id)).toEqual(["n1", "n3"]);
+  });
+  it("answers the same 403 for any withheld relationship", async () => {
+    const handlers = createNoticesHandlers({ ...makeDeps(), guardianAccess: async () => ({ decision: { granted: false as const, reason: "denied:no-relationship" as const }, student: null }) });
+    const result = await handlers["notices.child-visible"]!(ctx(guardian, { params: { studentId: "stu_other" } }));
+    expect(result).toEqual({ status: 403, body: { message: "access denied" } });
   });
 });
 

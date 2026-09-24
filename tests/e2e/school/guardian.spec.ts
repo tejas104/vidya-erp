@@ -29,6 +29,8 @@ test("administrator invites a parent, who activates, signs in and sees only thei
   const { id: sectionId } = await post("/api/v1/people/sections", { classId, name: "A" });
   const { id: studentId } = await post("/api/v1/people/students", { collegeId, admissionNo: `FB-${suffix}`, fullName: "Asha Family" });
   await post(`/api/v1/people/students/${studentId}/enrollment`, { sectionId, academicYear: "2026-27" });
+  await post("/api/v1/notices", { collegeId, audience: `class:${classId}`, title: "Family class notice", body: "Bring a water bottle." });
+  await post("/api/v1/notices", { collegeId, audience: "staff", title: "Staff private notice", body: "Staff only." });
 
   // 1. The administrator invites the parent from the pupil's record.
   await browserLogin(page, adminCreds);
@@ -68,6 +70,10 @@ test("administrator invites a parent, who activates, signs in and sees only thei
   await expect(parent.getByRole("heading", { name: "Asha Family" })).toBeVisible();
   await expect(parent.getByText("Attendance this year")).toBeVisible();
   await expect(parent.getByText("Not recorded").first()).toBeVisible();
+  await expect(parent.getByRole("heading", { name: "School notices" })).toBeVisible();
+  await expect(parent.getByText("Family class notice")).toBeVisible();
+  await expect(parent.getByText("No invoices yet.")).toBeVisible();
+  await expect(parent.getByText("Staff private notice")).toHaveCount(0);
   await expect(parent.getByRole("navigation", { name: "Primary" })).toHaveCount(0);
   await parent.screenshot({ path: testInfo.outputPath("family-portal.png"), fullPage: true });
 

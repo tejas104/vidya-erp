@@ -54,6 +54,7 @@ describe("route inventory", () => {
     ]);
     expect(routes.filter((route) => !route.auth.public && route.auth.requirement.audience === "guardian")
       .map((route) => route.id).sort()).toEqual([
+        "fees.child-fees", "notices.child-visible",
         "people.guardian-children", "people.guardian-redeem", "portal.child-attendance",
         "portal.child-marks", "portal.child-timetable", "portal.child-today",
       ]);

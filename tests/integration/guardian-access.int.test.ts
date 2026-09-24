@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Principal } from "@vidya/platform";
+import { INVOICE_GENERATE_JOB_NAME } from "@vidya/module-fees";
+import { pino } from "pino";
 import { buildStack, type Stack } from "./support/harness";
 
 /**
@@ -18,6 +20,7 @@ let stack: Stack;
 let admin: string;
 let collegeId: string;
 let classId: string;
+let otherClassId: string;
 let studentId: string;
 let otherStudentId: string;
 let classTeacher: string;
@@ -82,7 +85,7 @@ beforeAll(async () => {
   collegeId = bootstrap.collegeId;
   const { departmentId } = await stack.people.service.ensureImplicitDepartment(collegeId);
   classId = (await create("people.class-create", { departmentId, name: `Std G ${suffix}`, code: `G-${suffix}` })).id;
-  const otherClassId = (await create("people.class-create", { departmentId, name: `Std GO ${suffix}`, code: `GO-${suffix}` })).id;
+  otherClassId = (await create("people.class-create", { departmentId, name: `Std GO ${suffix}`, code: `GO-${suffix}` })).id;
   const sectionId = (await create("people.section-create", { classId, name: "A" })).id;
   const otherSectionId = (await create("people.section-create", { classId: otherClassId, name: "A" })).id;
   studentId = (await create("people.student-create", { collegeId, admissionNo: `G-${suffix}`, fullName: "Asha Kulkarni" })).id;
@@ -202,6 +205,38 @@ describe("Guardian access over real Postgres", () => {
     expect(await spent.response.json()).toEqual(await unknown.response.json());
   });
 
+  it("serves only a linked child's invoices and live audience-matched notices", async () => {
+    const head = await create("fees.head-create", { collegeId, name: `Tuition ${suffix}` });
+    await create("fees.structure-create", { classId, headId: head.id, academicYear, amountPaise: 50_000, dueOn: "2026-09-30", installmentNo: 1 });
+    const generation = await stack.call("fees.invoices-generate", { cookie: admin, body: { classId, academicYear } });
+    expect(generation.status, await generation.clone().text()).toBe(202);
+    const { runId } = (await generation.json()) as { runId: string };
+    expect(stack.enqueuedFees).toContainEqual({ runId });
+    await stack.fees.jobProcessors[INVOICE_GENERATE_JOB_NAME]!({ runId }, { logger: pino({ level: "silent" }), jobId: "guardian-fees", attempt: 1 });
+
+    for (const audience of ["college", "students", `class:${classId}`, `class:${otherClassId}`, "staff"]) {
+      await create("notices.create", { collegeId, audience, title: `For ${audience}`, body: "School notice" });
+    }
+
+    const fees = await stack.call("fees.child-fees", { cookie: guardian, params: { studentId } });
+    expect(fees.status, await fees.clone().text()).toBe(200);
+    const invoices = (await fees.json()) as { invoices: { headName: string; amountPaise: number; duesPaise: number }[] };
+    expect(invoices.invoices).toEqual([expect.objectContaining({ headName: `Tuition ${suffix}`, amountPaise: 50_000, duesPaise: 50_000 })]);
+
+    const notices = await stack.call("notices.child-visible", { cookie: guardian, params: { studentId } });
+    expect(notices.status).toBe(200);
+    const shown = (await notices.json()) as { notices: { title: string }[] };
+    expect(shown.notices.map((row) => row.title).sort()).toEqual(["For college", "For students", `For class:${classId}`].sort());
+
+    for (const route of ["fees.child-fees", "notices.child-visible"]) {
+      const unrelated = await stack.call(route, { cookie: guardian, params: { studentId: otherStudentId } });
+      const unknown = await stack.call(route, { cookie: guardian, params: { studentId: "stu_does_not_exist" } });
+      expect([unrelated.status, unknown.status]).toEqual([403, 403]);
+      expect(await unrelated.json()).toEqual(await unknown.json());
+      expect((await stack.call(route, { cookie: admin, params: { studentId } })).status).toBe(403);
+    }
+  });
+
   it("allows exactly one of two concurrent activations of the same code", async () => {
     const issued = await invite(admin, studentId);
     expect(issued.status).toBe(201);
@@ -296,6 +331,8 @@ describe("Guardian access over real Postgres", () => {
     const revokedRead = await stack.call("portal.child-attendance", { cookie: guardian, params: { studentId }, query: { academicYear } });
     const keptRead = await stack.call("portal.child-attendance", { cookie: guardian, params: { studentId: otherStudentId }, query: { academicYear } });
     expect([revokedRead.status, keptRead.status]).toEqual([403, 200]);
+    expect((await stack.call("fees.child-fees", { cookie: guardian, params: { studentId } })).status).toBe(403);
+    expect((await stack.call("notices.child-visible", { cookie: guardian, params: { studentId } })).status).toBe(403);
 
     const unscopedAdmin = await provisionStaff("g-unscoped-admin", undefined, true);
     expect((await stack.call("people.guardian-relationship-verify", { cookie: unscopedAdmin, params: { relationshipId: own.rows[0].id } })).status).toBe(403);

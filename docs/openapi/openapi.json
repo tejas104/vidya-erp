@@ -23116,6 +23116,158 @@
         }
       }
     },
+    "/api/v1/fees/children/{studentId}/invoices": {
+      "get": {
+        "summary": "A linked child's fee status for an authorized guardian",
+        "description": "**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "fees-family"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "studentId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Invoice balances and receipts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "invoices": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "headName": {
+                            "type": "string"
+                          },
+                          "academicYear": {
+                            "type": "string"
+                          },
+                          "amountPaise": {
+                            "type": "number"
+                          },
+                          "dueOn": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string"
+                          },
+                          "paidPaise": {
+                            "type": "number"
+                          },
+                          "duesPaise": {
+                            "type": "number"
+                          },
+                          "payments": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "receiptNo": {
+                                  "type": "number"
+                                },
+                                "amountPaise": {
+                                  "type": "number"
+                                },
+                                "mode": {
+                                  "type": "string",
+                                  "enum": [
+                                    "cash",
+                                    "upi",
+                                    "card",
+                                    "bank",
+                                    "gateway"
+                                  ]
+                                },
+                                "receivedAt": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "receiptNo",
+                                "amountPaise",
+                                "mode",
+                                "receivedAt"
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "headName",
+                          "academicYear",
+                          "amountPaise",
+                          "dueOn",
+                          "status",
+                          "paidPaise",
+                          "duesPaise",
+                          "payments"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "invoices"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "No relationship grants fees for this child",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/fees/collections/summary": {
       "get": {
         "summary": "Collection totals by mode over a date range (accountant/admin/principal)",
@@ -23787,6 +23939,128 @@
           },
           "403": {
             "description": "Access denied by the role/scope policy (problem+json)"
+          }
+        }
+      }
+    },
+    "/api/v1/notices/children/{studentId}/visible": {
+      "get": {
+        "summary": "Live school and class notices for an authorized guardian's child",
+        "description": "Guardian access is checked fresh for this child. Staff notices and notices outside the child's enrolled class are excluded server-side.\n\n**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "notices-family"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "studentId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Visible notices",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "notices": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "notice",
+                              "holiday",
+                              "exam",
+                              "event"
+                            ]
+                          },
+                          "eventDate": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "body": {
+                            "type": "string"
+                          },
+                          "publishAt": {
+                            "type": "string"
+                          },
+                          "expiresAt": {
+                            "type": "string",
+                            "nullable": true
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "kind",
+                          "eventDate",
+                          "title",
+                          "body",
+                          "publishAt",
+                          "expiresAt"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "notices"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "No relationship grants notices for this child",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
           }
         }
       }

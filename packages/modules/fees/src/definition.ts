@@ -55,6 +55,7 @@ const FEES_READERS = {
 };
 const STUDENT_ONLY = { public: false as const, requirement: { rolesAnyOf: ["student" as const] } };
 const ANY_AUTHENTICATED = { public: false as const, requirement: {} };
+const GUARDIAN_ONLY = { public: false as const, requirement: { audience: "guardian" as const } };
 
 export const feeHeadViewSchema = z.object({
   id: z.string(),
@@ -352,6 +353,24 @@ const routes: RouteSpec[] = [
         }),
       },
       404: { description: "This sign-in is not linked to a student record", schema: problemSchema },
+    },
+  },
+  {
+    id: "fees.child-fees",
+    module: MODULE_NAME,
+    method: "GET",
+    path: "/api/v1/fees/children/{studentId}/invoices",
+    summary: "A linked child's fee status for an authorized guardian",
+    tags: ["fees-family"],
+    auth: GUARDIAN_ONLY,
+    request: { params: z.object({ studentId: idSchema }) },
+    responses: {
+      200: { description: "Invoice balances and receipts", schema: z.object({ invoices: z.array(z.object({
+        id: z.string(), headName: z.string(), academicYear: z.string(), amountPaise: z.number(),
+        dueOn: z.string(), status: z.string(), paidPaise: z.number(), duesPaise: z.number(),
+        payments: z.array(z.object({ receiptNo: z.number(), amountPaise: z.number(), mode: paymentModeSchema, receivedAt: z.string() })),
+      })) }) },
+      403: { description: "No relationship grants fees for this child", schema: problemSchema },
     },
   },
   {

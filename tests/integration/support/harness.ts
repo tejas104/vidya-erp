@@ -30,6 +30,8 @@ import { createTimetableModule } from "@vidya/module-timetable";
 import { createSchoolAcademicsModule } from "@vidya/module-school-academics";
 import { createResultsModule } from "@vidya/module-results";
 import { createPortalModule } from "@vidya/module-portal";
+import { createFeesModule } from "@vidya/module-fees";
+import { createNoticesModule } from "@vidya/module-notices";
 import { integrationDatabaseUrl } from "./db-url";
 
 export const ADMIN_USERNAME = "int-admin";
@@ -222,6 +224,17 @@ export function buildStack(edition: "college" | "school" = "college") {
     guardianAccess: people.service.guardianAccess,
   });
 
+  const enqueuedFees: { runId: string }[] = [];
+  const fees = createFeesModule({
+    db, audit: system.service.audit, scopeChecker: core.scopeChecker,
+    peopleDirectory: people.service.directory, guardianAccess: people.service.guardianAccess,
+    enqueueGenerate: async (payload) => { enqueuedFees.push(payload); },
+  });
+  const notices = createNoticesModule({
+    db, audit: system.service.audit, scopeChecker: core.scopeChecker,
+    peopleDirectory: people.service.directory, guardianAccess: people.service.guardianAccess,
+  });
+
 
   const routeDeps: RouteDependencies = {
     logger,
@@ -232,7 +245,7 @@ export function buildStack(edition: "college" | "school" = "college") {
   };
   const specs = new Map<string, RouteSpec>();
   const handlers: Record<string, BoundRouteHandler> = {};
-  for (const module of [system, identity, people, academics, analytics, reporting, syllabus, timetable, schoolAcademics, results, portal]) {
+  for (const module of [system, identity, people, academics, analytics, reporting, syllabus, timetable, schoolAcademics, results, portal, fees, notices]) {
     if (!moduleRunsOnEdition(module, edition)) continue;
     for (const route of module.definition.routes) {
       specs.set(route.id, route);
@@ -324,6 +337,9 @@ export function buildStack(edition: "college" | "school" = "college") {
     timetable,
     schoolAcademics,
     results,
+    fees,
+    notices,
+    enqueuedFees,
     core,
     enqueuedImports,
     enqueuedRollups,

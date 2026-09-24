@@ -22,6 +22,7 @@ const ADMIN_OR_PRINCIPAL = {
   requirement: { rolesAnyOf: ["admin" as const, "principal" as const] },
 };
 const ANY_AUTHENTICATED = { public: false as const, requirement: {} };
+const GUARDIAN_ONLY = { public: false as const, requirement: { audience: "guardian" as const } };
 
 /** notice | holiday | exam | event — colours a calendar entry. */
 export const noticeKindSchema = z.enum(["notice", "holiday", "exam", "event"]);
@@ -101,6 +102,24 @@ const routes: RouteSpec[] = [
     auth: ANY_AUTHENTICATED,
     responses: {
       200: { description: "Visible notices, newest first", schema: z.object({ notices: z.array(noticeViewSchema) }) },
+    },
+  },
+  {
+    id: "notices.child-visible",
+    module: MODULE_NAME,
+    method: "GET",
+    path: "/api/v1/notices/children/{studentId}/visible",
+    summary: "Live school and class notices for an authorized guardian's child",
+    description: "Guardian access is checked fresh for this child. Staff notices and notices outside the child's enrolled class are excluded server-side.",
+    tags: ["notices-family"],
+    auth: GUARDIAN_ONLY,
+    request: { params: z.object({ studentId: idSchema }) },
+    responses: {
+      200: { description: "Visible notices", schema: z.object({ notices: z.array(z.object({
+        id: z.string(), kind: noticeKindSchema, eventDate: z.string().nullable(),
+        title: z.string(), body: z.string(), publishAt: z.string(), expiresAt: z.string().nullable(),
+      })) }) },
+      403: { description: "No relationship grants notices for this child", schema: problemSchema },
     },
   },
   {

@@ -16,7 +16,7 @@ import {
   type RuntimeModule,
   type ScopeChecker,
 } from "@vidya/platform";
-import type { PeopleDirectory } from "@vidya/module-people";
+import type { PeopleDirectory, PeopleModuleService } from "@vidya/module-people";
 import { feesModuleDefinition, INVOICE_GENERATE_JOB_NAME } from "./definition";
 import { createFeesHandlers } from "./handlers";
 import { createGenerateProcessor } from "./generate-job";
@@ -30,6 +30,7 @@ export interface FeesModuleDeps {
   readonly audit: TransactionalAuditLogger;
   readonly scopeChecker: ScopeChecker;
   readonly peopleDirectory: PeopleDirectory;
+  readonly guardianAccess: PeopleModuleService["guardianAccess"];
   /** Enqueues the invoice-generate job (BullMQ in prod, inline fake in tests). */
   readonly enqueueGenerate: (payload: { runId: string }) => Promise<void>;
 }
@@ -42,6 +43,7 @@ export function createFeesModule(deps: FeesModuleDeps): RuntimeModule<Record<str
       repo,
       directory: deps.peopleDirectory,
       scopeChecker: deps.scopeChecker,
+      guardianAccess: deps.guardianAccess,
       enqueueGenerate: deps.enqueueGenerate,
     }),
     jobProcessors: {

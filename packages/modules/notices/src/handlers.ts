@@ -1,5 +1,5 @@
 import type { OrgPath, Principal, RouteHandler, ScopeChecker } from "@vidya/platform";
-import type { PeopleDirectory } from "@vidya/module-people";
+import type { PeopleDirectory, PeopleModuleService } from "@vidya/module-people";
 import type { NoticesRepo } from "./repo";
 import type { NoticeRow } from "./db/schema";
 
@@ -7,6 +7,7 @@ export interface NoticesHandlerDeps {
   readonly repo: NoticesRepo;
   readonly directory: PeopleDirectory;
   readonly scopeChecker: ScopeChecker;
+  readonly guardianAccess: PeopleModuleService["guardianAccess"];
   readonly now?: () => Date;
 }
 
@@ -170,6 +171,33 @@ export function createNoticesHandlers(deps: NoticesHandlerDeps): Record<string, 
     return { status: 200, body: { notices: await Promise.all(results.map((row) => view(row))) } };
   };
 
+  const childVisible: RouteHandler = async (ctx) => {
+    const studentId = (ctx.request.params as { studentId: string }).studentId;
+    const { decision, student } = await deps.guardianAccess((ctx.principal as Principal).id, studentId, "notices");
+    if (!decision.granted || student === null) return denied();
+    const position = await deps.directory.studentPosition(student.studentId);
+    const notices: { id: string; kind: string; eventDate: string | null; title: string; body: string; publishAt: string; expiresAt: string | null }[] = [];
+    for (const row of await deps.repo.listLive(student.collegeId, now())) {
+      if (row.audience === "staff") continue;
+      if (row.audience.startsWith("department:") || row.audience.startsWith("class:")) {
+        const target = await audiencePath(row.collegeId, row.audience);
+        if (target === null || target.collegeId !== student.collegeId) continue;
+        if (row.audience.startsWith("department:") && (!position?.departmentId || position.departmentId !== target.departmentId)) continue;
+        if (row.audience.startsWith("class:") && (!position?.classId || position.classId !== target.classId)) continue;
+      }
+      notices.push({
+        id: row.id,
+        kind: row.kind,
+        eventDate: row.eventDate,
+        title: row.title,
+        body: row.body,
+        publishAt: row.publishAt.toISOString(),
+        expiresAt: row.expiresAt?.toISOString() ?? null,
+      });
+    }
+    return { status: 200, body: { notices } };
+  };
+
   const remove: RouteHandler = async (ctx) => {
     const principal = ctx.principal as Principal;
     const params = ctx.request.params as { noticeId: string };
@@ -184,6 +212,7 @@ export function createNoticesHandlers(deps: NoticesHandlerDeps): Record<string, 
     "notices.create": create,
     "notices.list": list,
     "notices.visible": visible,
+    "notices.child-visible": childVisible,
     "notices.delete": remove,
   };
 }

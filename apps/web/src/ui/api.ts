@@ -468,6 +468,7 @@ export interface NoticeView {
   createdBy: string;
   createdAt: string;
 }
+export type ChildNotice = Pick<NoticeView, "id" | "kind" | "eventDate" | "title" | "body" | "publishAt" | "expiresAt">;
 
 // --- fees ---
 export type PaymentMode = "cash" | "upi" | "card" | "bank" | "gateway";
@@ -547,6 +548,9 @@ export interface FeeCollectionSummary {
 export type FeeMyInvoice = FeeInvoiceView & {
   payments: FeePaymentView[];
   adjustments: FeeAdjustmentView[];
+};
+export type ChildFeeInvoice = Pick<FeeInvoiceView, "id" | "headName" | "academicYear" | "amountPaise" | "dueOn" | "status" | "paidPaise" | "duesPaise"> & {
+  payments: Pick<FeePaymentView, "receiptNo" | "amountPaise" | "mode" | "receivedAt">[];
 };
 
 // --- results ---
@@ -944,6 +948,10 @@ export const api = {
     get<{ dayOfWeek: number; periods: TtPeriod[]; entries: TtEntry[] }>(
       `/api/v1/portal/children/${encodeURIComponent(studentId)}/today?academicYear=${year}`,
     ),
+  childFees: (studentId: string) =>
+    get<{ invoices: ChildFeeInvoice[] }>(`/api/v1/fees/children/${encodeURIComponent(studentId)}/invoices`),
+  childNotices: (studentId: string) =>
+    get<{ notices: ChildNotice[] }>(`/api/v1/notices/children/${encodeURIComponent(studentId)}/visible`),
   guardianActivate: (body: { code: string; fullName: string; username: string; password: string }) =>
     post<{ username: string; child: { fullName: string }; status: "active" | "pending" }>("/api/v1/people/guardian-invitations/activate", body),
   guardianRedeem: (code: string) =>

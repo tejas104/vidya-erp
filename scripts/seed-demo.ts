@@ -336,6 +336,7 @@ function buildStack() {
     audit: system.service.audit,
     scopeChecker: core.scopeChecker,
     peopleDirectory: people.service.directory,
+    guardianAccess: people.service.guardianAccess,
     enqueueGenerate: async (payload) => {
       await fees.jobProcessors[INVOICE_GENERATE_JOB_NAME]!(payload, { logger, jobId: "seed-inline", attempt: 1 });
     },
@@ -347,6 +348,7 @@ function buildStack() {
     audit: system.service.audit,
     scopeChecker: core.scopeChecker,
     peopleDirectory: people.service.directory,
+    guardianAccess: people.service.guardianAccess,
   });
 
   // --- results ---

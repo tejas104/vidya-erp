@@ -19,6 +19,8 @@ vi.mock("./api", async (importOriginal) => {
       childAttendance: vi.fn(),
       childMarks: vi.fn(),
       childToday: vi.fn(),
+      childFees: vi.fn(),
+      childNotices: vi.fn(),
     },
   };
 });
@@ -47,9 +49,34 @@ beforeEach(() => {
   mocked(api.childAttendance).mockResolvedValue(attendance);
   mocked(api.childMarks).mockResolvedValue({ subjects: [], overallPct: null });
   mocked(api.childToday).mockResolvedValue({ dayOfWeek: 1, periods: [], entries: [] });
+  mocked(api.childFees).mockResolvedValue({ invoices: [] });
+  mocked(api.childNotices).mockResolvedValue({ notices: [] });
 });
 
 describe("family page (ADR-0027)", () => {
+  it("shows the child's fee balances and live notices in separate sections", async () => {
+    mocked(api.guardianChildren).mockResolvedValue({ children: [parentOf({ categories: ["fees", "notices"] })] });
+    mocked(api.childFees).mockResolvedValue({ invoices: [{ id: "inv_1", headName: "Tuition", academicYear: "2026-27", amountPaise: 50_000, dueOn: "2026-08-01", status: "part", paidPaise: 20_000, duesPaise: 30_000, payments: [{ receiptNo: 7, amountPaise: 20_000, mode: "upi", receivedAt: "2026-07-13T10:00:00Z" }] }] });
+    mocked(api.childNotices).mockResolvedValue({ notices: [{ id: "ntc_1", kind: "notice", eventDate: null, title: "School trip", body: "Bring a water bottle.", publishAt: "2026-07-13T10:00:00Z", expiresAt: null }] });
+    render(<FamilyPage />);
+    expect(await screen.findByRole("heading", { name: "School notices" })).toBeVisible();
+    expect(await screen.findByText("School trip")).toBeVisible();
+    expect(await screen.findByText("₹300.00 due")).toBeVisible();
+    expect(screen.getByText("Tuition")).toBeVisible();
+    expect(api.childFees).toHaveBeenCalledWith("stu-1");
+    expect(api.childNotices).toHaveBeenCalledWith("stu-1");
+    expect(api.childMarks).not.toHaveBeenCalled();
+  });
+
+  it("keeps notices visible when the fee request fails", async () => {
+    mocked(api.guardianChildren).mockResolvedValue({ children: [parentOf({ categories: ["fees", "notices"] })] });
+    mocked(api.childFees).mockRejectedValue(new Error("offline"));
+    mocked(api.childNotices).mockResolvedValue({ notices: [{ id: "ntc_1", kind: "notice", eventDate: null, title: "Sports day", body: "Tomorrow", publishAt: "2026-07-13T10:00:00Z", expiresAt: null }] });
+    render(<FamilyPage />);
+    expect(await screen.findByText("Sports day")).toBeVisible();
+    expect(await screen.findByText("Couldn't load fees for this child.")).toBeVisible();
+  });
+
   it("shows an unrecorded figure as 'Not recorded', never 0%", async () => {
     mocked(api.guardianChildren).mockResolvedValue({ children: [parentOf()] });
     render(<FamilyPage />);

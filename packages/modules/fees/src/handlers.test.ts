@@ -136,12 +136,31 @@ function makeDeps(opts: Opts = {}) {
 
   const deps: FeesHandlerDeps = {
     repo, directory, scopeChecker,
+    guardianAccess: async () => ({ decision: { granted: true, reason: "granted:active-relationship" }, student: { studentId: "stu_1", collegeId: "col_1", fullName: "Aarav", admissionNo: "FYCS-001" } }),
     enqueueGenerate: async (payload) => { enqueued.push(payload); },
   };
   return { deps, enqueued, attributions };
 }
 
 describe("fees handlers", () => {
+  it("shows an authorized guardian only this child's balances and receipt facts", async () => {
+    const handlers = createFeesHandlers(makeDeps({ payments: [paymentRow] }).deps);
+    const guardian: Principal = { ...student, id: "g_1", kind: "guardian", roles: [] };
+    const result = await handlers["fees.child-fees"]!(ctx(guardian, { params: { studentId: "stu_1" } }));
+    expect(result.status).toBe(200);
+    const invoice = (result.body as { invoices: Record<string, unknown>[] }).invoices[0]!;
+    expect(invoice).toMatchObject({ headName: "Tuition", amountPaise: 50_000, paidPaise: 50_000, duesPaise: 0 });
+    expect(invoice.payments).toEqual([{ receiptNo: 7, amountPaise: 50_000, mode: "cash", receivedAt: "2026-07-13T10:00:00.000Z" }]);
+    expect(JSON.stringify(invoice)).not.toMatch(/receivedBy|idempotencyKey|adjustments|ref/);
+  });
+
+  it("answers a uniform 403 when guardian access to fees is withheld", async () => {
+    const base = makeDeps().deps;
+    const handlers = createFeesHandlers({ ...base, guardianAccess: async () => ({ decision: { granted: false, reason: "denied:no-relationship" }, student: null }) });
+    const result = await handlers["fees.child-fees"]!(ctx({ ...student, kind: "guardian", roles: [] }, { params: { studentId: "stu_other" } }));
+    expect(result).toEqual({ status: 403, body: { message: "access denied" } });
+  });
+
   it("maps a duplicate head name to 409", async () => {
     const handlers = createFeesHandlers(makeDeps({ duplicateHead: true }).deps);
     const result = await handlers["fees.head-create"]!(ctx(admin, { body: { collegeId: "col_1", name: "Tuition" } }));
