@@ -2,6 +2,8 @@ import type { Principal, RouteContext, RouteHandler, RouteResult } from "@vidya/
 import type { AcademicsReadModel } from "@vidya/module-academics";
 import type { GuardianRecordCategory, PeopleDirectory, PeopleModuleService } from "@vidya/module-people";
 import type { TimetableReadModel } from "@vidya/module-timetable";
+import type { SchoolAcademicsReadModel } from "@vidya/module-school-academics";
+import { schoolTermMarks } from "./school-marks";
 
 export interface PortalHandlerDeps {
   readonly directory: PeopleDirectory;
@@ -9,6 +11,8 @@ export interface PortalHandlerDeps {
   readonly timetableRead: TimetableReadModel;
   /** ADR-0027: the people module's guardian access decision. */
   readonly guardianAccess: PeopleModuleService["guardianAccess"];
+  readonly edition?: "school" | "college";
+  readonly schoolAcademicsRead?: SchoolAcademicsReadModel;
 }
 
 /** Whose records a portal view shows: resolved server-side, never trusted
@@ -135,6 +139,7 @@ export function createPortalHandlers(deps: PortalHandlerDeps): Record<string, Ro
   };
 
   const marks = (resolve: Resolver): RouteHandler => async (ctx) => {
+    if (deps.edition === "school") return { status: 404, body: { message: "college marks are unavailable in the school edition" } };
     const student = await resolve(ctx);
     if (isResult(student)) return student;
     const query = ctx.request.query as { academicYear: string };
@@ -167,6 +172,28 @@ export function createPortalHandlers(deps: PortalHandlerDeps): Record<string, Ro
         ? null
         : Math.round((rows.reduce((sum, mark) => sum + mark.scorePct, 0) / rows.length) * 10) / 10;
     return { status: 200, body: { subjects, overallPct } };
+  };
+
+  const schoolMarks = (resolve: Resolver): RouteHandler => async (ctx) => {
+    if (deps.edition !== "school" || deps.schoolAcademicsRead === undefined) return { status: 404, body: { message: "school marks are unavailable in this edition" } };
+    const student = await resolve(ctx);
+    if (isResult(student)) return student;
+    const { academicYear } = ctx.request.query as { academicYear: string };
+    const position = await deps.directory.studentPositionForAcademicYear(student.studentId, academicYear);
+    if (position?.classId === undefined || position.collegeId !== student.collegeId) {
+      return { status: 200, body: { terms: [] } };
+    }
+    const terms = (await deps.schoolAcademicsRead.listTermsForColleges([student.collegeId]))
+      .filter((term) => term.academicYear === academicYear && term.status === "closed" && term.marksReleasedAt !== null)
+      .sort((a, b) => b.endsOn.localeCompare(a.endsOn) || a.name.localeCompare(b.name));
+    const released = [];
+    for (const term of terms) {
+      const source = await deps.schoolAcademicsRead.termResultSource(student.studentId, position.classId, term.id);
+      // Recheck the status on the fresh source: reopening immediately hides draft corrections.
+      if (source === null || source.term.status !== "closed" || source.term.marksReleasedAt === null || source.term.collegeId !== student.collegeId || source.term.academicYear !== academicYear || source.subjects.length === 0) continue;
+      released.push(await schoolTermMarks(source, deps.directory));
+    }
+    return { status: 200, body: { terms: released } };
   };
 
   /** The pupil's live section (via enrollment position); "" when unenrolled. */
@@ -207,6 +234,8 @@ export function createPortalHandlers(deps: PortalHandlerDeps): Record<string, Ro
     "portal.my-today": today(self),
     "portal.child-attendance": attendance(child("attendance")),
     "portal.child-marks": marks(child("marks")),
+    "portal.my-school-marks": schoolMarks(self),
+    "portal.child-school-marks": schoolMarks(child("marks")),
     "portal.child-timetable": timetable(child("timetable")),
     "portal.child-today": today(child("timetable")),
   };

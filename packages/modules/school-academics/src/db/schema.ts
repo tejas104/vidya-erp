@@ -30,6 +30,8 @@ export const schTerms = pgTable(
     closedAt: timestamp("closed_at", { withTimezone: true }),
     closedBy: text("closed_by"),
     closedReason: text("closed_reason"),
+    /** Null on old closed terms and while open; set only by release or new close. */
+    marksReleasedAt: timestamp("marks_released_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

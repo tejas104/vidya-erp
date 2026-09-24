@@ -70,6 +70,7 @@ export interface SchoolTermView {
   closedAt: string | null;
   closedBy: string | null;
   closedReason: string | null;
+  marksReleasedAt: string | null;
 }
 
 export interface SchoolAssessmentType {
@@ -669,6 +670,34 @@ export interface PortalMarks {
   overallPct: number | null;
 }
 
+export interface SchoolPortalMarks {
+  terms: {
+    termId: string;
+    termName: string;
+    academicYear: string;
+    endsOn: string;
+    overallPct: number | null;
+    complete: boolean;
+    subjects: {
+      subjectId: string;
+      name: string;
+      percentage: number | null;
+      status: "complete" | "incomplete" | "unavailable";
+      recordedCount: number;
+      assessmentCount: number;
+      assessments: {
+        assessmentId: string;
+        name: string;
+        typeName: string;
+        heldOn: string;
+        maxScore: number;
+        score: number | null;
+        status: "scored" | "absent" | "exempt" | "missing";
+      }[];
+    }[];
+  }[];
+}
+
 // --- syllabus ---
 export interface TopicView {
   id: string;
@@ -945,6 +974,7 @@ export const api = {
   portalMe: () => get<PortalMe>("/api/v1/portal/me"),
   portalAttendance: (year: string) => get<PortalAttendance>(`/api/v1/portal/attendance?academicYear=${year}`),
   portalMarks: (year: string) => get<PortalMarks>(`/api/v1/portal/marks?academicYear=${year}`),
+  portalSchoolMarks: (year: string) => get<SchoolPortalMarks>(`/api/v1/portal/school-marks?academicYear=${encodeURIComponent(year)}`),
   portalTimetable: (year: string) =>
     get<{ periods: TtPeriod[]; entries: TtEntry[] }>(`/api/v1/portal/timetable?academicYear=${year}`),
   portalToday: (year: string) =>
@@ -955,6 +985,8 @@ export const api = {
     get<PortalAttendance>(`/api/v1/portal/children/${encodeURIComponent(studentId)}/attendance?academicYear=${year}`),
   childMarks: (studentId: string, year: string) =>
     get<PortalMarks>(`/api/v1/portal/children/${encodeURIComponent(studentId)}/marks?academicYear=${year}`),
+  childSchoolMarks: (studentId: string, year: string) =>
+    get<SchoolPortalMarks>(`/api/v1/portal/children/${encodeURIComponent(studentId)}/school-marks?academicYear=${encodeURIComponent(year)}`),
   childToday: (studentId: string, year: string) =>
     get<{ dayOfWeek: number; periods: TtPeriod[]; entries: TtEntry[] }>(
       `/api/v1/portal/children/${encodeURIComponent(studentId)}/today?academicYear=${year}`,
@@ -1181,6 +1213,8 @@ export const api = {
     put<{ types: SchoolAssessmentType[] }>(`/api/v1/school/terms/${encodeURIComponent(termId)}/assessment-types`, { types }),
   schoolTransitionTerm: (termId: string, action: "close" | "reopen", reason: string) =>
     post<SchoolTermView>(`/api/v1/school/terms/${encodeURIComponent(termId)}/${action}`, reason.trim() ? { reason: reason.trim() } : {}),
+  schoolReleaseTermMarks: (termId: string) =>
+    post<SchoolTermView>(`/api/v1/school/terms/${encodeURIComponent(termId)}/release-marks`, {}),
   schoolReportCardDeskScope: () => get<SchoolReportCardDeskScope>("/api/v1/school/report-cards/desk-scope"),
   schoolReportCardRoster: (classId: string, termId: string) =>
     get<{ students: SchoolReportCardRosterStudent[] }>(`/api/v1/school/report-cards/classes/${encodeURIComponent(classId)}?termId=${encodeURIComponent(termId)}`),

@@ -239,6 +239,7 @@ const EXPECTATIONS: Record<string, MigrationExpectation> = {
   "school-academics/0000_school_academics": { tables: ["sca_terms"] },
   "school-academics/0001_assessment_types": { tables: ["sca_assessment_types"], indexes: ["sca_assessment_types_term_idx", "sca_assessment_types_name_idx"] },
   "school-academics/0002_school_marks": { tables: ["sca_assessments", "sca_marks"], columns: [{ table: "sca_terms", column: "grade_bands" }, { table: "sca_terms", column: "scale_id" }, { table: "sca_terms", column: "scale_name" }] },
+  "school-academics/0003_term_marks_release": { columns: [{ table: "sca_terms", column: "marks_released_at" }] },
 };
 
 async function assertPresent(key: string, label: string): Promise<void> {

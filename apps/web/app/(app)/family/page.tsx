@@ -20,6 +20,7 @@ import { StatTile, SubjectBars } from "@/ui/charts";
 import { formatPaise } from "@/ui/money";
 import { HelpButton } from "@/ui/help/HelpButton";
 import { useHelpEdition } from "@/ui/help/HelpEditionContext";
+import { SchoolTermMarks } from "@/ui/SchoolTermMarks";
 import styles from "./page.module.css";
 
 export const dynamic = "force-dynamic";
@@ -106,6 +107,7 @@ export default function FamilyPage() {
       ) : (
         <>
           <ChildView key={child.studentId} child={child} year={year} includeLiveMarks={edition !== "school"} />
+          {edition === "school" && child.categories.includes("marks") ? <SchoolTermMarks key={`marks:${child.studentId}`} academicYear={year} studentId={child.studentId} /> : null}
           {child.categories.includes("report-card") ? <ChildReportCards key={`cards:${child.studentId}`} studentId={child.studentId} /> : null}
           {child.categories.includes("fees") ? <ChildFees key={`fees:${child.studentId}`} studentId={child.studentId} /> : null}
           {child.categories.includes("notices") ? <ChildNotices key={`notices:${child.studentId}`} studentId={child.studentId} /> : null}

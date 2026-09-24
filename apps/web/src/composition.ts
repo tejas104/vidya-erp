@@ -458,6 +458,8 @@ function buildWebRuntime(): WebRuntime {
     academicsRead: academics.service.readModel,
     timetableRead: timetable.service.readModel,
     guardianAccess: people.service.guardianAccess,
+    edition: config.edition,
+    schoolAcademicsRead: schoolAcademics.service.readModel,
   });
 
   // Every module built, then filtered by edition — construction is cheap and

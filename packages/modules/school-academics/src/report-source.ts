@@ -60,6 +60,7 @@ export interface SchoolTermRecord {
   readonly startsOn: string;
   readonly endsOn: string;
   readonly status: "open" | "closed";
+  readonly marksReleasedAt: string | null;
   /** The grading basis frozen onto the term by its first assessment. Null
    *  until then — a term with no assessments has no grade bands yet. */
   readonly gradeBands: readonly Band[] | null;
@@ -68,7 +69,7 @@ export interface SchoolTermRecord {
 /** One subject's assessments and this student's entries, ready for S01. */
 export interface SchoolSubjectSource {
   readonly subjectId: string;
-  readonly assessments: readonly AssessmentDefinition[];
+  readonly assessments: readonly (AssessmentDefinition & { readonly name: string; readonly heldOn: string; readonly typeName: string })[];
   /** Exactly one entry per assessment above. A student with no stored mark
    *  yields status "missing" — never an invented zero. */
   readonly entries: readonly AssessmentEntry[];
@@ -127,6 +128,7 @@ function termRecord(row: typeof schTerms.$inferSelect): SchoolTermRecord {
     startsOn: row.startsOn,
     endsOn: row.endsOn,
     status: row.status as "open" | "closed",
+    marksReleasedAt: row.marksReleasedAt?.toISOString() ?? null,
     gradeBands: row.gradeBands ?? null,
   };
 }
@@ -172,14 +174,15 @@ export function createSchoolAcademicsReadModel(db: Db): SchoolAcademicsReadModel
               .where(and(eq(marks.studentId, studentId), inArray(marks.assessmentId, assessmentIds)));
       const scoreByAssessment = new Map(stored.map((row) => [row.assessmentId, Number(row.score)]));
 
-      const bySubject = new Map<string, { assessments: AssessmentDefinition[]; entries: AssessmentEntry[] }>();
+      const typeNames = new Map(types.map((type) => [type.id, type.name]));
+      const bySubject = new Map<string, { assessments: (AssessmentDefinition & { name: string; heldOn: string; typeName: string })[]; entries: AssessmentEntry[] }>();
       for (const row of rows) {
         let bucket = bySubject.get(row.subjectId);
         if (!bucket) {
           bucket = { assessments: [], entries: [] };
           bySubject.set(row.subjectId, bucket);
         }
-        bucket.assessments.push({ id: row.id, typeId: row.typeId, maxScore: Number(row.maxScore) });
+        bucket.assessments.push({ id: row.id, typeId: row.typeId, maxScore: Number(row.maxScore), name: row.name, heldOn: row.heldOn, typeName: typeNames.get(row.typeId) ?? "Assessment" });
         const score = scoreByAssessment.get(row.id);
         bucket.entries.push(
           score === undefined

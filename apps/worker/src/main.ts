@@ -340,6 +340,8 @@ async function main(): Promise<void> {
     academicsRead: academics.service.readModel,
     timetableRead: timetable.service.readModel,
     guardianAccess: people.service.guardianAccess,
+    edition: config.edition,
+    schoolAcademicsRead: schoolAcademics.service.readModel,
   });
 
   // Same edition filter as the web composition root, via the shared

@@ -17,6 +17,8 @@ import {
   type TtPeriod,
 } from "@/ui/api";
 import { HelpButton } from "@/ui/help/HelpButton";
+import { useHelpEdition } from "@/ui/help/HelpEditionContext";
+import { SchoolTermMarks } from "@/ui/SchoolTermMarks";
 import {
   useToast,
   Button,
@@ -76,6 +78,7 @@ type SessionRow = { heldOn: ReactNode; status: ReactNode };
 
 export default function PortalPage() {
   const toast = useToast();
+  const edition = useHelpEdition();
   const year = useMemo(() => currentAcademicYear(), []);
   const [load, setLoad] = useState<Load>({ state: "loading" });
   const [reloadTick, setReloadTick] = useState(0);
@@ -106,14 +109,14 @@ export default function PortalPage() {
         const me = await api.portalMe();
         const [attendance, marks, timetable, today, cwkA, cwkM] = await Promise.all([
           api.portalAttendance(year),
-          api.portalMarks(year),
+          edition === "school" ? Promise.resolve({ subjects: [], overallPct: null } as PortalMarks) : api.portalMarks(year),
           api.portalTimetable(year).catch(() => ({ periods: [], entries: [] })),
           api.portalToday(year).catch(() => ({ dayOfWeek: 0, periods: [], entries: [] })),
           api.cwkMyAssignments(year).catch(() => ({ assignments: [] as CwkAssignment[] })),
           api.cwkMyMaterials(year).catch(() => ({ materials: [] as CwkMaterial[] })),
         ]);
         const fees = await api.feesMyFees().then((r) => r.invoices).catch(() => null);
-        const results = await api.resMyResults().catch(() => null);
+        const results = edition === "school" ? null : await api.resMyResults().catch(() => null);
         const exams = await api.exmMySchedule().then((r) => r.slots).catch(() => null);
         const syllabus = await api.mySyllabus(year).catch(() => null);
         if (alive)
@@ -140,7 +143,7 @@ export default function PortalPage() {
     return () => {
       alive = false;
     };
-  }, [year, reloadTick]);
+  }, [year, reloadTick, edition]);
 
   if (load.state === "loading") {
     return (
@@ -199,12 +202,12 @@ export default function PortalPage() {
           sub={`${attendance.counts.present + attendance.counts.late + attendance.counts.absent + attendance.counts.excused} sessions`}
           muted={attendance.pct === null}
         />
-        <StatTile
+        {edition !== "school" ? <StatTile
           value={marks.overallPct === null ? "—" : `${marks.overallPct}%`}
           label="My overall marks (YTD)"
           muted={marks.overallPct === null}
-        />
-        <StatTile value={String(attendance.counts.absent)} label="Days absent" />
+        /> : null}
+        {Object.values(attendance.counts).some((count) => count > 0) ? <StatTile value={String(attendance.counts.absent)} label="Days absent" /> : null}
       </section>
 
       {today.entries.length > 0 ? (
@@ -360,7 +363,7 @@ export default function PortalPage() {
         </section>
       ) : null}
 
-      <section id="portal-marks" className="section" aria-label="Marks by subject">
+      {edition === "school" ? <SchoolTermMarks academicYear={year} /> : <section id="portal-marks" className="section" aria-label="Marks by subject">
         <div className="section-head">
           <h2>My marks</h2>
           <span className="stat-sub num">{marks.subjects.length} subjects</span>
@@ -394,7 +397,7 @@ export default function PortalPage() {
             </div>
           </>
         )}
-      </section>
+      </section>}
 
       {/* --- results --- */}
       {results !== null ? (
@@ -556,9 +559,9 @@ export default function PortalPage() {
         <section id="portal-fees" className="section" aria-label="My fees">
           <div className="section-head">
             <h2>My fees</h2>
-            <span className="stat-sub num">
+            {fees.length > 0 ? <span className="stat-sub num">
               {totalDues > 0 ? `Dues: ${formatPaise(totalDues)}` : `No dues — you're clear for ${year}`}
-            </span>
+            </span> : null}
           </div>
           {fees.length === 0 ? (
             <EmptyState title="No invoices yet." body="Fee invoices appear here once the office generates them." />

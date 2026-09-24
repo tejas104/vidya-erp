@@ -56,7 +56,7 @@ describe("route inventory", () => {
       .map((route) => route.id).sort()).toEqual([
         "fees.child-fees", "notices.child-visible",
         "people.guardian-children", "people.guardian-redeem", "portal.child-attendance",
-        "portal.child-marks", "portal.child-timetable", "portal.child-today",
+        "portal.child-marks", "portal.child-school-marks", "portal.child-timetable", "portal.child-today",
         "reporting.child-report-card-download", "reporting.child-report-cards",
       ]);
   });

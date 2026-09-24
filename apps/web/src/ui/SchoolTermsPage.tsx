@@ -26,6 +26,7 @@ export function SchoolTermsPage() {
   const [startsOn, setStartsOn] = useState("");
   const [endsOn, setEndsOn] = useState("");
   const [target, setTarget] = useState<SchoolTermView | null>(null);
+  const [releaseTarget, setReleaseTarget] = useState<SchoolTermView | null>(null);
   const [configuring, setConfiguring] = useState<SchoolTermView | null>(null);
   const [reason, setReason] = useState("");
   const [saving, setSaving] = useState(false);
@@ -55,6 +56,7 @@ export function SchoolTermsPage() {
     if (saving) return;
     setCreating(false);
     setTarget(null);
+    setReleaseTarget(null);
     setSaveError(null);
   }
 
@@ -91,6 +93,20 @@ export function SchoolTermsPage() {
     } finally { setSaving(false); }
   }
 
+  async function releaseMarks() {
+    if (!releaseTarget || saving) return;
+    setSaving(true);
+    setSaveError(null);
+    try {
+      const updated = await api.schoolReleaseTermMarks(releaseTarget.id);
+      setTerms((current) => current.map((term) => term.id === updated.id ? updated : term));
+      setReleaseTarget(null);
+      toast.push({ status: "good", message: "Term marks released to students and eligible families." });
+    } catch (caught) {
+      setSaveError(caught instanceof ApiError ? caught.message : "Couldn't release term marks. Please retry.");
+    } finally { setSaving(false); }
+  }
+
   return <>
     <PageHeader eyebrow="Academics" title={schoolVocabulary.academicTerms} lede={`Manage the school calendar for each ${schoolVocabulary.academicYear.toLowerCase()} and keep a record of term closures and reopening reasons.`} help={<HelpButton slug="terms" />} />
     <div className={styles.toolbar}>
@@ -108,9 +124,9 @@ export function SchoolTermsPage() {
             term: <><strong>{term.name}</strong><div className={styles.secondary}>{term.academicYear}</div></>,
             school: schools.find((school) => school.id === term.collegeId)?.name ?? "School",
             dates: <span className="num">{term.startsOn} – {term.endsOn}</span>,
-            status: <StatusBadge status={term.status === "open" ? "good" : "neutral"}>{term.status === "open" ? "Open" : "Closed"}</StatusBadge>,
+            status: <><StatusBadge status={term.status === "open" ? "good" : "neutral"}>{term.status === "open" ? "Open" : "Closed"}</StatusBadge>{term.status === "closed" ? <div className={styles.secondary}>{term.marksReleasedAt ? "Marks released" : "Marks private"}</div> : null}</>,
             reason: term.closedReason ?? "—",
-            actions: <div className={styles.rowActions}><Button variant="ghost" size="sm" onClick={() => setConfiguring(term)}>Assessment types</Button>{admin ? <Button variant="ghost" size="sm" onClick={() => { setTarget(term); setReason(""); setSaveError(null); }}>{term.status === "open" ? "Close term" : "Reopen term"}</Button> : <span>Read only</span>}</div>,
+            actions: <div className={styles.rowActions}><Button variant="ghost" size="sm" onClick={() => setConfiguring(term)}>Assessment types</Button>{admin ? <><Button variant="ghost" size="sm" onClick={() => { setTarget(term); setReason(""); setSaveError(null); }}>{term.status === "open" ? "Close term" : "Reopen term"}</Button>{term.status === "closed" && !term.marksReleasedAt ? <Button variant="ghost" size="sm" onClick={() => { setReleaseTarget(term); setSaveError(null); }}>Release marks</Button> : null}</> : <span>Read only</span>}</div>,
           }))} /></div>
       </Card>
     </AsyncState>
@@ -128,8 +144,13 @@ export function SchoolTermsPage() {
     <Modal open={target !== null} onClose={closeDialog} title={target?.status === "open" ? "Close academic term" : "Reopen academic term"}
       footer={<><Button variant="ghost" onClick={closeDialog} disabled={saving}>Cancel</Button><Button loading={saving} disabled={target?.status === "closed" && !reason.trim()} onClick={() => void transition()}>{target?.status === "open" ? "Confirm closure" : "Confirm reopening"}</Button></>}>
       <p>{target?.name} · {target?.academicYear}</p>
-      <p className={styles.secondary}>{target?.status === "closed" ? "A reason is required and will be recorded in the audit log." : "Closing this term makes its assessment marks read-only. An administrator must reopen it with a reason before making corrections."}</p>
+      <p className={styles.secondary}>{target?.status === "closed" ? "A reason is required and will be recorded in the audit log. Reopening hides this term's marks from student and family views while corrections are made." : "Closing makes marks read-only and releases this term's current results to linked students and guardians with marks access. Review every score first; missing marks will show as incomplete. Reopening with an audited reason hides the term while corrections are made."}</p>
       <Input label={target?.status === "closed" ? "Reopening reason" : "Closure reason (optional)"} value={reason} onChange={(event) => setReason(event.target.value)} maxLength={500} disabled={saving} required={target?.status === "closed"} />
+      {saveError ? <p className="formerror" role="alert">{saveError}</p> : null}
+    </Modal>
+    <Modal open={releaseTarget !== null} onClose={closeDialog} title="Release closed term marks" footer={<><Button variant="ghost" onClick={closeDialog} disabled={saving}>Cancel</Button><Button loading={saving} onClick={() => void releaseMarks()}>Release marks</Button></>}>
+      <p>{releaseTarget?.name} · {releaseTarget?.academicYear}</p>
+      <p className={styles.secondary}>This term was closed before marks release was available. Review its scores first. Releasing shows current results to linked students and guardians with marks access; incomplete subjects remain clearly marked.</p>
       {saveError ? <p className="formerror" role="alert">{saveError}</p> : null}
     </Modal>
     {configuring ? <AssessmentTypesEditor key={configuring.id} term={configuring} admin={admin} onClose={() => setConfiguring(null)} /> : null}

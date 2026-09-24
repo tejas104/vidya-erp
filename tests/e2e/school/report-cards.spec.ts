@@ -192,6 +192,8 @@ test("examination in-charge previews, is warned about missing marks, then issues
     await page.goto("/family");
     await expect(page.getByRole("heading", { name: "Report cards" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Marks", exact: true })).toHaveCount(0);
+    const termMarks = page.getByRole("region", { name: "School term marks" });
+    await expect(termMarks.getByText("No term marks released yet.")).toBeVisible();
     const familyReport = page.getByRole("region", { name: "Report cards" });
     await expect(familyReport.getByText(`Browser report ${suffix}`)).toBeVisible();
     const familyDownload = familyReport.getByRole("link", { name: "Download PDF" });
@@ -199,9 +201,39 @@ test("examination in-charge previews, is warned about missing marks, then issues
     expect(familyPdf.status()).toBe(200);
     expect((await familyPdf.body()).subarray(0, 5).toString("latin1")).toBe("%PDF-");
     await page.screenshot({ path: testInfo.outputPath("family-published-report-card.png"), fullPage: true });
+    expect((await admin.post(`/api/v1/school/terms/${termId}/close`, { data: {} })).status()).toBe(200);
+    await page.reload();
+    await expect(termMarks.getByText("90.00%")).toHaveCount(2);
+    await expect(termMarks.getByText("1 of 1 marks recorded")).toBeVisible();
+    await termMarks.getByText("View assessments").click();
+    await expect(termMarks.getByText("18/20")).toBeVisible();
+    await page.screenshot({ path: testInfo.outputPath("family-closed-term-marks.png"), fullPage: true });
+    expect((await admin.post(`/api/v1/school/terms/${termId}/reopen`, { data: { reason: "Verify release visibility" } })).status()).toBe(200);
+    await page.reload();
+    await expect(termMarks.getByText("No term marks released yet.")).toBeVisible();
     expect((await admin.post(`/api/v1/school/report-cards/${snapshotId}/withdraw`, { data: {} })).status()).toBe(200);
     await page.reload();
     await expect(familyReport.getByText("No report cards published yet.")).toBeVisible();
+
+    // The linked student receives the same closed-term result through their
+    // self-scoped route, without any child id from the browser.
+    expect((await admin.post(`/api/v1/school/terms/${termId}/close`, { data: {} })).status()).toBe(200);
+    const studentUsername = `student-report-${suffix}`;
+    const studentPassword = "student-report-pass-123";
+    const { id: studentUserId } = await post("/api/v1/identity/users", { collegeId, username: studentUsername, displayName: "Asha Browser", temporaryPassword: studentPassword, roles: ["student"] });
+    expect((await admin.post(`/api/v1/identity/users/${studentUserId}/password`, { data: { newPassword: studentPassword } })).status()).toBe(200);
+    expect((await admin.post(`/api/v1/people/students/${studentId}/identity-link`, { data: { identityUserId: studentUserId } })).status()).toBe(200);
+    await page.context().clearCookies();
+    await browserLogin(page, { username: studentUsername, password: studentPassword });
+    await page.goto("/portal");
+    await expect(page.getByRole("heading", { name: "My term marks" })).toBeVisible();
+    await expect(page.getByRole("region", { name: "School term marks" }).getByText("90.00%")).toHaveCount(2);
+    await expect(page.getByRole("heading", { name: "My marks", exact: true })).toHaveCount(0);
+    await page.getByRole("link", { name: "View your marks" }).click();
+    await expect(page.getByRole("region", { name: "School term marks" })).toBeInViewport();
+    await page.setViewportSize({ width: 390, height: 844 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath("student-closed-term-marks.png"), fullPage: true });
 
     await teacher.dispose();
   } finally {

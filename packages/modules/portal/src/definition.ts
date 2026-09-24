@@ -81,6 +81,34 @@ const marksSchema = z.object({
   overallPct: z.number().nullable(),
 });
 
+const schoolMarksSchema = z.object({
+  terms: z.array(z.object({
+    termId: z.string(),
+    termName: z.string(),
+    academicYear: academicYearSchema,
+    endsOn: z.string(),
+    overallPct: z.number().nullable(),
+    complete: z.boolean(),
+    subjects: z.array(z.object({
+      subjectId: z.string(),
+      name: z.string(),
+      percentage: z.number().nullable(),
+      status: z.enum(["complete", "incomplete", "unavailable"]),
+      recordedCount: z.number().int(),
+      assessmentCount: z.number().int(),
+      assessments: z.array(z.object({
+        assessmentId: z.string(),
+        name: z.string(),
+        typeName: z.string(),
+        heldOn: z.string(),
+        maxScore: z.number(),
+        score: z.number().nullable(),
+        status: z.enum(["scored", "absent", "exempt", "missing"]),
+      })),
+    })),
+  })),
+});
+
 const yearQuery = z.object({ academicYear: academicYearSchema });
 
 const timetableEntrySchema = z.object({
@@ -173,6 +201,20 @@ const routes: RouteSpec[] = [
       404: { description: "This sign-in is not linked to a student record", schema: problemSchema },
     },
   },
+  {
+    id: "portal.my-school-marks",
+    module: MODULE_NAME,
+    method: "GET",
+    path: "/api/v1/portal/school-marks",
+    summary: "Closed school-term marks for the signed-in student",
+    tags: ["portal"],
+    auth: STUDENT_ONLY,
+    request: { query: yearQuery },
+    responses: {
+      200: { description: "Released school-term marks", schema: schoolMarksSchema },
+      404: { description: "Student unlinked or school edition unavailable", schema: problemSchema },
+    },
+  },
 ];
 
 const timetableResponseSchema = z.object({ periods: z.array(periodSchema), entries: z.array(timetableEntrySchema) });
@@ -203,6 +245,20 @@ export const portalModuleDefinition: ModuleDefinition = {
   name: MODULE_NAME,
   tablePrefix: TABLE_PREFIX,
   migrationsDir: "migrations",
-  routes: [...routes, ...childRoutes],
+  routes: [...routes, ...childRoutes, {
+    id: "portal.child-school-marks",
+    module: MODULE_NAME,
+    method: "GET",
+    path: "/api/v1/portal/children/{studentId}/school-marks",
+    summary: "Closed school-term marks for an authorized child",
+    tags: ["portal-family"],
+    auth: GUARDIAN_ONLY,
+    request: { params: childParams, query: yearQuery },
+    responses: {
+      200: { description: "Released school-term marks", schema: schoolMarksSchema },
+      403: guardianDenied,
+      404: { description: "School edition unavailable", schema: problemSchema },
+    },
+  }],
   jobs: [],
 };

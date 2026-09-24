@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { api, type NoticeView } from "./api";
 import { Badge } from "./Badge";
 import { EmptyState } from "./EmptyState";
+import { useHelpEdition } from "./help/HelpEditionContext";
 
 const INITIAL_SHOWN = 5;
 
@@ -10,6 +11,7 @@ const INITIAL_SHOWN = 5;
  * Renders nothing at all while the notices module isn't answering, an
  * EmptyState when the board is clear, and rules-divided entries otherwise. */
 export function Noticeboard() {
+  const edition = useHelpEdition();
   const [notices, setNotices] = useState<NoticeView[] | null>(null);
   const [failed, setFailed] = useState(false);
   const [showAll, setShowAll] = useState(false);
@@ -27,7 +29,7 @@ export function Noticeboard() {
     <section className="section" aria-label="Noticeboard">
       <div className="section-head"><h2>Noticeboard</h2></div>
       {notices.length === 0 ? (
-        <EmptyState title="Nothing on the board." message="Notices from the college appear here." />
+        <EmptyState title="Nothing on the board." message={`Notices from the ${edition === "school" ? "school" : "college"} appear here.`} />
       ) : (
         <div style={{ display: "grid", gap: 0 }}>
           {shown.map((notice) => (

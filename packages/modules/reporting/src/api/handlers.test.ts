@@ -52,6 +52,7 @@ class FakePeopleDirectory implements PeopleDirectory {
   async collegeExists(): Promise<boolean> { return false; }
   async sectionRoster(): Promise<{ studentId: string; academicYear: string }[]> { return []; }
   async studentPosition(): Promise<OrgPath | null> { return null; }
+  async studentPositionForAcademicYear(): Promise<OrgPath | null> { return null; }
   async studentByIdentityUser() { return null; }
   async teacherByIdentityUser() { return null; }
   async teacherDepartments(): Promise<string[]> { return []; }

@@ -33,6 +33,7 @@ export const termViewSchema = z.object({
   closedAt: z.string().nullable(),
   closedBy: z.string().nullable(),
   closedReason: z.string().nullable(),
+  marksReleasedAt: z.string().nullable(),
 });
 
 const termsResponseSchema = z.object({ terms: z.array(termViewSchema) });
@@ -150,6 +151,23 @@ const routes: RouteSpec[] = [
       404: { description: "No such term", schema: problemSchema },
       409: { description: "Already open", schema: problemSchema },
       422: { description: "Missing or blank reason", schema: problemSchema },
+    },
+  },
+  {
+    id: "school-academics.release-marks",
+    module: MODULE_NAME,
+    method: "POST",
+    path: "/api/v1/school/terms/{termId}/release-marks",
+    summary: "Release marks for a closed term that predates this feature",
+    tags: ["school-academics"],
+    auth: ANY_AUTHENTICATED,
+    request: { params: z.object({ termId: idSchema }) },
+    audit: { action: "school-academics.marks-released", resourceType: "term" },
+    responses: {
+      200: { description: "Marks released", schema: termViewSchema },
+      403: { description: "Outside the caller's scope", schema: problemSchema },
+      404: { description: "No such term", schema: problemSchema },
+      409: { description: "Term open, already released, or changed", schema: problemSchema },
     },
   },
 ];

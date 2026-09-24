@@ -64,6 +64,7 @@ function row(over: Partial<SchTermRow> = {}): SchTermRow {
     closedAt: null,
     closedBy: null,
     closedReason: null,
+    marksReleasedAt: null,
     createdAt: new Date(),
     updatedAt: new Date(),
     ...over,
@@ -95,6 +96,13 @@ function fakeRepo(seed: SchTermRow[] = []): TermsRepo & { rows: SchTermRow[] } {
       target.closedAt = new Date();
       target.closedBy = input.actorId;
       target.closedReason = input.reason;
+      target.marksReleasedAt = input.status === "closed" ? new Date() : null;
+      return target;
+    },
+    async releaseMarks(id) {
+      const target = rows.find((r) => r.id === id);
+      if (!target || target.status !== "closed" || target.marksReleasedAt !== null) return null;
+      target.marksReleasedAt = new Date();
       return target;
     },
   };
@@ -267,6 +275,28 @@ describe("school-academics.reopen", () => {
       ctx(schoolAdmin, { params: { termId: "trm_1" }, body: { reason: "because" } }),
     );
     expect(result.status).toBe(409);
+  });
+});
+
+describe("school-academics.release-marks", () => {
+  it("releases an old closed term once, with an audit event", async () => {
+    const repo = fakeRepo([row({ status: "closed" })]);
+    const release = handlers(repo)["school-academics.release-marks"]!;
+    const result = await release(ctx(schoolAdmin, { params: { termId: "trm_1" } }));
+    expect(result.status).toBe(200);
+    expect((result.body as { marksReleasedAt: string | null }).marksReleasedAt).not.toBeNull();
+    expect(result.audit).toMatchObject({ org: { collegeId: SCHOOL }, resourceId: "trm_1" });
+    expect((await release(ctx(schoolAdmin, { params: { termId: "trm_1" } }))).status).toBe(409);
+    expect((await handlers(repo)["school-academics.reopen"]!(ctx(schoolAdmin, { params: { termId: "trm_1" }, body: { reason: "Fix score" } }))).status).toBe(200);
+    expect(repo.rows[0]!.marksReleasedAt).toBeNull();
+  });
+
+  it("refuses an unscoped admin and an open term", async () => {
+    const repo = fakeRepo([row({ status: "closed" })]);
+    const release = handlers(repo)["school-academics.release-marks"]!;
+    expect((await release(ctx(foreignAdmin, { params: { termId: "trm_1" } }))).status).toBe(403);
+    repo.rows[0]!.status = "open";
+    expect((await release(ctx(schoolAdmin, { params: { termId: "trm_1" } }))).status).toBe(409);
   });
 });
 

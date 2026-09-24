@@ -223,6 +223,8 @@ export function buildStack(edition: "college" | "school" = "college") {
     academicsRead: academics.service.readModel,
     timetableRead: timetable.service.readModel,
     guardianAccess: people.service.guardianAccess,
+    edition,
+    schoolAcademicsRead: schoolAcademics.service.readModel,
   });
 
   const enqueuedFees: { runId: string }[] = [];

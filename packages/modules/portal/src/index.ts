@@ -13,6 +13,7 @@ import { assertModuleWiring, type RuntimeModule } from "@vidya/platform";
 import type { AcademicsReadModel } from "@vidya/module-academics";
 import type { PeopleDirectory, PeopleModuleService } from "@vidya/module-people";
 import type { TimetableReadModel } from "@vidya/module-timetable";
+import type { SchoolAcademicsReadModel } from "@vidya/module-school-academics";
 import { portalModuleDefinition } from "./definition";
 import { createPortalHandlers } from "./handlers";
 
@@ -24,6 +25,8 @@ export interface PortalModuleDeps {
   readonly timetableRead: TimetableReadModel;
   /** ADR-0027: people's guardian access decision, for the family routes. */
   readonly guardianAccess: PeopleModuleService["guardianAccess"];
+  readonly edition?: "school" | "college";
+  readonly schoolAcademicsRead?: SchoolAcademicsReadModel;
 }
 
 export function createPortalModule(deps: PortalModuleDeps): RuntimeModule<Record<string, never>> {
@@ -34,6 +37,8 @@ export function createPortalModule(deps: PortalModuleDeps): RuntimeModule<Record
       academicsRead: deps.academicsRead,
       timetableRead: deps.timetableRead,
       guardianAccess: deps.guardianAccess,
+      edition: deps.edition,
+      schoolAcademicsRead: deps.schoolAcademicsRead,
     }),
     jobProcessors: {},
     readinessChecks: [],

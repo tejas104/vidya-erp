@@ -161,11 +161,12 @@ describe("Guardian access over real Postgres", () => {
     expect(attendance.status, await attendance.clone().text()).toBe(200);
     // No register taken yet: an absence of records, never a 0% figure.
     expect(await attendance.json()).toMatchObject({ pct: null, counts: { present: 0, absent: 0, late: 0, excused: 0 } });
-    expect((await read(guardian, "marks")).status).toBe(200);
+    expect((await read(guardian, "school-marks")).status).toBe(200);
+    expect((await read(guardian, "marks")).status).toBe(404);
     expect((await read(guardian, "timetable")).status).toBe(200);
 
     expect((await read(guardian, "attendance", otherStudentId)).status).toBe(403);
-    for (const view of ["attendance", "marks", "timetable", "today"]) {
+    for (const view of ["attendance", "school-marks", "timetable", "today"]) {
       const unrelated = await read(guardian, view, otherStudentId);
       const unknown = await read(guardian, view, "stu_does_not_exist");
       expect(unrelated.status).toBe(403);

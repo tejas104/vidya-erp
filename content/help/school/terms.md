@@ -39,6 +39,8 @@ Assessment types cannot be changed while the term is closed. They are also fixed
 2. Review the term and optionally record a **Closure reason**.
 3. Select **Confirm closure**.
 
-Closing a term makes its assessment marks read-only. Teachers can still view recorded marks and grades, but cannot create assessments or correct marks for that term.
+Closing a term makes its assessment marks read-only and releases the current term results to linked students and guardians whose relationship includes marks access. Review scores before closing. Missing marks display as incomplete, never as zero. Teachers can still view recorded marks and grades, but cannot create assessments or correct marks for that term. Report-card PDFs have a separate publication step.
 
-To make a correction, an administrator must select **Reopen term**, enter a non-blank **Reopening reason**, and select **Confirm reopening**. The reason and transition are recorded in the audit log. If the term was already changed by another administrator, reload the register and review its current status before trying again.
+Terms that were already closed before this feature was introduced remain **Marks private**. After reviewing scores, an administrator can select **Release marks** and confirm the release. This action is recorded in the audit log; it is available only for closed terms that have not yet been released.
+
+To make a correction, an administrator must select **Reopen term**, enter a non-blank **Reopening reason**, and select **Confirm reopening**. Reopening hides the term results from the student and family marks views while the correction is in progress. Close the term again to release the corrected result. The reason and transition are recorded in the audit log. If the term was already changed by another administrator, reload the register and review its current status before trying again.

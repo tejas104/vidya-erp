@@ -31,6 +31,7 @@ function termView(row: SchTermRow) {
     closedAt: row.closedAt ? row.closedAt.toISOString() : null,
     closedBy: row.closedBy,
     closedReason: row.closedReason,
+    marksReleasedAt: row.marksReleasedAt?.toISOString() ?? null,
   };
 }
 
@@ -109,6 +110,21 @@ export function createSchoolAcademicsHandlers(
     return { status: 200, body: { terms: visible.map(termView) } };
   };
 
+  /** Old closed terms need an explicit administrator decision before family disclosure. */
+  const releaseMarks: RouteHandler = async (ctx) => {
+    const principal = ctx.principal as Principal;
+    const { termId } = ctx.request.params as { termId: string };
+    const term = await deps.repo.get(termId);
+    if (term === null) return notFound("no such term");
+    if (!writeAllowed(principal, termRef(term).org)) return denied();
+    if (term.status !== "closed" || term.marksReleasedAt !== null) {
+      return { status: 409, body: { message: "Only a closed, unreleased term can be released." } };
+    }
+    const updated = await deps.repo.releaseMarks(termId);
+    if (updated === null) return { status: 409, body: { message: "The term changed. Reload before trying again." } };
+    return { status: 200, body: termView(updated), audit: { org: termRef(term).org, resourceId: termId, details: { marksReleasedAt: updated.marksReleasedAt?.toISOString() } } };
+  };
+
   /** close and reopen differ only in target status and whether a reason is required. */
   function transition(to: "open" | "closed"): RouteHandler {
     return async (ctx) => {
@@ -149,5 +165,6 @@ export function createSchoolAcademicsHandlers(
     "school-academics.list": list,
     "school-academics.close": transition("closed"),
     "school-academics.reopen": transition("open"),
+    "school-academics.release-marks": releaseMarks,
   };
 }

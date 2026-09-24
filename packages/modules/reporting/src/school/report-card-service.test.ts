@@ -26,6 +26,7 @@ const TERM: SchoolTermRecord = {
   startsOn: "2026-06-01",
   endsOn: "2026-06-05",
   status: "open",
+  marksReleasedAt: null,
   gradeBands: [
     { minPct: 0, grade: "F", points: 0 },
     { minPct: 40, grade: "C", points: 5 },
@@ -45,7 +46,7 @@ function source(overrides: Partial<SchoolTermResultSource> = {}): SchoolTermResu
     subjects: [
       {
         subjectId: "sub-math",
-        assessments: [{ id: "a1", typeId: "type-1", maxScore: 100 }],
+        assessments: [{ id: "a1", typeId: "type-1", maxScore: 100, name: "Exam", heldOn: "2026-06-01", typeName: "Exam" }],
         entries: [{ assessmentId: "a1", status: "scored", score: 90 }],
       },
     ],
@@ -117,8 +118,8 @@ describe("ReportCardBuilder", () => {
             {
               subjectId: "sub-math",
               assessments: [
-                { id: "a1", typeId: "type-1", maxScore: 100 },
-                { id: "a2", typeId: "type-1", maxScore: 100 },
+                { id: "a1", typeId: "type-1", maxScore: 100, name: "Exam 1", heldOn: "2026-06-01", typeName: "Exam" },
+                { id: "a2", typeId: "type-1", maxScore: 100, name: "Exam 2", heldOn: "2026-06-02", typeName: "Exam" },
               ],
               // a2 was never marked for this pupil.
               entries: [
@@ -149,12 +150,12 @@ describe("ReportCardBuilder", () => {
           subjects: [
             {
               subjectId: "sub-math",
-              assessments: [{ id: "a1", typeId: "type-1", maxScore: 100 }],
+              assessments: [{ id: "a1", typeId: "type-1", maxScore: 100, name: "Exam", heldOn: "2026-06-01", typeName: "Exam" }],
               entries: [{ assessmentId: "a1", status: "scored", score: 90 }],
             },
             {
               subjectId: "sub-sci",
-              assessments: [{ id: "a2", typeId: "type-1", maxScore: 100 }],
+              assessments: [{ id: "a2", typeId: "type-1", maxScore: 100, name: "Exam", heldOn: "2026-06-01", typeName: "Exam" }],
               entries: [{ assessmentId: "a2", status: "missing" }],
             },
           ],
@@ -176,12 +177,12 @@ describe("ReportCardBuilder", () => {
           subjects: [
             {
               subjectId: "sub-math",
-              assessments: [{ id: "a1", typeId: "type-1", maxScore: 100 }],
+              assessments: [{ id: "a1", typeId: "type-1", maxScore: 100, name: "Exam", heldOn: "2026-06-01", typeName: "Exam" }],
               entries: [{ assessmentId: "a1", status: "scored", score: 90 }],
             },
             {
               subjectId: "sub-sci",
-              assessments: [{ id: "a2", typeId: "type-1", maxScore: 100 }],
+              assessments: [{ id: "a2", typeId: "type-1", maxScore: 100, name: "Exam", heldOn: "2026-06-01", typeName: "Exam" }],
               entries: [{ assessmentId: "a2", status: "scored", score: 70 }],
             },
           ],

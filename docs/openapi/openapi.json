@@ -16823,6 +16823,207 @@
         }
       }
     },
+    "/api/v1/portal/school-marks": {
+      "get": {
+        "summary": "Closed school-term marks for the signed-in student",
+        "description": "**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "portal"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}$"
+            },
+            "required": true,
+            "name": "academicYear",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Released school-term marks",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "terms": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "termId": {
+                            "type": "string"
+                          },
+                          "termName": {
+                            "type": "string"
+                          },
+                          "academicYear": {
+                            "type": "string",
+                            "pattern": "^\\d{4}-\\d{2}$"
+                          },
+                          "endsOn": {
+                            "type": "string"
+                          },
+                          "overallPct": {
+                            "type": "number",
+                            "nullable": true
+                          },
+                          "complete": {
+                            "type": "boolean"
+                          },
+                          "subjects": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "subjectId": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                },
+                                "percentage": {
+                                  "type": "number",
+                                  "nullable": true
+                                },
+                                "status": {
+                                  "type": "string",
+                                  "enum": [
+                                    "complete",
+                                    "incomplete",
+                                    "unavailable"
+                                  ]
+                                },
+                                "recordedCount": {
+                                  "type": "integer"
+                                },
+                                "assessmentCount": {
+                                  "type": "integer"
+                                },
+                                "assessments": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "assessmentId": {
+                                        "type": "string"
+                                      },
+                                      "name": {
+                                        "type": "string"
+                                      },
+                                      "typeName": {
+                                        "type": "string"
+                                      },
+                                      "heldOn": {
+                                        "type": "string"
+                                      },
+                                      "maxScore": {
+                                        "type": "number"
+                                      },
+                                      "score": {
+                                        "type": "number",
+                                        "nullable": true
+                                      },
+                                      "status": {
+                                        "type": "string",
+                                        "enum": [
+                                          "scored",
+                                          "absent",
+                                          "exempt",
+                                          "missing"
+                                        ]
+                                      }
+                                    },
+                                    "required": [
+                                      "assessmentId",
+                                      "name",
+                                      "typeName",
+                                      "heldOn",
+                                      "maxScore",
+                                      "score",
+                                      "status"
+                                    ]
+                                  }
+                                }
+                              },
+                              "required": [
+                                "subjectId",
+                                "name",
+                                "percentage",
+                                "status",
+                                "recordedCount",
+                                "assessmentCount",
+                                "assessments"
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "termId",
+                          "termName",
+                          "academicYear",
+                          "endsOn",
+                          "overallPct",
+                          "complete",
+                          "subjects"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "terms"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Access denied by the role/scope policy (problem+json)"
+          },
+          "404": {
+            "description": "Student unlinked or school edition unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/portal/children/{studentId}/attendance": {
       "get": {
         "summary": "A linked child's attendance summary (guardian)",
@@ -17377,6 +17578,244 @@
           },
           "403": {
             "description": "No relationship grants this category for this child",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/portal/children/{studentId}/school-marks": {
+      "get": {
+        "summary": "Closed school-term marks for an authorized child",
+        "description": "**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "portal-family"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "studentId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}$"
+            },
+            "required": true,
+            "name": "academicYear",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Released school-term marks",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "terms": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "termId": {
+                            "type": "string"
+                          },
+                          "termName": {
+                            "type": "string"
+                          },
+                          "academicYear": {
+                            "type": "string",
+                            "pattern": "^\\d{4}-\\d{2}$"
+                          },
+                          "endsOn": {
+                            "type": "string"
+                          },
+                          "overallPct": {
+                            "type": "number",
+                            "nullable": true
+                          },
+                          "complete": {
+                            "type": "boolean"
+                          },
+                          "subjects": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "subjectId": {
+                                  "type": "string"
+                                },
+                                "name": {
+                                  "type": "string"
+                                },
+                                "percentage": {
+                                  "type": "number",
+                                  "nullable": true
+                                },
+                                "status": {
+                                  "type": "string",
+                                  "enum": [
+                                    "complete",
+                                    "incomplete",
+                                    "unavailable"
+                                  ]
+                                },
+                                "recordedCount": {
+                                  "type": "integer"
+                                },
+                                "assessmentCount": {
+                                  "type": "integer"
+                                },
+                                "assessments": {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "assessmentId": {
+                                        "type": "string"
+                                      },
+                                      "name": {
+                                        "type": "string"
+                                      },
+                                      "typeName": {
+                                        "type": "string"
+                                      },
+                                      "heldOn": {
+                                        "type": "string"
+                                      },
+                                      "maxScore": {
+                                        "type": "number"
+                                      },
+                                      "score": {
+                                        "type": "number",
+                                        "nullable": true
+                                      },
+                                      "status": {
+                                        "type": "string",
+                                        "enum": [
+                                          "scored",
+                                          "absent",
+                                          "exempt",
+                                          "missing"
+                                        ]
+                                      }
+                                    },
+                                    "required": [
+                                      "assessmentId",
+                                      "name",
+                                      "typeName",
+                                      "heldOn",
+                                      "maxScore",
+                                      "score",
+                                      "status"
+                                    ]
+                                  }
+                                }
+                              },
+                              "required": [
+                                "subjectId",
+                                "name",
+                                "percentage",
+                                "status",
+                                "recordedCount",
+                                "assessmentCount",
+                                "assessments"
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "termId",
+                          "termName",
+                          "academicYear",
+                          "endsOn",
+                          "overallPct",
+                          "complete",
+                          "subjects"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "terms"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "No relationship grants this category for this child",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "School edition unavailable",
             "content": {
               "application/json": {
                 "schema": {
@@ -29195,6 +29634,10 @@
                     "closedReason": {
                       "type": "string",
                       "nullable": true
+                    },
+                    "marksReleasedAt": {
+                      "type": "string",
+                      "nullable": true
                     }
                   },
                   "required": [
@@ -29207,7 +29650,8 @@
                     "status",
                     "closedAt",
                     "closedBy",
-                    "closedReason"
+                    "closedReason",
+                    "marksReleasedAt"
                   ]
                 }
               }
@@ -29410,6 +29854,10 @@
                           "closedReason": {
                             "type": "string",
                             "nullable": true
+                          },
+                          "marksReleasedAt": {
+                            "type": "string",
+                            "nullable": true
                           }
                         },
                         "required": [
@@ -29422,7 +29870,8 @@
                           "status",
                           "closedAt",
                           "closedBy",
-                          "closedReason"
+                          "closedReason",
+                          "marksReleasedAt"
                         ]
                       }
                     }
@@ -29527,6 +29976,10 @@
                     "closedReason": {
                       "type": "string",
                       "nullable": true
+                    },
+                    "marksReleasedAt": {
+                      "type": "string",
+                      "nullable": true
                     }
                   },
                   "required": [
@@ -29539,7 +29992,8 @@
                     "status",
                     "closedAt",
                     "closedBy",
-                    "closedReason"
+                    "closedReason",
+                    "marksReleasedAt"
                   ]
                 }
               }
@@ -29728,6 +30182,10 @@
                     "closedReason": {
                       "type": "string",
                       "nullable": true
+                    },
+                    "marksReleasedAt": {
+                      "type": "string",
+                      "nullable": true
                     }
                   },
                   "required": [
@@ -29740,7 +30198,8 @@
                     "status",
                     "closedAt",
                     "closedBy",
-                    "closedReason"
+                    "closedReason",
+                    "marksReleasedAt"
                   ]
                 }
               }
@@ -29841,6 +30300,193 @@
           },
           "422": {
             "description": "Missing or blank reason",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/school/terms/{termId}/release-marks": {
+      "post": {
+        "summary": "Release marks for a closed term that predates this feature",
+        "description": "**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "school-academics"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "termId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Marks released",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "collegeId": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "academicYear": {
+                      "type": "string"
+                    },
+                    "startsOn": {
+                      "type": "string"
+                    },
+                    "endsOn": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "open",
+                        "closed"
+                      ]
+                    },
+                    "closedAt": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "closedBy": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "closedReason": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "marksReleasedAt": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "collegeId",
+                    "name",
+                    "academicYear",
+                    "startsOn",
+                    "endsOn",
+                    "status",
+                    "closedAt",
+                    "closedBy",
+                    "closedReason",
+                    "marksReleasedAt"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Outside the caller's scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such term",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Term open, already released, or changed",
             "content": {
               "application/json": {
                 "schema": {

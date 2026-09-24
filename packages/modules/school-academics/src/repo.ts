@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import type { Db } from "@vidya/platform";
 import { schTerms, type SchTermRow } from "./db/schema";
 
@@ -38,6 +38,8 @@ export interface TermsRepo {
     actorId: string;
     reason: string | null;
   }): Promise<SchTermRow | null>;
+  /** Explicitly release a previously closed term (e.g. one closed before rollout). */
+  releaseMarks(id: string): Promise<SchTermRow | null>;
 }
 
 export function createTermsRepo(db: Db): TermsRepo {
@@ -82,9 +84,17 @@ export function createTermsRepo(db: Db): TermsRepo {
           closedAt: new Date(),
           closedBy: input.actorId,
           closedReason: input.reason,
+          marksReleasedAt: input.status === "closed" ? new Date() : null,
           updatedAt: new Date(),
         })
         .where(and(eq(schTerms.id, input.id), eq(schTerms.status, input.status === "open" ? "closed" : "open")))
+        .returning();
+      return rows[0] ?? null;
+    },
+    async releaseMarks(id) {
+      const rows = await db.update(schTerms)
+        .set({ marksReleasedAt: new Date(), updatedAt: new Date() })
+        .where(and(eq(schTerms.id, id), eq(schTerms.status, "closed"), isNull(schTerms.marksReleasedAt)))
         .returning();
       return rows[0] ?? null;
     },

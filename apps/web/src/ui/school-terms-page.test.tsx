@@ -7,9 +7,9 @@ import { HelpEditionProvider } from "./help/HelpEditionContext";
 
 vi.mock("./api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./api")>();
-  return { ...actual, api: { ...actual.api, schoolTerms: vi.fn(), session: vi.fn(), colleges: vi.fn(), schoolCreateTerm: vi.fn(), schoolTransitionTerm: vi.fn() } };
+  return { ...actual, api: { ...actual.api, schoolTerms: vi.fn(), session: vi.fn(), colleges: vi.fn(), schoolCreateTerm: vi.fn(), schoolTransitionTerm: vi.fn(), schoolReleaseTermMarks: vi.fn() } };
 });
-const term: SchoolTermView = { id: "trm_1", collegeId: "col_1", name: "Term 1", academicYear: "2026-27", startsOn: "2026-04-01", endsOn: "2026-09-30", status: "closed", closedAt: null, closedBy: null, closedReason: "Year end" };
+const term: SchoolTermView = { id: "trm_1", collegeId: "col_1", name: "Term 1", academicYear: "2026-27", startsOn: "2026-04-01", endsOn: "2026-09-30", status: "closed", closedAt: null, closedBy: null, closedReason: "Year end", marksReleasedAt: null };
 
 beforeEach(() => {
   vi.resetAllMocks();
@@ -27,7 +27,7 @@ describe("School term management", () => {
     expect(await screen.findByRole("heading", { name: "Academic Terms" })).toBeInTheDocument();
     expect(screen.getByLabelText("Academic Year")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Close term" }));
-    expect(screen.getByRole("dialog")).toHaveTextContent("Closing this term makes its assessment marks read-only. An administrator must reopen it with a reason before making corrections.");
+    expect(screen.getByRole("dialog")).toHaveTextContent("Closing makes marks read-only and releases this term's current results to linked students and guardians with marks access.");
     expect(screen.queryByText(/college-style marks/i)).not.toBeInTheDocument();
   });
 
@@ -74,5 +74,17 @@ describe("School term management", () => {
     expect(await screen.findByText("Term 1")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Create term" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Reopen term" })).not.toBeInTheDocument();
+  });
+
+  it("confirms release for a previously closed private term", async () => {
+    vi.mocked(api.schoolReleaseTermMarks).mockResolvedValue({ ...term, marksReleasedAt: "2026-09-24T12:00:00.000Z" });
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: "Release marks" }));
+    const dialog = screen.getByRole("dialog", { name: "Release closed term marks" });
+    expect(dialog).toHaveTextContent("This term was closed before marks release was available.");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Release marks" }));
+    await waitFor(() => expect(api.schoolReleaseTermMarks).toHaveBeenCalledWith("trm_1"));
+    expect(screen.getByText("Marks released")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Release marks" })).not.toBeInTheDocument();
   });
 });

@@ -139,6 +139,10 @@ export class FakePeopleDirectory implements PeopleDirectory {
     return null;
   }
 
+  async studentPositionForAcademicYear(studentId: string, academicYear: string): Promise<OrgPath | null> {
+    return academicYear === "2026-27" ? this.studentPosition(studentId) : null;
+  }
+
   async studentsExist(studentIds: readonly string[]): Promise<Set<string>> {
     const known = new Set<string>([ORG.studentA1, ORG.studentA2, ORG.studentB1]);
     return new Set(studentIds.filter((id) => known.has(id)));
