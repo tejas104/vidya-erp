@@ -129,16 +129,25 @@ test("examination in-charge previews, is warned about missing marks, then issues
     await confirm.getByRole("button", { name: "Generate with warnings" }).click();
 
     await expect(page.getByRole("link", { name: "Download PDF" })).toBeVisible();
-    await expect(page.getByRole("button", { name: /Asha Browser/ }).getByText("Generated")).toBeVisible();
+    await expect(page.getByRole("button", { name: /Asha Browser/ }).getByText("Private draft")).toBeVisible();
     await page.screenshot({ path: testInfo.outputPath("report-card-generated.png"), fullPage: true });
 
     // The download must be a real PDF served to the browser session.
     const href = await page.getByRole("link", { name: "Download PDF" }).getAttribute("href");
     expect(href).toMatch(/\/api\/v1\/school\/report-cards\/.+\/download$/);
+    const snapshotId = href!.match(/report-cards\/([^/]+)\/download$/)![1]!;
     const pdf = await page.request.get(href!);
     expect(pdf.status()).toBe(200);
     expect(pdf.headers()["content-type"]).toContain("application/pdf");
     expect((await pdf.body()).subarray(0, 5).toString("latin1")).toBe("%PDF-");
+
+    // A generated snapshot stays private until school leadership reviews the
+    // issued PDF and explicitly releases that exact snapshot.
+    await page.getByRole("button", { name: "Publish to family" }).click();
+    const publish = page.getByRole("dialog", { name: "Publish report card to family" });
+    await expect(publish).toContainText("this exact snapshot");
+    await publish.getByRole("button", { name: "Publish to family" }).click();
+    await expect(page.getByRole("button", { name: /Asha Browser/ }).getByText("Published")).toBeVisible();
 
     // Responsive and both themes, matching the other school journeys.
     await page.setViewportSize({ width: 390, height: 844 });
@@ -161,7 +170,38 @@ test("examination in-charge previews, is warned about missing marks, then issues
     await classPicker.selectOption(classId);
     await page.getByRole("button", { name: /Asha Browser/ }).click();
     await expect(page.getByRole("link", { name: "Download PDF" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Publish to family" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Withdraw family access" })).toHaveCount(0);
     await page.screenshot({ path: testInfo.outputPath("class-teacher-report-card-desk.png"), fullPage: true });
+
+    // A family member sees the released snapshot, then loses it on withdrawal
+    // without any session reset or change to the underlying school record.
+    const invitation = await admin.post(`/api/v1/people/students/${studentId}/guardian-invitations`, {
+      data: { guardianName: "Leela Browser", relationshipType: "parent", contactMethod: "email", contactValue: `leela-${suffix}@example.test` },
+    });
+    expect(invitation.status()).toBe(201);
+    const { code } = (await invitation.json()) as { code: string };
+    const familyUsername = `family-report-${suffix}`;
+    const familyPassword = "family-report-pass-123";
+    const activation = await page.request.post("/api/v1/people/guardian-invitations/activate", {
+      data: { code, fullName: "Leela Browser", username: familyUsername, password: familyPassword },
+    });
+    expect(activation.status(), await activation.text()).toBe(201);
+    await page.context().clearCookies();
+    await browserLogin(page, { username: familyUsername, password: familyPassword });
+    await page.goto("/family");
+    await expect(page.getByRole("heading", { name: "Report cards" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Marks", exact: true })).toHaveCount(0);
+    const familyReport = page.getByRole("region", { name: "Report cards" });
+    await expect(familyReport.getByText(`Browser report ${suffix}`)).toBeVisible();
+    const familyDownload = familyReport.getByRole("link", { name: "Download PDF" });
+    const familyPdf = await page.request.get((await familyDownload.getAttribute("href"))!);
+    expect(familyPdf.status()).toBe(200);
+    expect((await familyPdf.body()).subarray(0, 5).toString("latin1")).toBe("%PDF-");
+    await page.screenshot({ path: testInfo.outputPath("family-published-report-card.png"), fullPage: true });
+    expect((await admin.post(`/api/v1/school/report-cards/${snapshotId}/withdraw`, { data: {} })).status()).toBe(200);
+    await page.reload();
+    await expect(familyReport.getByText("No report cards published yet.")).toBeVisible();
 
     await teacher.dispose();
   } finally {

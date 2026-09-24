@@ -287,6 +287,7 @@ async function main(): Promise<void> {
     peopleDirectory: people.service.directory,
     linkStudentIdentity: people.service.linkStudentIdentity,
     identity: { issueCredential: identity.service.issueCredential },
+    guardianAccess: people.service.guardianAccess,
   });
 
   // Portal (W1): no jobs — included so the module inventory stays uniform

@@ -30,7 +30,7 @@ import {
 import type { AnalyticsReadModel } from "@vidya/module-analytics";
 import type { AcademicsReadModel } from "@vidya/module-academics";
 import type { SchoolAcademicsReadModel } from "@vidya/module-school-academics";
-import type { PeopleDirectory } from "@vidya/module-people";
+import type { PeopleDirectory, PeopleModuleService } from "@vidya/module-people";
 import { z } from "zod";
 import { REPORT_JOB_NAME, reportJobPayloadSchema, reportingModuleDefinition } from "./definition";
 import type { ReportSources } from "./report-data";
@@ -70,6 +70,7 @@ export interface ReportingModuleDeps {
    *  wired independently of the queued report flow above. */
   readonly scopeChecker: ScopeChecker;
   readonly peopleDirectory: PeopleDirectory;
+  readonly guardianAccess: PeopleModuleService["guardianAccess"];
   readonly linkStudentIdentity: (studentId: string, identityUserId: string) => Promise<boolean>;
   readonly identity: CredentialIssuer;
   /** School report cards: the two calculation engines' read models, reached
@@ -134,6 +135,7 @@ export function createReportingModule(deps: ReportingModuleDeps): RuntimeModule<
         schoolAcademics: deps.schoolAcademicsRead,
         directory: deps.peopleDirectory,
         scopeChecker: deps.scopeChecker,
+        guardianAccess: deps.guardianAccess,
       }),
     },
     jobProcessors: {

@@ -112,6 +112,8 @@ export const rosterStudentSchema = z.object({
   /** The most recent snapshot for this student and term, or null. */
   snapshotId: z.string().nullable(),
   generatedAt: z.string().nullable(),
+  /** The snapshot currently released to family, which may differ from latest. */
+  publishedSnapshotId: z.string().nullable(),
 });
 
 export type RosterStudent = z.infer<typeof rosterStudentSchema>;

@@ -200,6 +200,7 @@ export function buildStack(edition: "college" | "school" = "college") {
     peopleDirectory: people.service.directory,
     linkStudentIdentity: people.service.linkStudentIdentity,
     identity: { issueCredential: identity.service.issueCredential },
+    guardianAccess: people.service.guardianAccess,
   });
 
   const syllabus = createSyllabusModule({

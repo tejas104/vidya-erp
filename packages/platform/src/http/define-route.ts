@@ -211,7 +211,7 @@ function rateLimitedResponse(requestId: string, retryAfterSeconds: number): Resp
  *   authorization (role requirement) → zod validation (params/query/body,
  *   size-capped to RouteSpec.bodyMaxBytes or the global default) →
  *   per-identifier rate limit (scoped routes) → handler →
- *   audit (state-changing) → metrics + access log
+ *   audit (declared writes and disclosures) → metrics + access log
  *
  * Security posture (Constitution rule 6): authentication runs unless the
  * RouteSpec explicitly declares itself public. Audit posture (rule 7):
@@ -443,7 +443,6 @@ export function defineRoute(
 
       if (
         spec.audit !== undefined &&
-        STATE_CHANGING_METHODS.has(spec.method) &&
         result.status < 400 &&
         !auditAlreadyPersisted(spec, requestId, result, log)
       ) {

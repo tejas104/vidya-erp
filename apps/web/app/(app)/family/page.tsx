@@ -9,6 +9,7 @@ import {
   type GuardianChild,
   type ChildFeeInvoice,
   type ChildNotice,
+  type ChildReportCard,
   type PortalAttendance,
   type PortalMarks,
   type TtEntry,
@@ -18,6 +19,7 @@ import { AsyncState } from "@/ui/AsyncState";
 import { StatTile, SubjectBars } from "@/ui/charts";
 import { formatPaise } from "@/ui/money";
 import { HelpButton } from "@/ui/help/HelpButton";
+import { useHelpEdition } from "@/ui/help/HelpEditionContext";
 import styles from "./page.module.css";
 
 export const dynamic = "force-dynamic";
@@ -47,6 +49,7 @@ async function orNull<T>(request: Promise<T>): Promise<T | null> {
 }
 
 export default function FamilyPage() {
+  const edition = useHelpEdition();
   const year = useMemo(() => currentAcademicYear(), []);
   const [list, setList] = useState<Children>({ state: "loading" });
   const [selected, setSelected] = useState<string | null>(null);
@@ -102,7 +105,8 @@ export default function FamilyPage() {
         <EmptyState title="This link is no longer active." body="Contact the school office if you think this is a mistake." />
       ) : (
         <>
-          <ChildView key={child.studentId} child={child} year={year} />
+          <ChildView key={child.studentId} child={child} year={year} includeLiveMarks={edition !== "school"} />
+          {child.categories.includes("report-card") ? <ChildReportCards key={`cards:${child.studentId}`} studentId={child.studentId} /> : null}
           {child.categories.includes("fees") ? <ChildFees key={`fees:${child.studentId}`} studentId={child.studentId} /> : null}
           {child.categories.includes("notices") ? <ChildNotices key={`notices:${child.studentId}`} studentId={child.studentId} /> : null}
         </>
@@ -113,7 +117,7 @@ export default function FamilyPage() {
   );
 }
 
-function ChildView({ child, year }: { child: GuardianChild; year: string }) {
+function ChildView({ child, year, includeLiveMarks }: { child: GuardianChild; year: string; includeLiveMarks: boolean }) {
   const [records, setRecords] = useState<{ state: "loading" } | { state: "error" } | { state: "ok"; data: ChildRecords }>({ state: "loading" });
   const can = (category: string) => child.categories.includes(category);
 
@@ -121,12 +125,15 @@ function ChildView({ child, year }: { child: GuardianChild; year: string }) {
     setRecords({ state: "loading" });
     Promise.all([
       can("attendance") ? orNull(api.childAttendance(child.studentId, year)) : Promise.resolve(null),
-      can("marks") ? orNull(api.childMarks(child.studentId, year)) : Promise.resolve(null),
+      // School assessment marks live in the school term engine, while this
+      // legacy portal endpoint reads college assessment marks. Showing its
+      // empty result beside a populated school report card misstates the data.
+      includeLiveMarks && can("marks") ? orNull(api.childMarks(child.studentId, year)) : Promise.resolve(null),
       can("timetable") ? orNull(api.childToday(child.studentId, year)) : Promise.resolve(null),
     ])
       .then(([attendance, marks, today]) => setRecords({ state: "ok", data: { attendance, marks, today } }))
       .catch(() => setRecords({ state: "error" }));
-  }, [child, year]);
+  }, [child, year, includeLiveMarks]);
 
   useEffect(load, [load]);
 
@@ -244,6 +251,23 @@ function ChildFees({ studentId }: { studentId: string }) {
           <div className={styles.recordTop}><div><strong>{invoice.headName}</strong><small>{invoice.academicYear} · Due {invoice.dueOn}</small></div><StatusBadge status={invoice.duesPaise > 0 ? "warn" : "good"}>{invoice.status}</StatusBadge></div>
           <div className={styles.feeAmounts}><span>Total <strong className="num">{formatPaise(invoice.amountPaise)}</strong></span><span>Paid <strong className="num">{formatPaise(invoice.paidPaise)}</strong></span><span>Due <strong className="num">{formatPaise(invoice.duesPaise)}</strong></span></div>
           {invoice.payments.length ? <details><summary>Receipts ({invoice.payments.length})</summary><ul className={styles.receipts}>{invoice.payments.map((payment) => <li key={payment.receiptNo}>#{payment.receiptNo} · {formatPaise(payment.amountPaise)} · {payment.receivedAt.slice(0, 10)}</li>)}</ul></details> : null}
+        </li>)}</ul></Card>}
+    </AsyncState>
+  </section>;
+}
+
+function ChildReportCards({ studentId }: { studentId: string }) {
+  const request = useCallback(() => api.childReportCards(studentId), [studentId]);
+  const { state, retry } = useChildData(request);
+  const cards: ChildReportCard[] = state.kind === "ready" ? state.value.reportCards : [];
+  return <section className="section" aria-label="Report cards">
+    <div className="section-head"><h2>Report cards</h2></div>
+    <AsyncState loading={state.kind === "loading"} error={state.kind === "error"} onRetry={retry} errorMessage="Couldn't load report cards for this child.">
+      {cards.length === 0 ? <EmptyState title="No report cards published yet." body="The school will release report cards here when they are ready." /> :
+        <Card><ul className={styles.recordList}>{cards.map((card) => <li key={card.snapshotId} className={styles.record}>
+          <div className={styles.recordTop}><div><strong>{card.termName}</strong><small>{card.academicYear} · Issued {card.generatedAt.slice(0, 10)}</small></div><StatusBadge status="good">Published</StatusBadge></div>
+          <div className={styles.feeAmounts}><span>Overall <strong>{card.overall.complete && card.overall.percentage !== null ? `${card.overall.percentage.toFixed(1)}%` : "Incomplete"}</strong></span><span>Grade <strong>{card.overall.grade ?? "Not available"}</strong></span><span>Attendance <strong>{card.attendance.complete && card.attendance.percentage !== null ? `${card.attendance.percentage.toFixed(1)}%` : "Incomplete"}</strong></span></div>
+          <a className="ui-btn ui-btn-primary" href={api.childReportCardDownloadUrl(studentId, card.snapshotId)}>Download PDF</a>
         </li>)}</ul></Card>}
     </AsyncState>
   </section>;

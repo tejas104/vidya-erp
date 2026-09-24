@@ -29,6 +29,8 @@ describe("reporting module definition (contract conformance)", () => {
       "reporting.request",
       "reporting.school-report-card-generate",
       "reporting.school-report-card-preview",
+      "reporting.school-report-card-publish",
+      "reporting.school-report-card-withdraw",
     ]);
     // Constitution rule 7, enforced at bind time by defineRoute: a POST is a
     // write by convention and must be auditable. The report-card preview

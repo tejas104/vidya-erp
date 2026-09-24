@@ -333,6 +333,7 @@ describe("Guardian access over real Postgres", () => {
     expect([revokedRead.status, keptRead.status]).toEqual([403, 200]);
     expect((await stack.call("fees.child-fees", { cookie: guardian, params: { studentId } })).status).toBe(403);
     expect((await stack.call("notices.child-visible", { cookie: guardian, params: { studentId } })).status).toBe(403);
+    expect((await stack.call("reporting.child-report-cards", { cookie: guardian, params: { studentId } })).status).toBe(403);
 
     const unscopedAdmin = await provisionStaff("g-unscoped-admin", undefined, true);
     expect((await stack.call("people.guardian-relationship-verify", { cookie: unscopedAdmin, params: { relationshipId: own.rows[0].id } })).status).toBe(403);

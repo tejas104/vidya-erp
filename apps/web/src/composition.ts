@@ -405,6 +405,7 @@ function buildWebRuntime(): WebRuntime {
     peopleDirectory: people.service.directory,
     linkStudentIdentity: people.service.linkStudentIdentity,
     identity: { issueCredential: identity.service.issueCredential },
+    guardianAccess: people.service.guardianAccess,
   });
 
   // Portal (W1): no tables, no jobs — self-scoped student views composed

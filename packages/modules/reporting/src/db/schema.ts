@@ -1,4 +1,4 @@
-import { index, integer, jsonb, pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import { bigint, index, integer, jsonb, pgTable, text, timestamp } from "drizzle-orm/pg-core";
 
 /**
  * INTERNAL to the reporting module (not exported from index.ts). One table,
@@ -81,3 +81,21 @@ export const rptSchoolReportCards = pgTable(
 );
 
 export type RptSchoolReportCardRow = typeof rptSchoolReportCards.$inferSelect;
+
+/** Publication is an append-only decision, separate from the immutable card.
+ * The newest event for a pupil and term decides what families can currently see. */
+export const rptSchoolReportCardPublications = pgTable(
+  "rpt_school_report_card_publications",
+  {
+    id: bigint("id", { mode: "number" }).generatedAlwaysAsIdentity().primaryKey(),
+    studentId: text("student_id").notNull(),
+    termId: text("term_id").notNull(),
+    snapshotId: text("snapshot_id").references(() => rptSchoolReportCards.id),
+    action: text("action").notNull(),
+    actorId: text("actor_id").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("rpt_rc_publications_student_term_idx").on(table.studentId, table.termId, table.id)],
+);
+
+export type RptSchoolReportCardPublicationRow = typeof rptSchoolReportCardPublications.$inferSelect;

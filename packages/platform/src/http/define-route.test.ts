@@ -290,6 +290,14 @@ describe("defineRoute — audit (Constitution rule 7)", () => {
     await defineRoute(makeSpec(), okHandler, deps)(get());
     expect(deps.audit.events).toHaveLength(0);
   });
+
+  it("audits a successful read when its route declares a disclosure audit", async () => {
+    const deps = makeDeps({ authenticator: allowAuthenticator, accessPolicy: allowPolicy });
+    const spec = makeSpec({ method: "GET", audit: { action: "demo.disclosed", resourceType: "demo" } });
+    const handler: RouteHandler = async () => ({ status: 200, body: {}, audit: { resourceId: "d-1" } });
+    expect((await defineRoute(spec, handler, deps)(get())).status).toBe(200);
+    expect(deps.audit.events).toEqual([expect.objectContaining({ action: "demo.disclosed", resourceId: "d-1" })]);
+  });
 });
 
 describe("defineRoute — path parameters (Vidya #2 pipeline extension)", () => {

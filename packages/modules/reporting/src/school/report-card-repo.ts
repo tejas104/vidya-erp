@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import type { Db } from "@vidya/platform";
-import { rptSchoolReportCards, type RptSchoolReportCardRow } from "../db/schema";
+import { rptSchoolReportCards, rptSchoolReportCardPublications, type RptSchoolReportCardRow } from "../db/schema";
 import type { ReportCardSnapshot } from "./report-card-contract";
 
 export interface NewReportCardSnapshot {
@@ -26,6 +26,12 @@ export interface ReportCardRepo {
     studentIds: readonly string[],
     termId: string,
   ): Promise<Map<string, { id: string; generatedAt: Date }>>;
+  /** Current release for a pupil and term; null means never released or withdrawn. */
+  publishedForTerm(studentId: string, termId: string): Promise<string | null>;
+  /** Current published snapshots, one per term. */
+  publishedForStudent(studentId: string): Promise<RptSchoolReportCardRow[]>;
+  /** Serialized per pupil/term; returns false if the requested state is already current. */
+  publicationChange(input: { studentId: string; termId: string; snapshotId: string | null; actorId: string; expectedCurrent?: string }): Promise<boolean>;
 }
 
 export function createReportCardRepo(db: Db): ReportCardRepo {
@@ -74,6 +80,44 @@ export function createReportCardRepo(db: Db): ReportCardRepo {
         }
       }
       return latest;
+    },
+
+    async publishedForTerm(studentId, termId) {
+      const [event] = await db.select().from(rptSchoolReportCardPublications)
+        .where(and(eq(rptSchoolReportCardPublications.studentId, studentId), eq(rptSchoolReportCardPublications.termId, termId)))
+        .orderBy(desc(rptSchoolReportCardPublications.id)).limit(1);
+      return event?.action === "published" ? event.snapshotId : null;
+    },
+
+    async publishedForStudent(studentId) {
+      const events = await db.select().from(rptSchoolReportCardPublications)
+        .where(eq(rptSchoolReportCardPublications.studentId, studentId))
+        .orderBy(desc(rptSchoolReportCardPublications.id));
+      const current = new Map<string, string | null>();
+      for (const event of events) if (!current.has(event.termId)) current.set(event.termId, event.action === "published" ? event.snapshotId : null);
+      const ids = [...current.values()].filter((id): id is string => id !== null);
+      if (ids.length === 0) return [];
+      return db.select().from(rptSchoolReportCards).where(inArray(rptSchoolReportCards.id, ids))
+        .orderBy(desc(rptSchoolReportCards.generatedAt));
+    },
+
+    async publicationChange({ studentId, termId, snapshotId, actorId, expectedCurrent }) {
+      return db.transaction(async (tx) => {
+        // A pupil/term lock prevents two staff decisions racing past the same state.
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${studentId}), hashtext(${termId}))`);
+        const [current] = await tx.select().from(rptSchoolReportCardPublications)
+          .where(and(eq(rptSchoolReportCardPublications.studentId, studentId), eq(rptSchoolReportCardPublications.termId, termId)))
+          .orderBy(desc(rptSchoolReportCardPublications.id)).limit(1);
+        const currentId = current?.action === "published" ? current.snapshotId : null;
+        if (expectedCurrent !== undefined && currentId !== expectedCurrent) return false;
+        if (currentId === snapshotId) return false;
+        await tx.insert(rptSchoolReportCardPublications).values({
+          studentId, termId, snapshotId,
+          action: snapshotId === null ? "withdrawn" : "published",
+          actorId,
+        });
+        return true;
+      });
     },
   };
 }

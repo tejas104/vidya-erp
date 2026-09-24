@@ -203,6 +203,10 @@ const EXPECTATIONS: Record<string, MigrationExpectation> = {
       "rpt_school_report_cards_class_term_idx",
     ],
   },
+  "reporting/0004_report_card_publications": {
+    tables: ["rpt_school_report_card_publications"],
+    indexes: ["rpt_rc_publications_student_term_idx"],
+  },
 
   "timetable/0000_timetable": { tables: ["ttb_periods", "ttb_entries"] },
   "coursework/0000_coursework": {

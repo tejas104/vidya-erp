@@ -47,6 +47,8 @@ const problemSchema = z.object({
 });
 
 const ANY_AUTHENTICATED = { public: false as const, requirement: {} };
+const GUARDIAN_ONLY = { public: false as const, requirement: { audience: "guardian" as const } };
+const SCHOOL_LEADERS = { public: false as const, requirement: { rolesAnyOf: ["admin" as const, "principal" as const] } };
 const ADMIN_ONLY = { public: false as const, requirement: { rolesAnyOf: ["admin" as const] } };
 
 const routes: RouteSpec[] = [
@@ -168,7 +170,7 @@ const routes: RouteSpec[] = [
     auth: ANY_AUTHENTICATED,
     responses: {
       200: { description: "Report-card desk choices", schema: z.object({
-        classes: z.array(z.object({ id: z.string(), collegeId: z.string(), name: z.string() })),
+        classes: z.array(z.object({ id: z.string(), collegeId: z.string(), name: z.string(), canPublish: z.boolean() })),
         terms: z.array(z.object({ id: z.string(), collegeId: z.string(), name: z.string(), academicYear: z.string() })),
       }) },
     },
@@ -248,6 +250,57 @@ const routes: RouteSpec[] = [
       200: { description: "The report-card PDF", contentType: "application/pdf" },
       403: { description: "Outside the caller's current scope", schema: problemSchema },
       404: { description: "No such snapshot", schema: problemSchema },
+    },
+  },
+  ...(["publish", "withdraw"] as const).map((action): RouteSpec => ({
+    id: `reporting.school-report-card-${action}`,
+    module: MODULE_NAME,
+    method: "POST",
+    path: `/api/v1/school/report-cards/{snapshotId}/${action}`,
+    summary: `${action === "publish" ? "Publish" : "Withdraw"} a specific report-card snapshot for family`,
+    tags: ["reporting", "school"],
+    auth: SCHOOL_LEADERS,
+    request: { params: z.object({ snapshotId: idSchema }) },
+    audit: { action: action === "publish" ? "reporting.school-report-card-published" : "reporting.school-report-card-withdrawn", resourceType: "report" },
+    responses: {
+      200: { description: "Publication changed", schema: z.object({ snapshotId: z.string(), publicationState: z.enum(["published", "withdrawn"]) }) },
+      403: { description: "Outside school leadership scope", schema: problemSchema },
+      404: { description: "No such snapshot", schema: problemSchema },
+      409: { description: "Publication state changed already", schema: problemSchema },
+    },
+  })),
+  {
+    id: "reporting.child-report-cards",
+    module: MODULE_NAME,
+    method: "GET",
+    path: "/api/v1/school/report-cards/children/{studentId}",
+    summary: "Report cards released to this child's family",
+    tags: ["reporting", "family"],
+    auth: GUARDIAN_ONLY,
+    request: { params: z.object({ studentId: idSchema }) },
+    audit: { action: "reporting.family-report-cards-viewed", resourceType: "student" },
+    responses: {
+      200: { description: "Currently published cards", schema: z.object({ reportCards: z.array(z.object({
+        snapshotId: z.string(), termId: z.string(), termName: z.string(), academicYear: z.string(), generatedAt: z.string(),
+        overall: z.object({ percentage: z.number().nullable(), grade: z.string().nullable(), complete: z.boolean() }),
+        attendance: z.object({ percentage: z.number().nullable(), complete: z.boolean() }),
+      })) }) },
+      403: { description: "No current family access", schema: problemSchema },
+    },
+  },
+  {
+    id: "reporting.child-report-card-download",
+    module: MODULE_NAME,
+    method: "GET",
+    path: "/api/v1/school/report-cards/children/{studentId}/{snapshotId}/download",
+    summary: "Download a currently published report card for this child",
+    tags: ["reporting", "family"],
+    auth: GUARDIAN_ONLY,
+    request: { params: z.object({ studentId: idSchema, snapshotId: idSchema }) },
+    audit: { action: "reporting.family-report-card-downloaded", resourceType: "report" },
+    responses: {
+      200: { description: "Published report-card PDF", contentType: "application/pdf" },
+      403: { description: "No current family access or publication", schema: problemSchema },
     },
   },
 ];

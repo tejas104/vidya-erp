@@ -3,6 +3,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import FamilyPage from "../../app/(app)/family/page";
 import { AppShell } from "./AppShell";
 import { api, type GuardianChild, type Session } from "./api";
+import { HelpEditionProvider } from "./help/HelpEditionContext";
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/family",
@@ -21,6 +22,8 @@ vi.mock("./api", async (importOriginal) => {
       childToday: vi.fn(),
       childFees: vi.fn(),
       childNotices: vi.fn(),
+      childReportCards: vi.fn(),
+      childReportCardDownloadUrl: vi.fn((studentId: string, snapshotId: string) => `/children/${studentId}/${snapshotId}/download`),
     },
   };
 });
@@ -51,9 +54,28 @@ beforeEach(() => {
   mocked(api.childToday).mockResolvedValue({ dayOfWeek: 1, periods: [], entries: [] });
   mocked(api.childFees).mockResolvedValue({ invoices: [] });
   mocked(api.childNotices).mockResolvedValue({ notices: [] });
+  mocked(api.childReportCards).mockResolvedValue({ reportCards: [] });
 });
 
 describe("family page (ADR-0027)", () => {
+  it("does not show the college marks feed beside school report cards", async () => {
+    mocked(api.guardianChildren).mockResolvedValue({ children: [parentOf({ categories: ["attendance", "marks", "report-card"] })] });
+    render(<HelpEditionProvider edition="school"><FamilyPage /></HelpEditionProvider>);
+    expect(await screen.findByRole("heading", { name: "Report cards" })).toBeVisible();
+    await waitFor(() => expect(api.childReportCards).toHaveBeenCalledWith("stu-1"));
+    expect(api.childMarks).not.toHaveBeenCalled();
+    expect(screen.queryByRole("heading", { name: "Marks" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Overall marks this year")).not.toBeInTheDocument();
+  });
+  it("shows only published report cards for a relationship with that category", async () => {
+    mocked(api.guardianChildren).mockResolvedValue({ children: [parentOf({ categories: ["report-card"] })] });
+    mocked(api.childReportCards).mockResolvedValue({ reportCards: [{ snapshotId: "src_1", termId: "term_1", termName: "Term 1", academicYear: "2026-27", generatedAt: "2026-09-21T00:00:00Z", overall: { percentage: 82, grade: "A", complete: true }, attendance: { percentage: 95, complete: true } }] });
+    render(<FamilyPage />);
+    expect(await screen.findByText("Term 1")).toBeVisible();
+    expect(screen.getByRole("link", { name: "Download PDF" })).toHaveAttribute("href", "/children/stu-1/src_1/download");
+    expect(api.childReportCards).toHaveBeenCalledWith("stu-1");
+    expect(api.childFees).not.toHaveBeenCalled();
+  });
   it("shows the child's fee balances and live notices in separate sections", async () => {
     mocked(api.guardianChildren).mockResolvedValue({ children: [parentOf({ categories: ["fees", "notices"] })] });
     mocked(api.childFees).mockResolvedValue({ invoices: [{ id: "inv_1", headName: "Tuition", academicYear: "2026-27", amountPaise: 50_000, dueOn: "2026-08-01", status: "part", paidPaise: 20_000, duesPaise: 30_000, payments: [{ receiptNo: 7, amountPaise: 20_000, mode: "upi", receivedAt: "2026-07-13T10:00:00Z" }] }] });

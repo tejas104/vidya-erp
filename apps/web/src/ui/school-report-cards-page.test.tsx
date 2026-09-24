@@ -7,17 +7,18 @@ import { HelpEditionProvider } from "./help/HelpEditionContext";
 
 vi.mock("./api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./api")>();
-  return { ...actual, api: { ...actual.api, schoolReportCardDeskScope: vi.fn(), schoolReportCardRoster: vi.fn(), schoolReportCardPreview: vi.fn(), schoolGenerateReportCard: vi.fn(), schoolReportCardDownloadUrl: vi.fn((snapshotId: string) => `/api/v1/school/report-cards/${snapshotId}/download`) } };
+  return { ...actual, api: { ...actual.api, schoolReportCardDeskScope: vi.fn(), schoolReportCardRoster: vi.fn(), schoolReportCardPreview: vi.fn(), schoolGenerateReportCard: vi.fn(), schoolReportCardPublication: vi.fn(), schoolReportCardDownloadUrl: vi.fn((snapshotId: string) => `/api/v1/school/report-cards/${snapshotId}/download`) } };
 });
 
 const completePreview: SchoolReportCardPreview = { student: { id: "stu_1", fullName: "Meera Nair", admissionNo: "NG-001" }, term: { id: "term_1", name: "Term 1", academicYear: "2026-27", startsOn: "2026-04-01", endsOn: "2026-09-30" }, subjects: [{ subjectId: "sub_1", subjectName: "Mathematics", percentage: 82, grade: "A", complete: true }], overall: { percentage: 82, grade: "A", complete: true }, attendance: { eligibleDays: 90, presentEquivalentDays: 86, percentage: 95.6, complete: true, missingDates: [] }, warnings: [] };
 
 beforeEach(() => {
   vi.resetAllMocks();
-  vi.mocked(api.schoolReportCardDeskScope).mockResolvedValue({ classes: [{ id: "class_1", collegeId: "col_1", name: "Class 8A" }], terms: [{ id: "term_1", collegeId: "col_1", name: "Term 1", academicYear: "2026-27" }] });
-  vi.mocked(api.schoolReportCardRoster).mockResolvedValue({ students: [{ studentId: "stu_1", fullName: "Meera Nair", admissionNo: "NG-001", snapshotId: null, generatedAt: null }] });
+  vi.mocked(api.schoolReportCardDeskScope).mockResolvedValue({ classes: [{ id: "class_1", collegeId: "col_1", name: "Class 8A", canPublish: true }], terms: [{ id: "term_1", collegeId: "col_1", name: "Term 1", academicYear: "2026-27" }] });
+  vi.mocked(api.schoolReportCardRoster).mockResolvedValue({ students: [{ studentId: "stu_1", fullName: "Meera Nair", admissionNo: "NG-001", snapshotId: null, generatedAt: null, publishedSnapshotId: null }] });
   vi.mocked(api.schoolReportCardPreview).mockResolvedValue(completePreview);
   vi.mocked(api.schoolGenerateReportCard).mockResolvedValue({ snapshotId: "snap_1", generatedAt: "2026-09-21T00:00:00.000Z" });
+  vi.mocked(api.schoolReportCardPublication).mockResolvedValue({ snapshotId: "snap_1", publicationState: "published" });
   vi.mocked(api.schoolReportCardDownloadUrl).mockImplementation((snapshotId) => `/api/v1/school/report-cards/${snapshotId}/download`);
 });
 
@@ -42,7 +43,7 @@ async function chooseStudent() {
 describe("School report-card desk", () => {
   it("uses the scoped class choices and keeps classes from another school out of the selected term", async () => {
     vi.mocked(api.schoolReportCardDeskScope).mockResolvedValue({
-      classes: [{ id: "class_1", collegeId: "col_1", name: "Class 8A" }, { id: "class_2", collegeId: "col_2", name: "Class 9B" }],
+      classes: [{ id: "class_1", collegeId: "col_1", name: "Class 8A", canPublish: false }, { id: "class_2", collegeId: "col_2", name: "Class 9B", canPublish: false }],
       terms: [{ id: "term_1", collegeId: "col_1", name: "Term 1", academicYear: "2026-27" }],
     });
     renderPage();
@@ -58,7 +59,22 @@ describe("School report-card desk", () => {
     await waitFor(() => expect(api.schoolGenerateReportCard).toHaveBeenCalledWith({ studentId: "stu_1", termId: "term_1" }));
     const download = await screen.findByRole("link", { name: "Download PDF" });
     expect(download).toHaveAttribute("href", "/api/v1/school/report-cards/snap_1/download");
-    expect(screen.getByRole("button", { name: /Meera Nair/ })).toHaveTextContent("Generated");
+    expect(screen.getByRole("button", { name: /Meera Nair/ })).toHaveTextContent("Private draft");
+  });
+
+  it("requires a separate publication confirmation and can withdraw family access", async () => {
+    await chooseStudent();
+    fireEvent.click(screen.getByRole("button", { name: "Generate report card" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Publish to family" }));
+    expect(api.schoolReportCardPublication).not.toHaveBeenCalled();
+    const dialog = screen.getByRole("dialog", { name: "Publish report card to family" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Publish to family" }));
+    await waitFor(() => expect(api.schoolReportCardPublication).toHaveBeenCalledWith("snap_1", "publish"));
+    expect(screen.getByRole("button", { name: /Meera Nair/ })).toHaveTextContent("Published");
+    fireEvent.click(screen.getByRole("button", { name: "Withdraw family access" }));
+    fireEvent.click(within(screen.getByRole("dialog", { name: "Withdraw family access" })).getByRole("button", { name: "Withdraw access" }));
+    await waitFor(() => expect(api.schoolReportCardPublication).toHaveBeenCalledWith("snap_1", "withdraw"));
+    expect(screen.getByRole("button", { name: /Meera Nair/ })).toHaveTextContent("Private draft");
   });
 
   it("keeps incomplete results explicit and requires deliberate confirmation", async () => {

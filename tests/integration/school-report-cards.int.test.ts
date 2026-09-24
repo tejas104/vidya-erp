@@ -48,6 +48,7 @@ async function create(route: string, body: unknown, params?: Record<string, stri
 async function provisionUser(
   prefix: string,
   assignments: { kind: "subject_teacher" | "class_teacher"; subjectId?: string }[],
+  roles: ("admin" | "principal")[] = [],
 ): Promise<string> {
   const username = `${prefix}-${randomUUID().slice(0, 8)}`;
   const user = await create("identity.user-create", {
@@ -55,7 +56,7 @@ async function provisionUser(
     displayName: username,
     collegeId,
     temporaryPassword: "temporary-pass-123",
-    roles: [],
+    roles,
   });
   const reset = await stack.call("identity.password-reset-init", {
     cookie: admin,
@@ -171,7 +172,7 @@ describe("School report cards over real Postgres", () => {
     const response = await stack.call("reporting.school-report-card-desk-scope", { cookie: teacher });
     expect(response.status).toBe(200);
     const scope = (await response.json()) as { classes: { id: string; name: string }[]; terms: { id: string }[] };
-    expect(scope.classes).toEqual([{ id: classId, collegeId, name: `Std ${suffix}` }]);
+    expect(scope.classes).toEqual([{ id: classId, collegeId, name: `Std ${suffix}`, canPublish: false }]);
     expect(scope.terms.map((term) => term.id)).toContain(termId);
 
     const outside = await stack.call("reporting.school-report-card-desk-scope", { cookie: outsider });
@@ -431,5 +432,69 @@ describe("School report cards over real Postgres", () => {
     };
     expect(listed.students.map((student) => student.studentId)).toEqual([otherStudentId]);
     expect(listed.students[0]!.snapshotId).toBeNull();
+  });
+
+  it("publishes a chosen immutable snapshot, supersedes it, and withdraws family access", async () => {
+    const firstResponse = await generate(admin);
+    expect(firstResponse.status).toBe(201);
+    const first = (await firstResponse.json()) as { snapshotId: string };
+    const invited = await stack.call("people.guardian-invitation-issue", {
+      cookie: admin, params: { studentId }, body: {
+        guardianName: "Leela Nair", relationshipType: "parent", contactMethod: "email",
+        contactValue: `leela-${randomUUID()}@example.test`,
+      },
+    });
+    expect(invited.status, await invited.clone().text()).toBe(201);
+    const { code } = (await invited.json()) as { code: string };
+    const username = `rc-parent-${randomUUID().slice(0, 8)}`;
+    const activated = await stack.call("people.guardian-activate", {
+      body: { code, fullName: "Leela Nair", username, password: "report-parent-pass-123" },
+    });
+    expect(activated.status).toBe(201);
+    const parent = await stack.login(username, "report-parent-pass-123");
+    const list = (student = studentId) => stack.call("reporting.child-report-cards", { cookie: parent, params: { studentId: student } });
+    const familyPdf = (snapshotId: string, student = studentId) => stack.call("reporting.child-report-card-download", { cookie: parent, params: { studentId: student, snapshotId } });
+    const change = (cookie: string, snapshotId: string, action: "publish" | "withdraw") => stack.call(`reporting.school-report-card-${action}`, { cookie, params: { snapshotId } });
+
+    expect(await (await list()).json()).toEqual({ reportCards: [] });
+    expect((await familyPdf(first.snapshotId)).status).toBe(403);
+    expect((await change(teacher, first.snapshotId, "publish")).status).toBe(403);
+    expect((await change(outsider, first.snapshotId, "publish")).status).toBe(403);
+    const mixedRole = await provisionUser("rc-mixed", [{ kind: "class_teacher" }], ["admin"]);
+    const mixedScope = (await (await stack.call("reporting.school-report-card-desk-scope", { cookie: mixedRole })).json()) as { classes: { id: string; canPublish: boolean }[] };
+    expect(mixedScope.classes.find((item) => item.id === classId)?.canPublish).toBe(false);
+    expect((await change(mixedRole, first.snapshotId, "publish")).status).toBe(403);
+    expect((await change(admin, first.snapshotId, "publish")).status).toBe(200);
+    const published = (await (await list()).json()) as { reportCards: { snapshotId: string; overall: { percentage: number | null } }[] };
+    expect(published.reportCards).toEqual([expect.objectContaining({ snapshotId: first.snapshotId })]);
+    const downloaded = await familyPdf(first.snapshotId);
+    expect(downloaded.status).toBe(200);
+    expect(Buffer.from(await downloaded.arrayBuffer()).subarray(0, 5).toString("latin1")).toBe("%PDF-");
+
+    const second = (await (await generate(admin)).json()) as { snapshotId: string };
+    expect((await familyPdf(second.snapshotId)).status).toBe(403);
+    expect((await change(admin, second.snapshotId, "publish")).status).toBe(200);
+    expect((await familyPdf(first.snapshotId)).status).toBe(403);
+    expect(((await (await list()).json()) as { reportCards: { snapshotId: string }[] }).reportCards.map((card) => card.snapshotId)).toEqual([second.snapshotId]);
+    expect((await change(admin, first.snapshotId, "withdraw")).status).toBe(409);
+    expect((await change(admin, second.snapshotId, "withdraw")).status).toBe(200);
+    expect(await (await list()).json()).toEqual({ reportCards: [] });
+    expect((await familyPdf(second.snapshotId)).status).toBe(403);
+    expect((await stack.call("reporting.school-report-card-download", { cookie: admin, params: { snapshotId: first.snapshotId } })).status).toBe(200);
+
+    const unrelated = await list(otherStudentId);
+    const unknown = await list("stu_does-not-exist");
+    expect([unrelated.status, unknown.status]).toEqual([403, 403]);
+    expect(await unrelated.json()).toEqual(await unknown.json());
+    expect((await stack.call("reporting.child-report-cards", { cookie: admin, params: { studentId } })).status).toBe(403);
+    const disclosureAudit = await stack.pool.query(
+      "SELECT action FROM sys_audit_log WHERE action IN ('reporting.family-report-cards-viewed', 'reporting.family-report-card-downloaded', 'reporting.school-report-card-published', 'reporting.school-report-card-withdrawn') AND resource_id IN ($1, $2, $3)",
+      [studentId, first.snapshotId, second.snapshotId],
+    );
+    expect(disclosureAudit.rows.map((row) => row.action)).toEqual(expect.arrayContaining([
+      "reporting.family-report-cards-viewed", "reporting.family-report-card-downloaded",
+      "reporting.school-report-card-published", "reporting.school-report-card-withdrawn",
+    ]));
+    await expect(stack.pool.query("DELETE FROM rpt_school_report_card_publications WHERE student_id = $1", [studentId])).rejects.toThrow(/append-only/);
   });
 });

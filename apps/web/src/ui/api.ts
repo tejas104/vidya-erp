@@ -98,6 +98,17 @@ export interface SchoolReportCardRosterStudent {
   admissionNo: string;
   snapshotId: string | null;
   generatedAt: string | null;
+  publishedSnapshotId: string | null;
+}
+
+export interface ChildReportCard {
+  snapshotId: string;
+  termId: string;
+  termName: string;
+  academicYear: string;
+  generatedAt: string;
+  overall: { percentage: number | null; grade: string | null; complete: boolean };
+  attendance: { percentage: number | null; complete: boolean };
 }
 
 export interface SchoolReportCardPreview {
@@ -325,8 +336,8 @@ export interface StudentView extends StudentProfile {
   enrollment: { sectionId: string; academicYear: string } | null;
 }
 export interface SchoolReportCardDeskScope {
-  classes: { id: string; collegeId: string; name: string }[];
-  terms: { id: string; collegeId: string; name: string; academicYear: string }[];
+    classes: { id: string; collegeId: string; name: string; canPublish: boolean }[];
+    terms: { id: string; collegeId: string; name: string; academicYear: string }[];
 }
 export interface StudentDetailView extends Omit<StudentView, "enrollment"> {
   enrollment: {
@@ -952,6 +963,10 @@ export const api = {
     get<{ invoices: ChildFeeInvoice[] }>(`/api/v1/fees/children/${encodeURIComponent(studentId)}/invoices`),
   childNotices: (studentId: string) =>
     get<{ notices: ChildNotice[] }>(`/api/v1/notices/children/${encodeURIComponent(studentId)}/visible`),
+  childReportCards: (studentId: string) =>
+    get<{ reportCards: ChildReportCard[] }>(`/api/v1/school/report-cards/children/${encodeURIComponent(studentId)}`),
+  childReportCardDownloadUrl: (studentId: string, snapshotId: string) =>
+    `/api/v1/school/report-cards/children/${encodeURIComponent(studentId)}/${encodeURIComponent(snapshotId)}/download`,
   guardianActivate: (body: { code: string; fullName: string; username: string; password: string }) =>
     post<{ username: string; child: { fullName: string }; status: "active" | "pending" }>("/api/v1/people/guardian-invitations/activate", body),
   guardianRedeem: (code: string) =>
@@ -1173,6 +1188,8 @@ export const api = {
     post<SchoolReportCardPreview>("/api/v1/school/report-cards/preview", body),
   schoolGenerateReportCard: (body: { studentId: string; termId: string }) =>
     post<{ snapshotId: string; generatedAt: string }>("/api/v1/school/report-cards", body),
+  schoolReportCardPublication: (snapshotId: string, action: "publish" | "withdraw") =>
+    post<{ snapshotId: string; publicationState: "published" | "withdrawn" }>(`/api/v1/school/report-cards/${encodeURIComponent(snapshotId)}/${action}`, {}),
   schoolReportCardDownloadUrl: (snapshotId: string) =>
     `/api/v1/school/report-cards/${encodeURIComponent(snapshotId)}/download`,
   async login(username: string, password: string): Promise<void> {

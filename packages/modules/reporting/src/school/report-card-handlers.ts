@@ -5,7 +5,7 @@ import type {
   RouteHandler,
   ScopeChecker,
 } from "@vidya/platform";
-import type { PeopleDirectory } from "@vidya/module-people";
+import type { PeopleDirectory, PeopleModuleService } from "@vidya/module-people";
 import type { SchoolAcademicsReadModel } from "@vidya/module-school-academics";
 import { ReportCardBuildError, type ReportCardBuilder } from "./report-card-service";
 import { renderReportCardPdf } from "./report-card-pdf";
@@ -38,12 +38,23 @@ function classRef(org: OrgPath): ResourceRef {
   return { module: "reporting", resourceType: "class", org };
 }
 
+/** A staff member may hold several roles. Publication requires authority from
+ * a school-leader grant itself, never from a teacher grant plus a leader role. */
+function leaderPrincipal(principal: Principal): Principal {
+  return {
+    ...principal,
+    roles: principal.roles.filter((role) => role === "admin" || role === "principal"),
+    grants: principal.grants.filter((grant) => grant.role === "admin" || grant.role === "principal"),
+  };
+}
+
 export interface ReportCardHandlerDeps {
   readonly builder: ReportCardBuilder;
   readonly repo: ReportCardRepo;
   readonly schoolAcademics: SchoolAcademicsReadModel;
   readonly directory: PeopleDirectory;
   readonly scopeChecker: ScopeChecker;
+  readonly guardianAccess: PeopleModuleService["guardianAccess"];
 }
 
 export function createSchoolReportCardHandlers(
@@ -51,6 +62,7 @@ export function createSchoolReportCardHandlers(
 ): Record<string, RouteHandler> {
   const deskScope: RouteHandler = async (ctx) => {
     const principal = ctx.principal as Principal;
+    const leader = leaderPrincipal(principal);
     const candidates = new Set<string>();
     for (const grant of principal.grants) {
       if (grant.org.classId) {
@@ -64,11 +76,12 @@ export function createSchoolReportCardHandlers(
       }
     }
 
-    const authorized: { id: string; collegeId: string }[] = [];
+    const authorized: { id: string; collegeId: string; canPublish: boolean }[] = [];
     for (const id of candidates) {
       const org = await deps.directory.classPath(id);
       if (org && deps.scopeChecker.check(principal, "read", classRef(org)).granted) {
-        authorized.push({ id, collegeId: org.collegeId });
+        authorized.push({ id, collegeId: org.collegeId,
+          canPublish: deps.scopeChecker.check(leader, "read", classRef(org)).granted });
       }
     }
     const names = await deps.directory.namesFor(authorized.map((item) => item.id));
@@ -157,10 +170,11 @@ export function createSchoolReportCardHandlers(
       students.map((student) => student.studentId),
       termId,
     );
+    const published = await Promise.all(students.map((student) => deps.repo.publishedForTerm(student.studentId, termId)));
     return {
       status: 200,
       body: {
-        students: students.map((student) => {
+        students: students.map((student, index) => {
           const snapshot = latest.get(student.studentId);
           return {
             studentId: student.studentId,
@@ -168,6 +182,7 @@ export function createSchoolReportCardHandlers(
             admissionNo: student.admissionNo,
             snapshotId: snapshot?.id ?? null,
             generatedAt: snapshot?.generatedAt.toISOString() ?? null,
+            publishedSnapshotId: published[index] ?? null,
           };
         }),
       },
@@ -304,11 +319,69 @@ export function createSchoolReportCardHandlers(
     };
   };
 
+  const changePublication = (action: "publish" | "withdraw"): RouteHandler => async (ctx) => {
+    const principal = ctx.principal as Principal;
+    const { snapshotId } = ctx.request.params as { snapshotId: string };
+    const row = await deps.repo.get(snapshotId);
+    if (row === null) return fail(404, "no such report card");
+    const org: OrgPath = { collegeId: row.collegeId, departmentId: row.departmentId, classId: row.classId,
+      ...(row.sectionId === null ? {} : { sectionId: row.sectionId }) };
+    if (!deps.scopeChecker.check(leaderPrincipal(principal), "read", studentRef(org)).granted) return fail(403, "access denied");
+    const changed = await deps.repo.publicationChange({
+      studentId: row.studentId, termId: row.termId,
+      snapshotId: action === "publish" ? row.id : null,
+      ...(action === "withdraw" ? { expectedCurrent: row.id } : {}),
+      actorId: principal.id,
+    });
+    if (!changed) return fail(409, action === "publish" ? "This report card is already published." : "This report card is not the current family publication.");
+    return { status: 200, body: { snapshotId: row.id, publicationState: action === "publish" ? "published" : "withdrawn" },
+      audit: { org, resourceId: row.id, details: { studentId: row.studentId, termId: row.termId } } };
+  };
+
+  const childCards: RouteHandler = async (ctx) => {
+    const principal = ctx.principal as Principal;
+    const { studentId } = ctx.request.params as { studentId: string };
+    const access = await deps.guardianAccess(principal.id, studentId, "report-card", "published");
+    if (!access.decision.granted || access.student === null) return fail(403, "access denied");
+    const rows = await deps.repo.publishedForStudent(access.student.studentId);
+    const cards = [];
+    for (const row of rows) {
+      if (row.studentId !== access.student.studentId || row.collegeId !== access.student.collegeId) continue;
+      const snapshot = parseStoredSnapshot(row.payload);
+      if (snapshot === null) return fail(409, "A published report card cannot be displayed. Contact the school office.");
+      cards.push({ snapshotId: row.id, termId: row.termId, termName: snapshot.term.name,
+        academicYear: row.academicYear, generatedAt: row.generatedAt.toISOString(),
+        overall: snapshot.overall, attendance: { percentage: snapshot.attendance.percentage, complete: snapshot.attendance.complete } });
+    }
+    return { status: 200, body: { reportCards: cards },
+      audit: { org: { collegeId: access.student.collegeId }, resourceId: studentId,
+        details: { reportCardCount: cards.length } } };
+  };
+
+  const childDownload: RouteHandler = async (ctx) => {
+    const principal = ctx.principal as Principal;
+    const { studentId, snapshotId } = ctx.request.params as { studentId: string; snapshotId: string };
+    const access = await deps.guardianAccess(principal.id, studentId, "report-card", "published");
+    if (!access.decision.granted || access.student === null) return fail(403, "access denied");
+    const row = await deps.repo.get(snapshotId);
+    if (row === null || row.studentId !== access.student.studentId || row.collegeId !== access.student.collegeId ||
+      await deps.repo.publishedForTerm(studentId, row.termId) !== row.id) return fail(403, "access denied");
+    const snapshot = parseStoredSnapshot(row.payload);
+    if (snapshot === null) return fail(409, "A published report card cannot be displayed. Contact the school office.");
+    return { status: 200, body: await renderReportCardPdf(snapshot, row.generatedAt), contentType: "application/pdf",
+      audit: { org: { collegeId: row.collegeId, departmentId: row.departmentId, classId: row.classId },
+        resourceId: row.id, details: { studentId: row.studentId, termId: row.termId } } };
+  };
+
   return {
     "reporting.school-report-card-desk-scope": deskScope,
     "reporting.school-report-card-roster": roster,
     "reporting.school-report-card-preview": preview,
     "reporting.school-report-card-generate": generate,
     "reporting.school-report-card-download": download,
+    "reporting.school-report-card-publish": changePublication("publish"),
+    "reporting.school-report-card-withdraw": changePublication("withdraw"),
+    "reporting.child-report-cards": childCards,
+    "reporting.child-report-card-download": childDownload,
   };
 }

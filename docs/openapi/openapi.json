@@ -14835,12 +14835,16 @@
                           },
                           "name": {
                             "type": "string"
+                          },
+                          "canPublish": {
+                            "type": "boolean"
                           }
                         },
                         "required": [
                           "id",
                           "collegeId",
-                          "name"
+                          "name",
+                          "canPublish"
                         ]
                       }
                     },
@@ -14952,6 +14956,10 @@
                           "generatedAt": {
                             "type": "string",
                             "nullable": true
+                          },
+                          "publishedSnapshotId": {
+                            "type": "string",
+                            "nullable": true
                           }
                         },
                         "required": [
@@ -14959,7 +14967,8 @@
                           "fullName",
                           "admissionNo",
                           "snapshotId",
-                          "generatedAt"
+                          "generatedAt",
+                          "publishedSnapshotId"
                         ]
                       }
                     }
@@ -15587,6 +15596,530 @@
           },
           "404": {
             "description": "No such snapshot",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/school/report-cards/{snapshotId}/publish": {
+      "post": {
+        "summary": "Publish a specific report-card snapshot for family",
+        "description": "**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "reporting",
+          "school"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "snapshotId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Publication changed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "snapshotId": {
+                      "type": "string"
+                    },
+                    "publicationState": {
+                      "type": "string",
+                      "enum": [
+                        "published",
+                        "withdrawn"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "snapshotId",
+                    "publicationState"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Outside school leadership scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such snapshot",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Publication state changed already",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/school/report-cards/{snapshotId}/withdraw": {
+      "post": {
+        "summary": "Withdraw a specific report-card snapshot for family",
+        "description": "**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "reporting",
+          "school"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "snapshotId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Publication changed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "snapshotId": {
+                      "type": "string"
+                    },
+                    "publicationState": {
+                      "type": "string",
+                      "enum": [
+                        "published",
+                        "withdrawn"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "snapshotId",
+                    "publicationState"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Outside school leadership scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such snapshot",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Publication state changed already",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/school/report-cards/children/{studentId}": {
+      "get": {
+        "summary": "Report cards released to this child's family",
+        "description": "**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "reporting",
+          "family"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "studentId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Currently published cards",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "reportCards": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "snapshotId": {
+                            "type": "string"
+                          },
+                          "termId": {
+                            "type": "string"
+                          },
+                          "termName": {
+                            "type": "string"
+                          },
+                          "academicYear": {
+                            "type": "string"
+                          },
+                          "generatedAt": {
+                            "type": "string"
+                          },
+                          "overall": {
+                            "type": "object",
+                            "properties": {
+                              "percentage": {
+                                "type": "number",
+                                "nullable": true
+                              },
+                              "grade": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "complete": {
+                                "type": "boolean"
+                              }
+                            },
+                            "required": [
+                              "percentage",
+                              "grade",
+                              "complete"
+                            ]
+                          },
+                          "attendance": {
+                            "type": "object",
+                            "properties": {
+                              "percentage": {
+                                "type": "number",
+                                "nullable": true
+                              },
+                              "complete": {
+                                "type": "boolean"
+                              }
+                            },
+                            "required": [
+                              "percentage",
+                              "complete"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "snapshotId",
+                          "termId",
+                          "termName",
+                          "academicYear",
+                          "generatedAt",
+                          "overall",
+                          "attendance"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "reportCards"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "No current family access",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/school/report-cards/children/{studentId}/{snapshotId}/download": {
+      "get": {
+        "summary": "Download a currently published report card for this child",
+        "description": "**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "reporting",
+          "family"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "studentId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "snapshotId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Published report-card PDF",
+            "content": {
+              "application/pdf": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "No current family access or publication",
             "content": {
               "application/json": {
                 "schema": {

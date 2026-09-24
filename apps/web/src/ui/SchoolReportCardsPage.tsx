@@ -27,6 +27,8 @@ export function SchoolReportCardsPage() {
   const [previewState, setPreviewState] = useState<"idle" | "loading" | "denied" | "error">("idle");
   const [confirmIncomplete, setConfirmIncomplete] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [publicationAction, setPublicationAction] = useState<"publish" | "withdraw" | null>(null);
+  const [publicationBusy, setPublicationBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const rosterRequest = useRef(0);
   const previewRequest = useRef(0);
@@ -55,7 +57,7 @@ export function SchoolReportCardsPage() {
   async function loadRoster(nextClassId = classId, nextTermId = termId) {
     const request = ++rosterRequest.current;
     ++previewRequest.current;
-    setSelected(null); setPreview(null); setPreviewState("idle"); setActionError(null);
+    setSelected(null); setPreview(null); setPreviewState("idle"); setActionError(null); setPublicationAction(null);
     if (!nextClassId || !nextTermId) { setRoster({ kind: "idle" }); return; }
     setRoster({ kind: "loading" });
     try { const result = await api.schoolReportCardRoster(nextClassId, nextTermId); if (request === rosterRequest.current) setRoster({ kind: "ready", students: result.students }); }
@@ -64,7 +66,7 @@ export function SchoolReportCardsPage() {
   async function openPreview(student: SchoolReportCardRosterStudent) {
     if (!termId) return;
     const request = ++previewRequest.current;
-    setSelected(student); setPreview(null); setPreviewState("loading"); setActionError(null);
+    setSelected(student); setPreview(null); setPreviewState("loading"); setActionError(null); setPublicationAction(null);
     try { const result = await api.schoolReportCardPreview({ studentId: student.studentId, termId }); if (request === previewRequest.current) { setPreview(result); setPreviewState("idle"); } }
     catch (error) { if (request === previewRequest.current) setPreviewState(errorState(error)); }
   }
@@ -79,10 +81,29 @@ export function SchoolReportCardsPage() {
     } catch (error) { setActionError(error instanceof ApiError ? error.message : "Could not generate this report card. Try again."); }
     finally { setGenerating(false); }
   }
+  async function changePublication() {
+    if (!selected || !publicationAction || publicationBusy) return;
+    const action = publicationAction;
+    const snapshotId = action === "publish" ? selected.snapshotId : selected.publishedSnapshotId;
+    if (!snapshotId) return;
+    setPublicationBusy(true); setActionError(null);
+    try {
+      await api.schoolReportCardPublication(snapshotId, action);
+      const update = (student: SchoolReportCardRosterStudent) => student.studentId === selected.studentId
+        ? { ...student, publishedSnapshotId: action === "publish" ? snapshotId : null } : student;
+      setSelected((student) => student === null ? null : update(student));
+      setRoster((state) => state.kind === "ready" ? { ...state, students: state.students.map(update) } : state);
+      setPublicationAction(null);
+    } catch (error) {
+      setPublicationAction(null);
+      setActionError(error instanceof ApiError ? error.message : "Could not change family publication. Reload the roster and try again.");
+    } finally { setPublicationBusy(false); }
+  }
 
   if (load === "loading") return <Skeleton height={18} />;
   if (load === "denied") return <EmptyState title="Report cards are restricted." body="Ask a school administrator for report-card access." />;
   if (load === "error" || scope === null) return <EmptyState title="Couldn't load report cards." body="Check the connection, then retry." action={{ label: "Retry", onClick: () => window.location.reload() }} />;
+  const canPublishSelectedClass = scope.classes.find((item) => item.id === classId)?.canPublish ?? false;
 
   return <>
     <PageHeader eyebrow="School records" title="Report card desk" lede="Review one student at a time before creating a permanent report-card snapshot." help={<HelpButton slug="report-cards" />} />
@@ -99,7 +120,7 @@ export function SchoolReportCardsPage() {
         {roster.kind === "denied" ? <EmptyState title="This class is outside your access." body="Choose a class you are authorized to manage." /> : null}
         {roster.kind === "error" ? <EmptyState title="Couldn't load this roster." body="Your selections are preserved." action={{ label: "Retry", onClick: () => void loadRoster() }} /> : null}
         {roster.kind === "ready" && roster.students.length === 0 ? <EmptyState title="No enrolled students." body="There are no report cards to prepare for this selection." /> : null}
-        {roster.kind === "ready" ? <div className={styles.studentList}>{roster.students.map((student) => <button key={student.studentId} type="button" className={selected?.studentId === student.studentId ? styles.studentActive : styles.student} onClick={() => void openPreview(student)}><span><strong>{student.fullName}</strong><small>{student.admissionNo}</small></span>{student.snapshotId ? <StatusBadge status="good">Generated</StatusBadge> : <StatusBadge status="neutral">Not generated</StatusBadge>}</button>)}</div> : null}
+        {roster.kind === "ready" ? <div className={styles.studentList}>{roster.students.map((student) => <button key={student.studentId} type="button" className={selected?.studentId === student.studentId ? styles.studentActive : styles.student} onClick={() => void openPreview(student)}><span><strong>{student.fullName}</strong><small>{student.admissionNo}</small></span>{student.publishedSnapshotId ? <StatusBadge status="good">Published</StatusBadge> : student.snapshotId ? <StatusBadge status="neutral">Private draft</StatusBadge> : <StatusBadge status="neutral">Not generated</StatusBadge>}</button>)}</div> : null}
       </Card></div>
       <div className={styles.preview}><Card>
         <div className="section-head"><h2>Report-card preview</h2>{preview ? <StatusBadge status={incomplete(preview) ? "warn" : "good"}>{incomplete(preview) ? "Needs review" : "Complete"}</StatusBadge> : null}</div>
@@ -107,9 +128,10 @@ export function SchoolReportCardsPage() {
         {previewState === "loading" ? <><Skeleton height={24} /><div className={styles.actions}><Button disabled>Generate report card</Button></div></> : null}
         {previewState === "denied" ? <EmptyState title="You can't preview this student." body="Choose a student within your authorized class." /> : null}
         {previewState === "error" ? <EmptyState title="Couldn't load the preview." body="Your term, class, and student stay selected." action={{ label: "Retry", onClick: () => { if (selected) void openPreview(selected); } }} /> : null}
-        {preview ? <div className={styles.previewBody}><div className={styles.identity}><div><strong>{preview.student.fullName}</strong><span>{preview.student.admissionNo}</span></div><span>{preview.term.name} · {preview.term.academicYear}</span></div><div className={styles.subjects}>{preview.subjects.map((subject) => <div key={subject.subjectId} className={styles.subject}><span>{subject.subjectName}</span><span>{subject.complete ? `${percent(subject.percentage)} · ${subject.grade ?? "No grade"}` : "Incomplete marks"}</span></div>)}</div><div className={styles.summary}><div><span>Overall</span><strong>{preview.overall.complete ? `${percent(preview.overall.percentage)} · ${preview.overall.grade ?? "No grade"}` : "Incomplete"}</strong></div><div><span>Attendance</span><strong>{preview.attendance.complete ? percent(preview.attendance.percentage) : "Incomplete"}</strong><small>{preview.attendance.presentEquivalentDays === null ? "No present-equivalent total" : `${preview.attendance.presentEquivalentDays}/${preview.attendance.eligibleDays} eligible days`}</small></div></div>{(incomplete(preview) || preview.warnings.length > 0) ? <div className={styles.warnings} role="alert"><strong>Review before generating</strong><ul>{preview.warnings.map((warning) => <li key={warning}>{warning}</li>)}{preview.attendance.missingDates.length ? <li>Attendance is missing for {preview.attendance.missingDates.join(", ")}.</li> : null}</ul></div> : null}{actionError ? <p className="formerror" role="alert">{actionError}</p> : null}<div className={styles.actions}>{selected?.snapshotId ? <a className="ui-btn ui-btn-primary" href={api.schoolReportCardDownloadUrl(selected.snapshotId)}>Download PDF</a> : null}<Button onClick={() => incomplete(preview) ? setConfirmIncomplete(true) : void generate()} disabled={generating} loading={generating}>{selected?.snapshotId ? "Generate new snapshot" : "Generate report card"}</Button></div></div> : null}
+        {preview ? <div className={styles.previewBody}><div className={styles.identity}><div><strong>{preview.student.fullName}</strong><span>{preview.student.admissionNo}</span></div><span>{preview.term.name} · {preview.term.academicYear}</span></div><div className={styles.subjects}>{preview.subjects.map((subject) => <div key={subject.subjectId} className={styles.subject}><span>{subject.subjectName}</span><span>{subject.complete ? `${percent(subject.percentage)} · ${subject.grade ?? "No grade"}` : "Incomplete marks"}</span></div>)}</div><div className={styles.summary}><div><span>Overall</span><strong>{preview.overall.complete ? `${percent(preview.overall.percentage)} · ${preview.overall.grade ?? "No grade"}` : "Incomplete"}</strong></div><div><span>Attendance</span><strong>{preview.attendance.complete ? percent(preview.attendance.percentage) : "Incomplete"}</strong><small>{preview.attendance.presentEquivalentDays === null ? "No present-equivalent total" : `${preview.attendance.presentEquivalentDays}/${preview.attendance.eligibleDays} eligible days`}</small></div></div>{(incomplete(preview) || preview.warnings.length > 0) ? <div className={styles.warnings} role="alert"><strong>Review before generating</strong><ul>{preview.warnings.map((warning) => <li key={warning}>{warning}</li>)}{preview.attendance.missingDates.length ? <li>Attendance is missing for {preview.attendance.missingDates.join(", ")}.</li> : null}</ul></div> : null}{selected?.snapshotId ? <p className="subtle">{selected.publishedSnapshotId === selected.snapshotId ? "This snapshot is available to linked families." : selected.publishedSnapshotId ? "An older snapshot is available to families. This newer snapshot is private." : "This snapshot is private until a school leader publishes it."}</p> : null}{actionError ? <p className="formerror" role="alert">{actionError}</p> : null}<div className={styles.actions}>{selected?.snapshotId ? <a className="ui-btn ui-btn-primary" href={api.schoolReportCardDownloadUrl(selected.snapshotId)}>Download PDF</a> : null}<Button onClick={() => incomplete(preview) ? setConfirmIncomplete(true) : void generate()} disabled={generating} loading={generating}>{selected?.snapshotId ? "Generate new snapshot" : "Generate report card"}</Button>{canPublishSelectedClass && selected?.snapshotId && selected.publishedSnapshotId !== selected.snapshotId ? <Button variant="secondary" onClick={() => setPublicationAction("publish")}>Publish to family</Button> : null}{canPublishSelectedClass && selected?.publishedSnapshotId ? <Button variant="ghost" onClick={() => setPublicationAction("withdraw")}>Withdraw family access</Button> : null}</div></div> : null}
       </Card></div>
     </section>
     <Modal open={confirmIncomplete} onClose={() => setConfirmIncomplete(false)} title="Generate with incomplete data" footer={<><Button variant="ghost" onClick={() => setConfirmIncomplete(false)}>Cancel</Button><Button onClick={() => void generate()} loading={generating}>Generate with warnings</Button></>}><p>This preview has missing marks or attendance. Generating records the data exactly as shown; it does not treat missing values as zero or assume an attendance or promotion threshold.</p></Modal>
+    <Modal open={publicationAction !== null} onClose={() => setPublicationAction(null)} title={publicationAction === "publish" ? "Publish report card to family" : "Withdraw family access"} footer={<><Button variant="ghost" onClick={() => setPublicationAction(null)}>Cancel</Button><Button onClick={() => void changePublication()} loading={publicationBusy}>{publicationAction === "publish" ? "Publish to family" : "Withdraw access"}</Button></>}><p>{publicationAction === "publish" ? "Review the issued PDF before publishing. Linked adults with report-card access will be able to download this exact snapshot until it is replaced or withdrawn." : "Linked adults will lose access to the currently published snapshot immediately. The school retains the issued record."}</p></Modal>
   </>;
 }

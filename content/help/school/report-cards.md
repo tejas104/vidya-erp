@@ -8,6 +8,7 @@ Use **Report cards** to review one student's marks and attendance before creatin
 2. Select a student to load their on-screen preview. Subject results, the overall result, and attendance are shown separately.
 3. Read every warning. Missing marks or attendance remain marked **Incomplete**; the screen never changes them to zero or applies a promotion or attendance rule.
 4. Select **Generate report card** only after reviewing the preview. If the preview is incomplete, confirm deliberately in the warning dialog.
-5. When generation succeeds, **Download PDF** becomes available for that student's snapshot.
+5. When generation succeeds, **Download PDF** becomes available for that student's snapshot. It is still private to staff.
+6. A school administrator or principal reviews the issued PDF, then chooses **Publish to family** and confirms. The roster marks the child **Published**. A later generated snapshot stays private until separately published; **Withdraw family access** stops family downloads while preserving the school record.
 
 If loading the roster or preview fails, use **Retry** without losing the chosen scope. If generation fails, read the message and try again after checking the preview.
