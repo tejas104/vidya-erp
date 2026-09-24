@@ -313,7 +313,7 @@ reason; add slices freely when evidence demands it.
 | **N7** | Certificates: TC and bonafide (1.6) | A TC requires a recorded exit, so it follows N6. | `reporting`, `people` | N6 |
 | **N8** | Fee-defaulter workflow depth (1.9) | Printable notices and follow-up state on the existing `defaulters` route. | `fees` | — |
 | **N9** | Guardian invitation delivery (SMS/email adapter) | Removes the manual code hand-off; needs a provider decision from the owner. | `notices` or a new `ntf_` adapter | owner vendor choice |
-| **N10** | ADR-0028 draft: SaaS control plane and tenant isolation | Phase 3 is the largest unstarted risk; the boundary must be designed before Phase 2 builds on assumptions. Design only. | docs | — |
+| **N10** | SaaS control plane and tenant isolation design — **DONE (design only)** | ADR-0030 fixes the initial isolated-tenant boundary, hosted entitlements inside a distinct vendor control plane, failure behavior and proof sequence. The [hosting readiness register](HOSTING-READINESS-2026-09-24.md) distinguishes synthetic staging, a school pilot and repeatable paid SaaS, with remaining gates and planning ranges. Control-plane implementation is still Phase 3 work. Brought forward because the owner asked how to host the ERP and licensing service; the old ADR-0028 number is already used for report-card publication. | docs | — |
 
 ### N0 adversarial guardian review — 2026-09-24
 
@@ -418,11 +418,18 @@ Cross-cutting improvements, done alongside slices rather than as a phase:
 
 | # | Improvement | Note |
 |---|---|---|
-| N-X1 | Glob the school e2e spec list instead of hardcoding it | `scripts/school-e2e.ts` (~line 138) silently ignores new spec files. |
+| N-X1 — DONE | Discover school E2E specs and gate them in CI | `scripts/school-e2e.ts` reads every `*.spec.ts` in `tests/e2e/school` and fails if none exist; CI runs the labelled isolated school suite after the college browser gate. Local execution is recorded below; remote CI still needs an exact-SHA run. |
 | N-X2 | Inline-style cleanup (UI direction slice 5) | `style={{…}}` in pages escapes `check-scale.mjs`. Migrate a page when a slice touches it. |
 | N-X3 | One dense table pattern (UI direction slice 3) | Sticky header, saved filters, bulk bar, "none" vs "not recorded". |
 | N-X4 | Help docs per slice | 26 school screens lack help; `family`, `activate` among them. |
 | N-X5 | Flaky UI test | `apps/web/src/ui/attendance-page.test.tsx` failed once under a loaded full run and passed 3/3 alone. Diagnose timing; do not add retries. |
+
+N-X1 local proof (2026-09-24): the runner discovered six school spec files,
+executed **7/7** tests against its production school build, and removed only
+the labelled disposable containers, volumes and network. Typecheck, lint,
+ownership, TODO and Docker manifest checks passed. CI now declares the same
+school run after the college browser gate; no remote CI result is claimed for
+this local commit.
 
 ## Phase 2 — Paid-pilot school core
 
@@ -460,7 +467,7 @@ entitlements enforced server-side; **subscription expiry never deletes school
 data**; ERP subscription billing never mixes with the school fee ledger; start
 with managed isolated tenant environments and one immutable application release.
 
-All `PLANNED`. None started.
+Architecture is recorded in [ADR-0030](../adr/0030-hosted-control-plane-and-tenant-isolation.md); all implementation items remain `PLANNED`. No hosted tenant or vendor control plane has been deployed.
 
 ---
 

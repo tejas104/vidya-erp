@@ -1,6 +1,6 @@
 # School browser-test environment
 
-Run the real T03/T04 school journeys with one command:
+Run the isolated school journeys with one command:
 
 ```powershell
 pnpm test:e2e:school
@@ -21,10 +21,9 @@ ordinary local development and integration resources:
 It migrates that database, runs `scripts/seed-school-e2e.ts` (a deterministic
 school bootstrap account and implicit school department), compiles the school
 help map, builds the production web server with `VIDYA_EDITION=school`, and
-runs exactly `tests/e2e/school/terms.spec.ts` and
-`tests/e2e/school/marks.spec.ts`. The journeys add their own unique term and
-assessment data; this is disposable browser data, not the normal `seed:demo`
-dataset.
+runs every `*.spec.ts` in `tests/e2e/school/` (failing if none are found).
+The journeys add their own unique term and assessment data; this is disposable
+browser data, not the normal `seed:demo` dataset.
 
 The runner stops its web process and then verifies the Compose-project and
 `com.vidya.school-e2e=true` labels, plus the selected database name, before it

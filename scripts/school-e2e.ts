@@ -1,5 +1,5 @@
 import { execFile, spawn } from "node:child_process";
-import { access, stat } from "node:fs/promises";
+import { access, readdir, stat } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
@@ -128,6 +128,12 @@ async function cleanup(): Promise<void> {
 async function run(): Promise<void> {
   await access(envFile);
   await stat(overrideFile);
+  const specs = (await readdir(resolve(root, "tests/e2e/school")))
+    .filter((name) => name.endsWith(".spec.ts"))
+    .sort()
+    .map((name) => `tests/e2e/school/${name}`);
+  if (specs.length === 0) throw new Error("no school E2E specs found; refusing an empty pass");
+  console.log(`school E2E: ${specs.length} spec files`);
   try {
     await compose(["up", "-d", "postgres", "redis", "minio"]);
     await Promise.all([waitForHealth("postgres"), waitForHealth("redis"), waitForHealth("minio")]);
@@ -135,7 +141,7 @@ async function run(): Promise<void> {
     await command("pnpm", ["exec", "tsx", "scripts/seed-school-e2e.ts"], testEnv);
     await command("pnpm", ["compile:help"], testEnv);
     await command("pnpm", ["--filter", "@vidya/web", "build"], testEnv);
-    await command("pnpm", ["exec", "playwright", "test", "tests/e2e/school/terms.spec.ts", "tests/e2e/school/marks.spec.ts", "tests/e2e/school/report-cards.spec.ts", "tests/e2e/school/guardian.spec.ts", "tests/e2e/school/student-360.spec.ts", "tests/e2e/school/workbench-table.spec.ts", "--workers=1"], testEnv);
+    await command("pnpm", ["exec", "playwright", "test", ...specs, "--workers=1"], testEnv);
   } finally {
     await cleanup();
   }

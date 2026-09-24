@@ -43,6 +43,10 @@ export default tseslint.config(
       "**/.next/**",
       "**/dist/**",
       "coverage/**",
+      // Playwright retains generated browser bundles and traces for failures.
+      // They are test artifacts, not source files to lint.
+      "test-results/**",
+      "playwright-report/**",
       "docs/**",
       "**/next-env.d.ts",
     ],

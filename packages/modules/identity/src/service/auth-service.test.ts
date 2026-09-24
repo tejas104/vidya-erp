@@ -2,7 +2,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { pino } from "pino";
 import { AuthService } from "./auth-service";
 import { FailureThrottle } from "./throttle";
-import type { PasswordHasher } from "../core/contracts";
 import {
   FakePasswordHasher,
   FakeResetTokensRepo,
@@ -314,58 +313,20 @@ describe("AuthService.login", () => {
 });
 
 /**
- * Timing-indistinguishability evidence (#10.5 B2). PasswordHasher.dummyHash
- * already exists and is already consumed for unknown users (contracts.ts:29,
- * auth-service.ts login()); the job here is to EVIDENCE that unknown-user,
- * wrong-password and locked-account all cost the same wall-clock time — not
- * to build new machinery. FakePasswordHasher's real verify() is a plain
- * string compare (sub-microsecond), too fast for wall-clock noise to be
- * meaningful, so this hasher wraps it with a fixed artificial cost to stand
- * in for a real KDF's dominant, roughly-constant verify cost — the same
- * technique used to reason about argon2id timing without paying argon2id's
- * cost in a unit-test suite.
+ * #10.5 B2: every local-password failure path must pay for exactly one hash
+ * verification. A wall-clock comparison inside a parallel unit suite measures
+ * scheduler contention rather than this invariant; a real timing attack
+ * benchmark against Argon2 belongs in a separate controlled environment.
  */
-class DelayedFakeHasher implements PasswordHasher {
-  readonly dummyHash = "fake-hash::__nobody__::0000000000000000";
-  constructor(private readonly delayMs: number) {}
-  async hash(password: string): Promise<string> {
-    return `fake-hash::${password}::seed`;
-  }
-  async verify(hash: string, password: string): Promise<boolean> {
-    await new Promise((resolve) => setTimeout(resolve, this.delayMs));
-    const parts = hash.split("::");
-    return parts[0] === "fake-hash" && parts[1] === password && parts[1] !== "__nobody__";
-  }
-  needsRehash(): boolean {
-    return false;
-  }
-}
-
-describe("AuthService.login — timing indistinguishability (#10.5 B2)", () => {
-  const DELAY_MS = 8;
-  const TRIALS = 12;
-
-  async function medianMs(run: () => Promise<unknown>): Promise<number> {
-    const samples: number[] = [];
-    for (let i = 0; i < TRIALS; i += 1) {
-      const start = performance.now();
-      await run();
-      samples.push(performance.now() - start);
-    }
-    samples.sort((a, b) => a - b);
-    return samples[Math.floor(samples.length / 2)]!;
-  }
-
-  it("unknown-username, wrong-password, and an already-locked account measure within noise of each other", async () => {
-    // Real elapsed-time measurement needs real timers.
-    vi.useRealTimers();
-
-    const unknownUserMs = await medianMs(() => {
+describe("AuthService.login — failed paths verify once (#10.5 B2)", () => {
+  it("verifies a dummy hash for an unknown user and the stored hash for wrong or locked accounts", async () => {
+    const unknown = await (async () => {
       const repo = new FakeUsersRepo();
+      const hasher = new FakePasswordHasher();
       const service = new AuthService({
         repo,
         resetTokens: new FakeResetTokensRepo(),
-        hasher: new DelayedFakeHasher(DELAY_MS),
+        hasher,
         sessions: new FakeSessionManager(),
         audit: new RecordingAudit(),
         logger: silentLogger,
@@ -373,16 +334,18 @@ describe("AuthService.login — timing indistinguishability (#10.5 B2)", () => {
         resetThrottle: new FailureThrottle(new MemoryThrottleStore(), { maxAttempts: 1000, windowMinutes: 15 }, "reset"),
         resetTokenTtlMinutes: 30,
       });
-      return service.login("no-such-user", "whatever-password", "1.1.1.1");
-    });
+      return { result: await service.login("no-such-user", "whatever-password", "1.1.1.1"), calls: hasher.verifyCalls, dummyHash: hasher.dummyHash };
+    })();
 
-    const wrongPasswordMs = await medianMs(() => {
+    const storedHash = "fake-hash::right-password::seed";
+    const wrong = await (async () => {
       const repo = new FakeUsersRepo();
-      repo.seed({ username: "asha", passwordHash: "fake-hash::right-password::seed" });
+      repo.seed({ username: "asha", passwordHash: storedHash });
+      const hasher = new FakePasswordHasher();
       const service = new AuthService({
         repo,
         resetTokens: new FakeResetTokensRepo(),
-        hasher: new DelayedFakeHasher(DELAY_MS),
+        hasher,
         sessions: new FakeSessionManager(),
         audit: new RecordingAudit(),
         logger: silentLogger,
@@ -390,18 +353,19 @@ describe("AuthService.login — timing indistinguishability (#10.5 B2)", () => {
         resetThrottle: new FailureThrottle(new MemoryThrottleStore(), { maxAttempts: 1000, windowMinutes: 15 }, "reset"),
         resetTokenTtlMinutes: 30,
       });
-      return service.login("asha", "wrong-password", "1.1.1.1");
-    });
+      return { result: await service.login("asha", "wrong-password", "1.1.1.1"), calls: hasher.verifyCalls };
+    })();
 
-    const lockedAccountMs = await medianMs(() => {
+    const locked = await (async () => {
       const repo = new FakeUsersRepo();
-      repo.seed({ username: "asha", passwordHash: "fake-hash::right-password::seed" });
+      repo.seed({ username: "asha", passwordHash: storedHash });
       const store = new MemoryThrottleStore();
       const loginThrottle = new FailureThrottle(store, { maxAttempts: 1000, windowMinutes: 15 }, "login");
+      const hasher = new FakePasswordHasher();
       const service = new AuthService({
         repo,
         resetTokens: new FakeResetTokensRepo(),
-        hasher: new DelayedFakeHasher(DELAY_MS),
+        hasher,
         sessions: new FakeSessionManager(),
         audit: new RecordingAudit(),
         logger: silentLogger,
@@ -412,22 +376,15 @@ describe("AuthService.login — timing indistinguishability (#10.5 B2)", () => {
       // Pre-lock the account directly, isolated from login()'s own recordFailure.
       store.values.set("idn:throttle:login:asha", 1000);
       // Note: NOT store.expirations — isLocked() only reads the count.
-      return service.login("asha", "right-password", "1.1.1.1");
-    });
+      return { result: await service.login("asha", "right-password", "1.1.1.1"), calls: hasher.verifyCalls };
+    })();
 
-    // Method: median of TRIALS repeated calls per scenario (median resists the
-    // odd GC/scheduler outlier better than mean at this sample size), all
-    // three built on the SAME artificial per-verify cost (DELAY_MS) so any
-    // gap would come from the auth flow's own control structure, not the
-    // hasher. Tolerance is generous (well over 2x DELAY_MS) because this
-    // suite runs concurrently with everything else in the process — the
-    // claim under test is "no branch skips the hash verify", not "sub-
-    // millisecond timing safety", which is a job for a dedicated timing-
-    // attack benchmark against the real argon2id core, out of scope here.
-    const tolerance = DELAY_MS * 2;
-    expect(Math.abs(unknownUserMs - wrongPasswordMs)).toBeLessThan(tolerance);
-    expect(Math.abs(unknownUserMs - lockedAccountMs)).toBeLessThan(tolerance);
-    expect(Math.abs(wrongPasswordMs - lockedAccountMs)).toBeLessThan(tolerance);
+    expect(unknown.result.outcome).toBe("invalid-credentials");
+    expect(unknown.calls).toEqual([unknown.dummyHash]);
+    expect(wrong.result.outcome).toBe("invalid-credentials");
+    expect(wrong.calls).toEqual([storedHash]);
+    expect(locked.result.outcome).toBe("locked");
+    expect(locked.calls).toEqual([storedHash]);
   });
 });
 

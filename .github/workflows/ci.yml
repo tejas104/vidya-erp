@@ -120,6 +120,10 @@ jobs:
           pnpm test:e2e
           kill "$WORKER_PID" 2>/dev/null || true
 
+      - name: School E2E (isolated school edition + real browser)
+        timeout-minutes: 15
+        run: pnpm test:e2e:school
+
       - name: Upload Playwright report on failure
         if: failure()
         uses: actions/upload-artifact@v4
