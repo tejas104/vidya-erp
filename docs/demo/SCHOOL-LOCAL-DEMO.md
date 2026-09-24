@@ -49,10 +49,11 @@ analytics marks rollup is not presented as a school grade figure.
 2. Sign in as principal: inspect the leadership dashboard, analytics, leave
    decisions, report cards, and notices.
 3. Sign in as class teacher: inspect the class dashboard, roster, whole-class
-   attendance, saved-register duplicate guard, and report card desk.
+   attendance, saved-register duplicate guard, and report card desk. The class
+   register has pupil search and an enrolment action.
 4. Sign in as subject teacher: inspect the teaching dashboard, My timetable,
-   Attendance, Syllabus, Coursework, and Marks. On a phone width, switch
-   timetable days.
+   subject-scoped class register, Attendance, Syllabus, Coursework, and Marks.
+   On a phone width, switch timetable days.
 5. Sign in as student: inspect Today, assignments, term marks, exams, syllabus
    coverage, and fees in My register.
 6. Sign in as family: inspect the child, published report card PDF, fees,

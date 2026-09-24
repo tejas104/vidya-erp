@@ -105,6 +105,15 @@ The synthetic localhost fixture and isolated school browser suite verify these
 paths. Staff acceptance, more legacy-screen redesign, licensing and hosting
 remain separate work.
 
+## 2026-09-24 school class register revision
+
+The school edition now uses a focused class register with scoped attendance,
+marks and report-card entry points, pupil search and a missing-attendance filter.
+Class teachers can enrol a pupil from their whole-class register; subject
+teachers see their own subject attendance without the enrolment action. The
+college flashcard workspace remains in college edition. School staff no longer
+see college backlog, year-back, fee or 75% eligibility labels on this screen.
+
 Before applying `people/0007_unique_teacher_identity` to an existing school,
 inspect duplicate non-null `ppl_teachers.identity_user_id` values, resolve each
 against staff records and derived grants, and take a database backup. Apply in

@@ -1,0 +1,501 @@
+"use client";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  api,
+  ApiError,
+  currentAcademicYear,
+  type AssignmentView,
+  type FeeInvoiceView,
+  type RosterCard,
+  type SectionCorrection,
+  type StudentStatus,
+  type StudentView,
+  type TtToday,
+} from "@/ui/api";
+import { StatCard, EmptyState, Modal, Input, Select, Button, Skeleton, useToast, PageHeader } from "@vidya/ui-system";
+import { AsyncState } from "@/ui/AsyncState";
+import { StudentCard, type StudentFlags } from "@/ui/StudentCard";
+import { TodayTimeline } from "@/ui/TodayTimeline";
+import { StudentSlideOver, type DrawerStudent } from "@/ui/StudentSlideOver";
+import { HelpButton } from "@/ui/help/HelpButton";
+import { ago } from "@/ui/time";
+import { AVATARS, initials } from "@/ui/avatar";
+import styles from "./page.module.css";
+
+export const dynamic = "force-dynamic";
+
+const SHORT = 75;
+
+type ClassOpt = {
+  sectionId: string;
+  sectionName: string;
+  className: string;
+  classId: string;
+  subjectId?: string;
+  subjectName?: string;
+};
+type Card = { student: StudentView; att: RosterCard | null; idx: number };
+type Filter = "all" | "short" | "backlog" | "fees" | "yb";
+
+function flagsFor(c: Card, duesPaise: number): StudentFlags {
+  const pct = c.att?.pct ?? null;
+  return {
+    short: pct !== null && pct < SHORT,
+    backlog: c.student.status === "backlog",
+    yb: c.student.status === "year_back",
+    fees: duesPaise > 0,
+  };
+}
+
+export default function ClassWorkspacePage() {
+  const year = useMemo(() => currentAcademicYear(), []);
+  const toast = useToast();
+  const [roles, setRoles] = useState<string[]>([]);
+  const [opts, setOpts] = useState<ClassOpt[]>([]);
+  const [pick, setPick] = useState(0);
+  const [cards, setCards] = useState<Card[] | null>(null);
+  const [feesDues, setFeesDues] = useState<Map<string, number> | null>(null);
+  const [teachers, setTeachers] = useState<AssignmentView[] | null>(null);
+  const [corrections, setCorrections] = useState<SectionCorrection[] | null>(null);
+  const correctionsRef = useRef<HTMLDivElement>(null);
+  const [today, setToday] = useState<TtToday | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [filter, setFilter] = useState<Filter>("all");
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState<DrawerStudent | null>(null);
+  const [reloadTick, setReloadTick] = useState(0);
+  const [collegeId, setCollegeId] = useState("");
+  const [adding, setAdding] = useState(false);
+  const [newAdm, setNewAdm] = useState("");
+  const [newName, setNewName] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  // SCOPE STUB — real rule is "holds a class_teacher grant on THIS section",
+  // enforced server-side. Author that check; this role flag is a placeholder.
+  const canManage = roles.includes("class_teacher") || roles.includes("admin");
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const me = await api.session();
+        if (!alive) return;
+        setRoles([...me.roles]);
+        const dash = await api.dashboard(year);
+        if (!alive) return;
+        const list: ClassOpt[] = [];
+        for (const tile of dash.tiles) {
+          if (tile.type !== "class" && tile.type !== "teacher-class") continue;
+          const className = dash.names[tile.classId] ?? tile.classId;
+          const subjectId = tile.type === "teacher-class" ? tile.subjectId : undefined;
+          for (const s of tile.strip) {
+            list.push({
+              sectionId: s.sectionId,
+              sectionName: s.name,
+              className,
+              classId: tile.classId,
+              subjectId,
+              subjectName: subjectId ? dash.names[subjectId] : undefined,
+            });
+          }
+        }
+        setOpts(list);
+        api.ttMyToday(year).then((t) => alive && setToday(t)).catch(() => undefined);
+        api.colleges().then((c) => alive && setCollegeId(c.colleges[0]?.id ?? "")).catch(() => undefined);
+      } catch {
+        if (alive) setError("Couldn't load your classes.");
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [year]);
+
+  const opt = opts[pick];
+
+  useEffect(() => {
+    if (!opt) return;
+    let alive = true;
+    setCards(null);
+    setFeesDues(null);
+    setTeachers(null);
+    setCorrections(null);
+    setError(null);
+    // Fees, subject-teachers, and corrections are best-effort overlays: a
+    // 403 (out of scope) must not fail the roster, so they resolve to empty sets.
+    Promise.all([
+      api.sectionRoster(opt.sectionId),
+      api.rosterAttendance(opt.sectionId, { academicYear: year, subjectId: opt.subjectId }),
+      api.feesSectionInvoices(opt.sectionId, year).catch(() => ({ invoices: [] as FeeInvoiceView[] })),
+      api.classTeacherAssignments(opt.classId).catch(() => ({ assignments: [] as AssignmentView[] })),
+      api.sectionCorrections(opt.sectionId).catch(() => ({ corrections: [] as SectionCorrection[] })),
+    ])
+      .then(([roster, att, fees, assignments, corr]) => {
+        if (!alive) return;
+        const byId = new Map(att.cards.map((c) => [c.studentId, c]));
+        setCards(roster.students.map((student, idx) => ({ student, att: byId.get(student.id) ?? null, idx })));
+        const dues = new Map<string, number>();
+        for (const inv of fees.invoices) dues.set(inv.studentId, (dues.get(inv.studentId) ?? 0) + inv.duesPaise);
+        setFeesDues(dues);
+        setTeachers(assignments.assignments);
+        setCorrections(corr.corrections);
+      })
+      .catch(() => alive && setError("Couldn't load this roster."));
+    return () => {
+      alive = false;
+    };
+  }, [opt, year, reloadTick]);
+
+  async function setStudentStatus(status: string) {
+    if (!open) return;
+    try {
+      await api.updateStudent(open.studentId, { status: status as StudentStatus });
+      toast.push({ status: "good", message: `${open.name} → ${status}.` });
+      setOpen((cur) => (cur && cur.studentId === open.studentId ? { ...cur, status } : cur));
+      setReloadTick((n) => n + 1); // refresh cards/flags
+    } catch (caught) {
+      toast.push({ status: "danger", message: caught instanceof ApiError ? caught.message : "Couldn't change status." });
+    }
+  }
+
+  async function addStudent() {
+    if (!opt || collegeId === "" || newAdm.trim() === "" || newName.trim() === "") return;
+    setSaving(true);
+    try {
+      // sectionId scopes the create to this section — a class teacher may add
+      // into their own; the server 403s for any other (2.4).
+      await api.createStudent({
+        collegeId,
+        admissionNo: newAdm.trim(),
+        fullName: newName.trim(),
+        sectionId: opt.sectionId,
+        academicYear: year,
+      });
+      toast.push({ status: "good", message: `${newName.trim()} added to ${opt.className} · ${opt.sectionName}.` });
+      setAdding(false);
+      setNewAdm("");
+      setNewName("");
+      setReloadTick((n) => n + 1);
+    } catch (caught) {
+      toast.push({ status: "danger", message: caught instanceof ApiError ? caught.message : "Couldn't add the student." });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  // --- rings (class-level, derived from the roster) ---
+  const withPct = (cards ?? []).filter((c) => c.att?.pct != null);
+  const avgAtt = withPct.length ? Math.round(withPct.reduce((s, c) => s + (c.att!.pct ?? 0), 0) / withPct.length) : 0;
+  const shortN = (cards ?? []).filter((c) => (c.att?.pct ?? 100) < SHORT).length;
+  const backlogN = (cards ?? []).filter((c) => c.student.status === "backlog").length;
+  const feesN = feesDues ? (cards ?? []).filter((c) => (feesDues.get(c.student.id) ?? 0) > 0).length : 0;
+  const total = cards?.length ?? 0;
+
+  const visible = (cards ?? []).filter((c) => {
+    const f = flagsFor(c, feesDues?.get(c.student.id) ?? 0);
+    const passFilter =
+      filter === "all" ||
+      (filter === "short" && f.short) ||
+      (filter === "backlog" && f.backlog) ||
+      (filter === "yb" && f.yb) ||
+      (filter === "fees" && f.fees);
+    const q = query.trim().toLowerCase();
+    const passQuery = !q || c.student.fullName.toLowerCase().includes(q) || c.student.admissionNo.toLowerCase().includes(q);
+    return passFilter && passQuery;
+  });
+
+  async function openCard(c: Card) {
+    const f = flagsFor(c, feesDues?.get(c.student.id) ?? 0);
+    const base: DrawerStudent = {
+      studentId: c.student.id,
+      initials: initials(c.student.fullName),
+      gradient: AVATARS[c.idx % AVATARS.length]!.gradient,
+      ink: AVATARS[c.idx % AVATARS.length]!.ink,
+      rollNo: c.student.admissionNo,
+      name: c.student.fullName,
+      section: `${opt?.className ?? ""} · ${opt?.sectionName ?? ""}`,
+      status: c.student.status,
+      pct: c.att?.pct ?? null,
+      attended: c.att?.attended ?? 0,
+      total: c.att?.total ?? 0,
+      lastMark: null,
+      backlogs: c.student.status === "backlog" ? 1 : 0,
+      flags: f,
+      phone: c.student.phone,
+      guardianName: c.student.guardianName,
+      guardianPhone: c.student.guardianPhone,
+      dob: c.student.dob,
+    };
+    setOpen(base);
+    // last mark on demand (subject-scoped by the caller's grant)
+    api
+      .studentMarks(c.student.id, year)
+      .then((r) => {
+        const last = r.marks[r.marks.length - 1];
+        if (last) {
+          setOpen((cur) =>
+            cur && cur.studentId === base.studentId
+              ? { ...cur, lastMark: `${last.assessment.name} · ${last.mark.score}/${last.assessment.maxScore}` }
+              : cur,
+          );
+        }
+      })
+      .catch(() => undefined);
+  }
+
+  if (error && opts.length === 0) return <EmptyState title="Couldn't load." body={error} />;
+
+  const chip = (f: Filter, label: string, n: number) => (
+    <button type="button" className={`cw-chip${filter === f ? " on" : ""}`} onClick={() => setFilter(f)}>
+      {label} <span className="c">{n}</span>
+    </button>
+  );
+
+  return (
+    <>
+      {opts.length === 0 ? (
+        <div className="state">
+          <strong>No classes to show yet.</strong> A class or subject assignment brings your workspace here.
+        </div>
+      ) : (
+        <div className="cw-grid">
+          <div className="cw-main">
+            <div className={styles.classPicker}>
+              <Select
+                id="cw-class-pick"
+                label="Class"
+                value={pick}
+                onChange={(e) => setPick(Number(e.target.value))}
+                options={opts.map((o, i) => ({
+                  value: String(i),
+                  label: `${o.className} · ${o.sectionName}${o.subjectName ? ` · ${o.subjectName}` : ""}`,
+                }))}
+              />
+            </div>
+
+            <div className="cw-hero">
+              <div className="cw-hero-eyebrow">
+                Class workspace{total ? ` · ${total} students` : ""}
+              </div>
+              <PageHeader
+                title={
+                  <>
+                    {opt?.className} · {opt?.sectionName}
+                  </>
+                }
+                help={<HelpButton slug="classes" />}
+              />
+              <p>
+                {opt?.subjectName ? `You teach ${opt.subjectName} here. ` : ""}
+                {cards === null
+                  ? "Loading the roster…"
+                  : `${shortN} short of 75%${backlogN ? ` · ${backlogN} in backlog` : ""}.`}
+              </p>
+              <div className="cw-hero-cta">
+                <a
+                  className="cw-hbtn"
+                  href={`/manage/attendance?sectionId=${encodeURIComponent(opt?.sectionId ?? "")}${
+                    opt?.subjectId ? `&subjectId=${encodeURIComponent(opt.subjectId)}` : ""
+                  }`}
+                >
+                  Mark attendance
+                </a>
+                <button
+                  type="button"
+                  className="cw-hbtn ghost"
+                  onClick={() => correctionsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
+                >
+                  Review corrections
+                </button>
+              </div>
+            </div>
+
+            <div className="cw-rings">
+              <StatCard
+                pct={avgAtt}
+                display={`${avgAtt}%`}
+                label="Class attendance"
+                value={`${avgAtt}%`}
+                sub={opt?.subjectName ?? "all subjects"}
+                tone={avgAtt < 75 ? "warn" : "good"}
+              />
+              <StatCard
+                pct={total ? (shortN / total) * 100 : 0}
+                display={`${shortN}`}
+                label="Short of 75%"
+                value={`${shortN} / ${total}`}
+                sub="eligibility risk"
+                tone="bad"
+              />
+              <StatCard
+                pct={total ? (backlogN / total) * 100 : 0}
+                display={`${backlogN}`}
+                label="In backlog"
+                value={`${backlogN}`}
+                sub="ATKT · lifecycle"
+                tone="warn"
+              />
+              <StatCard
+                pct={total && feesDues ? (feesN / total) * 100 : 0}
+                display={feesDues ? `${feesN}` : "—"}
+                label="Fees pending"
+                value={feesDues ? `${feesN} / ${total}` : "—"}
+                sub={feesDues ? "with outstanding dues" : "no fee data"}
+                tone={feesN > 0 ? "warn" : "good"}
+              />
+            </div>
+
+            <div className="cw-toolbar">
+              <input
+                className="cw-search"
+                placeholder="Search name or roll no…"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                aria-label="Search students"
+              />
+              {chip("all", "All", total)}
+              {chip("short", "Short", shortN)}
+              {chip("backlog", "Backlog", backlogN)}
+              {chip("yb", "Year-back", (cards ?? []).filter((c) => c.student.status === "year_back").length)}
+              {feesDues && feesN > 0 ? chip("fees", "Fees due", feesN) : null}
+              {canManage ? (
+                <button type="button" className="btn" style={{ marginLeft: "auto" }} onClick={() => setAdding(true)}>
+                  + Add student
+                </button>
+              ) : null}
+            </div>
+
+            <AsyncState
+              loading={cards === null && error === null}
+              error={error !== null}
+              onRetry={() => setReloadTick((n) => n + 1)}
+            >
+              {visible.length === 0 ? (
+                <div className="state"><strong>No students match.</strong> Try a different filter or clear the search.</div>
+              ) : (
+                <div className="cw-cards">
+                  {visible.map((c) => (
+                    <StudentCard
+                      key={c.student.id}
+                      initials={initials(c.student.fullName)}
+                      gradient={AVATARS[c.idx % AVATARS.length]!.gradient}
+                      ink={AVATARS[c.idx % AVATARS.length]!.ink}
+                      rollNo={c.student.admissionNo}
+                      name={c.student.fullName}
+                      pct={c.att?.pct ?? null}
+                      flags={flagsFor(c, feesDues?.get(c.student.id) ?? 0)}
+                      onOpen={() => void openCard(c)}
+                    />
+                  ))}
+                </div>
+              )}
+            </AsyncState>
+          </div>
+
+          <aside className="cw-aside">
+            <div className="cw-panel">
+              <div className="cw-panel-h">
+                <h2>Subject teachers</h2>
+                <span className="hint">{teachers ? `${teachers.length}` : ""}</span>
+              </div>
+              {teachers === null ? (
+                <div className={styles.asideSkeleton} aria-hidden="true">
+                  <Skeleton height={14} /><Skeleton height={14} /><Skeleton height={14} />
+                </div>
+              ) : teachers.length === 0 ? (
+                <p className="strip-empty" style={{ padding: "10px 16px" }}>No teachers assigned yet.</p>
+              ) : (
+                <div className="cw-tl">
+                  {teachers.map((a) => (
+                    <div className="cw-tl-row" key={a.id}>
+                      <div className="cw-tl-body">
+                        <div className="cw-slot">
+                          <div className="cw-slot-t">
+                            {a.kind === "class_teacher" ? "Class teacher" : a.subjectName ?? "Unknown subject"}
+                          </div>
+                          <div className="cw-slot-s">{a.teacherName ?? "Unknown teacher"}</div>
+                          {a.kind === "class_teacher" ? <span className="tag">CT</span> : null}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="cw-panel" ref={correctionsRef}>
+              <div className="cw-panel-h">
+                <h2>Recent corrections</h2>
+                <span className="hint">{corrections ? `${corrections.length}` : ""}</span>
+              </div>
+              {corrections === null ? (
+                <div className={styles.asideSkeleton} aria-hidden="true">
+                  <Skeleton height={14} /><Skeleton height={14} /><Skeleton height={14} />
+                </div>
+              ) : corrections.length === 0 ? (
+                <p className="strip-empty" style={{ padding: "10px 16px" }}>No corrections recorded.</p>
+              ) : (
+                <div className="cw-tl">
+                  {corrections.map((c) => (
+                    <div className="cw-tl-row" key={`${c.sessionId}/${c.studentId}/${c.at}`}>
+                      <div className="cw-tl-body">
+                        <div className="cw-slot">
+                          <div className="cw-slot-t">{c.studentName}</div>
+                          <div className="cw-slot-s">
+                            {c.before} → {c.after} · {ago(c.at)}
+                            {c.byName ? ` · ${c.byName}` : ""}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="cw-panel">
+              <div className="cw-panel-h">
+                <h2>Today</h2>
+                <span className="hint">{today ? `${today.entries.length} periods` : ""}</span>
+              </div>
+              {today === null ? (
+                <div className={styles.asideSkeleton} aria-hidden="true">
+                  <Skeleton height={14} /><Skeleton height={14} /><Skeleton height={14} />
+                </div>
+              ) : (
+                <TodayTimeline today={today} />
+              )}
+            </div>
+          </aside>
+        </div>
+      )}
+
+      <StudentSlideOver
+        student={open}
+        canManage={canManage}
+        onClose={() => setOpen(null)}
+        onSetStatus={(status) => void setStudentStatus(status)}
+      />
+
+      <Modal
+        open={adding}
+        onClose={() => setAdding(false)}
+        title={`Add student — ${opt?.className ?? ""} · ${opt?.sectionName ?? ""}`}
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setAdding(false)}>Cancel</Button>
+            <Button onClick={() => void addStudent()} loading={saving} disabled={newAdm.trim() === "" || newName.trim() === ""}>
+              Add student
+            </Button>
+          </>
+        }
+      >
+        <div className={styles.formGrid}>
+          <p className={styles.formHint}>
+            Added straight into your section and enrolled for {year}. The record is audited and never deleted.
+          </p>
+          <Input id="add-adm" label="Admission no." value={newAdm} onChange={(e) => setNewAdm(e.target.value)} placeholder="e.g. FYCS-015" />
+          <Input id="add-name" label="Full name" value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Student name" />
+        </div>
+      </Modal>
+    </>
+  );
+}

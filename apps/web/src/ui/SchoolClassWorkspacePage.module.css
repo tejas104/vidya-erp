@@ -1,0 +1,43 @@
+.stack { display: grid; gap: var(--space-5); min-width: 0; }
+.topline { display: flex; align-items: end; justify-content: space-between; gap: var(--space-4); }
+.topline > div { width: min(100%, 27rem); }
+.scope { color: var(--ink-2); font-size: var(--text-12); padding-bottom: .7rem; white-space: nowrap; }
+.hero { display: flex; align-items: end; justify-content: space-between; gap: var(--space-5); padding: clamp(1.25rem, 3vw, 2rem); border: 1px solid var(--rule); border-radius: var(--radius); background: linear-gradient(125deg, var(--brand-soft), var(--surface)); }
+.hero h2 { margin: .35rem 0 .25rem; font-size: clamp(1.5rem, 2.8vw, 2.25rem); letter-spacing: -.03em; }
+.hero p, .rosterHeading p { margin: 0; color: var(--ink-2); font-size: var(--text-14); }
+.eyebrow { color: var(--brand); font-size: var(--text-12); font-weight: 700; letter-spacing: .09em; text-transform: uppercase; }
+.heroActions { display: flex; gap: .6rem; flex-wrap: wrap; }
+.primary, .secondary { display: inline-flex; align-items: center; justify-content: center; gap: .55rem; min-height: 2.75rem; padding: .65rem 1rem; border-radius: var(--radius-sm); font-weight: 700; font-size: var(--text-14); text-decoration: none; white-space: nowrap; }
+.primary { background: var(--brand); color: var(--on-brand); }
+.secondary { color: var(--ink); border: 1px solid var(--rule-strong); background: var(--surface); }
+.primary:focus-visible, .secondary:focus-visible, .pupil:focus-visible { outline: 3px solid var(--brand); outline-offset: 3px; }
+.roster { border: 1px solid var(--rule); border-radius: var(--radius); background: var(--surface); overflow: hidden; min-width: 0; }
+.rosterHeading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1.5rem; }
+.rosterHeading h2 { margin: .2rem 0; font-size: 1.4rem; }
+.filters { display: flex; align-items: end; gap: 1rem; padding: 0 1.5rem 1.25rem; }
+.filters > div { width: min(100%, 22rem); }
+.filter { display: flex; align-items: center; gap: .55rem; min-height: 2.75rem; color: var(--ink-2); font-size: var(--text-14); cursor: pointer; }
+.filter input { width: 1rem; height: 1rem; accent-color: var(--brand); }
+.rows { list-style: none; padding: 0; margin: 0; }
+.rows li { border-top: 1px solid var(--rule); }
+.pupil { display: flex; align-items: center; gap: 1rem; min-height: 4.9rem; padding: .9rem 1.5rem; color: var(--ink); text-decoration: none; }
+.pupil:hover { background: var(--surface-2); }
+.avatar { display: grid; place-items: center; flex: 0 0 2.6rem; width: 2.6rem; height: 2.6rem; border-radius: 50%; background: var(--brand-soft); color: var(--brand); font-weight: 800; }
+.pupilName { display: grid; gap: .15rem; min-width: 0; flex: 1; }
+.pupilName strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pupilName small, .attendance small { color: var(--ink-2); font-size: var(--text-12); }
+.attendance { display: grid; gap: .1rem; text-align: right; }
+.arrow { color: var(--brand); font-size: 1.2rem; }
+.modalFields { display: grid; gap: 1rem; }
+.modalFields p { margin: 0; color: var(--ink-2); font-size: var(--text-14); }
+@media (max-width: 680px) {
+  .topline, .hero, .rosterHeading, .filters { align-items: stretch; flex-direction: column; }
+  .scope { padding: 0; }
+  .heroActions > a { flex: 1; }
+  .rosterHeading { padding: 1.1rem; }
+  .filters { padding: 0 1.1rem 1rem; gap: .25rem; }
+  .pupil { gap: .65rem; padding: .8rem 1rem; }
+  .avatar { flex-basis: 2.2rem; width: 2.2rem; height: 2.2rem; }
+  .attendance small { display: none; }
+  .arrow { display: none; }
+}

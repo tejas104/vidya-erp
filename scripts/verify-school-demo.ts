@@ -109,7 +109,11 @@ async function main(): Promise<void> {
         } else if (account.role === "class-teacher") {
           await page.getByRole("region", { name: "Your workspaces" }).getByRole("link", { name: /Report cards/ }).waitFor();
           await page.goto("/manage/classes");
-          await page.getByRole("heading", { name: "Standard 8 · A", level: 1 }).waitFor();
+          await page.getByRole("heading", { name: "My class register", level: 1 }).waitFor();
+          await page.getByRole("heading", { name: "Standard 8 · A", level: 2 }).waitFor();
+          await page.getByRole("region", { name: "Pupil register" }).getByText("Asha Sharma").waitFor();
+          await page.getByRole("button", { name: "Add pupil" }).waitFor();
+          if (await page.getByText(/backlog|year.back|75% eligibility|fees pending/i).count()) throw new Error("College class terminology appears in the school register");
           await page.screenshot({ path: join(output, "class-teacher-classes.png"), fullPage: true });
           await page.goto("/manage/report-cards");
           await page.getByRole("heading", { name: "Report card desk", level: 1 }).waitFor();
@@ -120,6 +124,11 @@ async function main(): Promise<void> {
           await page.screenshot({ path: join(output, "class-teacher-existing-attendance.png"), fullPage: true });
           await page.goto("/manage/report-cards");
         } else if (account.role === "teacher") {
+          await page.goto("/manage/classes");
+          await page.getByRole("heading", { name: "My class register", level: 1 }).waitFor();
+          await page.getByRole("link", { name: "Enter marks" }).waitFor();
+          if (await page.getByRole("button", { name: "Add pupil" }).count()) throw new Error("Subject teacher sees a class enrolment action");
+          await page.screenshot({ path: join(output, "teacher-class-register.png"), fullPage: true });
           await page.goto("/manage/marks");
           await page.getByLabel("Term").waitFor();
           const termValue = await page.getByLabel("Term").locator("option").filter({ hasText: "Term 1" }).getAttribute("value");
@@ -165,6 +174,13 @@ async function main(): Promise<void> {
         const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
         if (overflow) throw new Error(`${account.role} landing overflows a 390px viewport`);
         await page.screenshot({ path: join(output, `${account.role}-mobile.png`), fullPage: true });
+        if (account.role === "class-teacher" || account.role === "teacher") {
+          await page.goto("/manage/classes");
+          await page.getByRole("heading", { name: "My class register", level: 1 }).waitFor();
+          await page.getByRole("region", { name: "Pupil register" }).getByText("Asha Sharma").waitFor();
+          if (await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)) throw new Error(`${account.role} class register overflows a 390px viewport`);
+          await page.screenshot({ path: join(output, `${account.role}-class-register-mobile.png`), fullPage: true });
+        }
         if (account.role === "admin" || account.role === "principal" || account.role === "class-teacher" || account.role === "teacher") {
           await page.goto("/dashboard");
           await page.getByRole("heading", { name: account.heading, level: 1 }).waitFor();
