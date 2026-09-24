@@ -63,7 +63,8 @@ not move them.
 ## 2. Where the code is
 
 - Branch **`codex/claude-school-product`**, worktree
-  **`D:\ATLAS\.worktrees\claude-school-product`**, HEAD **`c199589`**.
+  **`D:\ATLAS\.worktrees\claude-school-product`**. Last code commit **`c199589`**;
+  the handoff documents were committed on top of it (`8550e60` and one fix-up).
 - Base: `a9d5fc1` (your gate-04 reviewed checkpoint) plus three cherry-picked
   post-gate commits (`144c9d1`, `4b416e3`, `0ddf80c`).
 - **Do not develop in `D:\ATLAS`** — it is on `feat/a11-onboarding-import` and
@@ -445,7 +446,8 @@ improvements. That delegation continues to you, with these limits:
 
 ## 8. Working method
 
-1. Read-only discovery first: verify HEAD is `c199589`, the gates are green,
+1. Read-only discovery first: verify `c199589` is in HEAD's history and only
+   `docs/strategy/` changed after it (`git diff --stat c199589..HEAD`), the gates are green,
    and the three untracked owner docs exist. Record the baseline.
 2. For each slice: pick the smallest dependency-complete piece; read the code it
    touches end to end before editing; implement backend and frontend together;
