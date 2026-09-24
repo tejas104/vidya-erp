@@ -8,3 +8,69 @@
 .blank {
   color: var(--ink-3);
 }
+.mobileWeek {
+  display: none;
+}
+@media (max-width: 700px) {
+  .desktopWeek {
+    display: none;
+  }
+  .mobileWeek {
+    display: block;
+  }
+  .dayPicker {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--space-2);
+  }
+  .dayButton {
+    min-height: 44px;
+    border: 1px solid var(--rule);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    color: var(--ink-2);
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .dayButton[aria-pressed="true"] {
+    background: var(--brand);
+    border-color: var(--brand);
+    color: white;
+  }
+  .dayButton:focus-visible {
+    outline: 2px solid var(--brand);
+    outline-offset: 2px;
+  }
+  .dayHeading {
+    margin: var(--space-6) 0 var(--space-3);
+    font-size: var(--text-20);
+  }
+  .periodList {
+    display: grid;
+    gap: var(--space-3);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .periodCard {
+    display: grid;
+    grid-template-columns: 95px minmax(0, 1fr);
+    gap: var(--space-4);
+    padding: var(--space-4);
+    border: 1px solid var(--rule);
+    border-radius: var(--radius);
+    background: var(--surface);
+  }
+  .periodNumber,
+  .periodDetail {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+  }
+  .periodNumber span,
+  .periodDetail span {
+    color: var(--ink-3);
+    font-size: var(--text-12);
+  }
+}

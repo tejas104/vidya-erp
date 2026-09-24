@@ -1,0 +1,39 @@
+# Local, synthetic school demonstration. Use only with project vidya-school-demo
+# and scripts/school-demo.env; this does not share the owner's Atlas containers.
+services:
+  postgres:
+    ports: !override
+      - "127.0.0.1:55436:5432"
+    labels:
+      com.vidya.school-demo: "true"
+  redis:
+    ports: !override
+      - "127.0.0.1:6386:6379"
+    labels:
+      com.vidya.school-demo: "true"
+  minio:
+    ports: !override
+      - "127.0.0.1:9020:9000"
+      - "127.0.0.1:9021:9001"
+    labels:
+      com.vidya.school-demo: "true"
+  migrate:
+    labels:
+      com.vidya.school-demo: "true"
+  web:
+    ports: !override
+      - "127.0.0.1:3125:3000"
+    labels:
+      com.vidya.school-demo: "true"
+  worker:
+    ports: !override
+      - "127.0.0.1:9474:9464"
+    labels:
+      com.vidya.school-demo: "true"
+volumes:
+  pg-data:
+    labels:
+      com.vidya.school-demo: "true"
+  minio-data:
+    labels:
+      com.vidya.school-demo: "true"

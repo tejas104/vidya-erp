@@ -18,6 +18,8 @@ import { AttendanceSlot, MarksSlot, RiskDonut, StatTile } from "@/ui/charts";
 import { focusOf, type Focus } from "@/ui/oversightFocus";
 import { OnboardingChecklist } from "@/ui/OnboardingChecklist";
 import { HelpButton } from "@/ui/help/HelpButton";
+import { useHelpEdition } from "@/ui/help/HelpEditionContext";
+import { SchoolStaffHome } from "@/ui/SchoolStaffHome";
 
 export const dynamic = "force-dynamic";
 
@@ -82,12 +84,15 @@ function markHref(e: TtEntry): string {
 }
 
 export default function DashboardPage() {
+  const edition = useHelpEdition();
   const year = useMemo(() => currentAcademicYear(), []);
   const [session, setSession] = useState<Session | null>(null);
   const [dashboard, setDashboard] = useState<Dashboard | null>(null);
   const [atRisk, setAtRisk] = useState<AtRiskEntry[]>([]);
+  const [riskStatus, setRiskStatus] = useState<"loading" | "ready" | "partial">("loading");
   const [focus, setFocus] = useState<Focus | null>(null);
   const [today, setToday] = useState<TtToday | null>(null);
+  const [todayStatus, setTodayStatus] = useState<"loading" | "ready" | "unavailable">("loading");
   const [notices, setNotices] = useState<NoticeView[] | null>(null);
   const [leaveWaiting, setLeaveWaiting] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -112,14 +117,14 @@ export default function DashboardPage() {
         // --- timetable: the teaching roles get a Today card + compact notices ---
         if (me.roles.includes("teacher") || me.roles.includes("class_teacher")) {
           api.ttMyToday(year).then((t) => {
-            if (alive) setToday(t);
-          }).catch(() => undefined);
+            if (alive) { setToday(t); setTodayStatus("ready"); }
+          }).catch(() => { if (alive) setTodayStatus("unavailable"); });
           api.ntcVisible().then((r) => {
             if (alive) setNotices(r.notices);
           }).catch(() => undefined);
         }
         // --- leave: approvers get a "waiting" card ---
-        if (me.roles.includes("hod") || me.roles.includes("admin")) {
+        if (me.roles.includes("hod") || me.roles.includes("admin") || me.roles.includes("principal")) {
           api.lvsPending().then((r) => {
             if (alive) setLeaveWaiting(r.requests.length);
           }).catch(() => undefined);
@@ -129,6 +134,7 @@ export default function DashboardPage() {
         setDashboard(dash);
 
         const seen = new Map<string, AtRiskEntry>();
+        let riskFailed = false;
         for (const tile of dash.tiles) {
           const level =
             tile.type === "department" ? "department" : tile.type === "college" ? "college" : "class";
@@ -138,11 +144,12 @@ export default function DashboardPage() {
             const result = await api.atRisk(level, nodeId, year);
             for (const entry of result.students) if (!seen.has(entry.studentId)) seen.set(entry.studentId, entry);
           } catch {
-            /* a node the caller cannot enumerate is skipped */
+            riskFailed = true;
           }
         }
         if (alive) {
           setAtRisk([...seen.values()].sort((a, b) => (a.attendancePct ?? 100) - (b.attendancePct ?? 100)));
+          setRiskStatus(riskFailed ? "partial" : "ready");
         }
 
         if (alive) setFocus(focusOf(dash.tiles));
@@ -171,6 +178,10 @@ export default function DashboardPage() {
   const kpiMarks = focusTile && "marks" in focusTile ? focusTile.marks : null;
   const cohort =
     kpiAttendance && kpiAttendance.state === "ok" ? kpiAttendance.value.distinctStudents : null;
+
+  if (edition === "school" && session.roles.some((role) => role === "admin" || role === "principal" || role === "class_teacher" || role === "teacher")) {
+    return <SchoolStaffHome session={session} dashboard={dashboard} atRisk={atRisk} riskStatus={riskStatus} today={today} todayStatus={todayStatus} leaveWaiting={leaveWaiting} />;
+  }
 
   // Teaching-only staff get the focused "a teacher's day" dashboard; oversight
   // roles (hod/principal/admin) keep the analytics dashboard below.

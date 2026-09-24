@@ -63,7 +63,7 @@ export const NAV: NavEntry[] = [
   // --- PEOPLE: staff and the messages that go out to everyone.
   { href: "/manage/teachers", label: "Teachers", icon: "teachers", group: "PEOPLE", roles: ["admin"] },
   { href: "/manage/import/staff", label: "Import Staff", icon: "upload", group: "PEOPLE", roles: ["admin"] },
-  { href: "/manage/leave", label: "Leave", icon: "file", group: "PEOPLE", roles: ["teacher", "class_teacher", "hod"] },
+  { href: "/manage/leave", label: "Leave", icon: "file", group: "PEOPLE", roles: ["teacher", "class_teacher", "hod", "principal"] },
   { href: "/manage/notices", label: "Notices", icon: "bell", group: "PEOPLE", roles: ["admin", "principal"] },
   // --- REVIEW: look back at what happened, never change it.
   { href: "/manage/reports", label: "Reports", icon: "file", group: "REVIEW", roles: ALL },

@@ -8,6 +8,7 @@ import styles from "./page.module.css";
 export const dynamic = "force-dynamic";
 
 const DAY_KEYS = ["mon", "tue", "wed", "thu", "fri", "sat"] as const;
+const DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"] as const;
 type DayKey = (typeof DAY_KEYS)[number];
 type Row = { period: ReactNode } & Record<DayKey, ReactNode>;
 
@@ -16,6 +17,7 @@ export default function MyTimetablePage() {
   const [week, setWeek] = useState<TtWeek | null>(null);
   const [unlinked, setUnlinked] = useState(false);
   const [error, setError] = useState(false);
+  const [selectedDay, setSelectedDay] = useState(1);
 
   const load = useCallback(async () => {
     setWeek(null);
@@ -31,6 +33,10 @@ export default function MyTimetablePage() {
   useEffect(() => {
     void load();
   }, [load]);
+  useEffect(() => {
+    const today = new Date().getDay();
+    if (today >= 1 && today <= 6) setSelectedDay(today);
+  }, []);
 
   if (unlinked) {
     return (
@@ -89,7 +95,46 @@ export default function MyTimetablePage() {
         isEmpty={week !== null && (week.periods.length === 0 || week.entries.length === 0)}
         empty={<EmptyState title="No periods scheduled." body="Nothing is on your timetable yet." />}
       >
-        <Table columns={columns} rows={rows} />
+        <div className={styles.desktopWeek}>
+          <Table columns={columns} rows={rows} />
+        </div>
+        <section className={styles.mobileWeek} aria-label="Weekly timetable">
+          <div className={styles.dayPicker} aria-label="Choose a day">
+            {DAY_NAMES.map((name, index) => (
+              <button
+                key={name}
+                type="button"
+                className={styles.dayButton}
+                aria-pressed={selectedDay === index + 1}
+                onClick={() => setSelectedDay(index + 1)}
+              >
+                {name.slice(0, 3)}
+              </button>
+            ))}
+          </div>
+          <h2 className={styles.dayHeading}>{DAY_NAMES[selectedDay - 1]}</h2>
+          <ol className={styles.periodList}>
+            {(week?.periods ?? []).map((period) => {
+              const entry = week?.entries.find((item) => item.dayOfWeek === selectedDay && item.periodNo === period.periodNo);
+              return (
+                <li key={period.periodNo} className={styles.periodCard}>
+                  <div className={styles.periodNumber}>
+                    <strong>P{period.periodNo}</strong>
+                    <span className="num">{period.starts}–{period.ends}</span>
+                  </div>
+                  <div className={styles.periodDetail}>
+                    {entry ? (
+                      <>
+                        <strong>{entry.subjectName}</strong>
+                        <span>{entry.className} · Sec {entry.sectionName}{entry.room !== "" ? ` · Room ${entry.room}` : ""}</span>
+                      </>
+                    ) : <span className={styles.blank}>Free period</span>}
+                  </div>
+                </li>
+              );
+            })}
+          </ol>
+        </section>
       </AsyncState>
     </>
   );

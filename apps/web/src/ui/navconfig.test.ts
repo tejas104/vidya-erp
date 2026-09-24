@@ -40,6 +40,10 @@ describe("navConfig job-shaped regroup", () => {
     expect(hrefs(["teacher"])).not.toContain("/manage/analytics");
     expect(hrefs(["class_teacher"])).not.toContain("/manage/analytics");
   });
+  it("gives principals a navigation path to leave decisions", () => {
+    const principal = visibleNav(["principal"], "school").flatMap((group) => group.entries).map((entry) => entry.href);
+    expect(principal).toContain("/manage/leave");
+  });
   it("crumbsFor derives domain + label from NAV, none for dashboard", () => {
     expect(crumbsFor("/manage/marks")).toEqual([{ label: "Academics" }, { label: "Marks" }]);
     expect(crumbsFor("/manage/analytics")).toEqual([{ label: "Review" }, { label: "Analytics" }]);
