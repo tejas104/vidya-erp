@@ -66,9 +66,11 @@ analytics marks rollup is not presented as a school grade figure.
    sections to open the timetable, assignments, marks, exams, syllabus,
    attendance, fees, and notices as separate pages. The Standard 9 marks page
    shows the intentional unpublished-term state.
-6. Sign in as family: use the Overview, Learning, Fees, and Notices sections
-   to inspect attendance, the published report card PDF, balances, and school
-   notices. The family account must receive 403 from
+6. Sign in as family: switch between Asha Sharma (Standard 8 A) and Vedant
+   Sharma (Standard 9 A). Use the Overview, Learning, Fees, and Notices sections
+   to inspect each child's attendance, report-card state, balances, and notices.
+   Asha's published PDF is available; Vedant's open-term marks remain private.
+   The family account must receive 403 from
    staff APIs.
 
 The demo runs in school edition. An amber no-licence notice is expected because

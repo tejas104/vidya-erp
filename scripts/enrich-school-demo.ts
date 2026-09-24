@@ -114,6 +114,27 @@ async function main() {
     if (class9Pupil.identityUserId !== class9User.id)
       await api(admin, "post", `/api/v1/people/students/${class9Pupil.id}/identity-link`, { identityUserId: class9User.id });
 
+    const secondChild = rosters.get("9A")!.find((pupil) => pupil.fullName === "Vedant Sharma");
+    if (!secondChild) throw new Error("Expected Vedant Sharma in Standard 9 A");
+    const family = await login("school-demo-family", "school-demo-family-pass-2026");
+    try {
+      const linked = await api<{ children: { studentId: string; status: string }[] }>(family, "get", "/api/v1/people/guardian/children");
+      if (!linked.children.some((child) => child.studentId === secondChild.id)) {
+        const { code } = await api<{ code: string }>(admin, "post", `/api/v1/people/students/${secondChild.id}/guardian-invitations`, {
+          guardianName: "Leela Sharma", relationshipType: "parent", contactMethod: "email",
+          contactValue: "leela.sharma@example.test", staffVerified: true,
+        });
+        await api(family, "post", "/api/v1/people/guardian-invitations/redeem", { code });
+      }
+      const children = await api<{ children: { studentId: string; status: string }[] }>(family, "get", "/api/v1/people/guardian/children");
+      if (children.children.length !== 2 || children.children.some((child) => child.status !== "active") ||
+          !children.children.some((child) => child.studentId === secondChild.id))
+        throw new Error("Expected two active, distinct children in the family demo");
+      const unrelatedChild = rosters.get("8B")![0]!;
+      const unrelatedFees = await family.get(`/api/v1/fees/children/${unrelatedChild.id}/invoices`);
+      if (unrelatedFees.status() !== 403) throw new Error("Family account could read an unlinked pupil's fees");
+    } finally { await family.dispose(); }
+
     const subjects = tree.departments[0]!.subjects;
     const maths = subjects.find((subject) => subject.code === "MATH8");
     const science = subjects.find((subject) => subject.code === "SCI8");

@@ -155,6 +155,7 @@ async function main(): Promise<void> {
           await page.getByText("Mathematics").first().waitFor();
           await page.screenshot({ path: join(output, "teacher-timetable.png"), fullPage: true });
         } else if (account.role === "family") {
+          await page.getByRole("tab", { name: "Vedant Sharma" }).waitFor();
           await page.getByRole("navigation", { name: "Family sections" }).waitFor();
           await page.getByRole("heading", { name: "Today" }).waitFor();
           await page.screenshot({ path: join(output, "family-overview.png"), fullPage: true });
@@ -171,6 +172,20 @@ async function main(): Promise<void> {
           await page.getByRole("navigation", { name: "Family sections" }).getByRole("button", { name: "Notices" }).click();
           await page.getByText("Welcome to Standard 8").waitFor();
           await page.screenshot({ path: join(output, "family-notices.png"), fullPage: true });
+          await page.getByRole("tab", { name: "Vedant Sharma" }).click();
+          await page.getByRole("heading", { name: "Vedant Sharma", level: 1 }).waitFor();
+          await page.getByRole("region", { name: "School notices" }).getByText("Term 2 family meeting").waitFor();
+          if (await page.getByText("Welcome to Standard 8").count()) throw new Error("Standard 8 notice leaked into Vedant's family view");
+          await page.getByRole("navigation", { name: "Family sections" }).getByRole("button", { name: "Learning" }).click();
+          await page.getByText("No term marks released yet.").waitFor();
+          await page.getByText("No report cards published yet.").waitFor();
+          await page.screenshot({ path: join(output, "family-vedant-learning.png"), fullPage: true });
+          await page.getByRole("navigation", { name: "Family sections" }).getByRole("button", { name: "Fees" }).click();
+          await page.getByText("₹1,500.00 due").waitFor();
+          await page.screenshot({ path: join(output, "family-vedant-fees.png"), fullPage: true });
+          await page.getByRole("tab", { name: "Asha Sharma" }).click();
+          await page.getByRole("heading", { name: "Asha Sharma", level: 1 }).waitFor();
+          await page.getByText("₹800.00 due").waitFor();
           const staff = await page.request.get("/api/v1/people/colleges");
           if (staff.status() !== 403) throw new Error(`Family staff access returned ${staff.status()}, expected 403`);
           const teacherDirectory = await page.request.get("/api/v1/people/teachers?collegeId=col_unknown");
@@ -242,7 +257,11 @@ async function main(): Promise<void> {
           if (await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)) throw new Error("Attendance register overflows a 390px viewport");
           await page.screenshot({ path: join(output, "teacher-attendance-mobile.png"), fullPage: true });
         }
-        if (account.role === "family") await page.getByRole("heading", { name: "Today" }).waitFor();
+        if (account.role === "family") {
+          await page.getByRole("heading", { name: "Today" }).waitFor();
+          await page.getByRole("tab", { name: "Vedant Sharma" }).click();
+          await page.getByRole("heading", { name: "Vedant Sharma", level: 1 }).waitFor();
+        }
         if (account.role === "student") await page.getByText("Welcome to Standard 8").waitFor();
         if (account.role === "student-9a") await page.getByRole("heading", { name: "My marks", level: 1 }).waitFor();
         const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
