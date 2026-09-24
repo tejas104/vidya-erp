@@ -142,6 +142,8 @@ export interface IdentityService {
     roles: readonly Role[];
     createdBy: string;
   }): Promise<{ userId: string; username: string; temporaryPassword: string }>;
+  /** Narrow read for cross-module staff-account linking. Never returns secrets. */
+  accountForLink(userId: string): Promise<{ collegeId: string; accountKind: "staff" | "guardian"; roles: readonly Role[] } | null>;
   /**
    * ADR-0027: creates a guardian's own login when they redeem an invitation.
    * No roles, ever; kind "guardian". Throws UsernameTakenError on a clash.
@@ -224,6 +226,10 @@ export function createIdentityModule(deps: IdentityModuleDeps): RuntimeModule<Id
       derivedGrants,
       bootstrapAdmin: (input) => users.bootstrapAdmin(input),
       issueCredential: (input) => credentials.issueCredential(input),
+      accountForLink: async (userId) => {
+        const account = await users.getUser(userId);
+        return account ? { collegeId: account.collegeId, accountKind: account.accountKind, roles: account.roles } : null;
+      },
       createGuardianAccount: (input) => credentials.createGuardianAccount(input),
     },
   };

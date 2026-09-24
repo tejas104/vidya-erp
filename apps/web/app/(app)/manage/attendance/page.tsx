@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { api, currentAcademicYear, type AttendanceStatus } from "@/ui/api";
+import { api, currentAcademicYear, type AttendanceStatus, type SessionSummary } from "@/ui/api";
 import { useMutation } from "@/ui/useMutation";
 import { DeniedState } from "@/ui/DeniedState";
 import { AsyncState } from "@/ui/AsyncState";
@@ -34,6 +34,8 @@ export default function AttendancePage() {
   const [roster, setRoster] = useState<Student[] | null>(null);
   const [rosterError, setRosterError] = useState(false);
   const [marks, setMarks] = useState<Record<string, AttendanceStatus>>({});
+  const [daySessions, setDaySessions] = useState<SessionSummary[] | null>(null);
+  const [daySessionsError, setDaySessionsError] = useState(false);
   const save = useMutation(api.recordAttendance);
   const toast = useToast();
 
@@ -76,13 +78,30 @@ export default function AttendancePage() {
     loadRoster();
   }, [loadRoster]);
 
+  const loadDaySessions = useCallback(() => {
+    if (!sectionId || !heldOn) return;
+    setDaySessions(null);
+    setDaySessionsError(false);
+    api.sessionAttendance(sectionId, { from: heldOn, to: heldOn, limit: 100 })
+      .then(({ sessions }) => setDaySessions(sessions))
+      .catch(() => { setDaySessions(null); setDaySessionsError(true); });
+  }, [sectionId, heldOn]);
+  useEffect(() => { loadDaySessions(); }, [loadDaySessions]);
+
+  const existingSession = daySessions?.find((session) =>
+    session.heldOn === heldOn && session.slot === slot && (session.subjectId ?? "") === subjectId,
+  );
+
   async function submit() {
     const saved = await save.run({
       sectionId, heldOn, slot, academicYear: year,
       ...(subjectId !== "" ? { subjectId } : {}),
       entries: (roster ?? []).map((s) => ({ studentId: s.id, status: marks[s.id] ?? "present" })),
     });
-    if (saved) toast.push({ status: "good", message: "Attendance saved — recompute analytics to see it on the dashboard." });
+    if (saved) {
+      toast.push({ status: "good", message: "Attendance saved — recompute analytics to see it on the dashboard." });
+      loadDaySessions();
+    }
   }
 
   const rosterList = roster ?? [];
@@ -98,7 +117,9 @@ export default function AttendancePage() {
         eyebrow="Attendance"
         title="Record attendance"
         lede={
-          subjectId !== ""
+          existingSession
+            ? "The saved counts for this date and period are shown below."
+            : subjectId !== ""
             ? `Marking your subject's period (${slot}). Tap a student to mark absent.`
             : "Tap a student to mark absent — everyone starts present. Subject teachers mark their own period; the class teacher any."
         }
@@ -129,6 +150,18 @@ export default function AttendancePage() {
             isEmpty={roster !== null && roster.length === 0}
             empty={<EmptyState title="No students enrolled in this section." />}
           >
+            {daySessionsError ? <p role="alert" className="formerror">Couldn't check today's attendance. <Button variant="ghost" size="sm" onClick={loadDaySessions}>Retry check</Button></p> : null}
+            {existingSession ? <div role="status" className={styles.existingRegister}>
+              <strong>Attendance already recorded for this period</strong>
+              <p>Ask a class teacher or administrator to make an audited correction if it needs changing.</p>
+              <div className={styles.existingCounts}>
+                <StatusBadge status="good">{existingSession.counts.present} present</StatusBadge>
+                <StatusBadge status="danger">{existingSession.counts.absent} absent</StatusBadge>
+                <StatusBadge status="warn">{existingSession.counts.late} late</StatusBadge>
+                <StatusBadge status="neutral">{existingSession.counts.excused} excused</StatusBadge>
+              </div>
+            </div> : null}
+            {!existingSession ? <>
             <div className={styles.summary} aria-live="polite">
               <StatusBadge status="good">{presentN} present</StatusBadge>
               <StatusBadge status="danger" icon={<Icon name="close" size={12} />}>{absentN} absent</StatusBadge>
@@ -186,11 +219,12 @@ export default function AttendancePage() {
             </div>
 
             <div className={styles.saveBar}>
-              <Button disabled={save.phase.name === "saving"} onClick={submit}>
+              <Button disabled={save.phase.name === "saving" || daySessions === null || Boolean(existingSession)} onClick={submit}>
                 {save.phase.name === "saving" ? "Saving…" : "Save attendance"}
               </Button>
               {save.phase.name === "error" ? <span className="formerror" role="alert">{save.phase.message}</span> : null}
             </div>
+            </> : null}
           </AsyncState>
         </>
       )}

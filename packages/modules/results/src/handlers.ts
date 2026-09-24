@@ -16,6 +16,7 @@ export interface ResultsHandlerDeps {
   readonly directory: PeopleDirectory;
   readonly marks: AcademicsReadModel;
   readonly scopeChecker: ScopeChecker;
+  readonly edition?: "college" | "school";
 }
 
 function notFound(message = "not found") {
@@ -117,6 +118,7 @@ export function createResultsHandlers(deps: ResultsHandlerDeps): Record<string, 
     const existing = await deps.repo.getScale(params.scaleId);
     if (existing === null) return notFound("no such scale");
     if (!readAllowed(principal, { collegeId: existing.collegeId })) return denied();
+    if (deps.edition === "school") return { status: 409, body: { message: "school grade scales are retained; create a new scale for a changed grading rule" } };
     try {
       const row = await deps.repo.updateScale(params.scaleId, body);
       if (row === null) return notFound("no such scale");
@@ -135,6 +137,7 @@ export function createResultsHandlers(deps: ResultsHandlerDeps): Record<string, 
     const existing = await deps.repo.getScale(params.scaleId);
     if (existing === null) return notFound("no such scale");
     if (!readAllowed(principal, { collegeId: existing.collegeId })) return denied();
+    if (deps.edition === "school") return { status: 409, body: { message: "school grade scales are retained for existing and future terms" } };
     try {
       if (await deps.repo.scaleInUse(params.scaleId)) throw new ScaleInUseError();
       await deps.repo.deleteScale(params.scaleId);

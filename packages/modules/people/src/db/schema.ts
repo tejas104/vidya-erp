@@ -120,7 +120,7 @@ export const pplTeachers = pgTable("ppl_teachers", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
   uniqueIndex("ppl_teachers_staff_idx").on(table.collegeId, table.staffNo),
-  index("ppl_teachers_identity_idx").on(table.identityUserId),
+  uniqueIndex("ppl_teachers_identity_idx").on(table.identityUserId),
 ]);
 
 export const pplEnrollments = pgTable("ppl_enrollments", {

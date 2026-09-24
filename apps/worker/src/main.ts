@@ -163,7 +163,7 @@ async function main(): Promise<void> {
     audit: system.service.audit,
     scopeChecker: identityCore.scopeChecker,
     identityGrants: identity.service.derivedGrants,
-    identity: { issueCredential: identity.service.issueCredential },
+    identity: { issueCredential: identity.service.issueCredential, accountForLink: identity.service.accountForLink },
     guardianAccounts: { createGuardianAccount: identity.service.createGuardianAccount },
     readAudit: async (resourceType, resourceId, limit, beforeId) =>
       (await system.service.readAuditEventsForResource(resourceType, resourceId, limit, beforeId)).map(
@@ -228,6 +228,7 @@ async function main(): Promise<void> {
 
   // --- results --- (before reporting: grade cards render in this process)
   const results = createResultsModule({
+    edition: config.edition,
     db,
     audit: system.service.audit,
     scopeChecker: identityCore.scopeChecker,

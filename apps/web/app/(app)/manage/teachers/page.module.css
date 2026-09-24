@@ -25,7 +25,31 @@
 .recentActions {
   display: flex;
   gap: var(--space-2);
+  flex-wrap: wrap;
 }
+.teacherIdentity {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  flex-wrap: wrap;
+}
+.searchRow {
+  display: flex;
+  gap: var(--space-3);
+  align-items: flex-end;
+  flex-wrap: wrap;
+  max-width: 520px;
+}
+.pager {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+.credential {
+  display: grid;
+  gap: var(--space-2);
+}
+.credential p { margin: 0; overflow-wrap: anywhere; }
 .classPicker {
   max-width: 340px;
 }

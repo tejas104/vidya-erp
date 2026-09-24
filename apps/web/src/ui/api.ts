@@ -921,7 +921,18 @@ export const api = {
   // people — teachers
   createTeacher: (body: { collegeId: string; staffNo: string; fullName: string }) =>
     post<TeacherView>("/api/v1/people/teachers", body),
+  listTeachers: (collegeId: string, options: { q?: string; offset?: number; limit?: number } = {}) => {
+    const query = new URLSearchParams({ collegeId, offset: String(options.offset ?? 0), limit: String(options.limit ?? 50) });
+    if (options.q) query.set("q", options.q);
+    return get<{ teachers: TeacherView[]; nextOffset: number | null }>(`/api/v1/people/teachers?${query}`);
+  },
   getTeacher: (teacherId: string) => get<TeacherView>(`/api/v1/people/teachers/${encodeURIComponent(teacherId)}`),
+  updateTeacher: (teacherId: string, body: { fullName?: string; status?: "active" | "inactive" }) =>
+    patch<TeacherView>(`/api/v1/people/teachers/${encodeURIComponent(teacherId)}`, body),
+  issueTeacherCredential: (teacherId: string) =>
+    post<{ teacher: TeacherView; username: string; temporaryPassword: string; grants: { upserted: number; removed: number } }>(
+      `/api/v1/people/teachers/${encodeURIComponent(teacherId)}/credential`, {},
+    ),
   linkTeacherIdentity: (teacherId: string, identityUserId: string | null) =>
     post<{ teacher: TeacherView; grants: { upserted: number; removed: number } }>(
       `/api/v1/people/teachers/${encodeURIComponent(teacherId)}/identity-link`,

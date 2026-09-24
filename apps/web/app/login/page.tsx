@@ -2,49 +2,33 @@
 
 import { useEffect, useState } from "react";
 import { Button, Input } from "@vidya/ui-system";
-import { api, ApiError } from "@/ui/api";
+import { api, ApiError, type Session } from "@/ui/api";
 import styles from "./login.module.css";
 
 export const dynamic = "force-dynamic";
 
-type Role = "student" | "parent" | "staff";
+// One sign-in for every account. The session comes from the server; choosing a
+// destination here never grants a role or changes what an account can read.
+export function landingFor(session: Session): string {
+  if (session.kind === "guardian") return "/family";
+  if (session.roles.length > 0 && session.roles.every((role) => role === "student")) return "/portal";
+  if (session.roles.length > 0 && session.roles.every((role) => role === "accountant")) return "/manage/fees";
+  return "/dashboard";
+}
 
-const COPY: Record<Role, { eyebrow: string; lede: string; hint: string }> = {
-  student: {
-    eyebrow: "Student portal",
-    lede: "See your attendance, marks and notices for the term.",
-    hint: "Use the sign-in your college linked to your record.",
-  },
-  parent: {
-    eyebrow: "Parent sign-in",
-    lede: "See your child's attendance, marks and timetable.",
-    hint: "Use the username you chose when you set up your account.",
-  },
-  staff: {
-    eyebrow: "Staff sign-in",
-    lede: "Your dashboard shows only the classes and records in your scope.",
-    hint: "Use your staff username.",
-  },
-};
-
-// Dev-only convenience: Next inlines NODE_ENV at build, so this whole block
-// disappears from production bundles. One representative account per role from
-// scripts/seed-demo.ts — click to fill the form.
 const IS_DEV = process.env.NODE_ENV !== "production";
-const DEMO_ACCOUNTS: { label: string; username: string; password: string }[] = [
-  { label: "Admin", username: "demo-admin", password: "demo-admin-pass-2026!" },
+const DEMO_ACCOUNTS = [
+  { label: "Administrator", username: "demo-admin", password: "demo-admin-pass-2026!" },
   { label: "Principal", username: "demo-principal", password: "demo-staff-pass-2026!" },
-  { label: "HoD", username: "demo-hod-cse", password: "demo-staff-pass-2026!" },
   { label: "Class teacher", username: "demo-ct-fycs", password: "demo-teacher-pass-2026!" },
   { label: "Teacher", username: "demo-teacher-ds", password: "demo-teacher-pass-2026!" },
-  { label: "Accountant", username: "demo-accountant", password: "demo-accountant-pass-2026!" },
   { label: "Student", username: "demo-student", password: "demo-student-pass-2026!" },
-];
+] as const;
 
 export default function LoginPage() {
-  const [role, setRole] = useState<Role>("student");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [theme, setTheme] = useState<"light" | "dark" | null>(null);
@@ -56,8 +40,7 @@ export default function LoginPage() {
 
   function toggleTheme() {
     const root = document.documentElement;
-    const isDark =
-      root.getAttribute("data-theme") === "dark" ||
+    const isDark = root.getAttribute("data-theme") === "dark" ||
       (root.getAttribute("data-theme") === null && window.matchMedia("(prefers-color-scheme: dark)").matches);
     const next = isDark ? "light" : "dark";
     root.setAttribute("data-theme", next);
@@ -67,68 +50,60 @@ export default function LoginPage() {
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
+    if (busy) return;
+    if (!username.trim() || !password) {
+      setError("Enter your username and password.");
+      return;
+    }
     setBusy(true);
     setError("");
     try {
       await api.login(username.trim(), password);
-      window.location.href = "/dashboard";
+      const session = await api.session().catch(() => null);
+      window.location.href = session ? landingFor(session) : "/dashboard";
     } catch (caught) {
       const status = caught instanceof ApiError ? caught.status : 0;
-      if (status === 429) {
-        setError("Too many attempts. Wait a few minutes and try again.");
-      } else if (status === 403) {
-        setError("Your password needs to be reset before you can sign in. Ask your administrator.");
-      } else {
-        setError("That username and password don't match.");
-      }
+      setError(status === 429
+        ? "Too many attempts. Wait a few minutes and try again."
+        : status === 403
+          ? "Your password needs to be reset. Contact your school office."
+          : "That username and password don't match.");
+    } finally {
       setBusy(false);
     }
   }
 
   return (
     <div className={styles.page}>
-      <aside className={styles.hero} aria-hidden="true">
-        <div className={styles.heroInner}>
-          <span className={styles.word}>
-            vidya<span>.</span>
-          </span>
-          <p className={styles.tagline}>
-            Sign in to see your attendance, marks and notices — everything scoped to you.
-          </p>
-          <ul className={styles.points}>
-            <li>Attendance</li>
-            <li>Marks &amp; results</li>
-            <li>Notices &amp; calendar</li>
-          </ul>
+      <aside className={styles.story} aria-label="Vidya school workspace">
+        <div className={styles.storyTop}>
+          <span className={styles.word}>vidya<span>.</span></span>
+          <span className={styles.storyEdition}>School workspace</span>
         </div>
+        <div className={styles.storyMiddle}>
+          <p className={styles.storyEyebrow}>A better day at school</p>
+          <h2>Everyone in the school day, in one place.</h2>
+          <p>From the first register to the final report card, the right work opens with the right account.</p>
+          <div className={styles.storyBoard} aria-hidden="true">
+            <div><span>01</span><strong>Run the school</strong><small>People · records · fees</small></div>
+            <div><span>02</span><strong>Teach the class</strong><small>Attendance · lessons · marks</small></div>
+            <div><span>03</span><strong>Follow the journey</strong><small>Progress · notices · family</small></div>
+          </div>
+        </div>
+        <p className={styles.storyFooter}>One secure account. Your own view of Vidya.</p>
       </aside>
 
       <main id="main" className={styles.main}>
-        <button type="button" className={styles.themeToggle} onClick={toggleTheme}>
-          {theme === "dark" ? "paper" : "chalk"}
-        </button>
-
-        <div className={styles.card}>
-          <div className={styles.seg} role="tablist" aria-label="Who is signing in">
-            {(["student", "parent", "staff"] as Role[]).map((r) => (
-              <button
-                key={r}
-                type="button"
-                role="tab"
-                aria-selected={role === r}
-                data-on={role === r ? "" : undefined}
-                onClick={() => setRole(r)}
-              >
-                {r === "student" ? "Student" : r === "parent" ? "Parent" : "Staff"}
-              </button>
-            ))}
-          </div>
-
-          <p className={`eyebrow ${styles.eyebrow}`}>{COPY[role].eyebrow}</p>
-          <h1 className={styles.title}>Welcome back</h1>
-          <p className={styles.lede}>{COPY[role].lede}</p>
-          <p className={styles.hint}>{COPY[role].hint}</p>
-
+        <div className={styles.mainTop}>
+          <span className={styles.mobileWord}>vidya<span>.</span></span>
+          <button type="button" className={styles.themeToggle} onClick={toggleTheme} aria-label={theme === "dark" ? "Use light theme" : "Use dark theme"}>
+            {theme === "dark" ? "Light theme" : "Dark theme"}
+          </button>
+        </div>
+        <div className={styles.formWrap}>
+          <p className={styles.eyebrow}>Welcome to Vidya</p>
+          <h1>Sign in to your school.</h1>
+          <p className={styles.lede}>Teachers, school staff, students and families use the same sign-in. Your workspace opens automatically.</p>
           <form onSubmit={submit} noValidate>
             <Input
               id="username"
@@ -141,54 +116,45 @@ export default function LoginPage() {
               onChange={(event) => setUsername(event.target.value)}
               required
             />
-            <Input
-              id="password"
-              name="password"
-              type="password"
-              label="Password"
-              autoComplete="current-password"
-              className={styles.fieldInput}
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              required
-            />
-            <p className="formerror" role="alert" aria-live="polite">
-              {error}
-            </p>
+            <div className={styles.passwordWrap}>
+              <Input
+                id="password"
+                name="password"
+                type={showPassword ? "text" : "password"}
+                label="Password"
+                autoComplete="current-password"
+                className={styles.passwordInput}
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                required
+              />
+              <button type="button" className={styles.passwordToggle} onClick={() => setShowPassword((shown) => !shown)} aria-label={showPassword ? "Hide password" : "Show password"} aria-pressed={showPassword}>
+                {showPassword ? "Hide" : "Show"}
+              </button>
+            </div>
+            <p className={styles.error} role="alert" aria-live="polite">{error}</p>
             <Button type="submit" className={`login-submit ${styles.submit}`} disabled={busy}>
-              {busy ? "Signing in…" : "Sign in"}
+              {busy ? "Opening your workspace…" : "Sign in"}<span aria-hidden="true">→</span>
             </Button>
           </form>
-
-          {role === "parent" ? (
-            <p className={styles.hint}>
-              New here? <a href="/activate">Set up your parent account</a> with the invitation code the school gave you.
-            </p>
-          ) : null}
-
+          <div className={styles.accessHelp}>
+            <p>New parent or guardian? <a href="/activate">Activate your invitation</a>.</p>
+            <p>Need an account or password reset? Contact your school office.</p>
+          </div>
           {IS_DEV ? (
-            <div className={styles.demos}>
-              <span className={styles.demosLabel}>Demo accounts (dev only)</span>
-              <div className={styles.demosChips}>
-                {DEMO_ACCOUNTS.map((acc) => (
-                  <button
-                    key={acc.username}
-                    type="button"
-                    className={styles.demoChip}
-                    title={`${acc.username} / ${acc.password}`}
-                    onClick={() => {
-                      setUsername(acc.username);
-                      setPassword(acc.password);
-                      setError("");
-                    }}
-                  >
-                    {acc.label}
+            <details className={styles.demos}>
+              <summary>Local development accounts</summary>
+              <div className={styles.demoList}>
+                {DEMO_ACCOUNTS.map((account) => (
+                  <button key={account.username} type="button" onClick={() => { setUsername(account.username); setPassword(account.password); setError(""); }}>
+                    {account.label}
                   </button>
                 ))}
               </div>
-            </div>
+            </details>
           ) : null}
         </div>
+        <p className={styles.mainFooter}>Private school records stay with the people authorised to see them.</p>
       </main>
     </div>
   );

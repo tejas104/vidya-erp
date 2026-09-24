@@ -32,6 +32,8 @@ export interface ResultsModuleDeps {
   readonly peopleDirectory: PeopleDirectory;
   readonly marksReadModel: AcademicsReadModel;
   readonly scopeChecker: ScopeChecker;
+  /** School terms freeze a grading basis; school scales are retained for future terms. */
+  readonly edition?: "college" | "school";
 }
 
 /** Read surface for the reporting module's grade-card kind (R4). */
@@ -44,7 +46,7 @@ export interface ResultsService {
 export function createResultsModule(deps: ResultsModuleDeps): RuntimeModule<ResultsService> {
   const repo = createResultsRepo(deps.db);
   const shared = { repo, directory: deps.peopleDirectory, marks: deps.marksReadModel };
-  const handlersDeps = { ...shared, scopeChecker: deps.scopeChecker };
+  const handlersDeps = { ...shared, scopeChecker: deps.scopeChecker, edition: deps.edition ?? "college" };
   const module: RuntimeModule<ResultsService> = {
     definition: resultsModuleDefinition,
     handlers: createResultsHandlers(handlersDeps),

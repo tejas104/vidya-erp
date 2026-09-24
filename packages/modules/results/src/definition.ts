@@ -131,7 +131,7 @@ const routes: RouteSpec[] = [
     method: "PUT",
     path: "/api/v1/results/scales/{scaleId}",
     summary: "Rename a scale or replace its bands (admin)",
-    description: "Scales referenced by a publication are frozen — published SGPA must stay reproducible. Create a new scale instead (409).",
+    description: "College scales referenced by a publication are frozen. School scales are always retained; create a new scale for a new grading rule (409).",
     tags: ["results"],
     auth: ADMIN_ONLY,
     request: {
@@ -145,7 +145,7 @@ const routes: RouteSpec[] = [
     responses: {
       200: { description: "Updated", schema: gradeScaleViewSchema },
       404: { description: "No such scale", schema: problemSchema },
-      409: { description: "Scale is referenced by a publication (frozen), or duplicate name", schema: problemSchema },
+      409: { description: "Scale is frozen or school edition retains it, or duplicate name", schema: problemSchema },
     },
   },
   {
@@ -154,7 +154,7 @@ const routes: RouteSpec[] = [
     method: "DELETE",
     path: "/api/v1/results/scales/{scaleId}",
     summary: "Delete a grade scale (admin)",
-    description: "RESTRICT: scales referenced by a publication answer 409.",
+    description: "RESTRICT: college scales referenced by a publication and all school scales answer 409.",
     tags: ["results"],
     auth: ADMIN_ONLY,
     request: { params: z.object({ scaleId: idSchema }) },
@@ -162,7 +162,7 @@ const routes: RouteSpec[] = [
     responses: {
       200: { description: "Deleted", schema: z.object({ ok: z.literal(true) }) },
       404: { description: "No such scale", schema: problemSchema },
-      409: { description: "Scale is referenced by a publication", schema: problemSchema },
+      409: { description: "Scale is referenced by a publication or retained for school terms", schema: problemSchema },
     },
   },
   {

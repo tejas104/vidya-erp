@@ -24,6 +24,7 @@ import {
   type TableColumn,
 } from "@vidya/ui-system";
 import { AsyncState } from "@/ui/AsyncState";
+import { HelpButton } from "@/ui/help/HelpButton";
 import styles from "./page.module.css";
 
 export const dynamic = "force-dynamic";
@@ -36,7 +37,7 @@ function classOptions(tree: OrgTree): ClassOpt[] {
     for (const klass of dept.classes) {
       options.push({
         classId: klass.id,
-        label: `${dept.code} · ${klass.name}`,
+        label: dept.code === "__SCHOOL__" ? klass.name : `${dept.code} · ${klass.name}`,
         subjects: dept.subjects.map((subject) => ({ id: subject.id, name: subject.name })),
       });
     }
@@ -52,7 +53,12 @@ export default function TeachersPage() {
   const [tree, setTree] = useState<OrgTree | null>(null);
   const [failed, setFailed] = useState(false);
   const [users, setUsers] = useState<UserView[]>([]);
-  const [recent, setRecent] = useState<TeacherView[]>([]);
+  const [teachers, setTeachers] = useState<TeacherView[] | null>(null);
+  const [teachersError, setTeachersError] = useState(false);
+  const [query, setQuery] = useState("");
+  const [appliedQuery, setAppliedQuery] = useState("");
+  const [offset, setOffset] = useState(0);
+  const [nextOffset, setNextOffset] = useState<number | null>(null);
   const [staffNo, setStaffNo] = useState("");
   const [fullName, setFullName] = useState("");
   const [saving, setSaving] = useState(false);
@@ -69,6 +75,28 @@ export default function TeachersPage() {
   const [assignClassId, setAssignClassId] = useState("");
   const [assignKind, setAssignKind] = useState<"subject_teacher" | "class_teacher">("subject_teacher");
   const [assignSubjectId, setAssignSubjectId] = useState("");
+  const [editing, setEditing] = useState<TeacherView | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editStatus, setEditStatus] = useState<"active" | "inactive">("active");
+  const [credentialTarget, setCredentialTarget] = useState<TeacherView | null>(null);
+  const [issued, setIssued] = useState<{ username: string; temporaryPassword: string } | null>(null);
+
+  const loadTeachers = useCallback(async (collegeId: string, q: string, pageOffset: number) => {
+    setTeachersError(false);
+    setTeachers(null);
+    try {
+      const page = await api.listTeachers(collegeId, { q, offset: pageOffset, limit: 25 });
+      setTeachers(page.teachers);
+      setTeacherNames((current) => ({ ...current, ...Object.fromEntries(page.teachers.map((teacher) => [teacher.id, teacher.fullName])) }));
+      setNextOffset(page.nextOffset);
+    } catch {
+      setTeachersError(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (tree) void loadTeachers(tree.college.id, appliedQuery, offset);
+  }, [tree, appliedQuery, offset, loadTeachers]);
 
   useEffect(() => {
     (async () => {
@@ -88,7 +116,7 @@ export default function TeachersPage() {
           setAssignSubjectId(first.subjects[0]?.id ?? "");
         }
         try {
-          setUsers((await api.listUsers(college.id)).users);
+          setUsers((await api.listUsers(college.id)).users.filter((user) => user.accountKind === "staff" && user.roles.every((role) => role === "teacher" || role === "class_teacher")));
         } catch {
           setUsers([]);
         }
@@ -132,7 +160,10 @@ export default function TeachersPage() {
     setSaving(true);
     try {
       const teacher = await api.createTeacher({ collegeId: tree.college.id, staffNo, fullName });
-      setRecent((current) => [teacher, ...current]);
+      setQuery("");
+      setAppliedQuery("");
+      setOffset(0);
+      await loadTeachers(tree.college.id, "", 0);
       toast.push({ status: "good", message: `${teacher.fullName} added.` });
       setStaffNo("");
       setFullName("");
@@ -148,11 +179,41 @@ export default function TeachersPage() {
     setSaving(true);
     try {
       const { teacher, grants } = await api.linkTeacherIdentity(linking.id, linkUserId);
-      setRecent((current) => current.map((t) => (t.id === teacher.id ? teacher : t)));
+      setTeachers((current) => current?.map((t) => (t.id === teacher.id ? teacher : t)) ?? current);
       toast.push({ status: "good", message: `Linked — ${grants.upserted} grant(s) derived.` });
       setLinking(null);
     } catch (caught) {
       toast.push({ status: "danger", message: caught instanceof ApiError ? caught.message : "Couldn't link." });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function saveTeacher() {
+    if (!editing || !editName.trim()) return;
+    setSaving(true);
+    try {
+      const updated = await api.updateTeacher(editing.id, { fullName: editName.trim(), status: editStatus });
+      setTeachers((current) => current?.map((row) => row.id === updated.id ? updated : row) ?? current);
+      setTeacherNames((current) => ({ ...current, [updated.id]: updated.fullName }));
+      setEditing(null);
+      toast.push({ status: "good", message: `${updated.fullName} updated.` });
+    } catch (caught) {
+      toast.push({ status: "danger", message: caught instanceof ApiError ? caught.message : "Couldn't update the teacher." });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function issueCredential() {
+    if (!credentialTarget) return;
+    setSaving(true);
+    try {
+      const result = await api.issueTeacherCredential(credentialTarget.id);
+      setTeachers((current) => current?.map((row) => row.id === result.teacher.id ? result.teacher : row) ?? current);
+      setIssued({ username: result.username, temporaryPassword: result.temporaryPassword });
+    } catch (caught) {
+      toast.push({ status: "danger", message: caught instanceof ApiError ? caught.message : "Couldn't issue the sign-in." });
     } finally {
       setSaving(false);
     }
@@ -226,8 +287,9 @@ export default function TeachersPage() {
     <>
       <PageHeader
         eyebrow="Teachers"
-        title="Teacher records & assignments"
-        lede="Assignments derive scope grants once the teacher is linked to a sign-in (ADR-0015). Browse by class — teachers appear where they teach."
+        title="Teachers & class roles"
+        lede="Keep staff records, sign-ins and teaching roles together. Open a teacher below to update their record or assign a class."
+        help={<HelpButton slug="teachers" />}
       />
 
       <Card title="Add a teacher">
@@ -238,27 +300,47 @@ export default function TeachersPage() {
             Add teacher
           </Button>
         </div>
-        {recent.length > 0 ? (
+      </Card>
+
+      <section className="section" aria-label="Teacher directory">
+        <div className="section-head"><h2>Teacher directory</h2></div>
+        <form className={styles.searchRow} onSubmit={(event) => { event.preventDefault(); setOffset(0); setAppliedQuery(query.trim()); }}>
+          <Input id="tch-search" label="Find a teacher" hint="Search name or staff number" value={query} onChange={(event) => setQuery(event.target.value)} />
+          <Button type="submit" variant="ghost">Search</Button>
+        </form>
+        <AsyncState
+          loading={teachers === null && !teachersError}
+          error={teachersError}
+          onRetry={() => tree && void loadTeachers(tree.college.id, appliedQuery, offset)}
+          isEmpty={teachers !== null && teachers.length === 0}
+          empty={<EmptyState title="No teachers found" body={appliedQuery ? "Try another name or staff number." : "Add the first teacher above."} />}
+        >
           <div className={styles.recentList}>
-            {recent.map((teacher) => (
+            {(teachers ?? []).map((teacher) => (
               <div key={teacher.id} className={styles.recentRow}>
-                <span>
-                  <strong>{teacher.fullName}</strong> <span className="num">{teacher.staffNo}</span>{" "}
-                  {teacher.identityUserId !== null ? (
-                    <StatusBadge status="good">linked</StatusBadge>
-                  ) : (
-                    <StatusBadge status="warn">no sign-in</StatusBadge>
-                  )}
+                <span className={styles.teacherIdentity}>
+                  <strong>{teacher.fullName}</strong>
+                  <span className="num">{teacher.staffNo}</span>
+                  <StatusBadge status={teacher.status === "active" ? "good" : "neutral"}>{teacher.status}</StatusBadge>
+                  {teacher.identityUserId !== null ? <StatusBadge status="good">sign-in ready</StatusBadge> : <StatusBadge status="warn">no sign-in</StatusBadge>}
                 </span>
                 <span className={styles.recentActions}>
-                  <Button variant="ghost" onClick={() => { setLinkUserId(""); setLinking(teacher); }}>Link identity</Button>
+                  <Button variant="ghost" onClick={() => { setEditing(teacher); setEditName(teacher.fullName); setEditStatus(teacher.status); }}>Edit</Button>
+                  {teacher.identityUserId === null && teacher.status === "active" ? (
+                    <Button variant="ghost" onClick={() => { setIssued(null); setCredentialTarget(teacher); }}>Issue sign-in</Button>
+                  ) : null}
+                  {teacher.identityUserId === null ? <Button variant="ghost" onClick={() => { setLinkUserId(""); setLinking(teacher); }}>Link existing</Button> : null}
                   <Button variant="ghost" onClick={() => setAssigning(teacher)}>Assign</Button>
                 </span>
               </div>
             ))}
           </div>
-        ) : null}
-      </Card>
+        </AsyncState>
+        <div className={styles.pager}>
+          {offset > 0 ? <Button variant="ghost" onClick={() => setOffset(Math.max(0, offset - 25))}>Previous</Button> : null}
+          {nextOffset !== null ? <Button variant="ghost" onClick={() => setOffset(nextOffset)}>Next</Button> : null}
+        </div>
+      </section>
 
       <section className="section" aria-label="Assignments by class">
         <div className="section-head"><h2>Assignments by class</h2></div>
@@ -306,6 +388,21 @@ export default function TeachersPage() {
             ...users.map((user) => ({ value: user.id, label: `${user.displayName} (${user.username})` })),
           ]}
         />
+      </Modal>
+
+      <Modal open={editing !== null} onClose={() => setEditing(null)} title={`Edit ${editing?.staffNo ?? "teacher"}`}
+        footer={<><Button variant="ghost" onClick={() => setEditing(null)}>Cancel</Button><Button onClick={() => void saveTeacher()} loading={saving} disabled={!editName.trim()}>Save teacher</Button></>}>
+        <div className={styles.formGrid}>
+          <Input id="tch-edit-name" label="Full name" value={editName} onChange={(event) => setEditName(event.target.value)} />
+          <Select id="tch-edit-status" label="Status" value={editStatus} onChange={(event) => setEditStatus(event.target.value as "active" | "inactive")} options={[{ value: "active", label: "Active" }, { value: "inactive", label: "Inactive" }]} />
+          <p className={styles.confirmMessage}>Inactive teachers lose access granted through their class assignments.</p>
+        </div>
+      </Modal>
+
+      <Modal open={credentialTarget !== null} onClose={() => { setCredentialTarget(null); setIssued(null); }} title={`Sign-in for ${credentialTarget?.fullName ?? "teacher"}`}
+        footer={issued ? <Button onClick={() => { setCredentialTarget(null); setIssued(null); }}>Done</Button> : <><Button variant="ghost" onClick={() => setCredentialTarget(null)}>Cancel</Button><Button onClick={() => void issueCredential()} loading={saving}>Issue sign-in</Button></>}>
+        {issued ? <div className={styles.credential}><p>Give these details privately to the teacher. This temporary password is shown only now.</p><p><strong>Username</strong> <span className="num">{issued.username}</span></p><p><strong>Temporary password</strong> <span className="num">{issued.temporaryPassword}</span></p></div>
+          : <p>Issue one staff account for this teacher. Their class permissions will follow their assignments.</p>}
       </Modal>
 
       <Modal

@@ -46,7 +46,7 @@ function fakeIdentity(): CredentialIssuer {
   };
 }
 
-async function makeHarness(opts: { identity?: CredentialIssuer; edition?: "college" | "school" } = {}) {
+async function makeHarness(opts: { identity?: CredentialIssuer; edition?: "college" | "school"; accountForLink?: (userId: string) => Promise<{ collegeId: string; accountKind: "staff" | "guardian"; roles: readonly string[] } | null> } = {}) {
   const orgRepo = new InMemoryOrgRepo();
   const peopleRepo = new InMemoryPeopleRepo();
   const importsRepo = new InMemoryImportsRepo();
@@ -74,7 +74,7 @@ async function makeHarness(opts: { identity?: CredentialIssuer; edition?: "colle
       enqueued.push(payload);
     },
     edition: opts.edition ?? "college",
-    identity,
+    identity: { ...identity, accountForLink: opts.accountForLink ?? (async () => ({ collegeId: org.college.id, accountKind: "staff", roles: ["teacher"] })) },
     readAudit: async () => [],
   };
   return {
@@ -382,6 +382,23 @@ describe("student handlers", () => {
 });
 
 describe("teacher & assignment handlers", () => {
+  it("lists only scoped teachers with search and pagination", async () => {
+    const harness = await makeHarness();
+    const collegeId = harness.org.college.id;
+    await harness.peopleRepo.createTeacher({ collegeId, staffNo: "T02", fullName: "Meera Shah" });
+    await harness.peopleRepo.createTeacher({ collegeId, staffNo: "T01", fullName: "Asha Rao" });
+    await harness.peopleRepo.createTeacher({ collegeId: "col_other", staffNo: "T00", fullName: "Other Teacher" });
+    const first = await harness.handlers["people.teacher-list"]!(ctx({ query: { collegeId, offset: 0, limit: 1 } }));
+    expect(first.status).toBe(200);
+    expect((first.body as { teachers: { staffNo: string }[]; nextOffset: number }).teachers.map((row) => row.staffNo)).toEqual(["T01"]);
+    expect((first.body as { nextOffset: number }).nextOffset).toBe(1);
+    const searched = await harness.handlers["people.teacher-list"]!(ctx({ query: { collegeId, q: "meera", offset: 0, limit: 50 } }));
+    expect((searched.body as { teachers: { staffNo: string }[] }).teachers.map((row) => row.staffNo)).toEqual(["T02"]);
+    expect(harness.scopeChecker.calls.at(-1)?.resource).toMatchObject({ org: { collegeId } });
+    harness.scopeChecker.decision = { granted: false, reason: "denied" };
+    expect((await harness.handlers["people.teacher-list"]!(ctx({ query: { collegeId, offset: 0, limit: 50 } }))).status).toBe(403);
+  });
+
   it("creates teachers (409 on duplicates, 404 unknown college) and reads them", async () => {
     const harness = await makeHarness();
     const teacherId = await makeTeacher(harness);
@@ -453,6 +470,31 @@ describe("teacher & assignment handlers", () => {
         )
       ).status,
     ).toBe(404);
+  });
+
+  it("rejects guardian and other-school accounts when linking a teacher", async () => {
+    const guardian = await makeHarness({ accountForLink: async () => ({ collegeId: "other", accountKind: "guardian", roles: [] }) });
+    const teacherId = await makeTeacher(guardian);
+    const result = await guardian.handlers["people.teacher-link-identity"]!(ctx({ params: { teacherId }, body: { identityUserId: "user-foreign" } }));
+    expect(result.status).toBe(422);
+    expect((await guardian.peopleRepo.getTeacher(teacherId))?.identityUserId).toBeNull();
+  });
+
+  it("allows an unassigned staff login and rejects a student login", async () => {
+    let collegeId = "";
+    const harness = await makeHarness({ accountForLink: async (userId) => ({ collegeId, accountKind: "staff", roles: userId === "student" ? ["student"] : [] }) });
+    collegeId = harness.org.college.id;
+    const teacherId = await makeTeacher(harness);
+    expect((await harness.handlers["people.teacher-link-identity"]!(ctx({ params: { teacherId }, body: { identityUserId: "staff-unassigned" } }))).status).toBe(200);
+    expect((await harness.handlers["people.teacher-link-identity"]!(ctx({ params: { teacherId }, body: { identityUserId: "student" } }))).status).toBe(422);
+  });
+
+  it("does not link one sign-in to two teacher records", async () => {
+    const harness = await makeHarness();
+    const first = await makeTeacher(harness);
+    const second = await harness.peopleRepo.createTeacher({ collegeId: harness.org.college.id, staffNo: "T2", fullName: "Meera" });
+    expect((await harness.handlers["people.teacher-link-identity"]!(ctx({ params: { teacherId: first }, body: { identityUserId: "user-9" } }))).status).toBe(200);
+    expect((await harness.handlers["people.teacher-link-identity"]!(ctx({ params: { teacherId: second.id }, body: { identityUserId: "user-9" } }))).status).toBe(409);
   });
 
   it("assignment create/list/remove flows with 404s and 409s", async () => {

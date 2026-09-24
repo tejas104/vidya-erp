@@ -20,4 +20,6 @@ You need an assigned class or teaching period and an enrolled section roster. If
 
 The attendance record is saved for the selected date and period. The confirmation explains that analytics must be recomputed before the new attendance appears on the dashboard.
 
+If attendance was already saved for that section, date, period, and subject, the screen shows its recorded counts instead of a new entry form. Ask a class teacher or administrator to use the audited correction flow when a recorded status must change. If the screen cannot check for an existing register, retry the check before saving.
+
 If there are no sections, open the relevant period from your **Today** card or ask the office to verify your teaching assignment. If the roster cannot load, select the retry action and check the selected section. If saving shows an error, correct the indicated problem and select **Save attendance** again; do not assume an unsaved roster has been recorded.

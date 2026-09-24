@@ -44,12 +44,12 @@ analytics marks rollup is not presented as a school grade figure.
 
 ## Review route
 
-1. Sign in as administrator: inspect Students, Academic terms, Report cards,
-   Fee counter, and the organisation setup.
+1. Sign in as administrator: inspect the teacher directory, Results path,
+   Students, Academic terms, Report cards, Fee counter, and organisation setup.
 2. Sign in as principal: inspect the leadership dashboard, analytics, leave
    decisions, report cards, and notices.
 3. Sign in as class teacher: inspect the class dashboard, roster, whole-class
-   attendance, and report card desk.
+   attendance, saved-register duplicate guard, and report card desk.
 4. Sign in as subject teacher: inspect the teaching dashboard, My timetable,
    Attendance, Syllabus, Coursework, and Marks. On a phone width, switch
    timetable days.
@@ -63,7 +63,8 @@ The demo runs in school edition. An amber no-licence notice is expected because
 hosted licensing is being developed separately. This localhost fixture does
 not establish internet deployment readiness or real school acceptance.
 
-The browser check signs into all six roles at desktop and 390 px width,
+The browser check signs into all six roles from the same login page at desktop and 390 px width,
+checks the teacher directory and school Results, blocks a duplicate attendance entry,
 switches mobile timetable days, reads the family PDF, confirms the family
 cannot call a staff API, checks for horizontal overflow and page exceptions,
 and keeps screenshots under `test-results/school-demo/`.

@@ -20,7 +20,8 @@ vi.mock("./api", async (importOriginal) => {
       ...actual.api,
       colleges: vi.fn(), collegeTree: vi.fn(), createTeacher: vi.fn(), getTeacher: vi.fn(),
       linkTeacherIdentity: vi.fn(), createTeacherAssignment: vi.fn(), removeAssignment: vi.fn(),
-      classTeacherAssignments: vi.fn(), listUsers: vi.fn(),
+      classTeacherAssignments: vi.fn(), listUsers: vi.fn(), listTeachers: vi.fn(),
+      updateTeacher: vi.fn(), issueTeacherCredential: vi.fn(),
     },
   };
 });
@@ -42,9 +43,12 @@ beforeEach(() => {
   (api.colleges as ReturnType<typeof vi.fn>).mockResolvedValue({ colleges: [tree.college] });
   (api.collegeTree as ReturnType<typeof vi.fn>).mockResolvedValue(tree);
   (api.classTeacherAssignments as ReturnType<typeof vi.fn>).mockResolvedValue({ assignments: [] });
-  (api.listUsers as ReturnType<typeof vi.fn>).mockResolvedValue({ users: [{ id: "u_1", username: "t.new", displayName: "T New", status: "active", roles: [] }] });
+  (api.listUsers as ReturnType<typeof vi.fn>).mockResolvedValue({ users: [{ id: "u_1", username: "t.new", displayName: "T New", status: "active", accountKind: "staff", roles: ["teacher"] }] });
   (api.createTeacher as ReturnType<typeof vi.fn>).mockResolvedValue(teacher);
+  (api.listTeachers as ReturnType<typeof vi.fn>).mockImplementation(async () => ({ teachers: (api.createTeacher as ReturnType<typeof vi.fn>).mock.calls.length ? [teacher] : [], nextOffset: null }));
   (api.linkTeacherIdentity as ReturnType<typeof vi.fn>).mockResolvedValue({ teacher: { ...teacher, identityUserId: "u_1" }, grants: { upserted: 0, removed: 0 } });
+  (api.updateTeacher as ReturnType<typeof vi.fn>).mockResolvedValue({ ...teacher, fullName: "Updated Teacher" });
+  (api.issueTeacherCredential as ReturnType<typeof vi.fn>).mockResolvedValue({ teacher: { ...teacher, identityUserId: "u_1" }, username: "teacher-s-9", temporaryPassword: "OneTime-123", grants: { upserted: 0, removed: 0 } });
   (api.createTeacherAssignment as ReturnType<typeof vi.fn>).mockResolvedValue({ id: "asg_1", teacherId: "tch_1", classId: "cls_1", subjectId: "sub_1", kind: "subject_teacher", academicYear: "2026-27" });
 });
 
@@ -75,5 +79,26 @@ describe("/manage/teachers", () => {
         academicYear: expect.any(String),
       }),
     );
+  });
+
+  it("opens an existing teacher and issues a one-time staff sign-in", async () => {
+    (api.listTeachers as ReturnType<typeof vi.fn>).mockResolvedValue({ teachers: [teacher], nextOffset: null });
+    renderPage();
+    expect(await screen.findByText("New Teacher")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /issue sign-in/i }));
+    fireEvent.click(screen.getAllByRole("button", { name: /issue sign-in/i }).at(-1)!);
+    expect(await screen.findByText("OneTime-123")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Done" }));
+    expect(screen.queryByText("OneTime-123")).not.toBeInTheDocument();
+    expect(api.issueTeacherCredential).toHaveBeenCalledWith("tch_1");
+  });
+
+  it("updates status on a persisted teacher record", async () => {
+    (api.listTeachers as ReturnType<typeof vi.fn>).mockResolvedValue({ teachers: [teacher], nextOffset: null });
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
+    fireEvent.change(screen.getByLabelText("Status"), { target: { value: "inactive" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save teacher" }));
+    await waitFor(() => expect(api.updateTeacher).toHaveBeenCalledWith("tch_1", { fullName: "New Teacher", status: "inactive" }));
   });
 });

@@ -126,3 +126,13 @@
   background: var(--paper);
   border-top: 1px solid var(--rule);
 }
+.existingRegister {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.existingRegister p { margin: 0; color: var(--ink-2); }
+.existingCounts { display: flex; flex-wrap: wrap; gap: var(--space-2); }

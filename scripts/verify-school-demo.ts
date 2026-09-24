@@ -27,6 +27,18 @@ async function main(): Promise<void> {
   const browser = await chromium.launch({ headless: true });
   const findings: string[] = [];
   try {
+    const signInContext = await browser.newContext({ viewport: { width: 1440, height: 900 }, baseURL });
+    const signInPage = await signInContext.newPage();
+    await signInPage.goto("/login");
+    await signInPage.getByRole("heading", { name: "Sign in to your school." }).waitFor();
+    if (await signInPage.getByRole("tab").count() !== 0) throw new Error("Sign-in still asks the visitor to select a role");
+    await signInPage.screenshot({ path: join(output, "login-desktop.png"), fullPage: true });
+    await signInPage.getByRole("button", { name: "Use dark theme" }).click();
+    await signInPage.screenshot({ path: join(output, "login-dark.png"), fullPage: true });
+    await signInPage.setViewportSize({ width: 390, height: 844 });
+    if (await signInPage.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)) throw new Error("Sign-in overflows a 390px viewport");
+    await signInPage.screenshot({ path: join(output, "login-mobile.png"), fullPage: true });
+    await signInContext.close();
     for (const account of accounts) {
       const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, baseURL });
       const page = await context.newPage();
@@ -34,6 +46,7 @@ async function main(): Promise<void> {
       page.on("pageerror", (error) => errors.push(error.message));
       try {
         await login(page, account.username, account.password);
+        if (new URL(page.url()).pathname !== account.landing) throw new Error(`${account.role} landed on ${new URL(page.url()).pathname}, expected ${account.landing}`);
         await page.goto(account.landing);
         await page.getByRole("heading", { name: account.heading, level: 1 }).waitFor({ timeout: 20_000 });
         if (account.role === "admin" || account.role === "principal" || account.role === "class-teacher") {
@@ -55,6 +68,28 @@ async function main(): Promise<void> {
           await page.goto("/manage/students");
           await page.getByText("Asha Sharma").first().waitFor();
           await page.screenshot({ path: join(output, "admin-students.png"), fullPage: true });
+          await page.goto("/manage/teachers");
+          await page.getByRole("heading", { name: "Teachers & class roles", level: 1 }).waitFor();
+          await page.getByText("Farah Khan").first().waitFor();
+          await page.screenshot({ path: join(output, "admin-teachers.png"), fullPage: true });
+          await page.getByRole("region", { name: "Teacher directory" }).getByRole("button", { name: "Assign" }).first().waitFor();
+          await page.getByLabel("Find a teacher").fill("Farah");
+          await page.getByRole("region", { name: "Teacher directory" }).getByRole("button", { name: "Search", exact: true }).click();
+          await page.getByRole("region", { name: "Teacher directory" }).getByText("Farah Khan").waitFor();
+          await page.getByRole("region", { name: "Teacher directory" }).getByText("Ananya Iyer").waitFor({ state: "detached" });
+          await page.goto("/manage/results");
+          await page.getByRole("heading", { name: "From marks to report cards", level: 1 }).waitFor();
+          await page.getByRole("button", { name: "New grade scale" }).waitFor();
+          await page.getByText("School A-E").waitFor();
+          if (await page.getByText("SGPA").count()) throw new Error("College SGPA appears in school Results");
+          await page.screenshot({ path: join(output, "admin-results.png"), fullPage: true });
+          const colleges = await (await page.request.get("/api/v1/people/colleges")).json() as { colleges: { id: string }[] };
+          const scaleResponse = await page.request.get(`/api/v1/results/scales?collegeId=${encodeURIComponent(colleges.colleges[0]!.id)}`);
+          const scaleList = await scaleResponse.json() as { scales: { id: string; name: string }[] };
+          const schoolScale = scaleList.scales.find((scale) => scale.name === "School A-E");
+          if (!schoolScale) throw new Error("Demo school grading scale is missing");
+          const retained = await page.request.delete(`/api/v1/results/scales/${encodeURIComponent(schoolScale.id)}`, { headers: { origin: baseURL } });
+          if (retained.status() !== 409) throw new Error(`School grade-scale retention returned ${retained.status()}, expected 409`);
           await page.goto("/manage/report-cards");
           await page.getByRole("heading", { name: "Report card desk", level: 1 }).waitFor();
           await page.screenshot({ path: join(output, "admin-report-cards.png"), fullPage: true });
@@ -68,6 +103,9 @@ async function main(): Promise<void> {
           await page.goto("/manage/leave");
           await page.getByRole("heading", { level: 1 }).waitFor();
           await page.screenshot({ path: join(output, "principal-leave.png"), fullPage: true });
+          await page.goto("/manage/results");
+          await page.getByRole("heading", { name: "From marks to report cards", level: 1 }).waitFor();
+          if (await page.getByRole("button", { name: "New grade scale" }).count()) throw new Error("Principal sees an admin-only grading action");
         } else if (account.role === "class-teacher") {
           await page.getByRole("region", { name: "Your workspaces" }).getByRole("link", { name: /Report cards/ }).waitFor();
           await page.goto("/manage/classes");
@@ -76,6 +114,11 @@ async function main(): Promise<void> {
           await page.goto("/manage/report-cards");
           await page.getByRole("heading", { name: "Report card desk", level: 1 }).waitFor();
           await page.screenshot({ path: join(output, "class-teacher-report-cards.png"), fullPage: true });
+          await page.goto("/manage/attendance?date=2026-08-10");
+          await page.getByText(/already recorded/).waitFor();
+          if (await page.getByRole("button", { name: "Save attendance" }).count()) throw new Error("Recorded register still shows a save action");
+          await page.screenshot({ path: join(output, "class-teacher-existing-attendance.png"), fullPage: true });
+          await page.goto("/manage/report-cards");
         } else if (account.role === "teacher") {
           await page.goto("/manage/marks");
           await page.getByLabel("Term").waitFor();
@@ -97,6 +140,8 @@ async function main(): Promise<void> {
           await page.screenshot({ path: join(output, "family.png"), fullPage: true });
           const staff = await page.request.get("/api/v1/people/colleges");
           if (staff.status() !== 403) throw new Error(`Family staff access returned ${staff.status()}, expected 403`);
+          const teacherDirectory = await page.request.get("/api/v1/people/teachers?collegeId=col_unknown");
+          if (teacherDirectory.status() !== 403) throw new Error(`Family teacher directory returned ${teacherDirectory.status()}, expected 403`);
         } else {
           await page.getByRole("heading", { name: "My term marks" }).waitFor();
           await page.getByText("Observe a local ecosystem").waitFor();

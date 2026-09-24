@@ -1,16 +1,17 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import LoginPage from "../../app/login/page";
+import LoginPage, { landingFor } from "../../app/login/page";
 import { api } from "./api";
 
 vi.mock("./api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./api")>();
-  return { ...actual, api: { ...actual.api, login: vi.fn(), logout: vi.fn() } };
+  return { ...actual, api: { ...actual.api, login: vi.fn(), session: vi.fn(), logout: vi.fn() } };
 });
 
 beforeEach(() => {
   vi.clearAllMocks();
   Object.defineProperty(window, "location", { value: { href: "" }, writable: true });
+  (api.session as ReturnType<typeof vi.fn>).mockResolvedValue({ userId: "u_1", displayName: "Asha", roles: ["teacher"], grants: [] });
 });
 
 describe("login page", () => {
@@ -34,19 +35,16 @@ describe("login page", () => {
     expect(await screen.findByText(/username and password don't match/i)).toBeInTheDocument();
   });
 
-  it("the role toggle tailors the copy", () => {
+  it("uses one form for staff, students and families", () => {
     render(<LoginPage />);
-    // defaults to student
-    expect(screen.getByText("Student portal")).toBeInTheDocument();
-    expect(screen.getByText(/sign-in your college linked to your record/i)).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("tab", { name: "Staff" }));
-    expect(screen.getByText("Staff sign-in")).toBeInTheDocument();
-    expect(screen.getByText(/use your staff username/i)).toBeInTheDocument();
+    expect(screen.getByText(/Teachers, school staff, students and families use the same sign-in/)).toBeInTheDocument();
+    expect(screen.queryByRole("tablist")).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Activate your invitation" })).toHaveAttribute("href", "/activate");
   });
 
-  it("a demo chip fills the credentials (dev only)", () => {
+  it("a local development account fills the credentials only after opening the details", () => {
     render(<LoginPage />);
+    fireEvent.click(screen.getByText("Local development accounts"));
     fireEvent.click(screen.getByRole("button", { name: "Student" }));
     expect(screen.getByLabelText("Username")).toHaveValue("demo-student");
     expect(screen.getByLabelText("Password")).toHaveValue("demo-student-pass-2026!");
@@ -60,5 +58,22 @@ describe("login page", () => {
     fireEvent.change(screen.getByLabelText("Password"), { target: { value: "y" } });
     fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
     expect(await screen.findByText(/password needs to be reset/i)).toBeInTheDocument();
+  });
+
+  it("sends each successful account to its server-reported workspace", () => {
+    expect(landingFor({ userId: "g", kind: "guardian", displayName: "Parent", roles: [], grants: [] })).toBe("/family");
+    expect(landingFor({ userId: "s", displayName: "Pupil", roles: ["student"], grants: [] })).toBe("/portal");
+    expect(landingFor({ userId: "a", displayName: "Accountant", roles: ["accountant"], grants: [] })).toBe("/manage/fees");
+    expect(landingFor({ userId: "t", displayName: "Teacher", roles: ["teacher"], grants: [] })).toBe("/dashboard");
+  });
+
+  it("shows and hides the password without changing the entered value", () => {
+    render(<LoginPage />);
+    fireEvent.change(screen.getByLabelText("Password"), { target: { value: "school-secret" } });
+    fireEvent.click(screen.getByRole("button", { name: "Show password" }));
+    expect(screen.getByLabelText("Password")).toHaveAttribute("type", "text");
+    fireEvent.click(screen.getByRole("button", { name: "Hide password" }));
+    expect(screen.getByLabelText("Password")).toHaveAttribute("type", "password");
+    expect(screen.getByLabelText("Password")).toHaveValue("school-secret");
   });
 });

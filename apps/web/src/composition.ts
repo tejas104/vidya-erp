@@ -272,7 +272,7 @@ function buildWebRuntime(): WebRuntime {
     audit: system.service.audit,
     scopeChecker: identityCore.scopeChecker,
     identityGrants: identity.service.derivedGrants,
-    identity: { issueCredential: identity.service.issueCredential },
+    identity: { issueCredential: identity.service.issueCredential, accountForLink: identity.service.accountForLink },
     storage: { client: objectStorage, bucket: config.s3.bucket },
     enqueueImport: async (payload) => {
       await peopleQueue.queue.add(IMPORT_JOB_NAME, payload);
@@ -346,6 +346,7 @@ function buildWebRuntime(): WebRuntime {
 
   // --- results --- (before reporting: it feeds the grade-card source)
   const results = createResultsModule({
+    edition: config.edition,
     db,
     audit: system.service.audit,
     scopeChecker: identityCore.scopeChecker,

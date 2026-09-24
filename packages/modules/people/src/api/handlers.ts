@@ -46,7 +46,7 @@ export interface PeopleHandlerDeps {
   /** Drives the import-template CSV headers (#11 Task 1's first consumer). */
   readonly edition: AppConfig["edition"];
   /** Identity's credential issuance (#11 B4: the individual staff action). */
-  readonly identity: CredentialIssuer;
+  readonly identity: CredentialIssuer & { accountForLink(userId: string): Promise<{ collegeId: string; accountKind: "staff" | "guardian"; roles: readonly string[] } | null> };
   /** System module's public audit read, keyed by immutable event id. */
   readonly readAudit: (
     resourceType: string, resourceId: string, limit: number, beforeId?: number,
@@ -721,6 +721,18 @@ export function createPeopleHandlers(deps: PeopleHandlerDeps): Record<string, Ro
     };
   };
 
+  const teacherList: RouteHandler = async (ctx) => {
+    const principal = ctx.principal as Principal;
+    const query = ctx.request.query as { collegeId: string; q?: string; offset: number; limit: number };
+    if ((await deps.org.getCollege(query.collegeId)) === null) return notFound();
+    const scope = checkScope(deps.scopeChecker, ctx, principal, "read", {
+      module: "people", resourceType: "teacher", org: { collegeId: query.collegeId },
+    });
+    if (!scope.ok) return scope.result;
+    const page = await deps.people.listTeachers(query.collegeId, query);
+    return { status: 200, body: { teachers: page.teachers.map(teacherView), nextOffset: page.nextOffset } };
+  };
+
   const teacherCreate: RouteHandler = async (ctx) => {
     const principal = ctx.principal as Principal;
     const body = ctx.request.body as { collegeId: string; staffNo: string; fullName: string };
@@ -821,7 +833,22 @@ export function createPeopleHandlers(deps: PeopleHandlerDeps): Record<string, Ro
     if (!scope.ok) {
       return scope.result;
     }
-    const updated = await deps.people.linkTeacherIdentity(params.teacherId, body.identityUserId);
+    if (body.identityUserId !== null) {
+      const account = await deps.identity.accountForLink(body.identityUserId);
+      if (account === null || account.collegeId !== teacher.collegeId || account.accountKind !== "staff" || account.roles.some((role) => role !== "teacher" && role !== "class_teacher")) {
+        return { status: 422, body: { message: "choose a teacher account in this school" } };
+      }
+      const linkedTeacher = await deps.people.teacherForIdentity(body.identityUserId);
+      if (linkedTeacher !== null && linkedTeacher.id !== teacher.id) {
+        return { status: 409, body: { message: "this sign-in is already linked to another teacher" } };
+      }
+    }
+    let updated;
+    try {
+      updated = await deps.people.linkTeacherIdentity(params.teacherId, body.identityUserId);
+    } catch (error) {
+      return mapKnownErrors(error) ?? Promise.reject(error);
+    }
     if (updated === null) {
       return notFound();
     }
@@ -864,6 +891,9 @@ export function createPeopleHandlers(deps: PeopleHandlerDeps): Record<string, Ro
     }
     if (teacher.identityUserId !== null) {
       return { status: 409, body: { message: "teacher already has a login" } };
+    }
+    if (teacher.status !== "active") {
+      return { status: 409, body: { message: "activate the teacher before issuing a sign-in" } };
     }
     let issued;
     try {
@@ -1265,6 +1295,7 @@ export function createPeopleHandlers(deps: PeopleHandlerDeps): Record<string, Ro
     "people.document-download": documentDownload,
     "people.document-delete": documentDelete,
     "people.section-roster": sectionRoster,
+    "people.teacher-list": teacherList,
     "people.teacher-create": teacherCreate,
     "people.teacher-get": teacherGet,
     "people.teacher-update": teacherUpdate,

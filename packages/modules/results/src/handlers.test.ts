@@ -209,6 +209,16 @@ describe("results.class-results (compile preview)", () => {
   });
 });
 
+describe("school grade-scale retention", () => {
+  it("keeps school grading rules available across terms", async () => {
+    const handlers = createResultsHandlers({ ...makeDeps(), edition: "school" });
+    expect((await handlers["results.scale-list"]!(ctx(admin, { query: { collegeId: "col_1" } }))).status).toBe(200);
+    expect((await handlers["results.scale-update"]!(ctx(admin, { params: { scaleId: "scl_1" }, body: { name: "Changed" } }))).status).toBe(409);
+    expect((await handlers["results.scale-delete"]!(ctx(admin, { params: { scaleId: "scl_1" } }))).status).toBe(409);
+    expect((await handlers["results.scale-create"]!(ctx(admin, { body: { collegeId: "col_1", name: "Next year", bands: BANDS } }))).status).toBe(201);
+  });
+});
+
 describe("results.publish + the publication gate", () => {
   it("student sees nothing before publish, the golden term after", async () => {
     const deps = makeDeps();

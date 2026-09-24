@@ -280,7 +280,7 @@ function buildStack() {
     audit: system.service.audit,
     scopeChecker: core.scopeChecker,
     identityGrants: identity.service.derivedGrants,
-    identity: { issueCredential: identity.service.issueCredential },
+    identity: { issueCredential: identity.service.issueCredential, accountForLink: identity.service.accountForLink },
     guardianAccounts: { createGuardianAccount: identity.service.createGuardianAccount },
     readAudit: async (resourceType, resourceId, limit, beforeId) =>
       (await system.service.readAuditEventsForResource(resourceType, resourceId, limit, beforeId)).map(

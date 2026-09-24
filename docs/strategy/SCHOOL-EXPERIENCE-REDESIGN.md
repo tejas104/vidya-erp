@@ -13,6 +13,7 @@ needs its own security, data, migration, and browser gates.
 | [Alma solutions](https://www.getalma.com/solutions/) | [PUBLIC] Student information, enrollment history, attendance, academic records, fees, reporting, family access, and data administration are presented as connected school work. | [VIDYA] Keep the pupil record as the spine. A staff member should get from a class list, fee invoice, or report card to that record in one clear step. |
 | [EdPlus](https://www.edpluss.com/) | [PUBLIC] Operational breadth includes student data, exams, homework, timetable, fees, recovery, and attendance; it presents separate admin, teacher, and family app roles. | [VIDYA] Design each role's first screen around its next action. Module coverage is a roadmap input, not evidence that our modules are complete. |
 | [Vidyalaya School ERP](https://www.vidyalayaschoolsoftware.com/products-services/school-erp) and [portal](https://www.vidyalayaschoolsoftware.com/products-services/integration/online-portal) | [PUBLIC] School operations and parent or student information are joined in a portal, including attendance, results, and fees. | [VIDYA] Put each child's permitted information together in the family surface, with relationship checks on every category. |
+| [Dribbble education sign-in search](https://dribbble.com/search/login-page-education) | [PUBLIC] Examples show varied split layouts, clear identity fields and friendly education cues. | [VIDYA] Use a single original staff-and-family sign-in with a calm story panel, accessible form and responsive one-column layout. No artwork or screen is copied. |
 
 The public sites do not establish usability, implementation quality, or live
 integration inside Vidya. Staff and parent validation remains unperformed.
@@ -81,3 +82,32 @@ tenant isolation are independent of visibility in the UI.
 For each screen, capture current and revised screenshots, verify keyboard
 navigation, narrow and wide layouts, light and dark themes, and the relevant
 real API/database path. A browser-local demonstration is labelled as such.
+
+## 2026-09-24 login and staff revision
+
+- One sign-in now accepts school staff, teachers, students and families. The
+  server session selects the landing workspace; the old role-copy tabs are gone.
+  The login uses an original editorial layout informed by public education
+  login inspiration, without copying vendor layouts or assets.
+- The old teacher add-only screen now has a college-scoped, searchable,
+  paginated directory. Admins can update status, issue a one-time staff
+  credential, link an eligible existing staff account, and assign a class.
+  Server checks reject cross-school, guardian, student and duplicate links.
+  A unique teacher-account index closes the concurrent duplicate case.
+- School Results now leads through terms, marks and report cards, while the
+  college credits and SGPA desk stays in college edition. School grade scales
+  are retained for consistent term records.
+- Attendance entry checks for an existing register for the selected section,
+  date and period before allowing another save. The server remains the final
+  authority for duplicate and scope checks.
+
+The synthetic localhost fixture and isolated school browser suite verify these
+paths. Staff acceptance, more legacy-screen redesign, licensing and hosting
+remain separate work.
+
+Before applying `people/0007_unique_teacher_identity` to an existing school,
+inspect duplicate non-null `ppl_teachers.identity_user_id` values, resolve each
+against staff records and derived grants, and take a database backup. Apply in
+a maintenance window: the ordinary unique-index build briefly locks writes;
+the migration uses a five-second lock timeout and rolls back on contention or
+duplicate data. The paired down migration restores the prior non-unique index.

@@ -441,6 +441,15 @@ export class InMemoryPeopleRepo implements PeopleRepo {
     return this.teachers.get(id) ?? null;
   }
 
+  async listTeachers(collegeId: string, options: { q?: string; offset: number; limit: number }) {
+    const q = options.q?.trim().toLocaleLowerCase() ?? "";
+    const rows = [...this.teachers.values()]
+      .filter((teacher) => teacher.collegeId === collegeId && (teacher.fullName.toLocaleLowerCase().includes(q) || teacher.staffNo.toLocaleLowerCase().includes(q)))
+      .sort((a, b) => a.staffNo.localeCompare(b.staffNo) || a.id.localeCompare(b.id));
+    const page = rows.slice(options.offset, options.offset + options.limit);
+    return { teachers: page, nextOffset: rows.length > options.offset + options.limit ? options.offset + options.limit : null };
+  }
+
   async findTeacherByStaffNo(collegeId: string, staffNo: string): Promise<PplTeacherRow | null> {
     for (const teacher of this.teachers.values()) {
       if (teacher.collegeId === collegeId && teacher.staffNo === staffNo) {

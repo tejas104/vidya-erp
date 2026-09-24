@@ -36,6 +36,16 @@ beforeEach(() => {
 });
 
 describe("attendance entry — thumb-grid fast path", () => {
+  it("blocks a second register for the same section, date and period", async () => {
+    const today = new Date().toISOString().slice(0, 10);
+    (api.sessionAttendance as ReturnType<typeof vi.fn>).mockResolvedValue({ sessions: [{ id: "ses_existing", heldOn: today, slot: "day", subjectId: "", academicYear: "2026-27", counts: { present: 2, absent: 0, late: 0, excused: 0 } }] });
+    renderPage();
+    expect(await screen.findByText(/already recorded/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^save attendance$/i })).not.toBeInTheDocument();
+    expect(screen.getByText("2 present")).toBeInTheDocument();
+    expect(api.sessionAttendance).toHaveBeenCalledWith("sec_a", { from: today, to: today, limit: 100 });
+  });
+
   it("loads the roster present-by-default and Save submits every student as present", async () => {
     renderPage();
     expect(await screen.findByRole("button", { name: /Aarav Sharma, roll FYCS-001 — present/ })).toBeInTheDocument();

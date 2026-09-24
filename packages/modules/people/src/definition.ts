@@ -554,6 +554,26 @@ const routes: RouteSpec[] = [
     },
   },
   {
+    id: "people.teacher-list",
+    module: MODULE_NAME,
+    method: "GET",
+    path: "/api/v1/people/teachers",
+    summary: "List teachers in one college (admin)",
+    tags: ["people-teachers"],
+    auth: ADMIN_ONLY,
+    request: { query: z.object({
+      collegeId: idSchema,
+      q: z.string().trim().max(80).optional(),
+      offset: z.coerce.number().int().min(0).default(0),
+      limit: z.coerce.number().int().min(1).max(100).default(50),
+    }) },
+    responses: {
+      200: { description: "College-scoped teacher page", schema: z.object({ teachers: z.array(teacherViewSchema), nextOffset: z.number().nullable() }) },
+      403: { description: "Scope check denied", schema: problemSchema },
+      404: { description: "No such college", schema: problemSchema },
+    },
+  },
+  {
     id: "people.teacher-create",
     module: MODULE_NAME,
     method: "POST",
@@ -631,6 +651,8 @@ const routes: RouteSpec[] = [
         }),
       },
       404: { description: "No such teacher", schema: problemSchema },
+      409: { description: "The account is already linked to another teacher", schema: problemSchema },
+      422: { description: "The account is not a teacher account in this school", schema: problemSchema },
     },
   },
   {

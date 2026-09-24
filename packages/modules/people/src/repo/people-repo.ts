@@ -1,4 +1,4 @@
-import { and, asc, count, eq, inArray } from "drizzle-orm";
+import { and, asc, count, eq, ilike, inArray, or } from "drizzle-orm";
 import type { Db } from "@vidya/platform";
 import { newId } from "../ids";
 import {
@@ -107,6 +107,7 @@ export interface PeopleRepo {
     sourceImportId?: string;
   }): Promise<PplTeacherRow>;
   getTeacher(id: string): Promise<PplTeacherRow | null>;
+  listTeachers(collegeId: string, options: { q?: string; offset: number; limit: number }): Promise<{ teachers: PplTeacherRow[]; nextOffset: number | null }>;
   findTeacherByStaffNo(collegeId: string, staffNo: string): Promise<PplTeacherRow | null>;
   /** The teacher linked to an identity sign-in (timetable self-scope), if any. */
   findTeacherByIdentityUser(identityUserId: string): Promise<PplTeacherRow | null>;
@@ -318,6 +319,19 @@ export function createPeopleRepo(db: Db): PeopleRepo {
       return rows[0] ?? null;
     },
 
+    async listTeachers(collegeId, options) {
+      const search = options.q?.trim();
+      const escaped = search?.replace(/[\\%_]/g, "\\$&");
+      const rows = await db.select().from(pplTeachers)
+        .where(and(
+          eq(pplTeachers.collegeId, collegeId),
+          escaped ? or(ilike(pplTeachers.fullName, `%${escaped}%`), ilike(pplTeachers.staffNo, `%${escaped}%`)) : undefined,
+        ))
+        .orderBy(asc(pplTeachers.staffNo), asc(pplTeachers.id))
+        .limit(options.limit + 1).offset(options.offset);
+      return { teachers: rows.slice(0, options.limit), nextOffset: rows.length > options.limit ? options.offset + options.limit : null };
+    },
+
     async findTeacherByStaffNo(collegeId, staffNo) {
       const rows = await db
         .select()
@@ -337,17 +351,24 @@ export function createPeopleRepo(db: Db): PeopleRepo {
     },
 
     async updateTeacher(id, patch) {
-      const rows = await db
-        .update(pplTeachers)
-        .set({
-          ...(patch.fullName !== undefined ? { fullName: patch.fullName } : {}),
-          ...(patch.status !== undefined ? { status: patch.status } : {}),
-          ...(patch.identityUserId !== undefined ? { identityUserId: patch.identityUserId } : {}),
-          updatedAt: new Date(),
-        })
-        .where(eq(pplTeachers.id, id))
-        .returning();
-      return rows[0] ?? null;
+      try {
+        const rows = await db
+          .update(pplTeachers)
+          .set({
+            ...(patch.fullName !== undefined ? { fullName: patch.fullName } : {}),
+            ...(patch.status !== undefined ? { status: patch.status } : {}),
+            ...(patch.identityUserId !== undefined ? { identityUserId: patch.identityUserId } : {}),
+            updatedAt: new Date(),
+          })
+          .where(eq(pplTeachers.id, id))
+          .returning();
+        return rows[0] ?? null;
+      } catch (error) {
+        if (patch.identityUserId !== undefined && pgErrorCode(error) === "23505") {
+          throw new DuplicatePersonError("teacher", "identity link");
+        }
+        throw error;
+      }
     },
 
     async activeEnrollment(studentId, academicYear) {

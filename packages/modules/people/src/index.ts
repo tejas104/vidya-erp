@@ -73,7 +73,7 @@ export interface PeopleModuleDeps {
   /** Identity's derived-grant surface (ADR-0015). */
   readonly identityGrants: DerivedGrantsApi;
   /** Identity's credential issuance (#11 B4: per-staff "issue login" action). */
-  readonly identity: CredentialIssuer;
+  readonly identity: CredentialIssuer & { accountForLink(userId: string): Promise<{ collegeId: string; accountKind: "staff" | "guardian"; roles: readonly string[] } | null> };
   readonly storage: { readonly client: ObjectStorageClient; readonly bucket: string };
   /** Enqueues the bulk-import job on the people queue (composition provides it). */
   readonly enqueueImport: (payload: z.infer<typeof importJobPayloadSchema>) => Promise<void>;

@@ -165,6 +165,14 @@ export class PeopleService {
     return this.deps.repo.getTeacher(id);
   }
 
+  listTeachers(collegeId: string, options: { q?: string; offset: number; limit: number }) {
+    return this.deps.repo.listTeachers(collegeId, options);
+  }
+
+  teacherForIdentity(userId: string): Promise<PplTeacherRow | null> {
+    return this.deps.repo.findTeacherByIdentityUser(userId);
+  }
+
   updateTeacher(
     id: string,
     patch: { fullName?: string; status?: PersonStatus },
