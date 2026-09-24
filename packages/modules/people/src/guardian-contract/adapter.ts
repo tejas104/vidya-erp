@@ -18,11 +18,9 @@ import type {
  * authorization relation alongside containment and audience-matching — see
  * docs/architecture/guardian-access/boundaries.md.
  *
- * NOTHING CALLS THIS YET. Wiring it to an authenticated request requires
- * Decision 1 of ADR-0027 to be ratified. Implementing the decision logic now
- * is safe precisely because it grants nobody anything until that happens, and
- * it converts a 610-line specification into an enforced implementation that
- * the existing conformance cases run against.
+ * ADR-0027 is ratified. GuardianService calls this adapter after loading the
+ * current relationships for each authenticated guardian request. The S03
+ * contract cases run against this implementation.
  *
  * The relationship list arrives as an input rather than being fetched here
  * (ADR-0027 Decision 2: relationships are read fresh per request, never from

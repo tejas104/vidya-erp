@@ -51,6 +51,7 @@ const activeUser: UserView = {
   id: "u-admin",
   username: "admin",
   displayName: "Admin",
+  accountKind: "staff",
   status: "active",
   collegeId: "col-1",
   roles: ["admin"],

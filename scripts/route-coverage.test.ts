@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
@@ -30,6 +30,33 @@ describe("route inventory", () => {
       .filter((route) => !existsSync(routeFileFor(route.path)))
       .map((route) => `${route.id} (${route.method} ${route.path})`);
     expect(missing, `RouteSpecs with no route.ts:\n${missing.join("\n")}`).toEqual([]);
+  });
+
+  it("every API route delegates to the shared route handler", () => {
+    const apiDir = path.join(appDir, "api");
+    function routeFiles(dir: string): string[] {
+      return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+        const fullPath = path.join(dir, entry.name);
+        return entry.isDirectory() ? routeFiles(fullPath) : entry.name === "route.ts" ? [fullPath] : [];
+      });
+    }
+    const bypasses = routeFiles(apiDir)
+      .filter((file) => !readFileSync(file, "utf8").includes("routeHandler("))
+      .map((file) => path.relative(repoRoot, file));
+    expect(bypasses).toEqual([]);
+  });
+
+  it("keeps public and guardian route audiences explicit", () => {
+    const routes = moduleDefinitions.flatMap((def) => def.routes);
+    expect(routes.filter((route) => route.auth.public).map((route) => route.id).sort()).toEqual([
+      "identity.login", "identity.password-reset-confirm", "people.guardian-activate",
+      "system.health", "system.metrics", "system.ready",
+    ]);
+    expect(routes.filter((route) => !route.auth.public && route.auth.requirement.audience === "guardian")
+      .map((route) => route.id).sort()).toEqual([
+        "people.guardian-children", "people.guardian-redeem", "portal.child-attendance",
+        "portal.child-marks", "portal.child-timetable", "portal.child-today",
+      ]);
   });
 
   // ADR-0027 Finding C: "any" admits guardians, so it is reserved for routes

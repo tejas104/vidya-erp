@@ -344,6 +344,7 @@ export interface GrantInput {
 }
 export interface UserView {
   id: string; username: string; displayName: string;
+  accountKind: "staff" | "guardian";
   status: "active" | "disabled" | "must_reset";
   collegeId: string; roles: Role[]; grants: GrantView[]; createdAt: string;
 }

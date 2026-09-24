@@ -111,6 +111,7 @@ export const userViewSchema = z.object({
   id: z.string(),
   username: z.string(),
   displayName: z.string(),
+  accountKind: z.enum(["staff", "guardian"]),
   status: z.enum(["active", "disabled", "must_reset"]),
   collegeId: z.string(),
   roles: z.array(roleSchema),

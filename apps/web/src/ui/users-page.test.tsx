@@ -37,7 +37,7 @@ const tree = {
 };
 const existing = {
   id: "u_1", username: "demo-hod-cse", displayName: "Dr. Radhika Menon", status: "active",
-  collegeId: "col_1", roles: ["hod"], grants: [
+  accountKind: "staff", collegeId: "col_1", roles: ["hod"], grants: [
     { id: "g_1", role: "hod", collegeId: "col_1", departmentId: "dep_1", classId: null, sectionId: null, subjectId: null, verified: true, source: "manual" },
   ], createdAt: "2026-07-01T00:00:00Z",
 };
@@ -71,5 +71,13 @@ describe("/manage/users", () => {
         temporaryPassword: "temp-pass-123", roles: ["hod"],
       }),
     );
+  });
+  it("shows guardian accounts without role or grant actions", async () => {
+    (api.listUsers as ReturnType<typeof vi.fn>).mockResolvedValue({ users: [{ ...existing, id: "g_1", username: "parent.asha", displayName: "Asha's parent", accountKind: "guardian", roles: [], grants: [] }] });
+    renderPage();
+    expect(await screen.findByText("parent.asha")).toBeInTheDocument();
+    expect(screen.getByText("Guardian")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Roles" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Grants" })).not.toBeInTheDocument();
   });
 });

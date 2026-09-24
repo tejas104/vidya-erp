@@ -7,7 +7,7 @@ changes — this is a living record, not a plan written once.
 - Worktree: `D:\ATLAS\.worktrees\claude-school-product`
 - Base: `a9d5fc16f075b86474050fbefd4f0860ac21f006` (gate-04 reviewed checkpoint)
 - Integration commit: `0ddf80cc3ab8ff1ecc1b663fd0e6d152badeb161`
-- Last revised: 2026-09-24 (handed to Codex Astra — see [ASTRA-HANDOFF.md](ASTRA-HANDOFF.md))
+- Last revised: 2026-09-24 (N0 guardian review completed; see [ASTRA-HANDOFF.md](ASTRA-HANDOFF.md))
 
 Companion documents: [COMPETITIVE-PARITY-MATRIX.md](COMPETITIVE-PARITY-MATRIX.md),
 `DELIVERY-AND-REVIEW-REQUIREMENTS.md`, `VIDYA-SCHOOL-FIRST-SAAS-PLAN.md`.
@@ -301,7 +301,7 @@ reason; add slices freely when evidence demands it.
 
 | # | Slice | Why now | Owning module(s) | Depends on |
 |---|---|---|---|---|
-| **N0** | Independent adversarial review of `c530ba8..c199589` | The guardian work widened the platform auth surface; it has had self-review only. | all touched | — |
+| **N0** | Independent adversarial review of `c530ba8..c199589` — **DONE** | Concurrency, scope, and account-kind fixes below; full gates green. | all touched | — |
 | **N1** | Student 360 v1 | Closes the open "record depends on analytics" risk; every screen links here; the family tab already exists. | web; `people` (new history read) | N0 |
 | **N2** | Report-card desk for class teachers | Open risk: the audience that issues report cards cannot open the screen. | web; `people` directory | — |
 | **N3** | Parent views: report cards, fees, notices | Categories are enforced but unreadable; parents need exactly these three next. Requires a publish-to-parents decision for report cards. | `portal`, `reporting`, `fees`, `notices` | N0 |
@@ -312,6 +312,37 @@ reason; add slices freely when evidence demands it.
 | **N8** | Fee-defaulter workflow depth (1.9) | Printable notices and follow-up state on the existing `defaulters` route. | `fees` | — |
 | **N9** | Guardian invitation delivery (SMS/email adapter) | Removes the manual code hand-off; needs a provider decision from the owner. | `notices` or a new `ntf_` adapter | owner vendor choice |
 | **N10** | ADR-0028 draft: SaaS control plane and tenant isolation | Phase 3 is the largest unstarted risk; the boundary must be designed before Phase 2 builds on assumptions. Design only. | docs | — |
+
+### N0 adversarial guardian review — 2026-09-24
+
+The review traced all 177 declared routes to Next route files, checked all 156
+API route files for the shared `routeHandler` gate, and pinned public, guardian,
+and session-self route audiences in a regression test. Production composition
+uses the Redis-backed password limiter for activation. Staff checks use the
+student's resolved org position; live guardian reads resolve relationships on
+each request. The portal's unrelated and unknown child IDs have the same 403
+response. The nav reorder did not change role gates or destinations.
+
+| Severity | Finding | Correction |
+|---|---|---|
+| High | Claims of two different valid codes could each observe one fewer live relationship and both pass the self-attestation threshold. | Serialize invitation issue and claim on the pupil row; count live relationships inside the claim transaction. |
+| High | Reissue revoked older pending codes and inserted a new code in separate transactions, allowing concurrent reissues to leave two usable codes. | Revoke and insert in one pupil-locked transaction; claim uses the same lock order. |
+| Medium | An unauthorized staff caller could distinguish a revoked relationship because verify checked state before scope. | Scope-check first, then return the state conflict. |
+| Medium | Concurrent verify could re-activate a relationship just revoked by staff. | Compare the expected relationship status in the verification update; a stale change returns 409. |
+| Medium | Admin users list did not identify guardian logins, so the UI presented actions the server would reject. | Return account kind and label guardians; remove grant and role controls for those rows. |
+
+Accepted follow-up: a losing same-code activation can leave an inactive guardian
+login with no relationship or authority. It cannot read a pupil record, but
+operations should later provide a safe reap/retry path for that username.
+The review does not imply provider delivery, SaaS readiness, or real school UAT.
+
+N0 verification on the corrected tree: `pnpm typecheck`, `pnpm lint`,
+`pnpm openapi:check`, all three check scripts, and `pnpm build` passed;
+`pnpm test` passed 98 files / 1,199 tests, `pnpm test:ui` passed 68 files /
+306 tests, and the disposable `pnpm test:integration` passed 20 files /
+143 tests. The focused guardian integration suite passed 18/18 on real
+PostgreSQL. No browser journey was added for this backend/security review;
+N1 adds the new Student 360 journey.
 
 Cross-cutting improvements, done alongside slices rather than as a phase:
 

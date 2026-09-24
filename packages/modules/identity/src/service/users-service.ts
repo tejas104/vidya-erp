@@ -29,6 +29,7 @@ export interface UserView {
   readonly id: string;
   readonly username: string;
   readonly displayName: string;
+  readonly accountKind: "staff" | "guardian";
   readonly status: "active" | "disabled" | "must_reset";
   readonly collegeId: string;
   readonly roles: readonly Role[];
@@ -90,6 +91,7 @@ export class UsersService {
       id: record.id,
       username: record.username,
       displayName: record.displayName,
+      accountKind: record.accountKind,
       status: record.status,
       collegeId: record.collegeId,
       roles,

@@ -106,14 +106,17 @@ export function createGuardianHandlers(deps: GuardianHandlerDeps): Record<string
     };
   };
 
-  async function changeRelationship(ctx: RouteContext, change: (row: RelationshipRow, actorId: string) => Promise<RelationshipRow | null>, details: Record<string, unknown>) {
+  async function changeRelationship(ctx: RouteContext, change: (row: RelationshipRow, actorId: string) => Promise<RelationshipRow | null>, details: Record<string, unknown>, refuseRevoked = false) {
     const { relationshipId } = ctx.request.params as { relationshipId: string };
     const row = await deps.guardians.getRelationship(relationshipId);
     if (row === null) return notFound;
     const scope = await staffScope(ctx, row.studentId, "update");
     if (!scope.ok) return scope.result;
+    if (refuseRevoked && row.status === "revoked") {
+      return { status: 409, body: { message: "a revoked relationship is re-established by a new invitation, not by verification" } };
+    }
     const updated = await change(row, (ctx.principal as Principal).id);
-    if (updated === null) return notFound;
+    if (updated === null) return { status: 409, body: { message: "relationship changed; reload and try again" } };
     return {
       status: 200,
       body: { relationship: relationshipView(updated) },
@@ -126,12 +129,7 @@ export function createGuardianHandlers(deps: GuardianHandlerDeps): Record<string
   }
 
   const relationshipVerify: RouteHandler = async (ctx) => {
-    const { relationshipId } = ctx.request.params as { relationshipId: string };
-    const row = await deps.guardians.getRelationship(relationshipId);
-    if (row?.status === "revoked") {
-      return { status: 409, body: { message: "a revoked relationship is re-established by a new invitation, not by verification" } };
-    }
-    return changeRelationship(ctx, (r, actor) => deps.guardians.verify(r, actor), {});
+    return changeRelationship(ctx, (r, actor) => deps.guardians.verify(r, actor), {}, true);
   };
 
   const relationshipRevoke: RouteHandler = async (ctx) => {

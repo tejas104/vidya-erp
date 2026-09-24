@@ -1,6 +1,9 @@
-# Guardian access — a proposed authorization contract (S03)
+# Guardian access — S03 proposal archive
 
-**Status: PROPOSED. Not an ADR. Not ratified. Not implemented.**
+**Status: historical proposal.** ADR-0027 was accepted on 2026-09-23 and
+guardian identity, relationships and the family routes are implemented. Read
+ADR-0027 and the current code for binding decisions; the proposal text below
+records the earlier design review and may describe work as still pending.
 
 This directory is a design proposal for guardian (parent/family) access to
 pupil records, prepared per strategy plan §5.2/§5.3/§8 and the S03

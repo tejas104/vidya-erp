@@ -160,8 +160,7 @@ export class GuardianService {
   }): Promise<{ invitation: InvitationRow; code: string; revokedPrior: number }> {
     const code = generateInvitationCode();
     const now = this.now();
-    const revokedPrior = await this.deps.repo.revokePendingFor(input.student.studentId, input.contactValue);
-    const invitation = await this.deps.repo.createInvitation({
+    const { invitation, revokedPrior } = await this.deps.repo.issueInvitation({
       studentId: input.student.studentId,
       collegeId: input.student.collegeId,
       guardianName: input.guardianName,
@@ -192,6 +191,7 @@ export class GuardianService {
     const status: RelationshipStatus = relationship.status === "pending" ? "active" : (relationship.status as RelationshipStatus);
     return this.deps.repo.setRelationshipState(relationship.id, {
       status,
+      expectedStatus: relationship.status as RelationshipStatus,
       verificationState: "staff-verified",
       reason: null,
       changedBy: actorId,
@@ -334,26 +334,24 @@ export class GuardianService {
 
   private async claim(invitation: InvitationRow, guardian: NewGuardian) {
     const type = invitation.relationshipType as RelationshipType;
-    const live = await this.deps.repo.countLiveRelationships(invitation.studentId);
-    const state = initialRelationshipState({
-      type,
-      staffVerified: invitation.staffVerified,
-      liveRelationships: live,
-      selfAttestedLimit: this.deps.selfAttestedLimit,
-    });
     try {
       return await this.deps.repo.claimInvitation({
         invitationId: invitation.id,
         now: this.now(),
         guardian,
-        relationship: {
+        relationship: (liveRelationships) => ({
           studentId: invitation.studentId,
           collegeId: invitation.collegeId,
           relationshipType: type,
-          ...state,
+          ...initialRelationshipState({
+            type,
+            staffVerified: invitation.staffVerified,
+            liveRelationships,
+            selfAttestedLimit: this.deps.selfAttestedLimit,
+          }),
           grantedCategories: defaultCategories(type),
-          isPrimaryContact: live === 0,
-        },
+          isPrimaryContact: liveRelationships === 0,
+        }),
       });
     } catch (error) {
       if (error instanceof InvitationNotClaimableError) throw new InvitationRefusedError("denied:already-activated");

@@ -20,29 +20,23 @@ function memoryRepo(): GuardiansRepo & { guardians: GuardianRow[]; relationships
   return {
     guardians,
     relationships,
-    async createInvitation(input) {
-      const row: InvitationRow = { id: id("gin"), status: "pending", activatedRelationshipId: null, createdAt: new Date(), updatedAt: new Date(), ...input };
-      invitations.push(row);
-      return row;
-    },
-    async revokePendingFor(studentId, contactValue) {
-      let n = 0;
+    async issueInvitation(input) {
+      let revokedPrior = 0;
       for (const row of invitations) {
-        if (row.studentId === studentId && row.contactValue === contactValue && row.status === "pending") {
+        if (row.studentId === input.studentId && row.contactValue === input.contactValue && row.status === "pending") {
           row.status = "revoked";
-          n += 1;
+          revokedPrior += 1;
         }
       }
-      return n;
+      const row: InvitationRow = { id: id("gin"), status: "pending", activatedRelationshipId: null, createdAt: new Date(), updatedAt: new Date(), ...input };
+      invitations.push(row);
+      return { invitation: row, revokedPrior };
     },
     async findInvitationByCodeHash(codeHash) {
       return invitations.find((row) => row.codeHash === codeHash) ?? null;
     },
     async pendingInvitationsFor(studentId, now) {
       return invitations.filter((row) => row.studentId === studentId && row.status === "pending" && row.expiresAt > now);
-    },
-    async countLiveRelationships(studentId) {
-      return relationships.filter((row) => row.studentId === studentId && ["pending", "active", "restricted"].includes(row.status)).length;
     },
     async relationshipsForStudent(studentId) {
       return relationships
@@ -58,6 +52,7 @@ function memoryRepo(): GuardiansRepo & { guardians: GuardianRow[]; relationships
     async setRelationshipState(rid, patch) {
       const row = relationships.find((candidate) => candidate.id === rid);
       if (row === undefined) return null;
+      if (patch.expectedStatus !== undefined && row.status !== patch.expectedStatus) return null;
       row.status = patch.status;
       if (patch.verificationState !== undefined) row.verificationState = patch.verificationState;
       row.statusReason = patch.reason;
@@ -67,10 +62,11 @@ function memoryRepo(): GuardiansRepo & { guardians: GuardianRow[]; relationships
     async guardianByIdentityUser(identityUserId) {
       return guardians.find((row) => row.identityUserId === identityUserId) ?? null;
     },
-    async claimInvitation({ invitationId, now, guardian, relationship }) {
+    async claimInvitation({ invitationId, now, guardian, relationship: makeRelationship }) {
       const invitation = invitations.find((row) => row.id === invitationId)!;
       if (invitation.status !== "pending" || invitation.expiresAt <= now) throw new InvitationNotClaimableError();
       invitation.status = "activated";
+      const relationship = makeRelationship(relationships.filter((row) => row.studentId === invitation.studentId && ["pending", "active", "restricted"].includes(row.status) && ("id" in guardian ? row.guardianId !== guardian.id : true)).length);
       let guardianId: string;
       if ("id" in guardian) {
         guardianId = guardian.id;
@@ -269,6 +265,15 @@ describe("GuardianService lifecycle", () => {
     expect((await service.access(parent.userId, "read", PUPIL.studentId, "attendance")).decision.reason).toBe("denied:relationship-revoked");
     expect((await service.access(parent.userId, "read", OTHER_PUPIL.studentId, "attendance")).decision.granted).toBe(true);
     expect((await service.children(parent.userId)).map((c) => c.studentId)).toEqual([OTHER_PUPIL.studentId]);
+  });
+
+  it("never reactivates a relationship when verification loses a revocation race", async () => {
+    const { service, issue, activate } = setup();
+    const parent = await activate((await issue()).code);
+    const stale = { ...parent.relationship };
+    await service.revoke(parent.relationship, "custody change", "admin-1");
+    expect(await service.verify(stale, "admin-2")).toBeNull();
+    expect((await service.access(parent.userId, "read", PUPIL.studentId, "attendance")).decision.reason).toBe("denied:relationship-revoked");
   });
 
   it("a suspended guardian loses every child at once", async () => {

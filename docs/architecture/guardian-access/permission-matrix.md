@@ -1,6 +1,10 @@
 # Permission matrix (proposed)
 
-**Status: PROPOSED.** Mirrors the presentation of ADR-0010's matrix
+**Status: historical S03 proposal.** ADR-0027 and the current route definitions
+supersede the proposed staff-role table in Part B (especially invitation,
+verification and revocation roles). Part A remains the design input for the
+guardian adapter; its implemented behavior is pinned by adapter conformance
+tests. This document mirrors the presentation of ADR-0010's matrix
 deliberately (same table shape, same "deny-by-default" framing) because
 that matrix is the platform's one ratified authorization document and
 reviewers already know how to read it. This is not an extension of that

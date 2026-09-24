@@ -6,7 +6,7 @@ commit `0ddf80cc3ab8ff1ecc1b663fd0e6d152badeb161`.
 ## How to read this document
 
 This is a **clean-room competitive record**. It exists so Vidya can learn
-information architecture, workflow expectations and usability lessons from two
+information architecture, workflow expectations and usability lessons from three
 benchmark products without copying them.
 
 Every row separates three different kinds of statement, and they must never be
@@ -21,7 +21,7 @@ collapsed into each other:
 ### Clean-room rules in force
 
 - No proprietary code, private API, protected copy, trademark, logo,
-  illustration or brand asset from either vendor enters this repository.
+  illustration or brand asset from any reference vendor enters this repository.
 - Capability *names* are recorded as evidence of market expectation. Product
   *copy* is not reproduced.
 - Vidya workflows are expressed through Vidya's existing design system and
@@ -37,8 +37,10 @@ collapsed into each other:
 | A1 | Alma — Solutions / feature taxonomy | https://www.getalma.com/solutions/ | 2026-09-23 |
 | A2 | Alma — What is a Student Information System | https://www.getalma.com/what-is-a-student-information-system-sis/ | 2026-09-23 |
 | E1 | EdPlus AI — product home / ERP modules | https://www.edpluss.com/ | 2026-09-23 |
+| V1 | Vidyalaya School ERP — school ERP overview | https://www.vidyalayaschoolsoftware.com/products-services/school-erp | 2026-09-24 |
+| V2 | Vidyalaya School ERP — student and parent portal | https://www.vidyalayaschoolsoftware.com/products-services/integration/online-portal | 2026-09-24 |
 
-Both vendors are benchmarks for *different* things, and conflating them is a
+The vendors are benchmarks for *different* things, and conflating them is a
 product error:
 
 - **Alma [A2, PUBLIC]** explicitly positions the SIS as the K-12 *system of
@@ -51,12 +53,17 @@ product error:
   "30-minute installation guarantee" with Excel-led data setup. EdPlus is
   therefore the benchmark for **operational breadth, onboarding speed and
   parent-facing mobile reach** in the Indian market.
+- **Vidyalaya [V1/V2, PUBLIC]** advertises admissions, attendance, fees,
+  assessment, certificates, mobile access and a parent/student portal. It is
+  an additional India-market reference for **joining daily school operations
+  to a family-facing record**. The pages establish advertised scope only;
+  no workflow depth, correctness or user satisfaction has been verified.
 
-Vidya's intended position is neither: a **school-first Indian cloud SaaS with
-SIS-grade record and financial correctness**. Where Alma is strong on
-correctness but US/state-reporting shaped, and EdPlus is strong on breadth and
-onboarding speed, Vidya's differentiation is **correctness plus breadth with
-server-enforced tenant isolation and auditable financial truth**.
+Vidya's intended position is a **school-first Indian cloud SaaS with SIS-grade
+record and financial correctness**. The product goal joins clear educator
+workflows, India-market operational breadth, server-enforced tenant isolation
+and auditable financial records. These are Vidya design goals, not verified
+comparative claims about the reference vendors.
 
 ### Vidya current-state legend
 
@@ -66,9 +73,18 @@ server-enforced tenant isolation and auditable financial truth**.
 - **Missing** — not present.
 - **Deferred** — deliberately not built yet, with the reason recorded.
 
-Current state is derived from the 141 routes in `docs/openapi/openapi.json` and
-the 16 owned table prefixes (`sys_ idn_ ppl_ acd_ anl_ rpt_ ptl_ ttb_ cwk_ syl_
-fee_ ntc_ res_ exm_ lvs_ sca_`), not from any plan document.
+The 2026-09-24 inventory contains 177 RouteSpecs and 16 owned table prefixes
+(`sys_ idn_ ppl_ acd_ anl_ rpt_ ptl_ ttb_ cwk_ syl_ fee_ ntc_ res_ exm_ lvs_
+sca_`). Feature states below must be rechecked against code before release;
+they are not established by a plan document.
+
+### Vidyalaya reference — candidate jobs, not release claims
+
+| Public signal | Vidya decision | Validation |
+|---|---|---|
+| **[PUBLIC, V1]** Admission and student management appear together in the advertised module set. | **[VIDYA]** Keep the admissions-to-student handoff in Phase 2; preserve a single pupil record in N1. | Unvalidated with school staff. |
+| **[PUBLIC, V1]** Attendance, fees, assessment, progress cards and certificates are advertised. | **[VIDYA]** Continue N3 and N5–N8 with auditable source records; do not infer the vendor's calculations or controls. | Unvalidated with school staff. |
+| **[PUBLIC, V2]** The portal advertises child attendance, results and fees in one signed-in surface. | **[VIDYA]** N3 expands the existing relationship-scoped family portal. Each category remains separately authorized for each child. | Unvalidated with parents. |
 
 ---
 

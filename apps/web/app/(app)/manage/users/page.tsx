@@ -264,7 +264,7 @@ export default function UsersPage() {
   ];
   const rows: Row[] = (users ?? []).map((row) => ({
     username: <span className="num">{row.username}</span>,
-    name: row.displayName,
+    name: <>{row.displayName}{row.accountKind === "guardian" ? <StatusBadge status="info">Guardian</StatusBadge> : null}</>,
     roles: (
       <span className={styles.badgeRow}>
         {row.roles.length === 0 ? <span className={styles.dim}>—</span> : row.roles.map((role) => <StatusBadge key={role} status="neutral">{role}</StatusBadge>)}
@@ -278,8 +278,8 @@ export default function UsersPage() {
     grants: <span className="num">{row.grants.length}</span>,
     actions: (
       <span className={styles.tableActions}>
-        <Button variant="ghost" onClick={() => { setRoleDraft(row.roles); setRolesFor(row); }}>Roles</Button>
-        <Button variant="ghost" onClick={() => { setGrantRole("hod"); setGrantDept(""); setGrantClass(""); setGrantSubject(""); setGrantsFor(row); }}>Grants</Button>
+        {row.accountKind === "staff" ? <Button variant="ghost" onClick={() => { setRoleDraft(row.roles); setRolesFor(row); }}>Roles</Button> : null}
+        {row.accountKind === "staff" ? <Button variant="ghost" onClick={() => { setGrantRole("hod"); setGrantDept(""); setGrantClass(""); setGrantSubject(""); setGrantsFor(row); }}>Grants</Button> : null}
         <Button variant="ghost" onClick={() => setResetFor(row)}>Reset (token)</Button>
         <Button variant="ghost" onClick={() => { setNewPass(""); setPasswordFor(row); }}>Set password</Button>
         <Button variant="ghost" onClick={() => void toggleStatus(row)}>{row.status === "disabled" ? "Enable" : "Disable"}</Button>

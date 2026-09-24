@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, asc, eq, gt, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, ne, sql } from "drizzle-orm";
 import type { Db } from "@vidya/platform";
 import {
   pplGuardianInvitations,
@@ -39,22 +39,18 @@ export class InvitationNotClaimableError extends Error {
 }
 
 export interface GuardiansRepo {
-  createInvitation(
+  /** Reissue is one transaction: pupil lock, prior revocation, new code. */
+  issueInvitation(
     input: Omit<InvitationRow, "id" | "status" | "activatedRelationshipId" | "createdAt" | "updatedAt">,
-  ): Promise<InvitationRow>;
-  /** Re-issue (ADR-0027 Decision 7): earlier pending invitations for the same
-   *  pupil AND the same contact are revoked, so only the newest code works. */
-  revokePendingFor(studentId: string, contactValue: string): Promise<number>;
+  ): Promise<{ invitation: InvitationRow; revokedPrior: number }>;
   findInvitationByCodeHash(codeHash: string): Promise<InvitationRow | null>;
   pendingInvitationsFor(studentId: string, now: Date): Promise<InvitationRow[]>;
-  /** Relationships of a pupil that count toward the verification threshold. */
-  countLiveRelationships(studentId: string): Promise<number>;
   relationshipsForStudent(studentId: string): Promise<(RelationshipRow & { guardianName: string })[]>;
   relationshipsForGuardian(guardianId: string): Promise<RelationshipRow[]>;
   getRelationship(id: string): Promise<RelationshipRow | null>;
   setRelationshipState(
     id: string,
-    patch: { status: RelationshipStatus; verificationState?: VerificationState; reason: string | null; changedBy: string },
+    patch: { status: RelationshipStatus; expectedStatus?: RelationshipStatus; verificationState?: VerificationState; reason: string | null; changedBy: string },
   ): Promise<RelationshipRow | null>;
   guardianByIdentityUser(identityUserId: string): Promise<GuardianRow | null>;
   /**
@@ -68,33 +64,31 @@ export interface GuardiansRepo {
     invitationId: string;
     now: Date;
     guardian: NewGuardian;
-    relationship: NewRelationship;
+    /** Called under the pupil row lock, after counting live relationships. */
+    relationship: (liveRelationships: number) => NewRelationship;
   }): Promise<{ guardianId: string; relationship: RelationshipRow }>;
 }
 
 export function createGuardiansRepo(db: Db): GuardiansRepo {
   return {
-    async createInvitation(input) {
-      const rows = await db
-        .insert(pplGuardianInvitations)
-        .values({ id: `gin_${randomUUID()}`, ...input })
-        .returning();
-      return rows[0]!;
-    },
-
-    async revokePendingFor(studentId, contactValue) {
-      const rows = await db
-        .update(pplGuardianInvitations)
-        .set({ status: "revoked", updatedAt: new Date() })
-        .where(
-          and(
-            eq(pplGuardianInvitations.studentId, studentId),
-            eq(pplGuardianInvitations.contactValue, contactValue),
+    async issueInvitation(input) {
+      return db.transaction(async (tx) => {
+        await tx.execute(sql`SELECT id FROM ppl_students WHERE id = ${input.studentId} FOR UPDATE`);
+        const revoked = await tx
+          .update(pplGuardianInvitations)
+          .set({ status: "revoked", updatedAt: new Date() })
+          .where(and(
+            eq(pplGuardianInvitations.studentId, input.studentId),
+            eq(pplGuardianInvitations.contactValue, input.contactValue),
             eq(pplGuardianInvitations.status, "pending"),
-          ),
-        )
-        .returning({ id: pplGuardianInvitations.id });
-      return rows.length;
+          ))
+          .returning({ id: pplGuardianInvitations.id });
+        const rows = await tx
+          .insert(pplGuardianInvitations)
+          .values({ id: `gin_${randomUUID()}`, ...input })
+          .returning();
+        return { invitation: rows[0]!, revokedPrior: revoked.length };
+      });
     },
 
     async findInvitationByCodeHash(codeHash) {
@@ -118,19 +112,6 @@ export function createGuardiansRepo(db: Db): GuardiansRepo {
           ),
         )
         .orderBy(asc(pplGuardianInvitations.createdAt));
-    },
-
-    async countLiveRelationships(studentId) {
-      const rows = await db
-        .select({ count: sql<number>`count(*)::int` })
-        .from(pplStudentGuardians)
-        .where(
-          and(
-            eq(pplStudentGuardians.studentId, studentId),
-            inArray(pplStudentGuardians.status, ["pending", "active", "restricted"]),
-          ),
-        );
-      return rows[0]?.count ?? 0;
     },
 
     async relationshipsForStudent(studentId) {
@@ -166,7 +147,10 @@ export function createGuardiansRepo(db: Db): GuardiansRepo {
           statusChangedBy: patch.changedBy,
           updatedAt: new Date(),
         })
-        .where(eq(pplStudentGuardians.id, id))
+        .where(and(
+          eq(pplStudentGuardians.id, id),
+          patch.expectedStatus !== undefined ? eq(pplStudentGuardians.status, patch.expectedStatus) : undefined,
+        ))
         .returning();
       return rows[0] ?? null;
     },
@@ -180,8 +164,18 @@ export function createGuardiansRepo(db: Db): GuardiansRepo {
       return rows[0] ?? null;
     },
 
-    async claimInvitation({ invitationId, now, guardian, relationship }) {
+    async claimInvitation({ invitationId, now, guardian, relationship: makeRelationship }) {
       return db.transaction(async (tx) => {
+        const invitationRows = await tx
+          .select({ studentId: pplGuardianInvitations.studentId })
+          .from(pplGuardianInvitations)
+          .where(eq(pplGuardianInvitations.id, invitationId))
+          .limit(1);
+        if (invitationRows.length === 0) throw new InvitationNotClaimableError();
+        const studentId = invitationRows[0]!.studentId;
+        // Every invitation issue and claim for this pupil locks in the same
+        // order, so concurrent reissue cannot race a claim or deadlock it.
+        await tx.execute(sql`SELECT id FROM ppl_students WHERE id = ${studentId} FOR UPDATE`);
         const claimed = await tx
           .update(pplGuardianInvitations)
           .set({ status: "activated", updatedAt: now })
@@ -196,6 +190,17 @@ export function createGuardiansRepo(db: Db): GuardiansRepo {
         if (claimed.length === 0) {
           throw new InvitationNotClaimableError();
         }
+        // Claims for different codes of the same pupil now count serially.
+        const liveRows = await tx
+          .select({ count: sql<number>`count(*)::int` })
+          .from(pplStudentGuardians)
+          .where(and(
+            eq(pplStudentGuardians.studentId, studentId),
+            inArray(pplStudentGuardians.status, ["pending", "active", "restricted"]),
+            "id" in guardian ? ne(pplStudentGuardians.guardianId, guardian.id) : undefined,
+          ));
+        const relationship = makeRelationship(liveRows[0]?.count ?? 0);
+        if (relationship.studentId !== studentId) throw new Error("invitation pupil and relationship pupil differ");
         let guardianId: string;
         if ("id" in guardian) {
           guardianId = guardian.id;

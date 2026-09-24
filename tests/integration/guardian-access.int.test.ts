@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import type { Principal } from "@vidya/platform";
 import { buildStack, type Stack } from "./support/harness";
 
 /**
@@ -32,9 +33,9 @@ async function create(route: string, body: unknown, params?: Record<string, stri
   return (await response.json()) as { id: string };
 }
 
-async function provisionStaff(prefix: string, classTeacherOf?: string): Promise<string> {
+async function provisionStaff(prefix: string, classTeacherOf?: string, adminWithoutGrant = false): Promise<string> {
   const username = `${prefix}-${randomUUID().slice(0, 8)}`;
-  const user = await create("identity.user-create", { username, displayName: username, collegeId, temporaryPassword: "temporary-pass-123", roles: [] });
+  const user = await create("identity.user-create", { username, displayName: username, collegeId, temporaryPassword: "temporary-pass-123", roles: adminWithoutGrant ? ["admin"] : [] });
   const reset = await stack.call("identity.password-reset-init", { cookie: admin, params: { userId: user.id } });
   const { token } = (await reset.json()) as { token: string };
   expect((await stack.call("identity.password-reset-confirm", { body: { token, newPassword: "staff-pass-12345" } })).status).toBe(200);
@@ -100,6 +101,14 @@ describe("Guardian access over real Postgres", () => {
   let guardian: string;
   let guardianUsername: string;
 
+  it("allows a guardian to read only their own record through the real scope checker", () => {
+    const principal: Principal = { id: "guardian-user", kind: "guardian", displayName: null, roles: [], grants: [], scopes: [], sessionId: null };
+    const own = { module: "identity", resourceType: "user-profile", org: { collegeId }, ownerUserId: principal.id };
+    expect(stack.core.scopeChecker.check(principal, "read", own).granted).toBe(true);
+    expect(stack.core.scopeChecker.check(principal, "update", own).granted).toBe(false);
+    expect(stack.core.scopeChecker.check(principal, "read", { ...own, ownerUserId: "another-user" }).granted).toBe(false);
+  });
+
   it("issues a code once, and never writes it to the audit log", async () => {
     const response = await invite(admin, studentId);
     expect(response.status).toBe(201);
@@ -153,6 +162,13 @@ describe("Guardian access over real Postgres", () => {
     expect((await read(guardian, "timetable")).status).toBe(200);
 
     expect((await read(guardian, "attendance", otherStudentId)).status).toBe(403);
+    for (const view of ["attendance", "marks", "timetable", "today"]) {
+      const unrelated = await read(guardian, view, otherStudentId);
+      const unknown = await read(guardian, view, "stu_does_not_exist");
+      expect(unrelated.status).toBe(403);
+      expect(unknown.status).toBe(403);
+      expect(await unrelated.json()).toEqual(await unknown.json());
+    }
     expect((await read(admin, "attendance")).status).toBe(403);
   });
 
@@ -184,6 +200,55 @@ describe("Guardian access over real Postgres", () => {
     const unknown = await activate("AAAAA-BBBBB-CCCCC-DDDDD");
     expect([spent.response.status, unknown.response.status]).toEqual([400, 400]);
     expect(await spent.response.json()).toEqual(await unknown.response.json());
+  });
+
+  it("allows exactly one of two concurrent activations of the same code", async () => {
+    const issued = await invite(admin, studentId);
+    expect(issued.status).toBe(201);
+    const { code, invitation } = (await issued.json()) as { code: string; invitation: { id: string } };
+    const attempts = await Promise.all([activate(code), activate(code)]);
+    expect(attempts.map(({ response }) => response.status).sort()).toEqual([201, 400]);
+    const claimed = await stack.pool.query(
+      `SELECT i.status, count(sg.id)::int AS relationships
+         FROM ppl_guardian_invitations i
+         LEFT JOIN ppl_student_guardians sg ON sg.id = i.activated_relationship_id
+        WHERE i.id = $1 GROUP BY i.status`,
+      [invitation.id],
+    );
+    expect(claimed.rows).toEqual([{ status: "activated", relationships: 1 }]);
+  });
+
+  it("keeps only one code pending after simultaneous reissues to one contact", async () => {
+    const contactValue = `parent-${randomUUID()}@example.test`;
+    const responses = await Promise.all([
+      invite(admin, studentId, { contactMethod: "email", contactValue }),
+      invite(admin, studentId, { contactMethod: "email", contactValue }),
+    ]);
+    expect(responses.map((response) => response.status)).toEqual([201, 201]);
+    const issued = await Promise.all(responses.map((response) => response.json())) as { invitation: { id: string }; code: string }[];
+    const rows = await stack.pool.query(
+      `SELECT id, status FROM ppl_guardian_invitations WHERE id = ANY($1::text[]) ORDER BY id`,
+      [issued.map(({ invitation }) => invitation.id)],
+    );
+    expect(rows.rows.map((row) => row.status).sort()).toEqual(["pending", "revoked"]);
+  });
+
+  it("serializes different invitations against the two-adult self-attestation limit", async () => {
+    const pupil = await create("people.student-create", { collegeId, admissionNo: `G-RACE-${randomUUID().slice(0, 8)}`, fullName: "Race threshold pupil" });
+    expect((await activate(await issuedCode(admin, pupil.id))).response.status).toBe(201);
+    const codes = await Promise.all(Array.from({ length: 3 }, () => issuedCode(admin, pupil.id)));
+    const attempts = await Promise.all(codes.map((code) => activate(code)));
+    expect(attempts.map(({ response }) => response.status)).toEqual([201, 201, 201]);
+    const statuses = attempts.map(async ({ response }) => ((await response.json()) as { status: string }).status);
+    expect((await Promise.all(statuses)).sort()).toEqual(["active", "pending", "pending"]);
+    const rows = await stack.pool.query(
+      `SELECT status, count(*)::int AS count FROM ppl_student_guardians WHERE student_id = $1 GROUP BY status`,
+      [pupil.id],
+    );
+    expect(rows.rows.sort((a, b) => a.status.localeCompare(b.status))).toEqual([
+      { status: "active", count: 2 },
+      { status: "pending", count: 2 },
+    ]);
   });
 
   it("lets the class teacher invite for their own class only, and never revoke", async () => {
@@ -231,6 +296,21 @@ describe("Guardian access over real Postgres", () => {
     const revokedRead = await stack.call("portal.child-attendance", { cookie: guardian, params: { studentId }, query: { academicYear } });
     const keptRead = await stack.call("portal.child-attendance", { cookie: guardian, params: { studentId: otherStudentId }, query: { academicYear } });
     expect([revokedRead.status, keptRead.status]).toEqual([403, 200]);
+
+    const unscopedAdmin = await provisionStaff("g-unscoped-admin", undefined, true);
+    expect((await stack.call("people.guardian-relationship-verify", { cookie: unscopedAdmin, params: { relationshipId: own.rows[0].id } })).status).toBe(403);
+    expect((await stack.call("people.guardian-relationship-verify", { cookie: admin, params: { relationshipId: own.rows[0].id } })).status).toBe(409);
+  });
+
+  it("invalidates a disabled guardian's live session", async () => {
+    const code = await issuedCode(admin, otherStudentId);
+    const activated = await activate(code);
+    expect(activated.response.status).toBe(201);
+    const cookie = await stack.login(activated.username, PASSWORD);
+    const session = (await (await stack.call("identity.session", { cookie })).json()) as { userId: string };
+    const disabled = await stack.call("identity.user-update", { cookie: admin, params: { userId: session.userId }, body: { status: "disabled" } });
+    expect(disabled.status).toBe(200);
+    expect((await stack.call("people.guardian-children", { cookie })).status).toBe(401);
   });
 
   it("holds an other-authorized-contact pending until staff verify, in the database itself", async () => {

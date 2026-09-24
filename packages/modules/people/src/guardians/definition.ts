@@ -118,7 +118,7 @@ export const guardianRoutes: RouteSpec[] = [
       200: { description: "Verified; a pending relationship becomes active", schema: z.object({ relationship: relationshipViewSchema }) },
       403: { description: "Scope check denied", schema: problemSchema },
       404: { description: "No such relationship", schema: problemSchema },
-      409: { description: "The relationship is revoked", schema: problemSchema },
+      409: { description: "The relationship is revoked or changed during the request", schema: problemSchema },
     },
   },
   {
@@ -139,6 +139,7 @@ export const guardianRoutes: RouteSpec[] = [
       200: { description: "Revoked", schema: z.object({ relationship: relationshipViewSchema }) },
       403: { description: "Scope check denied", schema: problemSchema },
       404: { description: "No such relationship", schema: problemSchema },
+      409: { description: "Relationship changed during the request", schema: problemSchema },
     },
   },
   {

@@ -1368,6 +1368,13 @@
                     "displayName": {
                       "type": "string"
                     },
+                    "accountKind": {
+                      "type": "string",
+                      "enum": [
+                        "staff",
+                        "guardian"
+                      ]
+                    },
                     "status": {
                       "type": "string",
                       "enum": [
@@ -1465,6 +1472,7 @@
                     "id",
                     "username",
                     "displayName",
+                    "accountKind",
                     "status",
                     "collegeId",
                     "roles",
@@ -1580,6 +1588,13 @@
                           "displayName": {
                             "type": "string"
                           },
+                          "accountKind": {
+                            "type": "string",
+                            "enum": [
+                              "staff",
+                              "guardian"
+                            ]
+                          },
                           "status": {
                             "type": "string",
                             "enum": [
@@ -1677,6 +1692,7 @@
                           "id",
                           "username",
                           "displayName",
+                          "accountKind",
                           "status",
                           "collegeId",
                           "roles",
@@ -1769,6 +1785,13 @@
                     },
                     "displayName": {
                       "type": "string"
+                    },
+                    "accountKind": {
+                      "type": "string",
+                      "enum": [
+                        "staff",
+                        "guardian"
+                      ]
                     },
                     "status": {
                       "type": "string",
@@ -1867,6 +1890,7 @@
                     "id",
                     "username",
                     "displayName",
+                    "accountKind",
                     "status",
                     "collegeId",
                     "roles",
@@ -2005,6 +2029,13 @@
                     "displayName": {
                       "type": "string"
                     },
+                    "accountKind": {
+                      "type": "string",
+                      "enum": [
+                        "staff",
+                        "guardian"
+                      ]
+                    },
                     "status": {
                       "type": "string",
                       "enum": [
@@ -2102,6 +2133,7 @@
                     "id",
                     "username",
                     "displayName",
+                    "accountKind",
                     "status",
                     "collegeId",
                     "roles",
@@ -7896,7 +7928,7 @@
             }
           },
           "409": {
-            "description": "The relationship is revoked",
+            "description": "The relationship is revoked or changed during the request",
             "content": {
               "application/json": {
                 "schema": {
@@ -8062,6 +8094,24 @@
           },
           "404": {
             "description": "No such relationship",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "message"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Relationship changed during the request",
             "content": {
               "application/json": {
                 "schema": {
