@@ -155,13 +155,22 @@ async function main(): Promise<void> {
           await page.getByText("Mathematics").first().waitFor();
           await page.screenshot({ path: join(output, "teacher-timetable.png"), fullPage: true });
         } else if (account.role === "family") {
+          await page.getByRole("navigation", { name: "Family sections" }).waitFor();
+          await page.getByRole("heading", { name: "Today" }).waitFor();
+          await page.screenshot({ path: join(output, "family-overview.png"), fullPage: true });
+          await page.getByRole("navigation", { name: "Family sections" }).getByRole("button", { name: "Learning" }).click();
           await page.getByRole("heading", { name: "Report cards" }).waitFor();
-          await page.getByText("Welcome to Standard 8").waitFor();
           const href = await page.getByRole("region", { name: "Report cards" }).getByRole("link", { name: "Download PDF" }).getAttribute("href");
           if (!href) throw new Error("Published report card has no PDF link");
           const pdf = await page.request.get(href);
           if (!pdf.ok() || (await pdf.body()).subarray(0, 5).toString("latin1") !== "%PDF-") throw new Error("Published PDF download failed");
-          await page.screenshot({ path: join(output, "family.png"), fullPage: true });
+          await page.screenshot({ path: join(output, "family-learning.png"), fullPage: true });
+          await page.getByRole("navigation", { name: "Family sections" }).getByRole("button", { name: "Fees" }).click();
+          await page.getByText("₹800.00 due").waitFor();
+          await page.screenshot({ path: join(output, "family-fees.png"), fullPage: true });
+          await page.getByRole("navigation", { name: "Family sections" }).getByRole("button", { name: "Notices" }).click();
+          await page.getByText("Welcome to Standard 8").waitFor();
+          await page.screenshot({ path: join(output, "family-notices.png"), fullPage: true });
           const staff = await page.request.get("/api/v1/people/colleges");
           if (staff.status() !== 403) throw new Error(`Family staff access returned ${staff.status()}, expected 403`);
           const teacherDirectory = await page.request.get("/api/v1/people/teachers?collegeId=col_unknown");
@@ -233,7 +242,7 @@ async function main(): Promise<void> {
           if (await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)) throw new Error("Attendance register overflows a 390px viewport");
           await page.screenshot({ path: join(output, "teacher-attendance-mobile.png"), fullPage: true });
         }
-        if (account.role === "family") await page.getByText("Welcome to Standard 8").waitFor();
+        if (account.role === "family") await page.getByRole("heading", { name: "Today" }).waitFor();
         if (account.role === "student") await page.getByText("Welcome to Standard 8").waitFor();
         if (account.role === "student-9a") await page.getByRole("heading", { name: "My marks", level: 1 }).waitFor();
         const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);

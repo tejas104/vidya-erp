@@ -66,8 +66,9 @@ analytics marks rollup is not presented as a school grade figure.
    sections to open the timetable, assignments, marks, exams, syllabus,
    attendance, fees, and notices as separate pages. The Standard 9 marks page
    shows the intentional unpublished-term state.
-6. Sign in as family: inspect the child, published report card PDF, fees,
-   attendance, and school notice. The family account must receive 403 from
+6. Sign in as family: use the Overview, Learning, Fees, and Notices sections
+   to inspect attendance, the published report card PDF, balances, and school
+   notices. The family account must receive 403 from
    staff APIs.
 
 The demo runs in school edition. An amber no-licence notice is expected because

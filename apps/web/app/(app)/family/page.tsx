@@ -38,6 +38,7 @@ type ChildRecords = {
   marks: PortalMarks | null;
   today: { dayOfWeek: number; periods: TtPeriod[]; entries: TtEntry[] } | null;
 };
+type FamilyView = "overview" | "learning" | "fees" | "notices" | "link";
 
 /** A category the server withholds answers 403: show nothing, not an error. */
 async function orNull<T>(request: Promise<T>): Promise<T | null> {
@@ -54,6 +55,7 @@ export default function FamilyPage() {
   const year = useMemo(() => currentAcademicYear(), []);
   const [list, setList] = useState<Children>({ state: "loading" });
   const [selected, setSelected] = useState<string | null>(null);
+  const [view, setView] = useState<FamilyView>("overview");
 
   const load = useCallback(() => {
     api
@@ -72,6 +74,14 @@ export default function FamilyPage() {
   }
 
   const child = list.children.find((candidate) => candidate.studentId === selected) ?? null;
+  const sections: { id: FamilyView; label: string }[] = [
+    { id: "overview", label: "Overview" },
+    ...(child?.categories.some((category) => category === "marks" || category === "report-card") ? [{ id: "learning" as const, label: "Learning" }] : []),
+    ...(child?.categories.includes("fees") ? [{ id: "fees" as const, label: "Fees" }] : []),
+    ...(child?.categories.includes("notices") ? [{ id: "notices" as const, label: "Notices" }] : []),
+    { id: "link", label: "Link a child" },
+  ];
+  const activeView = sections.some((section) => section.id === view) ? view : "overview";
 
   return (
     <>
@@ -92,6 +102,13 @@ export default function FamilyPage() {
         </div>
       ) : null}
 
+      {child !== null && (child.status === "active" || child.status === "restricted") ? (
+        <nav className={styles.sections} aria-label="Family sections">
+          {sections.map((section) => <button key={section.id} type="button" aria-pressed={activeView === section.id}
+            onClick={() => setView(section.id)}>{section.label}</button>)}
+        </nav>
+      ) : null}
+
       {child === null ? (
         <EmptyState
           title="No children linked yet."
@@ -106,36 +123,39 @@ export default function FamilyPage() {
         <EmptyState title="This link is no longer active." body="Contact the school office if you think this is a mistake." />
       ) : (
         <>
-          <ChildView key={child.studentId} child={child} year={year} includeLiveMarks={edition !== "school"} />
-          {edition === "school" && child.categories.includes("marks") ? <SchoolTermMarks key={`marks:${child.studentId}`} academicYear={year} studentId={child.studentId} /> : null}
-          {child.categories.includes("report-card") ? <ChildReportCards key={`cards:${child.studentId}`} studentId={child.studentId} /> : null}
-          {child.categories.includes("fees") ? <ChildFees key={`fees:${child.studentId}`} studentId={child.studentId} /> : null}
-          {child.categories.includes("notices") ? <ChildNotices key={`notices:${child.studentId}`} studentId={child.studentId} /> : null}
+          {activeView === "overview" ? <ChildView key={`${child.studentId}:overview`} child={child} year={year} view="overview" /> : null}
+          {activeView === "learning" ? <>
+            {edition !== "school" && child.categories.includes("marks") ? <ChildView key={`${child.studentId}:learning`} child={child} year={year} view="learning" /> : null}
+            {edition === "school" && child.categories.includes("marks") ? <SchoolTermMarks key={`marks:${child.studentId}`} academicYear={year} studentId={child.studentId} /> : null}
+            {child.categories.includes("report-card") ? <ChildReportCards key={`cards:${child.studentId}`} studentId={child.studentId} /> : null}
+          </> : null}
+          {activeView === "fees" && child.categories.includes("fees") ? <ChildFees key={`fees:${child.studentId}`} studentId={child.studentId} /> : null}
+          {activeView === "notices" && child.categories.includes("notices") ? <ChildNotices key={`notices:${child.studentId}`} studentId={child.studentId} /> : null}
         </>
       )}
 
-      <LinkAnotherChild onLinked={load} />
+      {child === null || (child.status !== "active" && child.status !== "restricted") || activeView === "link" ? <LinkAnotherChild onLinked={load} /> : null}
     </>
   );
 }
 
-function ChildView({ child, year, includeLiveMarks }: { child: GuardianChild; year: string; includeLiveMarks: boolean }) {
+function ChildView({ child, year, view }: { child: GuardianChild; year: string; view: "overview" | "learning" }) {
   const [records, setRecords] = useState<{ state: "loading" } | { state: "error" } | { state: "ok"; data: ChildRecords }>({ state: "loading" });
   const can = (category: string) => child.categories.includes(category);
 
   const load = useCallback(() => {
     setRecords({ state: "loading" });
     Promise.all([
-      can("attendance") ? orNull(api.childAttendance(child.studentId, year)) : Promise.resolve(null),
+      view === "overview" && can("attendance") ? orNull(api.childAttendance(child.studentId, year)) : Promise.resolve(null),
       // School assessment marks live in the school term engine, while this
       // legacy portal endpoint reads college assessment marks. Showing its
       // empty result beside a populated school report card misstates the data.
-      includeLiveMarks && can("marks") ? orNull(api.childMarks(child.studentId, year)) : Promise.resolve(null),
-      can("timetable") ? orNull(api.childToday(child.studentId, year)) : Promise.resolve(null),
+      view === "learning" && can("marks") ? orNull(api.childMarks(child.studentId, year)) : Promise.resolve(null),
+      view === "overview" && can("timetable") ? orNull(api.childToday(child.studentId, year)) : Promise.resolve(null),
     ])
       .then(([attendance, marks, today]) => setRecords({ state: "ok", data: { attendance, marks, today } }))
       .catch(() => setRecords({ state: "error" }));
-  }, [child, year, includeLiveMarks]);
+  }, [child, year, view]);
 
   useEffect(load, [load]);
 
@@ -143,6 +163,9 @@ function ChildView({ child, year, includeLiveMarks }: { child: GuardianChild; ye
     return <AsyncState loading={records.state === "loading"} error={records.state === "error"} onRetry={load}>{null}</AsyncState>;
   }
   const { attendance, marks, today } = records.data;
+  if (view === "overview" && attendance === null && today === null) {
+    return <EmptyState title="No overview records available." body="Choose a section above to see the records shared for this child." />;
+  }
   const sessions = attendance === null ? 0 : Object.values(attendance.counts).reduce((sum, n) => sum + n, 0);
 
   return (

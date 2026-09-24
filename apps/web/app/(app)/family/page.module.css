@@ -2,6 +2,28 @@
   margin-bottom: var(--space-5);
 }
 
+.sections {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  border-bottom: 1px solid var(--rule-strong);
+  margin-bottom: var(--space-5);
+}
+.sections button {
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--ink-2);
+  font: inherit;
+  font-size: var(--text-14);
+  font-weight: 600;
+  padding: var(--space-3) var(--space-4);
+  cursor: pointer;
+}
+.sections button[aria-pressed="true"] { color: var(--brand); border-bottom-color: var(--brand); }
+.sections button:hover { color: var(--ink); }
+.sections button:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+
 .periods {
   list-style: none;
   margin: 0;

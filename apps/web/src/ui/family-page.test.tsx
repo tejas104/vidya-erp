@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import FamilyPage from "../../app/(app)/family/page";
 import { AppShell } from "./AppShell";
 import { api, type GuardianChild, type Session } from "./api";
@@ -61,6 +61,9 @@ describe("family page (ADR-0027)", () => {
   it("does not show the college marks feed beside school report cards", async () => {
     mocked(api.guardianChildren).mockResolvedValue({ children: [parentOf({ categories: ["attendance", "marks", "report-card"] })] });
     render(<HelpEditionProvider edition="school"><FamilyPage /></HelpEditionProvider>);
+    await screen.findByRole("navigation", { name: "Family sections" });
+    expect(screen.queryByRole("heading", { name: "Report cards" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Learning" }));
     expect(await screen.findByRole("heading", { name: "Report cards" })).toBeVisible();
     await waitFor(() => expect(api.childReportCards).toHaveBeenCalledWith("stu-1"));
     expect(api.childMarks).not.toHaveBeenCalled();
@@ -71,20 +74,26 @@ describe("family page (ADR-0027)", () => {
     mocked(api.guardianChildren).mockResolvedValue({ children: [parentOf({ categories: ["report-card"] })] });
     mocked(api.childReportCards).mockResolvedValue({ reportCards: [{ snapshotId: "src_1", termId: "term_1", termName: "Term 1", academicYear: "2026-27", generatedAt: "2026-09-21T00:00:00Z", overall: { percentage: 82, grade: "A", complete: true }, attendance: { percentage: 95, complete: true } }] });
     render(<FamilyPage />);
+    expect(await screen.findByText("No overview records available.")).toBeVisible();
+    fireEvent.click(await screen.findByRole("button", { name: "Learning" }));
     expect(await screen.findByText("Term 1")).toBeVisible();
     expect(screen.getByRole("link", { name: "Download PDF" })).toHaveAttribute("href", "/children/stu-1/src_1/download");
     expect(api.childReportCards).toHaveBeenCalledWith("stu-1");
     expect(api.childFees).not.toHaveBeenCalled();
   });
-  it("shows the child's fee balances and live notices in separate sections", async () => {
+  it("opens the child's fees and notices as focused sections", async () => {
     mocked(api.guardianChildren).mockResolvedValue({ children: [parentOf({ categories: ["fees", "notices"] })] });
     mocked(api.childFees).mockResolvedValue({ invoices: [{ id: "inv_1", headName: "Tuition", academicYear: "2026-27", amountPaise: 50_000, dueOn: "2026-08-01", status: "part", paidPaise: 20_000, duesPaise: 30_000, payments: [{ receiptNo: 7, amountPaise: 20_000, mode: "upi", receivedAt: "2026-07-13T10:00:00Z" }] }] });
     mocked(api.childNotices).mockResolvedValue({ notices: [{ id: "ntc_1", kind: "notice", eventDate: null, title: "School trip", body: "Bring a water bottle.", publishAt: "2026-07-13T10:00:00Z", expiresAt: null }] });
     render(<FamilyPage />);
-    expect(await screen.findByRole("heading", { name: "School notices" })).toBeVisible();
-    expect(await screen.findByText("School trip")).toBeVisible();
+    fireEvent.click(await screen.findByRole("button", { name: "Fees" }));
     expect(await screen.findByText("₹300.00 due")).toBeVisible();
     expect(screen.getByText("Tuition")).toBeVisible();
+    expect(api.childNotices).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Notices" }));
+    expect(await screen.findByRole("heading", { name: "School notices" })).toBeVisible();
+    expect(await screen.findByText("School trip")).toBeVisible();
+    expect(screen.queryByText("Tuition")).not.toBeInTheDocument();
     expect(api.childFees).toHaveBeenCalledWith("stu-1");
     expect(api.childNotices).toHaveBeenCalledWith("stu-1");
     expect(api.childMarks).not.toHaveBeenCalled();
@@ -95,8 +104,11 @@ describe("family page (ADR-0027)", () => {
     mocked(api.childFees).mockRejectedValue(new Error("offline"));
     mocked(api.childNotices).mockResolvedValue({ notices: [{ id: "ntc_1", kind: "notice", eventDate: null, title: "Sports day", body: "Tomorrow", publishAt: "2026-07-13T10:00:00Z", expiresAt: null }] });
     render(<FamilyPage />);
-    expect(await screen.findByText("Sports day")).toBeVisible();
+    fireEvent.click(await screen.findByRole("button", { name: "Fees" }));
     expect(await screen.findByText("Couldn't load fees for this child.")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Notices" }));
+    expect(await screen.findByText("Sports day")).toBeVisible();
+    expect(screen.queryByText("Couldn't load fees for this child.")).not.toBeInTheDocument();
   });
 
   it("shows an unrecorded figure as 'Not recorded', never 0%", async () => {
@@ -116,6 +128,20 @@ describe("family page (ADR-0027)", () => {
     await waitFor(() => expect(api.childAttendance).toHaveBeenCalled());
     expect(api.childMarks).not.toHaveBeenCalled();
     expect(screen.queryByRole("heading", { name: "Marks" })).not.toBeInTheDocument();
+  });
+
+  it("returns to the overview when another child has fewer permitted sections", async () => {
+    mocked(api.guardianChildren).mockResolvedValue({ children: [
+      parentOf({ categories: ["attendance", "fees"] }),
+      parentOf({ studentId: "stu-2", fullName: "Meera Kulkarni", categories: ["attendance"] }),
+    ] });
+    render(<FamilyPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Fees" }));
+    await waitFor(() => expect(api.childFees).toHaveBeenCalledWith("stu-1"));
+    fireEvent.click(screen.getByRole("tab", { name: "Meera Kulkarni" }));
+    expect(screen.queryByRole("button", { name: "Fees" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Overview" })).toHaveAttribute("aria-pressed", "true");
+    expect(api.childFees).not.toHaveBeenCalledWith("stu-2");
   });
 
   it("explains a pending link instead of showing empty records", async () => {
