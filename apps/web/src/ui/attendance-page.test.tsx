@@ -14,7 +14,7 @@ function renderPage() {
 
 vi.mock("./api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./api")>();
-  return { ...actual, api: { ...actual.api, dashboard: vi.fn(), sectionRoster: vi.fn(), recordAttendance: vi.fn(), sessionAttendance: vi.fn(), rosterAttendance: vi.fn() } };
+  return { ...actual, api: { ...actual.api, dashboard: vi.fn(), sectionRoster: vi.fn(), recordAttendance: vi.fn(), sessionAttendance: vi.fn(), getSession: vi.fn(), rosterAttendance: vi.fn() } };
 });
 
 beforeEach(() => {
@@ -31,18 +31,20 @@ beforeEach(() => {
     ],
   });
   (api.sessionAttendance as ReturnType<typeof vi.fn>).mockResolvedValue({ sessions: [] });
+  (api.getSession as ReturnType<typeof vi.fn>).mockResolvedValue({ id: "ses_existing", sectionId: "sec_a", heldOn: new Date().toISOString().slice(0, 10), slot: "day", subjectId: "", academicYear: "2026-27", takenBy: "u", entries: [{ studentId: "stu_1", status: "present" }, { studentId: "stu_2", status: "present" }] });
   (api.rosterAttendance as ReturnType<typeof vi.fn>).mockResolvedValue({ cards: [] });
   (api.recordAttendance as ReturnType<typeof vi.fn>).mockResolvedValue({ id: "ses_1", sectionId: "sec_a", heldOn: "2026-06-01", slot: "day", academicYear: "2026-27", takenBy: "u", entries: [] });
 });
 
-describe("attendance entry — thumb-grid fast path", () => {
+describe("attendance register", () => {
   it("blocks a second register for the same section, date and period", async () => {
     const today = new Date().toISOString().slice(0, 10);
     (api.sessionAttendance as ReturnType<typeof vi.fn>).mockResolvedValue({ sessions: [{ id: "ses_existing", heldOn: today, slot: "day", subjectId: "", academicYear: "2026-27", counts: { present: 2, absent: 0, late: 0, excused: 0 } }] });
     renderPage();
-    expect(await screen.findByText(/already recorded/)).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Attendance recorded" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^save attendance$/i })).not.toBeInTheDocument();
     expect(screen.getByText("2 present")).toBeInTheDocument();
+    expect(await screen.findAllByText("present")).toHaveLength(2);
     expect(api.sessionAttendance).toHaveBeenCalledWith("sec_a", { from: today, to: today, limit: 100 });
   });
 

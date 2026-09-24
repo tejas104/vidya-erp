@@ -61,6 +61,7 @@ type Load =
 
 export interface OnboardingChecklistProps {
   role: ChecklistRole;
+  studentEdition?: "school" | "college";
   /** admin only — used for the cheap "did you change your temp password" check. */
   userId?: string;
   /** teacher only — the tiles the dashboard already fetched (no duplicate call). */
@@ -82,7 +83,7 @@ export interface OnboardingChecklistProps {
  * scoped to the caller's own principal (never a request-supplied id), so
  * there is no "someone else's data" case for this route to deny.
  */
-export function OnboardingChecklist({ role, userId, tiles }: OnboardingChecklistProps) {
+export function OnboardingChecklist({ role, userId, tiles, studentEdition = "college" }: OnboardingChecklistProps) {
   const [load, setLoad] = useState<Load>({ status: "loading" });
   const [auto, setAuto] = useState<Record<string, boolean>>({});
   const [reloadTick, setReloadTick] = useState(0);
@@ -217,7 +218,7 @@ export function OnboardingChecklist({ role, userId, tiles }: OnboardingChecklist
                       onChange={isAuto ? undefined : () => toggleManual(item.id)}
                       aria-label={isAuto ? `${item.label} (detected automatically)` : item.label}
                     />
-                    <a href={item.href} className={checked ? styles.done : undefined}>
+                    <a href={role === "student" && studentEdition === "school" ? `/portal/${item.id}` : item.href} className={checked ? styles.done : undefined}>
                       {item.label}
                     </a>
                   </li>

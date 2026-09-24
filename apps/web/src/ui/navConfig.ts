@@ -29,7 +29,16 @@ export const NAV: NavEntry[] = [
   // --- TODAY (group "TOP"): the screens a staff member opens every morning.
   // Rendered untitled at the top of the rail, so it is one tap from anywhere.
   { href: "/dashboard", label: "Dashboard", icon: "dashboard", group: "TOP", roles: ALL },
-  { href: "/portal", label: "My register", icon: "students", group: "TOP", roles: ["student"] },
+  { href: "/portal", label: "Overview", icon: "dashboard", group: "TOP", roles: ["student"], editions: ["school"] },
+  { href: "/portal", label: "My register", icon: "students", group: "TOP", roles: ["student"], editions: ["college"] },
+  { href: "/portal/schedule", label: "Timetable", icon: "attendance", group: "DAY", roles: ["student"], editions: ["school"] },
+  { href: "/portal/assignments", label: "Assignments", icon: "file", group: "DAY", roles: ["student"], editions: ["school"] },
+  { href: "/portal/marks", label: "Marks", icon: "marks", group: "LEARNING", roles: ["student"], editions: ["school"] },
+  { href: "/portal/exams", label: "Exams", icon: "check", group: "LEARNING", roles: ["student"], editions: ["school"] },
+  { href: "/portal/syllabus", label: "Syllabus", icon: "file", group: "LEARNING", roles: ["student"], editions: ["school"] },
+  { href: "/portal/attendance", label: "Attendance", icon: "attendance", group: "MY_RECORDS", roles: ["student"], editions: ["school"] },
+  { href: "/portal/fees", label: "Fees", icon: "rupee", group: "MY_RECORDS", roles: ["student"], editions: ["school"] },
+  { href: "/portal/notices", label: "Notices", icon: "bell", group: "MY_RECORDS", roles: ["student"], editions: ["school"] },
   // The teacher mobile fast-path (A10 Part 4): current/next period + ONE
   // "Mark attendance" button, nothing else.
   { href: "/manage/now", label: "Now", icon: "attendance", group: "TOP", roles: ["teacher", "class_teacher"] },
@@ -85,11 +94,14 @@ export const NAV: NavEntry[] = [
 ];
 
 // Job-shaped, not module-shaped: daily work first, once-a-year setup last.
-export const DOMAIN_ORDER = ["TOP", "STUDENTS", "ACADEMICS", "MONEY", "PEOPLE", "REVIEW", "SETUP"] as const;
+export const DOMAIN_ORDER = ["TOP", "DAY", "LEARNING", "MY_RECORDS", "STUDENTS", "ACADEMICS", "MONEY", "PEOPLE", "REVIEW", "SETUP"] as const;
 // The group rendered below the setup divider. Everything above it is work a
 // staff member does during a term; SETUP is what a new school does once.
 export const SETUP_GROUP = "SETUP";
 const LABEL: Record<string, string> = {
+  DAY: "My day",
+  LEARNING: "Learning",
+  MY_RECORDS: "My records",
   STUDENTS: "Students",
   ACADEMICS: "Academics",
   MONEY: "Money",

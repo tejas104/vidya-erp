@@ -12,10 +12,13 @@ In PowerShell, from the repository root:
 docker compose -p vidya-school-demo -f docker-compose.yml -f docker-compose.school-demo.yml --env-file scripts/school-demo.env up -d --build
 docker compose -p vidya-school-demo -f docker-compose.yml -f docker-compose.school-demo.yml --env-file scripts/school-demo.env run --rm -e VIDYA_ADMIN_PASSWORD=school-demo-admin-pass-2026 worker apps/worker/node_modules/.bin/tsx scripts/create-admin.ts --username school-demo-admin --display-name "Demo School Administrator" --college-name "Vidya Demo School" --college-code VDEMO
 $env:SCHOOL_DEMO_SEED='true'; pnpm exec tsx scripts/seed-school-demo.ts
+$env:SCHOOL_DEMO_SEED='true'; pnpm exec tsx scripts/enrich-school-demo.ts
 pnpm exec tsx scripts/verify-school-demo.ts
 ```
 
-The seed refuses to run if the demo school already has a class. Keep the
+The initial seed refuses to run if the demo school already has a class. The
+enrichment command is repeatable and adds only missing synthetic records to
+the isolated VDEMO school. Keep the
 containers and volumes running for review; `docker compose ... up -d --no-build`
 restarts them without reseeding. The browser verification writes screenshots to
 `test-results/school-demo/`.
@@ -32,10 +35,11 @@ restarts them without reseeding. The browser verification writes screenshots to
 | Family | `school-demo-family` | `school-demo-family-pass-2026` |
 
 All records, names, passwords, payment references, and contact addresses are
-fictional. The fixture covers a Standard 8 section with five pupils, two
-subjects, a six day timetable, attendance, syllabus coverage, an assignment,
+fictional. The fixture covers Standard 8 A and B and Standard 9 A with 40 pupils,
+two subjects, a six day timetable, four attendance dates with present, absent,
+late and excused entries, syllabus coverage, several assignments and a study file,
 closed Term 1 marks, a published report card PDF, future exams, a class notice,
-and generated invoices with a partial payment. Term 2 remains open for a live
+two event notices, a pending staff leave request, and generated invoices with a partial payment. Term 2 remains open for a live
 marks demonstration.
 
 The role dashboards use scoped attendance rollups rebuilt by the seed. Term
@@ -54,8 +58,9 @@ analytics marks rollup is not presented as a school grade figure.
 4. Sign in as subject teacher: inspect the teaching dashboard, My timetable,
    subject-scoped class register, Attendance, Syllabus, Coursework, and Marks.
    On a phone width, switch timetable days.
-5. Sign in as student: inspect Today, assignments, term marks, exams, syllabus
-   coverage, and fees in My register.
+5. Sign in as student: use the My day, Learning, and My records navigation
+   sections to open the timetable, assignments, marks, exams, syllabus,
+   attendance, fees, and notices as separate pages.
 6. Sign in as family: inspect the child, published report card PDF, fees,
    attendance, and school notice. The family account must receive 403 from
    staff APIs.
@@ -65,8 +70,9 @@ hosted licensing is being developed separately. This localhost fixture does
 not establish internet deployment readiness or real school acceptance.
 
 The browser check signs into all six roles from the same login page at desktop and 390 px width,
-checks the teacher directory and school Results, blocks a duplicate attendance entry,
-switches mobile timetable days, reads the family PDF, confirms the family
+checks the teacher directory and school Results, reads a saved attendance register,
+changes an unsaved pupil status, opens every student navigation page and the mobile menu,
+downloads the sample study PDF, switches mobile timetable days, reads the family PDF, confirms the family
 cannot call a staff API, checks for horizontal overflow and page exceptions,
 and keeps screenshots under `test-results/school-demo/`.
 

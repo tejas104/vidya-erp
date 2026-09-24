@@ -42,3 +42,29 @@
   white-space: pre-wrap;
   opacity: 0.8;
 }
+.quickGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: var(--space-3);
+  margin-bottom: var(--space-5);
+}
+.quickGrid a {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  color: var(--ink);
+  text-decoration: none;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-md);
+  transition: border-color 160ms ease, transform 160ms ease;
+}
+.quickGrid a:hover {
+  border-color: var(--focus);
+  transform: translateY(-2px);
+}
+.quickGrid a:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.quickGrid a span { color: var(--ink-2); font-size: var(--text-14); }

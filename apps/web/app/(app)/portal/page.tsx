@@ -76,7 +76,14 @@ const STATUS_TONE: Record<string, "good" | "warn" | "danger"> = {
 
 type SessionRow = { heldOn: ReactNode; status: ReactNode };
 
-export default function PortalPage() {
+export type PortalView = "overview" | "schedule" | "assignments" | "marks" | "exams" | "syllabus" | "attendance" | "fees" | "notices";
+const SCHOOL_VIEW_TITLES: Record<PortalView, string> = {
+  overview: "My school day", schedule: "My timetable", assignments: "Assignments & materials",
+  marks: "My marks", exams: "My exams", syllabus: "What we're learning",
+  attendance: "My attendance", fees: "My fees", notices: "School notices",
+};
+
+export default function PortalPage({ view = "overview" }: { view?: PortalView }) {
   const toast = useToast();
   const edition = useHelpEdition();
   const year = useMemo(() => currentAcademicYear(), []);
@@ -167,6 +174,7 @@ export default function PortalPage() {
   if (load.state === "error") return <EmptyState title="Couldn't load your register." body="Try again shortly." />;
 
   const { me, attendance, marks, timetable, today, assignments, materials, fees, results, exams, syllabus } = load;
+  const show = (section: PortalView) => edition !== "school" || view === section;
   const todayIso = new Date().toISOString().slice(0, 10);
   const totalDues = fees === null ? 0 : fees.reduce((sum, invoice) => sum + invoice.duesPaise, 0);
   const gridCell = (day: number, periodNo: number) =>
@@ -183,8 +191,8 @@ export default function PortalPage() {
   return (
     <>
       <PageHeader
-        eyebrow="My register"
-        title={`Hello, ${me.student.fullName.split(" ")[0]}.`}
+        eyebrow={edition === "school" ? "Student workspace" : "My register"}
+        title={edition === "school" && view !== "overview" ? SCHOOL_VIEW_TITLES[view] : `Hello, ${me.student.fullName.split(" ")[0]}.`}
         lede={
           me.enrollment
             ? `${me.enrollment.className} · Section ${me.enrollment.sectionName} · AY ${me.enrollment.academicYear} · ${me.student.admissionNo}`
@@ -193,9 +201,9 @@ export default function PortalPage() {
         help={<HelpButton slug="portal" />}
       />
 
-      <OnboardingChecklist role="student" />
+      {show("overview") ? <OnboardingChecklist role="student" studentEdition={edition} /> : null}
 
-      <section className="stats" aria-label="My figures" style={{ marginBottom: "var(--space-5)" }}>
+      {show("overview") ? <section className="stats" aria-label="My figures" style={{ marginBottom: "var(--space-5)" }}>
         <StatTile
           value={attendance.pct === null ? "—" : `${attendance.pct}%`}
           label="My attendance (YTD)"
@@ -208,9 +216,16 @@ export default function PortalPage() {
           muted={marks.overallPct === null}
         /> : null}
         {Object.values(attendance.counts).some((count) => count > 0) ? <StatTile value={String(attendance.counts.absent)} label="Days absent" /> : null}
-      </section>
+      </section> : null}
 
-      {today.entries.length > 0 ? (
+      {edition === "school" && view === "overview" ? <nav className={styles.quickGrid} aria-label="Explore your school workspace">
+        <a href="/portal/schedule"><strong>Timetable</strong><span>Classes and teachers this week →</span></a>
+        <a href="/portal/assignments"><strong>Assignments</strong><span>{assignments.length} set for your class →</span></a>
+        <a href="/portal/marks"><strong>Marks</strong><span>Term progress and grades →</span></a>
+        <a href="/portal/attendance"><strong>Attendance</strong><span>Your recorded days →</span></a>
+      </nav> : null}
+
+      {show("overview") && today.entries.length > 0 ? (
         <section className="section" aria-label="Today's classes">
           <div className="section-head"><h2>Today</h2></div>
           <Card>
@@ -235,7 +250,7 @@ export default function PortalPage() {
         </section>
       ) : null}
 
-      {timetable.entries.length > 0 ? (
+      {show("schedule") && timetable.entries.length > 0 ? (
         <section className="section" aria-label="My timetable">
           <div className="section-head"><h2>My timetable</h2></div>
           <div className="ui-tablewrap">
@@ -276,8 +291,10 @@ export default function PortalPage() {
           </div>
         </section>
       ) : null}
+      {edition === "school" && view === "schedule" && timetable.entries.length === 0 ?
+        <EmptyState title="No timetable published yet." body="Your classes will appear here when the school adds the weekly schedule." /> : null}
 
-      <section className="section" aria-label="My assignments">
+      {show("assignments") ? <section className="section" aria-label="My assignments">
         <div className="section-head">
           <h2>Assignments</h2>
           <span className="stat-sub num">{assignments.length}</span>
@@ -313,9 +330,9 @@ export default function PortalPage() {
             ))}
           </Card>
         )}
-      </section>
+      </section> : null}
 
-      {materials.length > 0 ? (
+      {show("assignments") && materials.length > 0 ? (
         <section className="section" aria-label="Study material">
           <div className="section-head"><h2>Study material</h2></div>
           <Card>
@@ -332,7 +349,7 @@ export default function PortalPage() {
         </section>
       ) : null}
 
-      <Modal
+      {show("assignments") ? <Modal
         open={submitFor !== null}
         onClose={() => setSubmitFor(null)}
         title={`Submit — ${submitFor?.title ?? ""}`}
@@ -352,9 +369,9 @@ export default function PortalPage() {
           <label htmlFor="cwk-answer" className={styles.label}>Your answer</label>
           <textarea id="cwk-answer" className={styles.textarea} rows={6} value={submitText} onChange={(event) => setSubmitText(event.target.value)} />
         </div>
-      </Modal>
+      </Modal> : null}
 
-      {attendance.monthly.length > 0 ? (
+      {show("attendance") && attendance.monthly.length > 0 ? (
         <section className="section" aria-label="Attendance trend">
           <div className="section-head"><h2>Attendance by month</h2></div>
           <Card>
@@ -363,7 +380,7 @@ export default function PortalPage() {
         </section>
       ) : null}
 
-      {edition === "school" ? <SchoolTermMarks academicYear={year} /> : <section id="portal-marks" className="section" aria-label="Marks by subject">
+      {show("marks") ? edition === "school" ? <SchoolTermMarks academicYear={year} /> : <section id="portal-marks" className="section" aria-label="Marks by subject">
         <div className="section-head">
           <h2>My marks</h2>
           <span className="stat-sub num">{marks.subjects.length} subjects</span>
@@ -397,10 +414,10 @@ export default function PortalPage() {
             </div>
           </>
         )}
-      </section>}
+      </section> : null}
 
       {/* --- results --- */}
-      {results !== null ? (
+      {show("marks") && results !== null ? (
         <section className="section" aria-label="My results">
           <div className="section-head">
             <h2>My results</h2>
@@ -444,7 +461,7 @@ export default function PortalPage() {
       ) : null}
 
       {/* --- exams --- */}
-      {exams !== null ? (
+      {show("exams") && exams !== null ? (
         <section className="section" aria-label="My exams">
           <div className="section-head">
             <h2>My exams</h2>
@@ -494,9 +511,11 @@ export default function PortalPage() {
           )}
         </section>
       ) : null}
+      {edition === "school" && view === "exams" && exams === null ?
+        <EmptyState title="Exam schedule unavailable." body="Try again shortly." /> : null}
 
       {/* --- syllabus coverage --- */}
-      {syllabus !== null && syllabus.subjects.length > 0 ? (
+      {show("syllabus") && syllabus !== null && syllabus.subjects.length > 0 ? (
         <section className="section" aria-label="Course coverage">
           <div className="section-head"><h2>Course coverage</h2></div>
           <div className="grid">
@@ -551,11 +570,13 @@ export default function PortalPage() {
           </div>
         </section>
       ) : null}
+      {edition === "school" && view === "syllabus" && (syllabus === null || syllabus.subjects.length === 0) ?
+        <EmptyState title={syllabus === null ? "Syllabus unavailable." : "No syllabus shared yet."} body="Your subjects and topics will appear here when teachers add them." /> : null}
 
       {/* --- notices --- */}
-      <Noticeboard />
+      {show("notices") ? <Noticeboard /> : null}
 
-      {fees !== null ? (
+      {show("fees") && fees !== null ? (
         <section id="portal-fees" className="section" aria-label="My fees">
           <div className="section-head">
             <h2>My fees</h2>
@@ -610,8 +631,10 @@ export default function PortalPage() {
           )}
         </section>
       ) : null}
+      {edition === "school" && view === "fees" && fees === null ?
+        <EmptyState title="Fee records unavailable." body="Try again shortly or contact the school office." /> : null}
 
-      <section id="portal-attendance" className="section" aria-label="Recent sessions">
+      {show("attendance") ? <section id="portal-attendance" className="section" aria-label="Recent sessions">
         <div className="section-head"><h2>Recent attendance</h2></div>
         <AsyncState
           loading={false}
@@ -621,7 +644,7 @@ export default function PortalPage() {
         >
           <Table columns={sessionColumns} rows={sessionRows} />
         </AsyncState>
-      </section>
+      </section> : null}
     </>
   );
 }

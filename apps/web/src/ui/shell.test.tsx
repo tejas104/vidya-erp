@@ -71,6 +71,15 @@ describe("Sidebar (role-gated)", () => {
     expect(screen.queryByRole("button", { name: "Administration" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /^dashboard$/i })).not.toBeInTheDocument();
   });
+  it("groups the school student workspace into daily work, learning, and records", () => {
+    render(<Sidebar roles={["student"]} edition="school" open={false} onClose={() => {}} />);
+    expect(screen.getByRole("link", { name: "Overview" })).toHaveAttribute("href", "/portal");
+    for (const group of ["My day", "Learning", "My records"])
+      expect(screen.getByRole("button", { name: group })).toBeInTheDocument();
+    for (const [label, href] of [["Timetable", "/portal/schedule"], ["Assignments", "/portal/assignments"], ["Marks", "/portal/marks"], ["Exams", "/portal/exams"], ["Syllabus", "/portal/syllabus"], ["Attendance", "/portal/attendance"], ["Fees", "/portal/fees"], ["Notices", "/portal/notices"]])
+      expect(screen.getByRole("link", { name: label })).toHaveAttribute("href", href);
+    expect(screen.queryByRole("link", { name: "Teachers" })).not.toBeInTheDocument();
+  });
   // The old "Class teacher" context badge was keyed to a "Teaching" group
   // that no longer exists post-regroup (see navConfig's ACADEMICS domain) —
   // it never fired. Removed rather than re-wired; a real class-teacher

@@ -21,6 +21,9 @@ function loadCollapsed(): Set<string> {
 export function Sidebar({ roles, open, onClose, edition = "college" }: { roles: Role[]; open: boolean; onClose: () => void; edition?: Edition }) {
   const pathname = usePathname();
   const groups = visibleNav(roles, edition);
+  const activeHref = groups.flatMap((group) => group.entries)
+    .filter((entry) => pathname === entry.href || pathname.startsWith(`${entry.href}/`))
+    .sort((a, b) => b.href.length - a.href.length)[0]?.href;
   const [collapsed, setCollapsed] = useState<Set<string>>(loadCollapsed);
 
   function toggle(group: string) {
@@ -34,7 +37,7 @@ export function Sidebar({ roles, open, onClose, edition = "college" }: { roles: 
   }
 
   function renderLink(entry: NavEntry) {
-    const active = pathname === entry.href || pathname.startsWith(`${entry.href}/`);
+    const active = entry.href === activeHref;
     return (
       <a
         key={entry.href}
@@ -52,7 +55,7 @@ export function Sidebar({ roles, open, onClose, edition = "college" }: { roles: 
   return (
     <aside className={`shell-side${open ? " open" : ""}`}>
       <div className="shell-side-head">
-        <a href="/dashboard" className="wordmark" style={{ textDecoration: "none" }}>
+        <a href={roles.includes("student") && !roles.some((role) => role !== "student") ? "/portal" : "/dashboard"} className="wordmark" style={{ textDecoration: "none" }}>
           vidya<span>.</span>
         </a>
         <button type="button" className="ui-iconbtn shell-side-close" aria-label="Close menu" onClick={onClose}>

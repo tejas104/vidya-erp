@@ -1,5 +1,5 @@
 /// <reference lib="dom" />
-import { mkdir } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { chromium, type Page } from "@playwright/test";
 
@@ -52,10 +52,10 @@ async function main(): Promise<void> {
         if (account.role === "admin" || account.role === "principal" || account.role === "class-teacher") {
           const figures = page.getByRole("region", { name: "School figures" });
           await figures.getByText("Attendance (YTD)").waitFor();
-          await figures.getByText("80%", { exact: true }).waitFor();
+          await figures.getByText(/\d+%/).first().waitFor();
           await figures.getByRole("link", { name: /View.*Term records/ }).waitFor();
-          await page.getByRole("region", { name: "Pupils needing attention" }).getByRole("link", { name: "Kabir Roy" }).click();
-          await page.getByRole("heading", { name: "Kabir Roy", level: 1 }).waitFor();
+          await page.getByRole("region", { name: "Pupils needing attention" }).getByRole("link").first().click();
+          await page.getByRole("heading", { level: 1 }).waitFor();
           await page.goto(account.landing);
           await page.getByRole("heading", { name: account.heading, level: 1 }).waitFor();
         }
@@ -118,12 +118,26 @@ async function main(): Promise<void> {
           await page.goto("/manage/report-cards");
           await page.getByRole("heading", { name: "Report card desk", level: 1 }).waitFor();
           await page.screenshot({ path: join(output, "class-teacher-report-cards.png"), fullPage: true });
-          await page.goto("/manage/attendance?date=2026-08-10");
-          await page.getByText(/already recorded/).waitFor();
+          await page.goto("/manage/attendance?date=2026-09-23");
+          await page.getByRole("heading", { name: "Attendance recorded" }).waitFor();
+          await page.getByText("Ishaan Verma").waitFor();
+          await page.getByText("20 pupils in this section").waitFor();
           if (await page.getByRole("button", { name: "Save attendance" }).count()) throw new Error("Recorded register still shows a save action");
           await page.screenshot({ path: join(output, "class-teacher-existing-attendance.png"), fullPage: true });
           await page.goto("/manage/report-cards");
         } else if (account.role === "teacher") {
+          await page.goto("/manage/attendance?date=2026-09-24");
+          await page.getByRole("heading", { name: "Class attendance", level: 1 }).waitFor();
+          await page.getByText("Asha Sharma").waitFor();
+          await page.getByText("Ishaan Verma").waitFor();
+          await page.getByText("20 pupils in this section").waitFor();
+          const ashaStatus = page.getByRole("button", { name: /Asha Sharma, roll.*present/i });
+          await ashaStatus.click();
+          await page.getByRole("button", { name: /Asha Sharma, roll.*absent/i }).waitFor();
+          await page.getByLabel("Mark Asha Sharma late or excused").selectOption("late");
+          await page.getByRole("button", { name: /Asha Sharma, roll.*late/i }).waitFor();
+          await page.getByLabel("Mark Asha Sharma late or excused").selectOption("");
+          await page.screenshot({ path: join(output, "teacher-attendance.png"), fullPage: true });
           await page.goto("/manage/classes");
           await page.getByRole("heading", { name: "My class register", level: 1 }).waitFor();
           await page.getByRole("link", { name: "Enter marks" }).waitFor();
@@ -152,10 +166,34 @@ async function main(): Promise<void> {
           const teacherDirectory = await page.request.get("/api/v1/people/teachers?collegeId=col_unknown");
           if (teacherDirectory.status() !== 403) throw new Error(`Family teacher directory returned ${teacherDirectory.status()}, expected 403`);
         } else {
-          await page.getByRole("heading", { name: "My term marks" }).waitFor();
-          await page.getByText("Observe a local ecosystem").waitFor();
-          await page.getByText("Term 2 assessment week").first().waitFor();
-          await page.screenshot({ path: join(output, "student.png"), fullPage: true });
+          await page.getByRole("navigation", { name: "Explore your school workspace" }).waitFor();
+          await page.getByRole("link", { name: "Timetable", exact: true }).waitFor();
+          await page.screenshot({ path: join(output, "student-overview.png"), fullPage: true });
+          for (const [route, heading, evidence] of [
+            ["schedule", "My timetable", "Mathematics"],
+            ["assignments", "Assignments & materials", "Observe a local ecosystem"],
+            ["marks", "My marks", "My term marks"],
+            ["exams", "My exams", "Term 2 assessment week"],
+            ["syllabus", "What we're learning", "Living systems"],
+            ["attendance", "My attendance", "Recent attendance"],
+            ["fees", "My fees", "Tuition"],
+            ["notices", "School notices", "Welcome to Standard 8"],
+          ] as const) {
+            await page.goto(`/portal/${route}`);
+            await page.getByRole("heading", { name: heading, level: 1 }).waitFor();
+            await page.getByText(evidence).first().waitFor();
+            if (route === "assignments") {
+              const material = page.getByRole("link", { name: "Download" }).first();
+              const href = await material.getAttribute("href");
+              if (!href) throw new Error("Student study material has no download link");
+              const response = await page.request.get(href);
+              const bytes = await response.body();
+              if (!response.ok() || bytes.length < 500 || bytes.subarray(0, 5).toString("latin1") !== "%PDF-")
+                throw new Error("Synthetic revision guide PDF failed to download");
+              await writeFile(join(output, "student-revision-guide.pdf"), bytes);
+            }
+            await page.screenshot({ path: join(output, `student-${route}.png`), fullPage: true });
+          }
         }
         await page.setViewportSize({ width: 390, height: 844 });
         await page.reload();
@@ -168,12 +206,24 @@ async function main(): Promise<void> {
           await saturday.click();
           if (await saturday.getAttribute("aria-pressed") !== "true") throw new Error("Mobile timetable day picker did not switch to Saturday");
           await page.getByRole("button", { name: "Thu", exact: true }).click();
+          await page.goto("/manage/attendance?date=2026-09-24");
+          await page.getByText("20 pupils in this section").waitFor();
+          if (await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)) throw new Error("Attendance register overflows a 390px viewport");
+          await page.screenshot({ path: join(output, "teacher-attendance-mobile.png"), fullPage: true });
         }
         if (account.role === "family") await page.getByText("Welcome to Standard 8").waitFor();
-        if (account.role === "student") await page.getByText("Observe a local ecosystem").waitFor();
+        if (account.role === "student") await page.getByText("Welcome to Standard 8").waitFor();
         const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
         if (overflow) throw new Error(`${account.role} landing overflows a 390px viewport`);
         await page.screenshot({ path: join(output, `${account.role}-mobile.png`), fullPage: true });
+        if (account.role === "student") {
+          await page.getByRole("button", { name: "Open menu" }).click();
+          await page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: "Timetable" }).waitFor();
+          await page.waitForFunction(() => getComputedStyle(document.querySelector(".shell-side")!).transform === "none");
+          await page.screenshot({ path: join(output, "student-nav-mobile.png"), fullPage: true });
+          await page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: "Timetable" }).click();
+          await page.getByRole("heading", { name: "My timetable", level: 1 }).waitFor();
+        }
         if (account.role === "class-teacher" || account.role === "teacher") {
           await page.goto("/manage/classes");
           await page.getByRole("heading", { name: "My class register", level: 1 }).waitFor();

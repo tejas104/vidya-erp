@@ -3,6 +3,7 @@ import { render, screen } from "@testing-library/react";
 import { ToastProvider } from "@vidya/ui-system";
 import PortalPage from "../../app/(app)/portal/page";
 import { api } from "./api";
+import { HelpEditionProvider } from "./help/HelpEditionContext";
 
 function renderPage() {
   return render(
@@ -96,6 +97,16 @@ beforeEach(() => {
 });
 
 describe("/portal (student self-view)", () => {
+  it("keeps the school overview brief and opens focused student pages", async () => {
+    const view = render(<ToastProvider><HelpEditionProvider edition="school"><PortalPage /></HelpEditionProvider></ToastProvider>);
+    expect(await screen.findByRole("navigation", { name: "Explore your school workspace" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Timetable Classes and teachers/ })).toHaveAttribute("href", "/portal/schedule");
+    expect(screen.queryByRole("heading", { name: "My exams" })).not.toBeInTheDocument();
+    view.rerender(<ToastProvider><HelpEditionProvider edition="school"><PortalPage view="exams" /></HelpEditionProvider></ToastProvider>);
+    expect(await screen.findByRole("heading", { name: "My exams", level: 1 })).toBeInTheDocument();
+    expect(screen.getAllByText(/Midterm/).length).toBeGreaterThan(0);
+    expect(screen.queryByRole("navigation", { name: "Explore your school workspace" })).not.toBeInTheDocument();
+  });
   it("renders the student's own figures", async () => {
     renderPage();
     expect(await screen.findByText(/Hello, Aarav\./)).toBeInTheDocument();

@@ -1,138 +1,58 @@
-.filterRow {
-  display: flex;
-  gap: var(--space-4);
-  flex-wrap: wrap;
-  margin-bottom: var(--space-5);
+.eyebrow { color: var(--brand); font-size: var(--text-12); font-weight: 700; letter-spacing: .09em; text-transform: uppercase; }
+.context { display: grid; gap: var(--space-4); padding: var(--space-5); margin-bottom: var(--space-5); border: 1px solid var(--rule); border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow); }
+.contextHeading { display: grid; gap: var(--space-1); }
+.contextHeading strong { font-size: var(--text-20); }
+.contextHeading > span:last-child { color: var(--ink-2); font-size: var(--text-14); }
+.filterRow { display: grid; grid-template-columns: minmax(15rem, 2fr) minmax(10rem, 1fr) minmax(10rem, 1fr); gap: var(--space-3); align-items: end; }
+.sectionField, .dateField, .slotField { min-width: 0; }
+.register { border: 1px solid var(--rule); border-radius: var(--radius); background: var(--surface); overflow: hidden; }
+.registerHead { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-5) var(--space-5) var(--space-3); }
+.registerHead h2 { margin: var(--space-1) 0; font-size: var(--text-24); }
+.registerHead p { margin: 0; color: var(--ink-2); font-size: var(--text-14); }
+.summary { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); padding: 0 var(--space-5) var(--space-4); }
+.summaryNote { margin-left: auto; color: var(--ink-2); font-size: var(--text-12); }
+.searchRow { display: flex; align-items: end; justify-content: space-between; gap: var(--space-3); padding: var(--space-3) var(--space-5); border-top: 1px solid var(--rule); background: var(--paper); }
+.searchRow > div { width: min(100%, 24rem); }
+.searchRow > span { color: var(--ink-2); font-size: var(--text-12); padding-bottom: var(--space-2); }
+.rows { padding: 0; margin: 0; list-style: none; }
+.row { display: flex; align-items: center; gap: var(--space-3); min-height: 5.25rem; padding: var(--space-3) var(--space-5); border-top: 1px solid var(--rule); }
+.row:first-child { border-top: 0; }
+.row:hover { background: var(--paper); }
+.avatar { display: grid; place-items: center; flex: 0 0 2.55rem; width: 2.55rem; height: 2.55rem; border-radius: 50%; font-size: var(--text-12); font-weight: 800; }
+.person { display: grid; gap: var(--space-1); min-width: 0; flex: 1; }
+.person strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.person small { color: var(--ink-2); font-family: var(--font-mono); font-size: var(--text-12); }
+.controls { display: flex; align-items: center; gap: var(--space-2); }
+.statusButton { display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2); min-width: 6.75rem; min-height: 2.75rem; padding: var(--space-2) var(--space-3); border: 1px solid var(--good); border-radius: var(--radius-sm); background: var(--good-soft); color: var(--good); font: inherit; font-size: var(--text-14); font-weight: 700; text-transform: capitalize; cursor: pointer; }
+.statusButton[data-status="absent"] { border-color: var(--bad); background: var(--bad-soft); color: var(--bad); }
+.statusButton[data-status="late"] { border-color: var(--warn); background: var(--warn-soft); color: var(--warn); }
+.statusButton[data-status="excused"] { border-color: var(--rule-strong); background: var(--surface-2); color: var(--ink-2); }
+.statusButton:focus-visible, .secondary:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.secondary { min-width: 6.75rem; min-height: 2.75rem; padding: var(--space-2); border: 1px solid var(--rule-strong); border-radius: var(--radius-sm); background: var(--surface); color: var(--ink-2); font: inherit; font-size: var(--text-12); cursor: pointer; }
+.savedStatus { min-width: 6.75rem; padding: var(--space-2) var(--space-3); border-radius: var(--radius-sm); background: var(--surface-2); color: var(--ink-2); font-size: var(--text-14); font-weight: 700; text-align: center; text-transform: capitalize; }
+.savedStatus[data-status="present"] { background: var(--good-soft); color: var(--good); }
+.savedStatus[data-status="absent"] { background: var(--bad-soft); color: var(--bad); }
+.savedStatus[data-status="late"] { background: var(--warn-soft); color: var(--warn); }
+.savedMessage { margin: 0; padding: var(--space-5); color: var(--ink-2); }
+.saveBar { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); margin-top: var(--space-4); padding: var(--space-3) var(--space-5); border: 1px solid var(--rule); border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow-2); }
+.saveBar > span:first-child { display: grid; gap: var(--space-1); }
+.saveBar small { color: var(--ink-2); font-size: var(--text-12); }
+@media (max-width: 760px) {
+  .filterRow { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .sectionField { grid-column: 1 / -1; }
 }
-.sectionField {
-  min-width: 220px;
+@media (max-width: 540px) {
+  .context { padding: var(--space-4); }
+  .filterRow { grid-template-columns: minmax(0, 1fr); }
+  .sectionField { grid-column: auto; }
+  .registerHead { align-items: start; flex-direction: column; padding: var(--space-4); }
+  .summary { padding: 0 var(--space-4) var(--space-3); }
+  .summaryNote { width: 100%; margin-left: 0; }
+  .searchRow { padding: var(--space-3) var(--space-4); }
+  .row { gap: var(--space-2); padding: var(--space-3) var(--space-4); }
+  .avatar { flex-basis: 2.25rem; width: 2.25rem; height: 2.25rem; }
+  .controls { flex-direction: column; gap: var(--space-1); }
+  .statusButton, .secondary { min-width: 5.5rem; min-height: 2.2rem; font-size: var(--text-12); }
+  .saveBar { flex-wrap: wrap; padding: var(--space-3) var(--space-4); }
+  .saveBar button { width: 100%; }
 }
-
-.summary {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  flex-wrap: wrap;
-  margin-bottom: var(--space-4);
-}
-.allPresent {
-  margin-left: auto;
-}
-
-/* Roll-number grid: thumb-sized cells (width/height are exempt from the
- * spacing-scale gate — they're geometry, not spacing). One tap toggles
- * present<->absent; the <select> underneath is the secondary late/excused
- * control so it never costs the primary flow a tap. */
-.grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
-  gap: var(--space-2);
-  margin-bottom: var(--space-5);
-}
-.cell {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-}
-.cellBtn {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-1);
-  width: 100%;
-  min-height: 64px;
-  padding: var(--space-2);
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--rule-strong);
-  background: var(--surface);
-  color: var(--ink);
-  cursor: pointer;
-  font: inherit;
-  -webkit-tap-highlight-color: transparent;
-}
-.cellBtn:focus-visible {
-  outline: 2px solid var(--brand);
-  outline-offset: 2px;
-}
-/* present (default): quiet outline, no fill — the exceptions should stand out. */
-.cellBtn[data-status="present"] {
-  border-color: var(--good);
-}
-/* absent: filled, never colour-alone — background changes shape (filled vs
- * outline) AND carries the close icon. */
-.cellBtn[data-status="absent"] {
-  background: var(--bad);
-  border-color: var(--bad);
-  color: var(--on-brand);
-}
-.cellBtn[data-status="late"] {
-  background: var(--warn-soft);
-  border-color: var(--warn);
-  color: var(--warn);
-}
-.cellBtn[data-status="excused"] {
-  background: var(--line-2);
-  border-color: var(--ink-3);
-  color: var(--ink-2);
-}
-
-.avatar {
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  font-size: var(--text-12);
-  font-weight: 700;
-  flex-shrink: 0;
-}
-.roll {
-  font-family: var(--font-mono);
-  font-size: var(--text-12);
-  font-weight: 700;
-}
-.statusMark {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 14px;
-  font-size: var(--text-12);
-  font-weight: 700;
-}
-
-.secondary {
-  width: 100%;
-  font-size: var(--text-12);
-  padding: var(--space-1);
-  border: 1px solid transparent;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--ink-3);
-  text-align: center;
-}
-.secondary:focus-visible {
-  outline: 2px solid var(--brand);
-  outline-offset: 1px;
-}
-
-.saveBar {
-  position: sticky;
-  bottom: 0;
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-3) 0;
-  background: var(--paper);
-  border-top: 1px solid var(--rule);
-}
-.existingRegister {
-  display: grid;
-  gap: var(--space-3);
-  padding: var(--space-4);
-  border: 1px solid var(--rule);
-  border-radius: var(--radius);
-  background: var(--surface);
-}
-.existingRegister p { margin: 0; color: var(--ink-2); }
-.existingCounts { display: flex; flex-wrap: wrap; gap: var(--space-2); }
