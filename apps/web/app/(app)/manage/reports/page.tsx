@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
 import {
   api,
   ApiError,
@@ -7,11 +8,13 @@ import {
   type OrgTree,
   type ReportParams,
   type ReportView,
+  type Session,
   type StudentView,
 } from "@/ui/api";
+import { useHelpEdition } from "@/ui/help/HelpEditionContext";
 import { AsyncState } from "@/ui/AsyncState";
 import {
-  useToast, Button, Select, Table, StatusBadge, EmptyState, PageHeader,
+  useToast, Button, Input, Select, Table, StatusBadge, EmptyState, PageHeader,
   type TableColumn,
 } from "@vidya/ui-system";
 import { HelpButton } from "@/ui/help/HelpButton";
@@ -26,7 +29,7 @@ const TONE: Record<ReportView["status"], "good" | "warn" | "danger" | "neutral">
   failed: "danger",
 };
 
-type Need = "student" | "section" | "class";
+type Need = "student" | "section" | "class" | "school-date";
 const KINDS: { kind: ReportParams["kind"]; label: string; need: Need; formats: ("pdf" | "csv" | "xlsx")[] }[] = [
   { kind: "grade-card", label: "Grade card — one student", need: "student", formats: ["pdf", "xlsx", "csv"] },
   { kind: "hall-ticket", label: "Exam hall ticket — one student", need: "student", formats: ["pdf", "xlsx", "csv"] },
@@ -34,7 +37,13 @@ const KINDS: { kind: ReportParams["kind"]; label: string; need: Need; formats: (
   { kind: "section-attendance", label: "Section attendance register", need: "section", formats: ["pdf", "xlsx", "csv"] },
   { kind: "marks-summary", label: "Class marks summary", need: "class", formats: ["pdf", "xlsx", "csv"] },
   { kind: "at-risk", label: "At-risk students — a class", need: "class", formats: ["pdf", "xlsx", "csv"] },
+  { kind: "teacher-attendance", label: "Teacher attendance — daily register", need: "school-date", formats: ["pdf", "xlsx", "csv"] },
 ];
+
+function todayLocal(): string {
+  const date = new Date();
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
 
 type ReportRow = {
   kind: ReactNode; format: ReactNode; year: ReactNode; status: ReactNode; rows: ReactNode;
@@ -42,11 +51,17 @@ type ReportRow = {
 };
 
 export default function ReportsPage() {
+  const router = useRouter();
+  const edition = useHelpEdition();
   const year = useMemo(() => currentAcademicYear(), []);
   const toast = useToast();
   const [reports, setReports] = useState<ReportView[] | null>(null);
   const [failed, setFailed] = useState(false);
   const [tree, setTree] = useState<OrgTree | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
+  const [schools, setSchools] = useState<{ id: string; name: string }[]>([]);
+  const [schoolId, setSchoolId] = useState("");
+  const [reportDate, setReportDate] = useState(todayLocal);
   const [kindIdx, setKindIdx] = useState(0);
   const [classId, setClassId] = useState("");
   const [sectionId, setSectionId] = useState("");
@@ -66,8 +81,11 @@ export default function ReportsPage() {
 
   useEffect(() => {
     void load();
+    api.session().then(setSession).catch(() => undefined);
     api.colleges()
       .then(async ({ colleges }) => {
+        setSchools(colleges);
+        setSchoolId(colleges[0]?.id ?? "");
         if (colleges[0]) setTree(await api.collegeTree(colleges[0].id));
       })
       .catch(() => undefined);
@@ -81,7 +99,9 @@ export default function ReportsPage() {
         : [],
     [tree],
   );
-  const spec = KINDS[kindIdx]!;
+  const kinds = useMemo(() => KINDS.filter((item) => item.need !== "school-date" ||
+    (edition === "school" && session?.roles.some((role) => role === "admin" || role === "principal"))), [edition, session]);
+  const spec = kinds[kindIdx] ?? kinds[0]!;
 
   useEffect(() => {
     if (spec.need !== "student" || sectionId === "") return;
@@ -93,6 +113,9 @@ export default function ReportsPage() {
   }, [spec, format]);
 
   function buildParams(): ReportParams | null {
+    if (spec.need === "school-date") {
+      return schoolId && reportDate ? { kind: "teacher-attendance", collegeId: schoolId, date: reportDate } : null;
+    }
     if (spec.need === "class") {
       if (classId === "") return null;
       return spec.kind === "at-risk"
@@ -114,8 +137,10 @@ export default function ReportsPage() {
     }
     setBusy(true);
     try {
-      await api.requestReport(params, format, year);
-      toast.push({ status: "good", message: "Report requested — it runs in the worker; refresh in a moment." });
+      const reportYear = params.kind === "teacher-attendance"
+        ? currentAcademicYear(new Date(`${params.date}T12:00:00`)) : year;
+      await api.requestReport(params, format, reportYear);
+      toast.push({ status: "good", message: "Report requested. Select Refresh shortly to check when it's ready." });
       await load();
     } catch (caught) {
       toast.push({ status: "danger", message: caught instanceof ApiError ? caught.message : "Couldn't request the report." });
@@ -134,7 +159,7 @@ export default function ReportsPage() {
     { key: "actions", header: "", align: "right" },
   ];
   const tableRows: ReportRow[] = (reports ?? []).map((row) => ({
-    kind: row.kind,
+    kind: KINDS.find((item) => item.kind === row.kind)?.label ?? row.kind,
     format: <StatusBadge status="neutral">{row.format.toUpperCase()}</StatusBadge>,
     year: <span className="num">{row.academicYear}</span>,
     status: (
@@ -146,12 +171,18 @@ export default function ReportsPage() {
     created: <span className="num">{new Date(row.createdAt).toLocaleString()}</span>,
     actions:
       row.status === "completed" ? (
-        <a className="btn ghost" href={api.downloadUrl(row.id)} download>Download</a>
+        <a className="btn ghost" href={api.downloadUrl(row.id)} download>Download {row.format.toUpperCase()}</a>
       ) : null,
   }));
 
   return (
     <>
+      <button className="section-back" type="button" onClick={() => {
+        if (window.history.length > 1 && window.history.state?.__NA) router.back();
+        else router.push("/dashboard");
+      }} aria-label="Back to previous section">
+        <span aria-hidden="true">←</span> Back to previous section
+      </button>
       <PageHeader
         eyebrow="Reports"
         title="Reports"
@@ -167,7 +198,7 @@ export default function ReportsPage() {
             id="r-kind" label="Report type" className={styles.wide}
             value={String(kindIdx)}
             onChange={(e) => { setKindIdx(Number(e.target.value)); setStudentId(""); }}
-            options={KINDS.map((k, i) => ({ value: String(i), label: k.label }))}
+            options={kinds.map((k, i) => ({ value: String(i), label: k.label }))}
           />
 
           {spec.need === "class" ? (
@@ -197,6 +228,15 @@ export default function ReportsPage() {
             />
           ) : null}
 
+          {spec.need === "school-date" ? <>
+            <Select
+              id="r-school" label="School" className={styles.mid}
+              value={schoolId} onChange={(event) => setSchoolId(event.target.value)}
+              options={[{ value: "", label: "Choose school…" }, ...schools.map((school) => ({ value: school.id, label: school.name }))]}
+            />
+            <Input id="r-date" label="Attendance date" type="date" value={reportDate} onChange={(event) => setReportDate(event.target.value)} />
+          </> : null}
+
           <Select
             id="r-fmt" label="Format"
             value={format} onChange={(e) => setFormat(e.target.value as "pdf" | "csv" | "xlsx")}
@@ -206,7 +246,7 @@ export default function ReportsPage() {
           <Button onClick={() => void generate()} loading={busy}>Generate report</Button>
         </div>
         <p className={`field-hint ${styles.hint}`}>
-          Reports run in the background worker. If they stay “pending”, make sure the worker is running (<span className="num">pnpm dev:worker</span>).
+          Reports usually finish shortly. Select Refresh to check when your download is ready.
         </p>
       </section>
 

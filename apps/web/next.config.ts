@@ -58,6 +58,9 @@ const CONTENT_SECURITY_POLICY_REPORT_ONLY = [
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  // School installations may build on modest on-prem hosts. Avoid spawning a
+  // page-data worker per CPU when memory is the limiting resource.
+  experimental: { cpus: 2 },
   poweredByHeader: false,
   // Inlined into the client bundle at build time (version is not a secret).
   env: {
