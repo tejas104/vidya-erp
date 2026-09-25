@@ -16,7 +16,9 @@ export const newSchoolAssessmentSchema = z.object({
   heldOn: z.string().date(),
 });
 export const schoolMarksInputSchema = z.object({
-  entries: z.array(z.object({ studentId: id, score })).min(1).max(500),
+  // Imports include the score seen at preview time. The repo compares it
+  // inside the term-locked transaction before applying any row.
+  entries: z.array(z.object({ studentId: id, score, expectedScore: score.nullable().optional() })).min(1).max(500),
 }).refine(({ entries }) => new Set(entries.map((entry) => entry.studentId)).size === entries.length, "Each student may appear only once.");
 
 export const schoolAssessmentViewSchema = z.object({

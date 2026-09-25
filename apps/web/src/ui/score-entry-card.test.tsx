@@ -1,9 +1,15 @@
 import { describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
-import { ScoreEntryCard } from "./ScoreEntryCard";
+import { ScoreEntryCard, validateScore } from "./ScoreEntryCard";
 
 const roster = [{ id: "s1", fullName: "Asha" }, { id: "s2", fullName: "Bina" }];
 describe("Shared score entry", () => {
+  it("matches the school score precision accepted by the server", () => {
+    expect(validateScore("1.234", 20)).toContain("two decimal");
+    expect(validateScore("1e1", 20)).toContain("two decimal");
+    expect(validateScore("0", 20)).toBeNull();
+    expect(validateScore("12.50", 20)).toBeNull();
+  });
   it("never turns a blank row into a zero mark while saving another row", () => {
     const onSave = vi.fn();
     render(<ScoreEntryCard title="Marks" roster={roster} values={{ s1: " ", s2: "0" }} maxScore={20} onChange={vi.fn()} onSave={onSave} />);

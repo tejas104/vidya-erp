@@ -46,7 +46,7 @@ beforeAll(async () => {
 });
 afterAll(async () => { await stack?.close(); });
 const assessmentBody = () => ({ classId, subjectId, termId, typeId, scaleId, name: "First test", maxScore: 20, heldOn: "2026-06-01" });
-const save = (cookie: string, entries = [{ studentId, score: 16 }]) => stack.call("school-academics.marks-enter", { cookie, params: { assessmentId }, body: { entries } });
+const save = (cookie: string, entries: { studentId: string; score: number; expectedScore?: number | null }[] = [{ studentId, score: 16 }]) => stack.call("school-academics.marks-enter", { cookie, params: { assessmentId }, body: { entries } });
 
 describe("School assessments and marks with real authentication, scope and database guards", () => {
   it("requires authentication on every school marks route", async () => {
@@ -86,6 +86,15 @@ describe("School assessments and marks with real authentication, scope and datab
     expect(await read.json()).toMatchObject({ marks: [{ score: 16, grade: "A" }] });
     const audit = await stack.system.service.readAuditEventsForResource("assessment", assessmentId, 10);
     expect(audit.some((event) => event.action === "school-academics.marks-entered")).toBe(true);
+  });
+  it("rejects a stale CSV preview inside the term-locked marks transaction", async () => {
+    expect((await save(teacher, [{ studentId, score: 18, expectedScore: 16 }])).status).toBe(200);
+    const stale = await save(teacher, [{ studentId, score: 19, expectedScore: 16 }]);
+    expect(stale.status).toBe(409);
+    expect((await stale.json()) as { message: string }).toMatchObject({ message: expect.stringContaining("changed since the import preview") });
+    const read = await stack.call("school-academics.marks-list", { cookie: teacher, params: { assessmentId } });
+    expect(await read.json()).toMatchObject({ marks: [{ score: 18 }] });
+    expect((await save(teacher, [{ studentId, score: 16, expectedScore: 18 }])).status).toBe(200);
   });
   it("keeps the grading basis immutable after use even if the source scale changes", async () => {
     const changed = await stack.call("results.scale-update", { cookie: admin, params: { scaleId }, body: { name: `Changed source ${suffix}`, bands: [{ minPct: 0, grade: "Changed", points: 1 }] } });

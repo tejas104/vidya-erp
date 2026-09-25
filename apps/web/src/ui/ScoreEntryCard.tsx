@@ -31,6 +31,7 @@ interface ScoreEntryCardProps {
  * Non-empty must be a finite number within [0, max] — surfaced inline per row. */
 export function validateScore(raw: string, max: number): string | null {
   if (raw.trim() === "") return null;
+  if (!/^\d+(?:\.\d{1,2})?$/.test(raw.trim())) return "Use at most two decimal places.";
   const n = Number(raw);
   if (!Number.isFinite(n)) return "Enter a number.";
   if (n < 0 || n > max) return `0–${max} only.`;

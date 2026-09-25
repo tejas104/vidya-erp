@@ -32,6 +32,15 @@ Vidya saves the scores and the grades calculated from the assessment's saved gra
 
 If a score is rejected, check that the learner is enrolled in the assessment class for the Academic Year and that the score is within the maximum. If you do not see a teaching subject or get an access message, ask the administrator to verify the staff teaching assignment; do not enter marks through another teacher's account.
 
+## Import a class section from CSV
+
+1. Open the assessment, then select **Download roster template**. It includes this section's student IDs, admission numbers, names and any scores already saved.
+2. Edit only the **score** column in a spreadsheet. Leave a score blank to keep it unrecorded. A zero is a recorded score. Save the file as CSV.
+3. Select **Choose completed CSV**. Vidya checks every row and shows the score changes before saving. If there are errors, download the error CSV and correct the file. No row is saved while errors remain.
+4. Review the current and new scores, then select **Save scores**. Vidya checks for any marks changed after the preview and saves the batch atomically. If another teacher has changed a score, download a fresh template and review again.
+
+The template is for one selected section and assessment. Keep every student row, even when its score is blank. Importing does not remove existing marks; use a new score to correct one. Closed terms cannot accept an import.
+
 ## Closed terms
 
 When a term is closed, its assessments and recorded grades remain visible but marks are read-only. An administrator must reopen the term with a reason before any correction can be saved. This is a school term rule and does not change legacy college marks behavior.

@@ -1,0 +1,19 @@
+.lede { color: var(--ink-2); line-height: 1.5; margin: 0 0 var(--space-3); max-width: 70ch; }
+.actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); }
+.fileLabel { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: var(--space-2) var(--space-3); border: 1px solid var(--rule-strong); border-radius: var(--radius-sm); color: var(--ink); background: var(--paper-raised); cursor: pointer; font-weight: 600; }
+.fileLabel:hover { border-color: var(--focus); }
+.fileLabel:has(+ .fileInput:focus-visible) { outline: 2px solid var(--focus); outline-offset: 2px; }
+.fileInput { width: 1px; height: 1px; opacity: 0; position: absolute; }
+.filename { color: var(--ink-2); font-size: var(--text-14); margin: var(--space-2) 0 0; overflow-wrap: anywhere; }
+.error { border: 1px solid var(--bad); border-radius: var(--radius-sm); padding: var(--space-3); margin-top: var(--space-3); }
+.error p { margin: var(--space-1) 0 0; }
+.error:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.preview { display: grid; gap: var(--space-3); margin-top: var(--space-4); }
+.summary { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-3); }
+.summary span { color: var(--ink-2); }
+.scroll { overflow-x: auto; border: 1px solid var(--rule); border-radius: var(--radius-sm); }
+.scroll table { width: 100%; min-width: 30rem; border-collapse: collapse; text-align: left; }
+.scroll th, .scroll td { padding: var(--space-2) var(--space-3); border-bottom: 1px solid var(--rule); }
+.scroll th { background: var(--paper-raised); font-size: var(--text-14); }
+.scroll td { font-variant-numeric: tabular-nums; }
+.scroll tr:last-child td { border-bottom: 0; }

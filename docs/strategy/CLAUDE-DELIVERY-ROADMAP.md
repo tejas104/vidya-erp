@@ -7,7 +7,7 @@ changes — this is a living record, not a plan written once.
 - Worktree: `D:\ATLAS\.worktrees\claude-school-product`
 - Base: `a9d5fc16f075b86474050fbefd4f0860ac21f006` (gate-04 reviewed checkpoint)
 - Integration commit: `0ddf80cc3ab8ff1ecc1b663fd0e6d152badeb161`
-- Last revised: 2026-09-25 (comparison recheck and school analytics increment)
+- Last revised: 2026-09-25 (school marks CSV import increment)
 
 Companion documents: [COMPETITIVE-PARITY-MATRIX.md](COMPETITIVE-PARITY-MATRIX.md),
 `DELIVERY-AND-REVIEW-REQUIREMENTS.md`, `VIDYA-SCHOOL-FIRST-SAAS-PLAN.md`.
@@ -28,13 +28,19 @@ module lists guide job selection but do not prove workflow quality or parity.
 
 The local school demo now includes audited teacher attendance and scoped
 PDF/Excel/CSV exports (`e14f43b` through `b903823`). Analytics adds Columns,
-Line, Area and exact Data views for monthly attendance in the current UI slice.
-These are useful school-demo increments, not completion of N5's shortfall and
-unsubmitted-register workflow. N4 bulk marks import, N5 attendance shortfall,
-N6 promotion/transfer, N7 certificates, N8 fee follow-up and Phase 2/3
-admissions, finance depth and hosted control-plane work remain on the critical
-path. The current chart change has focused UI and local browser evidence; it
-does not replace full school and hosting gates.
+Line, Area and exact Data views for monthly attendance (`6a7898c`). The marks
+desk now has a section roster CSV template, row validation, change preview,
+downloadable error CSV and an atomic, audit-logged batch save. The save checks
+the previewed score under the term lock, so a concurrent correction rejects
+the import instead of overwriting it. A seeded teacher browser journey
+exercised error and success paths, then restored the original mark. N4 still
+needs a measured pilot-size import and scaling decision; the browser preview
+is not a persisted, server-side import job.
+
+N5 attendance shortfall and unsubmitted-register handling, N6 promotion and
+transfer, N7 certificates, N8 fee follow-up, and Phase 2/3 admissions,
+finance depth and hosted control-plane work remain on the critical path. This
+local demo evidence does not replace full school and hosting gates.
 
 ---
 
@@ -128,7 +134,7 @@ parent can be given access safely.
 | 1.4 | Parent portal essentials | `DONE (first slice)` | Invitation → activation → family portal (attendance, marks, timetable) reusing `portal` read models behind people's guardian access decision. See "Slice 1.3/1.4 — delivered" below for what is deferred. |
 | 1.5 | Promotion / detention / transfer | `PLANNED` | Auditable batch with preview; reversible per student; no hard delete of enrollment history. |
 | 1.6 | Certificates (TC, bonafide) | `PLANNED` | Generated from record state, numbered and audited — not free-text templates. |
-| 1.7 | Bulk marks import | `PLANNED` | Reuse the people-import dry-run + downloadable error-report pattern. |
+| 1.7 | Bulk marks import | `IN PROGRESS` | Teacher CSV template, browser preview, error CSV and atomic compare-and-save work locally. Measure a pilot-sized class and decide whether to add a persistent worker import run. |
 | 1.8 | Attendance shortfall workflow | `PLANNED` | Wire S02; must show the denominator and separate pupil absence from unsubmitted registers. |
 | 1.9 | Fee-defaulter workflow depth | `PLANNED` | `defaulters` route exists; printable notices and follow-up state do not. |
 
@@ -325,7 +331,7 @@ reason; add slices freely when evidence demands it.
 | **N2** | Report-card desk for class teachers — **DONE** | A reporting-owned desk scope now lists only readable classes and their school's terms; the class teacher sees the desk in school navigation. Real browser and integration scope checks cover the audience. | web; `reporting`, `school-academics` read model | — |
 | **N3** | Parent views: report cards, fees, notices — **DONE** | Family fee balances/receipts, audience-filtered live notices, and explicitly released report cards use fresh child-category checks. Report-card publication and withdrawal are append-only; family PDFs require the current release. Real browser and database tests cover release, supersession, withdrawal, sibling denial, and relationship revocation. | `reporting`, `fees`, `notices`, web | N0 |
 | **N3.1** | School family and student term marks — **DONE** | Separate school marks routes use the school-academics read model and weighted engine. A new close stamps release; historical closed terms remain private until an audited admin release. Reopening hides them during correction. Student self-scope and fresh guardian marks checks apply. Subject and assessment details distinguish missing scores from zero, and incomplete data blocks the overall percentage. College marks routes are unavailable in the school edition. Type, unit, UI, integration, migration, and isolated browser gates pass. See [ADR-0029](../adr/0029-school-term-marks-release.md). | `school-academics`, `portal`, web | N3 |
-| **N4** | Bulk marks import (1.7) | Highest-frequency pain for staff after attendance. | `school-academics`, worker | — |
+| **N4** | Bulk marks import (1.7) — **IN PROGRESS** | CSV teacher flow and compare-and-save shipped for the local demo; measured scaling and full review remain. | `school-academics`, web | — |
 | **N5** | Attendance shortfall workflow (1.8) | S02 exists and is unused outside report cards. | `academics`, `analytics` | — |
 | **N6** | Promotion / detention / transfer (1.5) | Year-end is unavoidable; also sets `historicalAccessUntil` (ADR-0027 Decision 9). | `people`, `school-academics` | N1 |
 | **N7** | Certificates: TC and bonafide (1.6) | A TC requires a recorded exit, so it follows N6. | `reporting`, `people` | N6 |

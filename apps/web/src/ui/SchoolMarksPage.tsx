@@ -4,6 +4,7 @@ import { Button, Card, EmptyState, Input, PageHeader, Select, StatusBadge, Table
 import { api, ApiError, currentAcademicYear, type SchoolAssessmentView, type SchoolClassSetup, type SchoolMarkView } from "./api";
 import { AsyncState } from "./AsyncState";
 import { ScoreEntryCard, type ScoreEntryStudent } from "./ScoreEntryCard";
+import { SchoolMarksImport } from "./SchoolMarksImport";
 import { schoolVocabulary } from "./editionVocabulary";
 import { HelpButton } from "./help/HelpButton";
 import styles from "./SchoolMarksPage.module.css";
@@ -113,15 +114,17 @@ export function SchoolMarksPage() {
     finally { setSaving(false); }
   }
 
-  async function save(entries: { studentId: string; score: number }[]) {
-    if (!active || saving) return;
+  async function save(entries: { studentId: string; score: number; expectedScore?: number | null }[]): Promise<boolean> {
+    if (!active || saving) return false;
     setSaving(true);
     setMarksError(null);
     try {
       const result = await api.schoolEnterMarks(active.id, entries);
       setSavedMarks((current) => [...current.filter((mark) => !result.marks.some((saved) => saved.studentId === mark.studentId)), ...result.marks]);
+      setScores((current) => ({ ...current, ...Object.fromEntries(result.marks.map((mark) => [mark.studentId, String(mark.score)])) }));
       toast.push({ status: "good", message: "Scores and grades saved." });
-    } catch (caught) { setMarksError(caught instanceof ApiError ? caught.message : "Couldn't save marks. Please retry."); }
+      return true;
+    } catch (caught) { setMarksError(caught instanceof ApiError ? caught.message : "Couldn't save marks. Please retry."); return false; }
     finally { setSaving(false); }
   }
 
@@ -156,7 +159,10 @@ export function SchoolMarksPage() {
               </Card>
             </>}
             {active ? <AsyncState loading={marksLoading} error={marksError !== null && !marksReady} errorMessage={marksError} onRetry={() => setMarksReload((value) => value + 1)}>
-              {termStatus === "open" && roster.length > 0 ? <ScoreEntryCard title={active.name} roster={roster} values={scores} maxScore={active.maxScore} onChange={(id, value) => setScores((current) => ({ ...current, [id]: value }))} onSave={(entries) => void save(entries)} saving={saving} error={marksError} /> : <p className={styles.notice}>{termStatus === "closed" ? "Term closed · marks are read only." : "No students are enrolled in this section."}</p>}
+              {termStatus === "open" && roster.length > 0 ? <>
+                <ScoreEntryCard title={active.name} roster={roster} values={scores} maxScore={active.maxScore} onChange={(id, value) => setScores((current) => ({ ...current, [id]: value }))} onSave={(entries) => void save(entries)} saving={saving} error={marksError} />
+                <SchoolMarksImport key={active.id} assessmentId={active.id} roster={roster} marks={savedMarks} maxScore={active.maxScore} saving={saving} onSave={save} />
+              </> : <p className={styles.notice}>{termStatus === "closed" ? "Term closed · marks are read only." : "No students are enrolled in this section."}</p>}
               {savedMarks.length > 0 ? <Card title="Recorded grades"><div className={styles.tableViewport}><Table columns={[{ key: "name", header: "Student" }, { key: "score", header: "Score", figure: true }, { key: "percentage", header: "%", figure: true }, { key: "grade", header: "Grade" }]}
                 rows={savedMarks.filter((mark) => roster.some((student) => student.id === mark.studentId)).map((mark) => ({ name: roster.find((student) => student.id === mark.studentId)?.fullName ?? "Student", score: `${mark.score}/${active.maxScore}`, percentage: mark.percentage, grade: <StatusBadge status="neutral">{mark.grade}</StatusBadge> }))} /></div></Card> : null}
             </AsyncState> : null}

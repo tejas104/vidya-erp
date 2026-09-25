@@ -19,7 +19,7 @@ export interface SchoolMarksRepo {
   list(classId: string, academicYear: string): Promise<SchoolAssessmentRow[]>;
   create(input: NewSchoolAssessment): Promise<SchoolAssessmentRow>;
   readMarks(assessmentId: string): Promise<SchoolMarkRow[]>;
-  saveMarks(assessment: SchoolAssessmentRow, entries: { studentId: string; score: number }[], recordedBy: string): Promise<{ before: SchoolMarkRow[]; marks: SchoolMarkRow[] }>;
+  saveMarks(assessment: SchoolAssessmentRow, entries: { studentId: string; score: number; expectedScore?: number | null }[], recordedBy: string): Promise<{ before: SchoolMarkRow[]; marks: SchoolMarkRow[] }>;
 }
 
 function requireOpen(term: SchTermRow | undefined): asserts term is SchTermRow {
@@ -59,6 +59,11 @@ export function createSchoolMarksRepo(db: Db): SchoolMarksRepo {
         requireOpen(term);
         if (!term.gradeBands) throw new SchoolMarksError(409, "This term has no saved grading basis.");
         const before = await tx.select().from(marks).where(and(eq(marks.assessmentId, assessment.id), inArray(marks.studentId, entries.map((entry) => entry.studentId))));
+        const beforeByStudent = new Map(before.map((mark) => [mark.studentId, Number(mark.score)]));
+        if (entries.some((entry) => entry.expectedScore !== undefined &&
+            entry.expectedScore !== (beforeByStudent.get(entry.studentId) ?? null))) {
+          throw new SchoolMarksError(409, "Marks changed since the import preview. Download a fresh roster and review again.");
+        }
         const saved: SchoolMarkRow[] = [];
         for (const entry of entries) {
           if (entry.score > Number(assessment.maxScore)) throw new SchoolMarksError(422, "A score exceeds this assessment's maximum.");

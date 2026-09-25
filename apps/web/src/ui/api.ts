@@ -1241,7 +1241,7 @@ export const api = {
     post<SchoolAssessmentView>("/api/v1/school/assessments", body),
   schoolMarks: (assessmentId: string) =>
     get<{ marks: SchoolMarkView[]; termStatus: "open" | "closed" }>(`/api/v1/school/assessments/${encodeURIComponent(assessmentId)}/marks`),
-  schoolEnterMarks: (assessmentId: string, entries: { studentId: string; score: number }[]) =>
+  schoolEnterMarks: (assessmentId: string, entries: { studentId: string; score: number; expectedScore?: number | null }[]) =>
     put<{ marks: SchoolMarkView[] }>(`/api/v1/school/assessments/${encodeURIComponent(assessmentId)}/marks`, { entries }),
   schoolSetAssessmentTypes: (termId: string, types: { id?: string; name: string; weight: number }[]) =>
     put<{ types: SchoolAssessmentType[] }>(`/api/v1/school/terms/${encodeURIComponent(termId)}/assessment-types`, { types }),
