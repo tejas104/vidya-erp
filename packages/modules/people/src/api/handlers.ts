@@ -19,11 +19,11 @@ import { UsernameTakenError } from "@vidya/module-identity";
 import { DOCUMENT_MAX_BYTES, studentStatusSchema } from "../definition";
 import { usernameFromCode } from "../ids";
 import type { OrgService } from "../service/org-service";
-import { PeopleService, UnknownReferenceError } from "../service/people-service";
+import { InvalidEnrollmentDatesError, PeopleService, UnknownReferenceError } from "../service/people-service";
 import type { AssignmentsService } from "../service/assignments-service";
 import type { CredentialIssuer, ImportService } from "../service/import-service";
 import { DuplicateCodeError, UnitInUseError, type OrgUnitType } from "../repo/org-repo";
-import { DuplicateAssignmentError, DuplicatePersonError, type StudentStatus } from "../repo/people-repo";
+import { DuplicateAssignmentError, DuplicatePersonError, EnrollmentConflictError, type StudentStatus } from "../repo/people-repo";
 import { InvalidStaffAttendanceTarget, type StaffAttendanceRepo, type StaffPresenceEntry } from "../repo/staff-attendance-repo";
 import type { RowError } from "../repo/imports-repo";
 import type {
@@ -103,7 +103,7 @@ function studentView(student: PplStudentRow, enrollment: PplEnrollmentRow | null
     enrollment:
       enrollment === null
         ? null
-        : { sectionId: enrollment.sectionId, academicYear: enrollment.academicYear },
+        : { id: enrollment.id, sectionId: enrollment.sectionId, academicYear: enrollment.academicYear, startsOn: enrollment.startsOn, endsOn: enrollment.endsOn },
   };
 }
 
@@ -177,7 +177,7 @@ function importTemplateColumns(kind: "students" | "teachers", edition: AppConfig
 }
 
 function mapKnownErrors(error: unknown): RouteResult | null {
-  if (error instanceof DuplicateCodeError || error instanceof DuplicatePersonError || error instanceof DuplicateAssignmentError) {
+  if (error instanceof DuplicateCodeError || error instanceof DuplicatePersonError || error instanceof DuplicateAssignmentError || error instanceof EnrollmentConflictError) {
     return { status: 409, body: { message: error.message } };
   }
   if (error instanceof UnitInUseError) {
@@ -185,6 +185,9 @@ function mapKnownErrors(error: unknown): RouteResult | null {
   }
   if (error instanceof UnknownReferenceError) {
     return { status: 404, body: { message: error.message } };
+  }
+  if (error instanceof InvalidEnrollmentDatesError) {
+    return { status: 422, body: { message: error.message } };
   }
   return null;
 }
@@ -437,6 +440,7 @@ export function createPeopleHandlers(deps: PeopleHandlerDeps): Record<string, Ro
       fullName: string;
       sectionId?: string;
       academicYear?: string;
+      startsOn?: string;
     };
     if ((await deps.org.getCollege(body.collegeId)) === null) {
       return notFound();
@@ -471,6 +475,7 @@ export function createPeopleHandlers(deps: PeopleHandlerDeps): Record<string, Ro
           studentId: created.id,
           sectionId: body.sectionId,
           academicYear: body.academicYear,
+          startsOn: body.startsOn,
         });
         enrollment = result?.enrollment ?? null;
       }
@@ -508,11 +513,14 @@ export function createPeopleHandlers(deps: PeopleHandlerDeps): Record<string, Ro
     return { status: 200, body: {
       ...studentView(student, enrollment),
       enrollment: display === null ? null : {
+        id: display.id,
         sectionId: display.sectionId,
         sectionName: display.sectionName,
         classId: display.classId,
         className: display.className,
         academicYear: display.academicYear,
+        startsOn: display.startsOn,
+        endsOn: display.endsOn,
       },
     } };
   };
@@ -652,7 +660,7 @@ export function createPeopleHandlers(deps: PeopleHandlerDeps): Record<string, Ro
   const studentEnroll: RouteHandler = async (ctx) => {
     const principal = ctx.principal as Principal;
     const params = ctx.request.params as { studentId: string };
-    const body = ctx.request.body as { sectionId: string; academicYear: string };
+    const body = ctx.request.body as { sectionId: string; academicYear: string; startsOn?: string };
     const student = await deps.people.getStudent(params.studentId);
     if (student === null) {
       return notFound();
@@ -689,6 +697,7 @@ export function createPeopleHandlers(deps: PeopleHandlerDeps): Record<string, Ro
         studentId: params.studentId,
         sectionId: body.sectionId,
         academicYear: body.academicYear,
+        startsOn: body.startsOn,
       });
       if (result === null) {
         return notFound();
@@ -705,10 +714,34 @@ export function createPeopleHandlers(deps: PeopleHandlerDeps): Record<string, Ro
             studentId: params.studentId,
             sectionId: body.sectionId,
             academicYear: body.academicYear,
+            startsOn: body.startsOn ?? null,
             previousEnrollmentId: result.previous?.id ?? null,
           },
         },
       };
+    } catch (error) {
+      return mapKnownErrors(error) ?? Promise.reject(error);
+    }
+  };
+
+  const studentEnrollmentDates: RouteHandler = async (ctx) => {
+    const { studentId, enrollmentId } = ctx.request.params as { studentId: string; enrollmentId: string };
+    const { startsOn, endsOn, expectedStartsOn, expectedEndsOn } = ctx.request.body as { startsOn: string; endsOn: string | null; expectedStartsOn: string | null; expectedEndsOn: string | null };
+    const student = await deps.people.getStudent(studentId);
+    if (!student) return notFound();
+    const principal = ctx.principal as Principal;
+    const studentScope = checkScope(deps.scopeChecker, ctx, principal, "update", { module: "people", resourceType: "student", org: { collegeId: student.collegeId } });
+    if (!studentScope.ok) return studentScope.result;
+    const enrollment = (await deps.people.listEnrollments(studentId)).find((row) => row.id === enrollmentId);
+    if (!enrollment) return notFound();
+    const path = await deps.org.pathForSection(enrollment.sectionId);
+    if (!path || path.collegeId !== student.collegeId) return notFound();
+    const scope = checkScope(deps.scopeChecker, ctx, principal, "update", { module: "people", resourceType: "enrollment", org: path });
+    if (!scope.ok) return scope.result;
+    try {
+      const updated = await deps.people.correctEnrollmentDates(studentId, enrollmentId, startsOn, endsOn, expectedStartsOn, expectedEndsOn);
+      if (!updated) return notFound();
+      return { status: 200, body: { enrollmentId, startsOn: updated.startsOn, endsOn: updated.endsOn }, audit: { resourceId: enrollmentId, details: { studentId, before: { startsOn: enrollment.startsOn, endsOn: enrollment.endsOn }, after: { startsOn: updated.startsOn, endsOn: updated.endsOn } } } };
     } catch (error) {
       return mapKnownErrors(error) ?? Promise.reject(error);
     }
@@ -1354,6 +1387,7 @@ export function createPeopleHandlers(deps: PeopleHandlerDeps): Record<string, Ro
     "people.student-update": studentUpdate,
     "people.student-link-identity": studentLinkIdentity,
     "people.student-enroll": studentEnroll,
+    "people.student-enrollment-dates": studentEnrollmentDates,
     "people.document-upload": documentUpload,
     "people.document-list": documentList,
     "people.document-download": documentDownload,

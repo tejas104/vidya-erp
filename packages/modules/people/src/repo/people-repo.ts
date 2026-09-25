@@ -1,4 +1,4 @@
-import { and, asc, count, eq, ilike, inArray, or } from "drizzle-orm";
+import { and, asc, count, eq, ilike, inArray, isNull, or } from "drizzle-orm";
 import type { Db } from "@vidya/platform";
 import { newId } from "../ids";
 import {
@@ -53,6 +53,10 @@ export class DuplicateAssignmentError extends Error {
     super("an equivalent assignment already exists for this class/subject/year");
     this.name = "DuplicateAssignmentError";
   }
+}
+
+export class EnrollmentConflictError extends Error {
+  constructor() { super("Enrollment changed; reload before transferring this pupil."); this.name = "EnrollmentConflictError"; }
 }
 
 function pgErrorCode(error: unknown): string | undefined {
@@ -121,13 +125,18 @@ export interface PeopleRepo {
   latestActiveEnrollment(studentId: string): Promise<PplEnrollmentRow | null>;
   /** All enrollment rows, including withdrawn records, for the pupil history. */
   listEnrollments(studentId: string): Promise<PplEnrollmentRow[]>;
-  withdrawEnrollment(enrollmentId: string): Promise<void>;
+  withdrawEnrollment(enrollmentId: string, endsOn?: string | null): Promise<void>;
   createEnrollment(input: {
     studentId: string;
     sectionId: string;
     academicYear: string;
+    startsOn?: string | null;
   }): Promise<PplEnrollmentRow>;
+  replaceEnrollment(previousId: string, input: { studentId: string; sectionId: string; academicYear: string; startsOn?: string | null }, previousEndsOn: string | null): Promise<PplEnrollmentRow>;
   roster(sectionId: string): Promise<{ enrollment: PplEnrollmentRow; student: PplStudentRow }[]>;
+  /** Includes withdrawn pupils so a past term can still be reviewed. */
+  sectionEnrollmentHistory(sectionId: string, academicYear: string): Promise<PplEnrollmentRow[]>;
+  updateEnrollmentDates(enrollmentId: string, startsOn: string, endsOn: string | null, expectedStartsOn: string | null, expectedEndsOn: string | null): Promise<PplEnrollmentRow | null>;
 
   createAssignment(input: {
     teacherId: string;
@@ -401,10 +410,10 @@ export function createPeopleRepo(db: Db): PeopleRepo {
         .orderBy(asc(pplEnrollments.createdAt), asc(pplEnrollments.id));
     },
 
-    async withdrawEnrollment(enrollmentId) {
+    async withdrawEnrollment(enrollmentId, endsOn) {
       await db
         .update(pplEnrollments)
-        .set({ status: "withdrawn", updatedAt: new Date() })
+        .set({ status: "withdrawn", ...(endsOn !== undefined ? { endsOn } : {}), updatedAt: new Date() })
         .where(eq(pplEnrollments.id, enrollmentId));
     },
 
@@ -416,9 +425,25 @@ export function createPeopleRepo(db: Db): PeopleRepo {
           studentId: input.studentId,
           sectionId: input.sectionId,
           academicYear: input.academicYear,
+          startsOn: input.startsOn ?? null,
         })
         .returning();
       return rows[0]!;
+    },
+
+    async replaceEnrollment(previousId, input, previousEndsOn) {
+      return db.transaction(async (tx) => {
+        const previous = await tx.update(pplEnrollments)
+          .set({ status: "withdrawn", endsOn: previousEndsOn, updatedAt: new Date() })
+          .where(and(eq(pplEnrollments.id, previousId), eq(pplEnrollments.studentId, input.studentId), eq(pplEnrollments.academicYear, input.academicYear), eq(pplEnrollments.status, "enrolled")))
+          .returning();
+        if (!previous.length) throw new EnrollmentConflictError();
+        const inserted = await tx.insert(pplEnrollments).values({
+          id: newId("enr"), studentId: input.studentId, sectionId: input.sectionId,
+          academicYear: input.academicYear, startsOn: input.startsOn ?? null,
+        }).returning();
+        return inserted[0]!;
+      });
     },
 
     async roster(sectionId) {
@@ -429,6 +454,19 @@ export function createPeopleRepo(db: Db): PeopleRepo {
         .where(and(eq(pplEnrollments.sectionId, sectionId), eq(pplEnrollments.status, "enrolled")))
         .orderBy(asc(pplStudents.fullName));
       return rows;
+    },
+
+    async sectionEnrollmentHistory(sectionId, academicYear) {
+      return db.select().from(pplEnrollments)
+        .where(and(eq(pplEnrollments.sectionId, sectionId), eq(pplEnrollments.academicYear, academicYear)))
+        .orderBy(asc(pplEnrollments.studentId), asc(pplEnrollments.createdAt));
+    },
+
+    async updateEnrollmentDates(enrollmentId, startsOn, endsOn, expectedStartsOn, expectedEndsOn) {
+      const rows = await db.update(pplEnrollments)
+        .set({ startsOn, endsOn, updatedAt: new Date() })
+        .where(and(eq(pplEnrollments.id, enrollmentId), expectedStartsOn === null ? isNull(pplEnrollments.startsOn) : eq(pplEnrollments.startsOn, expectedStartsOn), expectedEndsOn === null ? isNull(pplEnrollments.endsOn) : eq(pplEnrollments.endsOn, expectedEndsOn))).returning();
+      return rows[0] ?? null;
     },
 
     async createAssignment(input) {

@@ -104,6 +104,10 @@ export interface PeopleDirectory {
   collegeExists(collegeId: string): Promise<boolean>;
   /** Live enrollments of a section: who attendance can be marked for. */
   sectionRoster(sectionId: string): Promise<{ studentId: string; academicYear: string }[]>;
+  /** All enrollment windows, including withdrawn pupils; null dates remain unverified. */
+  sectionEnrollmentHistory(sectionId: string, academicYear: string): Promise<{ studentId: string; startsOn: string | null; endsOn: string | null; status: string }[]>;
+  /** Verified windows for one pupil in a section, used by immutable report-card previews. */
+  studentEnrollmentWindows(studentId: string, academicYear: string): Promise<{ sectionId: string; startsOn: string | null; endsOn: string | null; status: string }[]>;
   /** Enrollment-derived org position; `{collegeId}` for unenrolled students. */
   studentPosition(studentId: string): Promise<OrgPath | null>;
   /** Active enrollment for one academic year; null when no class is enrolled that year. */
@@ -292,6 +296,11 @@ export function createPeopleModule(deps: PeopleModuleDeps): RuntimeModule<People
             studentId: entry.student.id,
             academicYear: entry.enrollment.academicYear,
           })),
+        sectionEnrollmentHistory: async (sectionId, academicYear) =>
+          (await peopleRepo.sectionEnrollmentHistory(sectionId, academicYear)).map((row) => ({ studentId: row.studentId, startsOn: row.startsOn, endsOn: row.endsOn, status: row.status })),
+        studentEnrollmentWindows: async (studentId, academicYear) =>
+          (await peopleRepo.listEnrollments(studentId)).filter((row) => row.academicYear === academicYear)
+            .map((row) => ({ sectionId: row.sectionId, startsOn: row.startsOn, endsOn: row.endsOn, status: row.status })),
         studentPosition: async (studentId) => {
           const student = await peopleRepo.getStudent(studentId);
           return student === null ? null : people.studentOrgPosition(student);

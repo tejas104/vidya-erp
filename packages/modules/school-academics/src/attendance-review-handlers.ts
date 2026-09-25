@@ -63,18 +63,24 @@ export function createAttendanceReviewHandlers(deps: Deps): Record<string, Route
     const scheduledDates = term.instructionalDays.filter((date) => date <= until);
     const dailyRegisters = until < term.startsOn ? [] : await deps.academics.sectionDailyRegisterWindow(sectionId, term.startsOn, until);
     const registerByDate = new Map(dailyRegisters.map((day) => [day.heldOn, day]));
-    const unsubmittedDates = scheduledDates.filter((date) => !registerByDate.has(date));
-    const roster = (await deps.directory.sectionRoster(sectionId)).filter((student) => student.academicYear === term.academicYear);
-    const names = await deps.directory.studentsBrief(roster.map((student) => student.studentId));
-    const students = roster.map(({ studentId }) => {
+    const history = await deps.directory.sectionEnrollmentHistory(sectionId, term.academicYear);
+    const unsubmittedDates = scheduledDates.filter((date) => history.some((window) => window.startsOn !== null && window.startsOn <= date && (window.status === "enrolled" || window.endsOn !== null) && (window.endsOn === null || date <= window.endsOn)) && !registerByDate.has(date));
+    const byStudent = new Map<string, typeof history>();
+    for (const enrollment of history) byStudent.set(enrollment.studentId, [...(byStudent.get(enrollment.studentId) ?? []), enrollment]);
+    const names = await deps.directory.studentsBrief([...byStudent.keys()]);
+    const students = [...byStudent].map(([studentId, windows]) => {
+      const dateIssue = windows.some((window) => window.startsOn === null) ? "Enrollment start date needs verification"
+        : windows.some((window) => window.status !== "enrolled" && window.endsOn === null) ? "Past enrollment end date needs verification" : null;
+      const brief = names.get(studentId);
+      if (dateIssue) return { studentId, fullName: brief?.fullName ?? "Student", admissionNo: brief?.admissionNo ?? "", enrollmentDates: windows.map((window) => ({ from: window.startsOn, to: window.endsOn })), dateIssue, expectedDays: null, recordedDays: null, absentDays: null, missingEntryDates: [], percentageDenominator: null, percentage: null, shortfall: null };
       const records = dailyRegisters.flatMap((day) => day.entries.filter((entry) => entry.studentId === studentId).map((entry) => ({ date: day.heldOn, status: entry.status })));
-      const outcome = summarizeAttendance({ policy: SCHOOL_DAILY_ATTENDANCE_POLICY, interval: { from: term.startsOn, to: until < term.startsOn ? term.startsOn : until }, calendar: { instructionalDays: scheduledDates }, enrollments: [{ from: term.startsOn, to: null }], records });
+      const enrollments = windows.map((window) => ({ from: window.startsOn!, to: window.endsOn }));
+      const outcome = summarizeAttendance({ policy: SCHOOL_DAILY_ATTENDANCE_POLICY, interval: { from: term.startsOn, to: until < term.startsOn ? term.startsOn : until }, calendar: { instructionalDays: scheduledDates }, enrollments, records });
       if (!outcome.ok) throw new Error(`Attendance source is inconsistent: ${outcome.code}`);
       const summary = outcome.result;
-      const brief = names.get(studentId);
-      return { studentId, fullName: brief?.fullName ?? "Student", admissionNo: brief?.admissionNo ?? "", expectedDays: summary.expectedDays, recordedDays: summary.recordedDays, absentDays: summary.statusTotals.absent, missingEntryDates: summary.missingDates.filter((date) => registerByDate.has(date)), percentageDenominator: summary.percentageDenominator, percentage: summary.percentage, shortfall: summary.percentage === null ? null : summary.percentage < Number(term.shortfallThreshold) };
+      return { studentId, fullName: brief?.fullName ?? "Student", admissionNo: brief?.admissionNo ?? "", enrollmentDates: windows.map((window) => ({ from: window.startsOn, to: window.endsOn })), dateIssue: null, expectedDays: summary.expectedDays, recordedDays: summary.recordedDays, absentDays: summary.statusTotals.absent, missingEntryDates: summary.missingDates.filter((date) => registerByDate.has(date)), percentageDenominator: summary.percentageDenominator, percentage: summary.percentage, shortfall: summary.percentage === null ? null : summary.percentage < Number(term.shortfallThreshold) };
     }).sort((a, b) => a.fullName.localeCompare(b.fullName));
-    return { status: 200, body: { termId, sectionId, through: until, calendarVersion: term.calendarVersion, threshold: Number(term.shortfallThreshold), scheduledDates, unsubmittedDates, rosterAssumption: "Current section roster is assumed enrolled throughout this term window; historical enrollment dates are unavailable.", students } };
+    return { status: 200, body: { termId, sectionId, through: until, calendarVersion: term.calendarVersion, threshold: Number(term.shortfallThreshold), scheduledDates, unsubmittedDates, students } };
   };
   return { "school-academics.calendar": calendar(false), "school-academics.calendar-set": calendar(true), "school-academics.attendance-shortfall": shortfall };
 }

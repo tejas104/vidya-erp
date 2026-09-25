@@ -53,7 +53,17 @@ export default function StudentsPage() {
   const [transferTo, setTransferTo] = useState("");
   const [admissionNo, setAdmissionNo] = useState("");
   const [fullName, setFullName] = useState("");
+  const [entryDate, setEntryDate] = useState("");
+  const [transferDate, setTransferDate] = useState("");
+  const [dateStudent, setDateStudent] = useState<StudentView | null>(null);
+  const [dateRows, setDateRows] = useState<Awaited<ReturnType<typeof api.studentHistory>>["enrollments"]>([]);
+  const [dateEnrollmentId, setDateEnrollmentId] = useState("");
+  const [correctStart, setCorrectStart] = useState("");
+  const [correctEnd, setCorrectEnd] = useState("");
+  const [expectedStart, setExpectedStart] = useState<string | null>(null);
+  const [expectedEnd, setExpectedEnd] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [canCorrectDates, setCanCorrectDates] = useState(false);
   const [linking, setLinking] = useState<StudentView | null>(null);
   const [linkUserId, setLinkUserId] = useState("");
   const [editing, setEditing] = useState<StudentView | null>(null);
@@ -65,6 +75,7 @@ export default function StudentsPage() {
   const [viewing, setViewing] = useState<StudentView | null>(null);
 
   useEffect(() => {
+    void api.session().then((session) => setCanCorrectDates(session.roles.includes("admin"))).catch(() => setCanCorrectDates(false));
     (async () => {
       try {
         const { colleges } = await api.colleges();
@@ -103,15 +114,16 @@ export default function StudentsPage() {
   }, [loadRoster]);
 
   async function createAndEnroll() {
-    if (!tree || admissionNo.trim() === "" || fullName.trim() === "") return;
+    if (!tree || admissionNo.trim() === "" || fullName.trim() === "" || !entryDate) return;
     setSaving(true);
     try {
       const student = await api.createStudent({ collegeId: tree.college.id, admissionNo, fullName });
-      await api.enrollStudent(student.id, { sectionId, academicYear: year });
+      await api.enrollStudent(student.id, { sectionId, academicYear: year, startsOn: entryDate });
       toast.push({ status: "good", message: `${fullName} enrolled.` });
       setAdding(false);
       setAdmissionNo("");
       setFullName("");
+      setEntryDate("");
       await loadRoster();
     } catch (caught) {
       toast.push({ status: "danger", message: caught instanceof ApiError ? caught.message : "Couldn't add the student." });
@@ -121,18 +133,55 @@ export default function StudentsPage() {
   }
 
   async function submitTransfer() {
-    if (!transfer || !transferTo) return;
+    if (!transfer || !transferTo || !transferDate) return;
     setSaving(true);
     try {
-      await api.enrollStudent(transfer.id, { sectionId: transferTo, academicYear: year });
+      await api.enrollStudent(transfer.id, { sectionId: transferTo, academicYear: year, startsOn: transferDate });
       toast.push({ status: "good", message: `${transfer.fullName} transferred.` });
       setTransfer(null);
+      setTransferDate("");
       await loadRoster();
     } catch (caught) {
       toast.push({ status: "danger", message: caught instanceof ApiError ? caught.message : "Couldn't transfer." });
     } finally {
       setSaving(false);
     }
+  }
+
+  async function openEnrollmentDates(student: StudentView) {
+    setDateStudent(student);
+    setDateRows([]);
+    setDateEnrollmentId("");
+    try {
+      const rows = (await api.studentHistory(student.id)).enrollments;
+      setDateRows(rows);
+      const current = rows.find((row) => row.id === student.enrollment?.id) ?? rows[0];
+      if (current) selectDateRow(current);
+    } catch (caught) {
+      toast.push({ status: "danger", message: caught instanceof ApiError ? caught.message : "Couldn't load enrollment history." });
+      setDateStudent(null);
+    }
+  }
+
+  function selectDateRow(row: typeof dateRows[number]) {
+    setDateEnrollmentId(row.id);
+    setCorrectStart(row.startsOn ?? "");
+    setCorrectEnd(row.endsOn ?? "");
+    setExpectedStart(row.startsOn ?? null);
+    setExpectedEnd(row.endsOn ?? null);
+  }
+
+  async function saveEnrollmentDates() {
+    if (!dateStudent || !dateEnrollmentId || !correctStart) return;
+    setSaving(true);
+    try {
+      await api.correctEnrollmentDates(dateStudent.id, dateEnrollmentId, { startsOn: correctStart, endsOn: correctEnd || null, expectedStartsOn: expectedStart, expectedEndsOn: expectedEnd });
+      toast.push({ status: "good", message: "Verified enrollment dates saved." });
+      setDateStudent(null);
+      await loadRoster();
+    } catch (caught) {
+      toast.push({ status: "danger", message: caught instanceof ApiError ? caught.message : "Couldn't save enrollment dates." });
+    } finally { setSaving(false); }
   }
 
   async function submitLink() {
@@ -260,10 +309,11 @@ export default function StudentsPage() {
       <span className={styles.rowActions}>
         <Button variant="ghost" onClick={() => setViewing(row)}>View</Button>
         <Button variant="ghost" onClick={() => openEdit(row)}>Edit</Button>
+        {canCorrectDates ? <Button variant="ghost" onClick={() => void openEnrollmentDates(row)}>{row.enrollment?.startsOn ? "Enrollment dates" : "Set enrollment date"}</Button> : null}
         <Button variant="ghost" onClick={() => { setLinkUserId(""); setLinking(row); }}>
           {row.identityUserId === null ? "Link sign-in" : "Sign-in ✓"}
         </Button>
-        <Button variant="ghost" onClick={() => { setTransferTo(""); setTransfer(row); }}>Transfer</Button>
+        <Button variant="ghost" onClick={() => { setTransferTo(""); setTransferDate(""); setTransfer(row); }}>Transfer</Button>
       </span>
     ),
   }));
@@ -318,7 +368,7 @@ export default function StudentsPage() {
         footer={
           <>
             <Button variant="ghost" onClick={() => setAdding(false)}>Cancel</Button>
-            <Button onClick={() => void createAndEnroll()} loading={saving} disabled={admissionNo.trim() === "" || fullName.trim() === ""}>
+            <Button onClick={() => void createAndEnroll()} loading={saving} disabled={admissionNo.trim() === "" || fullName.trim() === "" || !entryDate}>
               Create & enroll
             </Button>
           </>
@@ -327,6 +377,7 @@ export default function StudentsPage() {
         <div className={styles.formGrid}>
           <Input id="stu-adm" label="Admission no." hint="Unique, e.g. FYCS-015" value={admissionNo} onChange={(event) => setAdmissionNo(event.target.value)} />
           <Input id="stu-name" label="Full name" value={fullName} onChange={(event) => setFullName(event.target.value)} />
+          <Input id="stu-start" label="Enrollment effective from" type="date" hint="Use the first day this pupil belonged to this section." value={entryDate} onChange={(event) => setEntryDate(event.target.value)} />
         </div>
       </Modal>
 
@@ -337,7 +388,7 @@ export default function StudentsPage() {
         footer={
           <>
             <Button variant="ghost" onClick={() => setTransfer(null)}>Cancel</Button>
-            <Button onClick={() => void submitTransfer()} loading={saving} disabled={transferTo === ""}>
+            <Button onClick={() => void submitTransfer()} loading={saving} disabled={transferTo === "" || !transferDate}>
               Transfer
             </Button>
           </>
@@ -353,6 +404,15 @@ export default function StudentsPage() {
             ...options.filter((option) => option.sectionId !== sectionId).map((option) => ({ value: option.sectionId, label: option.label })),
           ]}
         />
+        <Input id="stu-transfer-date" label="Transfer effective from" type="date" hint="The previous section ends the day before this date." value={transferDate} onChange={(event) => setTransferDate(event.target.value)} />
+      </Modal>
+
+      <Modal open={dateStudent !== null} onClose={() => setDateStudent(null)} title={`Enrollment dates — ${dateStudent?.fullName ?? ""}`} footer={<><Button variant="ghost" onClick={() => setDateStudent(null)}>Cancel</Button><Button onClick={() => void saveEnrollmentDates()} loading={saving} disabled={!dateEnrollmentId || !correctStart}>Save verified dates</Button></>}>
+        <Select label="Enrollment record" value={dateEnrollmentId} onChange={(event) => { const row = dateRows.find((item) => item.id === event.target.value); if (row) selectDateRow(row); }} options={dateRows.map((row) => ({ value: row.id, label: `${row.className} · ${row.sectionName} · ${row.academicYear} (${row.status})` }))} />
+        <div className={styles.formGrid}>
+          <Input id="correct-start" label="Effective from" type="date" value={correctStart} disabled={!dateEnrollmentId} onChange={(event) => setCorrectStart(event.target.value)} />
+          <Input id="correct-end" label="Effective through" type="date" hint="Leave blank only while this enrollment is active." value={correctEnd} disabled={!dateEnrollmentId} onChange={(event) => setCorrectEnd(event.target.value)} />
+        </div>
       </Modal>
 
       <Modal

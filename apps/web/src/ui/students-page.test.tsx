@@ -19,7 +19,7 @@ vi.mock("./api", async (importOriginal) => {
     api: {
       ...actual.api,
       colleges: vi.fn(), collegeTree: vi.fn(), sectionRoster: vi.fn(),
-      createStudent: vi.fn(), enrollStudent: vi.fn(), updateStudent: vi.fn(),
+      createStudent: vi.fn(), enrollStudent: vi.fn(), updateStudent: vi.fn(), session: vi.fn(),
     },
   };
 });
@@ -37,6 +37,7 @@ const tree = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  (api.session as ReturnType<typeof vi.fn>).mockResolvedValue({ roles: ["admin"] });
   (api.colleges as ReturnType<typeof vi.fn>).mockResolvedValue({ colleges: [tree.college] });
   (api.collegeTree as ReturnType<typeof vi.fn>).mockResolvedValue(tree);
   (api.sectionRoster as ReturnType<typeof vi.fn>).mockResolvedValue({
@@ -57,12 +58,13 @@ describe("/manage/students", () => {
     fireEvent.click(await screen.findByRole("button", { name: /add student/i }));
     fireEvent.change(screen.getByLabelText("Admission no."), { target: { value: "FYCS-099" } });
     fireEvent.change(screen.getByLabelText("Full name"), { target: { value: "New Kid" } });
+    fireEvent.change(screen.getByLabelText("Enrollment effective from"), { target: { value: "2026-09-23" } });
     fireEvent.click(screen.getByRole("button", { name: /^create & enroll$/i }));
     await waitFor(() =>
       expect(api.createStudent).toHaveBeenCalledWith({ collegeId: "col_1", admissionNo: "FYCS-099", fullName: "New Kid" }),
     );
     await waitFor(() =>
-      expect(api.enrollStudent).toHaveBeenCalledWith("stu_9", expect.objectContaining({ sectionId: "sec_1" })),
+      expect(api.enrollStudent).toHaveBeenCalledWith("stu_9", expect.objectContaining({ sectionId: "sec_1", startsOn: "2026-09-23" })),
     );
   });
 });

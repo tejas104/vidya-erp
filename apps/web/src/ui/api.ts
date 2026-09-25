@@ -104,8 +104,8 @@ export interface SchoolReportCardRosterStudent {
 export interface SchoolTermCalendar { termId: string; instructionalDays: string[] | null; shortfallThreshold: number | null; version: number; locked: boolean }
 export interface SchoolAttendanceShortfall {
   termId: string; sectionId: string; through: string; calendarVersion: number; threshold: number;
-  scheduledDates: string[]; unsubmittedDates: string[]; rosterAssumption: string;
-  students: { studentId: string; fullName: string; admissionNo: string; expectedDays: number; recordedDays: number; absentDays: number; missingEntryDates: string[]; percentageDenominator: number; percentage: number | null; shortfall: boolean | null }[];
+  scheduledDates: string[]; unsubmittedDates: string[];
+  students: { studentId: string; fullName: string; admissionNo: string; enrollmentDates: { from: string | null; to: string | null }[]; dateIssue: string | null; expectedDays: number | null; recordedDays: number | null; absentDays: number | null; missingEntryDates: string[]; percentageDenominator: number | null; percentage: number | null; shortfall: boolean | null }[];
 }
 
 export interface ChildReportCard {
@@ -341,7 +341,7 @@ export interface StudentView extends StudentProfile {
   id: string; collegeId: string; admissionNo: string; fullName: string;
   status: StudentStatus;
   identityUserId: string | null;
-  enrollment: { sectionId: string; academicYear: string } | null;
+  enrollment: { id?: string; sectionId: string; academicYear: string; startsOn?: string | null; endsOn?: string | null } | null;
 }
 export interface SchoolReportCardDeskScope {
     classes: { id: string; collegeId: string; name: string; canPublish: boolean }[];
@@ -357,6 +357,7 @@ export interface StudentHistory {
   enrollments: {
     id: string; sectionId: string; sectionName: string; classId: string | null;
     className: string; academicYear: string; status: string; createdAt: string; updatedAt: string;
+    startsOn?: string | null; endsOn?: string | null;
   }[];
   statusChanges: { from: StudentStatus; to: StudentStatus; occurredAt: string; actorId: string | null }[];
   events: { action: string; actorId: string | null; occurredAt: string }[];
@@ -928,18 +929,20 @@ export const api = {
     post<StudentDocument>(`/api/v1/people/students/${encodeURIComponent(studentId)}/documents`, body),
   docDownloadUrl: (documentId: string) => `/api/v1/people/documents/${encodeURIComponent(documentId)}/download`,
   docDelete: (documentId: string) => del<{ ok: true }>(`/api/v1/people/documents/${encodeURIComponent(documentId)}`),
-  createStudent: (body: { collegeId: string; admissionNo: string; fullName: string; sectionId?: string; academicYear?: string }) =>
+  createStudent: (body: { collegeId: string; admissionNo: string; fullName: string; sectionId?: string; academicYear?: string; startsOn?: string }) =>
     post<StudentView>("/api/v1/people/students", body),
   updateStudent: (
     studentId: string,
     body: { fullName?: string; status?: StudentStatus; phone?: string | null; guardianName?: string | null; guardianPhone?: string | null; dob?: string | null },
   ) =>
     patch<StudentView>(`/api/v1/people/students/${encodeURIComponent(studentId)}`, body),
-  enrollStudent: (studentId: string, body: { sectionId: string; academicYear: string }) =>
+  enrollStudent: (studentId: string, body: { sectionId: string; academicYear: string; startsOn?: string }) =>
     post<{ enrollmentId: string; previousEnrollmentId: string | null }>(
       `/api/v1/people/students/${encodeURIComponent(studentId)}/enrollment`,
       body,
     ),
+  correctEnrollmentDates: (studentId: string, enrollmentId: string, body: { startsOn: string; endsOn: string | null; expectedStartsOn: string | null; expectedEndsOn: string | null }) =>
+    patch<{ enrollmentId: string; startsOn: string; endsOn: string | null }>(`/api/v1/people/students/${encodeURIComponent(studentId)}/enrollments/${encodeURIComponent(enrollmentId)}/dates`, body),
   // people — teachers
   createTeacher: (body: { collegeId: string; staffNo: string; fullName: string }) =>
     post<TeacherView>("/api/v1/people/teachers", body),

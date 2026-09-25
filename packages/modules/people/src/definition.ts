@@ -15,6 +15,7 @@ export const nameSchema = z.string().trim().min(1).max(128);
 export const academicYearSchema = z
   .string()
   .regex(/^\d{4}-\d{2}$/, 'academic year like "2026-27"');
+const effectiveDateSchema = z.string().date();
 
 export const orgUnitTypeSchema = z.enum(["college", "department", "class", "section", "subject"]);
 
@@ -103,19 +104,25 @@ export const studentViewSchema = z.object({
   dob: z.string().nullable(),
   enrollment: z
     .object({
+      id: z.string(),
       sectionId: z.string(),
       academicYear: z.string(),
+      startsOn: effectiveDateSchema.nullable(),
+      endsOn: effectiveDateSchema.nullable(),
     })
     .nullable(),
 });
 
 export const studentDetailSchema = studentViewSchema.extend({
   enrollment: z.object({
+    id: z.string(),
     sectionId: z.string(),
     sectionName: z.string(),
     classId: z.string().nullable(),
     className: z.string(),
     academicYear: z.string(),
+    startsOn: effectiveDateSchema.nullable(),
+    endsOn: effectiveDateSchema.nullable(),
   }).nullable(),
 });
 
@@ -128,6 +135,8 @@ const studentHistorySchema = z.object({
     className: z.string(),
     academicYear: z.string(),
     status: z.string(),
+    startsOn: effectiveDateSchema.nullable(),
+    endsOn: effectiveDateSchema.nullable(),
     createdAt: z.string(),
     updatedAt: z.string(),
   })),
@@ -364,6 +373,7 @@ const routes: RouteSpec[] = [
         /** When present, the student is enrolled here on creation (class-teacher add). */
         sectionId: idSchema.optional(),
         academicYear: academicYearSchema.optional(),
+        startsOn: effectiveDateSchema.optional(),
       }),
     },
     audit: { action: "people.student-created", resourceType: "student" },
@@ -440,7 +450,7 @@ const routes: RouteSpec[] = [
     auth: ADMIN_OR_CLASS_TEACHER,
     request: {
       params: z.object({ studentId: idSchema }),
-      body: z.object({ sectionId: idSchema, academicYear: academicYearSchema }),
+      body: z.object({ sectionId: idSchema, academicYear: academicYearSchema, startsOn: effectiveDateSchema.optional() }),
     },
     audit: { action: "people.student-enrolled", resourceType: "enrollment" },
     responses: {
@@ -453,6 +463,26 @@ const routes: RouteSpec[] = [
       },
       403: { description: "Scope check denied (source or target)", schema: problemSchema },
       404: { description: "No such student or section", schema: problemSchema },
+      422: { description: "Invalid transfer date", schema: problemSchema },
+    },
+  },
+  {
+    id: "people.student-enrollment-dates",
+    module: MODULE_NAME,
+    method: "PATCH",
+    path: "/api/v1/people/students/{studentId}/enrollments/{enrollmentId}/dates",
+    summary: "Correct effective enrollment dates",
+    description: "An administrator records verified school dates; legacy rows are never inferred from entry timestamps.",
+    tags: ["people-students"],
+    auth: ADMIN_ONLY,
+    request: { params: z.object({ studentId: idSchema, enrollmentId: idSchema }), body: z.object({ startsOn: effectiveDateSchema, endsOn: effectiveDateSchema.nullable(), expectedStartsOn: effectiveDateSchema.nullable(), expectedEndsOn: effectiveDateSchema.nullable() }) },
+    audit: { action: "people.enrollment-dates-corrected", resourceType: "enrollment" },
+    responses: {
+      200: { description: "Dates corrected", schema: z.object({ enrollmentId: idSchema, startsOn: effectiveDateSchema, endsOn: effectiveDateSchema.nullable() }) },
+      403: { description: "Outside scope", schema: problemSchema },
+      404: { description: "No such enrollment", schema: problemSchema },
+      409: { description: "Enrollment changed since the editor loaded", schema: problemSchema },
+      422: { description: "Invalid or overlapping dates", schema: problemSchema },
     },
   },
   {

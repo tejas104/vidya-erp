@@ -4147,6 +4147,10 @@
                   "academicYear": {
                     "type": "string",
                     "pattern": "^\\d{4}-\\d{2}$"
+                  },
+                  "startsOn": {
+                    "type": "string",
+                    "format": "date"
                   }
                 },
                 "required": [
@@ -4214,16 +4218,32 @@
                       "type": "object",
                       "nullable": true,
                       "properties": {
+                        "id": {
+                          "type": "string"
+                        },
                         "sectionId": {
                           "type": "string"
                         },
                         "academicYear": {
                           "type": "string"
+                        },
+                        "startsOn": {
+                          "type": "string",
+                          "nullable": true,
+                          "format": "date"
+                        },
+                        "endsOn": {
+                          "type": "string",
+                          "nullable": true,
+                          "format": "date"
                         }
                       },
                       "required": [
+                        "id",
                         "sectionId",
-                        "academicYear"
+                        "academicYear",
+                        "startsOn",
+                        "endsOn"
                       ]
                     }
                   },
@@ -4393,6 +4413,9 @@
                       "type": "object",
                       "nullable": true,
                       "properties": {
+                        "id": {
+                          "type": "string"
+                        },
                         "sectionId": {
                           "type": "string"
                         },
@@ -4408,14 +4431,27 @@
                         },
                         "academicYear": {
                           "type": "string"
+                        },
+                        "startsOn": {
+                          "type": "string",
+                          "nullable": true,
+                          "format": "date"
+                        },
+                        "endsOn": {
+                          "type": "string",
+                          "nullable": true,
+                          "format": "date"
                         }
                       },
                       "required": [
+                        "id",
                         "sectionId",
                         "sectionName",
                         "classId",
                         "className",
-                        "academicYear"
+                        "academicYear",
+                        "startsOn",
+                        "endsOn"
                       ]
                     }
                   },
@@ -4631,16 +4667,32 @@
                       "type": "object",
                       "nullable": true,
                       "properties": {
+                        "id": {
+                          "type": "string"
+                        },
                         "sectionId": {
                           "type": "string"
                         },
                         "academicYear": {
                           "type": "string"
+                        },
+                        "startsOn": {
+                          "type": "string",
+                          "nullable": true,
+                          "format": "date"
+                        },
+                        "endsOn": {
+                          "type": "string",
+                          "nullable": true,
+                          "format": "date"
                         }
                       },
                       "required": [
+                        "id",
                         "sectionId",
-                        "academicYear"
+                        "academicYear",
+                        "startsOn",
+                        "endsOn"
                       ]
                     }
                   },
@@ -4759,6 +4811,16 @@
                           "status": {
                             "type": "string"
                           },
+                          "startsOn": {
+                            "type": "string",
+                            "nullable": true,
+                            "format": "date"
+                          },
+                          "endsOn": {
+                            "type": "string",
+                            "nullable": true,
+                            "format": "date"
+                          },
                           "createdAt": {
                             "type": "string"
                           },
@@ -4774,6 +4836,8 @@
                           "className",
                           "academicYear",
                           "status",
+                          "startsOn",
+                          "endsOn",
                           "createdAt",
                           "updatedAt"
                         ]
@@ -4961,6 +5025,10 @@
                   "academicYear": {
                     "type": "string",
                     "pattern": "^\\d{4}-\\d{2}$"
+                  },
+                  "startsOn": {
+                    "type": "string",
+                    "format": "date"
                   }
                 },
                 "required": [
@@ -5030,6 +5098,264 @@
           },
           "404": {
             "description": "No such student or section",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid transfer date",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/people/students/{studentId}/enrollments/{enrollmentId}/dates": {
+      "patch": {
+        "summary": "Correct effective enrollment dates",
+        "description": "An administrator records verified school dates; legacy rows are never inferred from entry timestamps.\n\n**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "people-students"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "studentId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "enrollmentId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "startsOn": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "endsOn": {
+                    "type": "string",
+                    "nullable": true,
+                    "format": "date"
+                  },
+                  "expectedStartsOn": {
+                    "type": "string",
+                    "nullable": true,
+                    "format": "date"
+                  },
+                  "expectedEndsOn": {
+                    "type": "string",
+                    "nullable": true,
+                    "format": "date"
+                  }
+                },
+                "required": [
+                  "startsOn",
+                  "endsOn",
+                  "expectedStartsOn",
+                  "expectedEndsOn"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Dates corrected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "enrollmentId": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 64
+                    },
+                    "startsOn": {
+                      "type": "string",
+                      "format": "date"
+                    },
+                    "endsOn": {
+                      "type": "string",
+                      "nullable": true,
+                      "format": "date"
+                    }
+                  },
+                  "required": [
+                    "enrollmentId",
+                    "startsOn",
+                    "endsOn"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Outside scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such enrollment",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Enrollment changed since the editor loaded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid or overlapping dates",
             "content": {
               "application/json": {
                 "schema": {
@@ -5164,16 +5490,32 @@
                           "type": "object",
                           "nullable": true,
                           "properties": {
+                            "id": {
+                              "type": "string"
+                            },
                             "sectionId": {
                               "type": "string"
                             },
                             "academicYear": {
                               "type": "string"
+                            },
+                            "startsOn": {
+                              "type": "string",
+                              "nullable": true,
+                              "format": "date"
+                            },
+                            "endsOn": {
+                              "type": "string",
+                              "nullable": true,
+                              "format": "date"
                             }
                           },
                           "required": [
+                            "id",
                             "sectionId",
-                            "academicYear"
+                            "academicYear",
+                            "startsOn",
+                            "endsOn"
                           ]
                         }
                       },
@@ -5353,16 +5695,32 @@
                             "type": "object",
                             "nullable": true,
                             "properties": {
+                              "id": {
+                                "type": "string"
+                              },
                               "sectionId": {
                                 "type": "string"
                               },
                               "academicYear": {
                                 "type": "string"
+                              },
+                              "startsOn": {
+                                "type": "string",
+                                "nullable": true,
+                                "format": "date"
+                              },
+                              "endsOn": {
+                                "type": "string",
+                                "nullable": true,
+                                "format": "date"
                               }
                             },
                             "required": [
+                              "id",
                               "sectionId",
-                              "academicYear"
+                              "academicYear",
+                              "startsOn",
+                              "endsOn"
                             ]
                           }
                         },
@@ -30334,9 +30692,6 @@
                         "format": "date"
                       }
                     },
-                    "rosterAssumption": {
-                      "type": "string"
-                    },
                     "students": {
                       "type": "array",
                       "items": {
@@ -30353,14 +30708,43 @@
                           "admissionNo": {
                             "type": "string"
                           },
+                          "enrollmentDates": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "from": {
+                                  "type": "string",
+                                  "nullable": true,
+                                  "format": "date"
+                                },
+                                "to": {
+                                  "type": "string",
+                                  "nullable": true,
+                                  "format": "date"
+                                }
+                              },
+                              "required": [
+                                "from",
+                                "to"
+                              ]
+                            }
+                          },
+                          "dateIssue": {
+                            "type": "string",
+                            "nullable": true
+                          },
                           "expectedDays": {
-                            "type": "number"
+                            "type": "number",
+                            "nullable": true
                           },
                           "recordedDays": {
-                            "type": "number"
+                            "type": "number",
+                            "nullable": true
                           },
                           "absentDays": {
-                            "type": "number"
+                            "type": "number",
+                            "nullable": true
                           },
                           "missingEntryDates": {
                             "type": "array",
@@ -30370,7 +30754,8 @@
                             }
                           },
                           "percentageDenominator": {
-                            "type": "number"
+                            "type": "number",
+                            "nullable": true
                           },
                           "percentage": {
                             "type": "number",
@@ -30385,6 +30770,8 @@
                           "studentId",
                           "fullName",
                           "admissionNo",
+                          "enrollmentDates",
+                          "dateIssue",
                           "expectedDays",
                           "recordedDays",
                           "absentDays",
@@ -30404,7 +30791,6 @@
                     "threshold",
                     "scheduledDates",
                     "unsubmittedDates",
-                    "rosterAssumption",
                     "students"
                   ]
                 }

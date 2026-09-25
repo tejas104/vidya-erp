@@ -17,7 +17,7 @@ beforeEach(() => {
   vi.mocked(api.colleges).mockResolvedValue({ colleges: [] });
   vi.mocked(api.dashboard).mockResolvedValue({ academicYear: "2026-27", names: { class_1: "Standard 8" }, tiles: [{ type: "class", classId: "class_1", attendance: { state: "no-data" }, marks: { state: "no-data" }, atRisk: 0, strip: [{ sectionId: "section_1", name: "A", days: [] }] }] });
   vi.mocked(api.session).mockResolvedValue({ userId: "teacher_1", displayName: "Teacher", roles: ["class_teacher"], grants: [] });
-  vi.mocked(api.schoolAttendanceShortfall).mockResolvedValue({ termId: "term_2", sectionId: "section_1", through: "2026-09-25", calendarVersion: 1, threshold: 75, scheduledDates: ["2026-09-21", "2026-09-22"], unsubmittedDates: ["2026-09-22"], rosterAssumption: "Current roster assumed.", students: [{ studentId: "student_1", fullName: "Asha Rao", admissionNo: "A-01", expectedDays: 2, recordedDays: 1, absentDays: 1, missingEntryDates: [], percentageDenominator: 2, percentage: null, shortfall: null }] });
+  vi.mocked(api.schoolAttendanceShortfall).mockResolvedValue({ termId: "term_2", sectionId: "section_1", through: "2026-09-25", calendarVersion: 1, threshold: 75, scheduledDates: ["2026-09-21", "2026-09-22"], unsubmittedDates: ["2026-09-22"], students: [{ studentId: "student_1", fullName: "Asha Rao", admissionNo: "A-01", enrollmentDates: [{ from: "2026-09-21", to: null }], dateIssue: null, expectedDays: 2, recordedDays: 1, absentDays: 1, missingEntryDates: [], percentageDenominator: 2, percentage: null, shortfall: null }] });
 });
 
 describe("school attendance review", () => {
@@ -30,7 +30,7 @@ describe("school attendance review", () => {
     fireEvent.click(review);
     expect(await screen.findByText("Asha Rao")).toBeInTheDocument();
     expect(screen.getByText("Needs data")).toBeInTheDocument();
-    expect(screen.getByText("0", { selector: "strong" })).toBeInTheDocument();
+    expect(screen.getByText("Enrollment dates needed")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Open this register →" })).toHaveAttribute("href", "/manage/attendance?sectionId=section_1&date=2026-09-22");
   });
 });

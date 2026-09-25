@@ -190,6 +190,8 @@ test("examination in-charge previews, is warned about missing marks, then issues
     await page.context().clearCookies();
     await browserLogin(page, { username: familyUsername, password: familyPassword });
     await page.goto("/family");
+    const learning = page.getByRole("navigation", { name: "Family sections" }).getByRole("button", { name: "Learning" });
+    await learning.click();
     await expect(page.getByRole("heading", { name: "Report cards" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Marks", exact: true })).toHaveCount(0);
     const termMarks = page.getByRole("region", { name: "School term marks" });
@@ -203,6 +205,7 @@ test("examination in-charge previews, is warned about missing marks, then issues
     await page.screenshot({ path: testInfo.outputPath("family-published-report-card.png"), fullPage: true });
     expect((await admin.post(`/api/v1/school/terms/${termId}/close`, { data: {} })).status()).toBe(200);
     await page.reload();
+    await learning.click();
     await expect(termMarks.getByText("90.00%")).toHaveCount(2);
     await expect(termMarks.getByText("1 of 1 marks recorded")).toBeVisible();
     await termMarks.getByText("View assessments").click();
@@ -210,9 +213,11 @@ test("examination in-charge previews, is warned about missing marks, then issues
     await page.screenshot({ path: testInfo.outputPath("family-closed-term-marks.png"), fullPage: true });
     expect((await admin.post(`/api/v1/school/terms/${termId}/reopen`, { data: { reason: "Verify release visibility" } })).status()).toBe(200);
     await page.reload();
+    await learning.click();
     await expect(termMarks.getByText("No term marks released yet.")).toBeVisible();
     expect((await admin.post(`/api/v1/school/report-cards/${snapshotId}/withdraw`, { data: {} })).status()).toBe(200);
     await page.reload();
+    await learning.click();
     await expect(familyReport.getByText("No report cards published yet.")).toBeVisible();
 
     // The linked student receives the same closed-term result through their
@@ -225,11 +230,10 @@ test("examination in-charge previews, is warned about missing marks, then issues
     expect((await admin.post(`/api/v1/people/students/${studentId}/identity-link`, { data: { identityUserId: studentUserId } })).status()).toBe(200);
     await page.context().clearCookies();
     await browserLogin(page, { username: studentUsername, password: studentPassword });
-    await page.goto("/portal");
+    await page.goto("/portal/marks");
     await expect(page.getByRole("heading", { name: "My term marks" })).toBeVisible();
     await expect(page.getByRole("region", { name: "School term marks" }).getByText("90.00%")).toHaveCount(2);
-    await expect(page.getByRole("heading", { name: "My marks", exact: true })).toHaveCount(0);
-    await page.getByRole("link", { name: "View your marks" }).click();
+    await expect(page.getByRole("heading", { name: "My marks", exact: true })).toBeVisible();
     await expect(page.getByRole("region", { name: "School term marks" })).toBeInViewport();
     await page.setViewportSize({ width: 390, height: 844 });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);

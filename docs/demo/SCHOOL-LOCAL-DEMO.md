@@ -6,15 +6,22 @@ Atlas development stack. All published ports bind to `127.0.0.1`.
 
 ## Start from a fresh demo volume
 
-In PowerShell, from the repository root:
+In PowerShell, from the repository root after Docker Desktop is running. The
+first image build needs internet access and may take several minutes. Node.js
+and pnpm are not required on the reviewer's computer:
 
 ```powershell
 docker compose -p vidya-school-demo -f docker-compose.yml -f docker-compose.school-demo.yml --env-file scripts/school-demo.env up -d --build
 docker compose -p vidya-school-demo -f docker-compose.yml -f docker-compose.school-demo.yml --env-file scripts/school-demo.env run --rm -e VIDYA_ADMIN_PASSWORD=school-demo-admin-pass-2026 worker apps/worker/node_modules/.bin/tsx scripts/create-admin.ts --username school-demo-admin --display-name "Demo School Administrator" --college-name "Vidya Demo School" --college-code VDEMO
-$env:SCHOOL_DEMO_SEED='true'; pnpm exec tsx scripts/seed-school-demo.ts
-$env:SCHOOL_DEMO_SEED='true'; pnpm exec tsx scripts/enrich-school-demo.ts
-pnpm exec tsx scripts/verify-school-demo.ts
+docker compose -p vidya-school-demo -f docker-compose.yml -f docker-compose.school-demo.yml --env-file scripts/school-demo.env run --rm -e SCHOOL_DEMO_SEED=true -e SCHOOL_DEMO_BASE_URL=http://web:3000 worker apps/worker/node_modules/.bin/tsx scripts/seed-school-demo.ts
+docker compose -p vidya-school-demo -f docker-compose.yml -f docker-compose.school-demo.yml --env-file scripts/school-demo.env run --rm -e SCHOOL_DEMO_SEED=true -e SCHOOL_DEMO_BASE_URL=http://web:3000 worker apps/worker/node_modules/.bin/tsx scripts/enrich-school-demo.ts
 ```
+
+Wait for `http://localhost:3125/login` to respond before the seed command.
+If the web service is still starting, retry after it becomes ready. Run the
+seed only once on a fresh demo volume; repeat the enrichment safely after
+later updates. `scripts/verify-school-demo.ts` is an optional browser check
+for a host with Node.js, pnpm, and Playwright Chromium installed.
 
 The initial seed refuses to run if the demo school already has a class. The
 enrichment command is repeatable and adds only missing synthetic records to

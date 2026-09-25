@@ -53,6 +53,7 @@ export function SchoolClassWorkspacePage() {
   const [adding, setAdding] = useState(false);
   const [admissionNo, setAdmissionNo] = useState("");
   const [fullName, setFullName] = useState("");
+  const [startsOn, setStartsOn] = useState("");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -86,17 +87,18 @@ export function SchoolClassWorkspacePage() {
   }, [choice, year, rosterReload]);
 
   async function addPupil() {
-    if (!choice?.homeroom || !admissionNo.trim() || !fullName.trim() || saving) return;
+    if (!choice?.homeroom || !admissionNo.trim() || !fullName.trim() || !startsOn || saving) return;
     setSaving(true);
     try {
       const { colleges } = await api.colleges();
       const collegeId = students?.[0]?.collegeId ?? colleges[0]?.id;
       if (!collegeId) throw new Error("School unavailable");
-      await api.createStudent({ collegeId, admissionNo: admissionNo.trim(), fullName: fullName.trim(), sectionId: choice.sectionId, academicYear: year });
+      await api.createStudent({ collegeId, admissionNo: admissionNo.trim(), fullName: fullName.trim(), sectionId: choice.sectionId, academicYear: year, startsOn });
       toast.push({ status: "good", message: `${fullName.trim()} added to ${choice.label}.` });
       setAdding(false);
       setAdmissionNo("");
       setFullName("");
+      setStartsOn("");
       setRosterReload((count) => count + 1);
     } catch (caught) {
       toast.push({ status: "danger", message: caught instanceof ApiError ? caught.message : "Couldn't add this pupil. Check the admission number and try again." });
@@ -151,11 +153,12 @@ export function SchoolClassWorkspacePage() {
         </AsyncState>
       </div> : null}
     </AsyncState>
-    <Modal open={adding} onClose={() => setAdding(false)} title={`Add pupil to ${choice?.label ?? "class"}`} footer={<><Button variant="ghost" onClick={() => setAdding(false)}>Cancel</Button><Button onClick={() => void addPupil()} loading={saving} disabled={!admissionNo.trim() || !fullName.trim()}>Add pupil</Button></>}>
+    <Modal open={adding} onClose={() => setAdding(false)} title={`Add pupil to ${choice?.label ?? "class"}`} footer={<><Button variant="ghost" onClick={() => setAdding(false)}>Cancel</Button><Button onClick={() => void addPupil()} loading={saving} disabled={!admissionNo.trim() || !fullName.trim() || !startsOn}>Add pupil</Button></>}>
       <div className={styles.modalFields}>
         <p>Creates an audited pupil record and enrols them in this section for {year}.</p>
         <Input id="school-admission" label="Admission number" value={admissionNo} onChange={(event) => setAdmissionNo(event.target.value)} />
         <Input id="school-pupil-name" label="Full name" value={fullName} onChange={(event) => setFullName(event.target.value)} />
+        <Input id="school-pupil-start" label="Enrollment effective from" type="date" hint="First day this pupil belonged to this section." value={startsOn} onChange={(event) => setStartsOn(event.target.value)} />
       </div>
     </Modal>
   </>;

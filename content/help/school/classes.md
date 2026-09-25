@@ -11,4 +11,4 @@ Choose your assigned class and section to see its pupils. If you also teach a su
 
 Search by name or admission number. **No attendance yet** finds pupils without recorded entries in the selected attendance scope. A missing percentage means attendance has not been recorded; it is not a zero score.
 
-Class teachers can use **Add pupil** from their whole-class register. The new record is audited and enrolled in that section for the displayed academic year. If a class or action is unavailable, ask the school office to check your teaching assignment.
+Class teachers can use **Add pupil** from their whole-class register. Choose the pupil's first day in that section; this effective date is used for term attendance. The new record is audited and enrolled for the displayed academic year. If a class or action is unavailable, ask the school office to check your teaching assignment.

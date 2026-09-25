@@ -70,10 +70,12 @@ test("administrator invites a parent, who activates, signs in and sees only thei
   await expect(parent.getByRole("heading", { name: "Asha Family" })).toBeVisible();
   await expect(parent.getByText("Attendance this year")).toBeVisible();
   await expect(parent.getByText("Not recorded").first()).toBeVisible();
+  await parent.getByRole("navigation", { name: "Family sections" }).getByRole("button", { name: "Notices" }).click();
   await expect(parent.getByRole("heading", { name: "School notices" })).toBeVisible();
   await expect(parent.getByText("Family class notice")).toBeVisible();
-  await expect(parent.getByText("No invoices yet.")).toBeVisible();
   await expect(parent.getByText("Staff private notice")).toHaveCount(0);
+  await parent.getByRole("navigation", { name: "Family sections" }).getByRole("button", { name: "Fees" }).click();
+  await expect(parent.getByText("No invoices yet.")).toBeVisible();
   await expect(parent.getByRole("navigation", { name: "Primary" })).toHaveCount(0);
   await parent.screenshot({ path: testInfo.outputPath("family-portal.png"), fullPage: true });
 

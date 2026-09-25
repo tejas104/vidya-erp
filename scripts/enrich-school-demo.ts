@@ -3,10 +3,10 @@ import { request, type APIRequestContext } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 
 /** Adds repeatable synthetic records to the isolated VDEMO localhost fixture. */
-const baseURL = "http://localhost:3125";
+const baseURL = process.env.SCHOOL_DEMO_BASE_URL ?? "http://localhost:3125";
 const academicYear = "2026-27";
 let requestCounter = 0;
-type Student = { id: string; fullName: string; admissionNo: string; identityUserId?: string | null };
+type Student = { id: string; fullName: string; admissionNo: string; identityUserId?: string | null; enrollment?: { id: string; startsOn: string | null } | null };
 type Section = { id: string; name: string };
 type Class = { id: string; code: string; sections: Section[] };
 type Subject = { id: string; code: string };
@@ -89,7 +89,7 @@ async function main() {
         const admissionNo = `VDEMO-${group.code}-${String(index + (group.code === "8A" ? 6 : 1)).padStart(3, "0")}`;
         if (byNumber.has(admissionNo)) continue;
         const student = await api<Student>(admin, "post", "/api/v1/people/students", { collegeId, admissionNo, fullName: name });
-        await api(admin, "post", `/api/v1/people/students/${student.id}/enrollment`, { sectionId: group.sectionId, academicYear });
+        await api(admin, "post", `/api/v1/people/students/${student.id}/enrollment`, { sectionId: group.sectionId, academicYear, startsOn: name === "Nitya Joshi" ? "2026-09-23" : "2026-04-01" });
         await api(admin, "patch", `/api/v1/people/students/${student.id}`, {
           guardianName: ["Kavita", "Rajesh", "Priya", "Sanjay"][index % 4] + " " + name.split(" ").at(-1),
           guardianPhone: `90000${String(index + (group.code === "8A" ? 100 : group.code === "8B" ? 200 : 300)).padStart(5, "0")}`,
@@ -97,6 +97,14 @@ async function main() {
         });
       }
       const roster = await api<{ students: Student[] }>(admin, "get", `/api/v1/people/sections/${group.sectionId}/roster`);
+      // Only the isolated VDEMO fixture is corrected. Existing synthetic rows
+      // predate the effective-date column; no production backfill is inferred.
+      for (const student of roster.students) {
+        if (student.enrollment?.startsOn !== null || !student.enrollment?.id) continue;
+        await api(admin, "patch", `/api/v1/people/students/${student.id}/enrollments/${student.enrollment.id}/dates`, {
+          startsOn: student.fullName === "Nitya Joshi" ? "2026-09-23" : "2026-04-01", endsOn: null, expectedStartsOn: null, expectedEndsOn: null,
+        });
+      }
       rosters.set(group.code, roster.students);
     }
     const class9Pupil = rosters.get("9A")![0]!;

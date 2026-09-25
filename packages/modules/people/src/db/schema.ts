@@ -129,6 +129,9 @@ export const pplEnrollments = pgTable("ppl_enrollments", {
   sectionId: text("section_id").notNull().references(() => pplSections.id, { onDelete: "restrict" }),
   academicYear: text("academic_year").notNull(),
   status: text("status").notNull().default("enrolled"),
+  /** Effective school dates, not the date the row was entered. Null means unverified legacy data. */
+  startsOn: date("starts_on", { mode: "string" }),
+  endsOn: date("ends_on", { mode: "string" }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [

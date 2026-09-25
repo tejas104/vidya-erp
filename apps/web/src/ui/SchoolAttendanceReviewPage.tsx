@@ -66,7 +66,8 @@ export function SchoolAttendanceReviewPage() {
     finally { setReviewing(false); }
   }
   const confirmed = report?.students.filter((student) => student.shortfall === true).length ?? 0;
-  const incomplete = report?.students.filter((student) => student.shortfall === null).length ?? 0;
+  const datesNeeded = report?.students.filter((student) => student.dateIssue !== null).length ?? 0;
+  const incomplete = report?.students.filter((student) => student.dateIssue === null && student.shortfall === null).length ?? 0;
   return <>
     <PageHeader eyebrow="School attendance" title="Attendance review" lede="See missing daily registers first, then identify pupils whose recorded attendance is below the school's threshold." help={<HelpButton slug="attendance-review" />} />
     <button type="button" className={styles.back} onClick={() => router.back()}>← Back to previous page</button>
@@ -85,13 +86,14 @@ export function SchoolAttendanceReviewPage() {
       <div className={styles.metrics}>
         <div><span>Scheduled days</span><strong>{report.scheduledDates.length}</strong></div>
         <div><span>Registers missing</span><strong>{report.unsubmittedDates.length}</strong></div>
+        <div><span>Enrollment dates needed</span><strong>{datesNeeded}</strong></div>
         <div><span>Need data</span><strong>{incomplete}</strong></div>
         <div><span>Confirmed below {report.threshold}%</span><strong>{confirmed}</strong></div>
       </div>
       {report.unsubmittedDates.length ? <Card title="Daily registers to complete"><p className={styles.hint}>A missing register is not a pupil absence. Percentages stay unavailable until every scheduled day has a pupil entry.</p><div className={styles.dates}>{report.unsubmittedDates.map((date) => <span key={date}>{date}</span>)}</div>{canMark ? <Link href={`/manage/attendance?sectionId=${encodeURIComponent(sectionId)}&date=${report.unsubmittedDates[0]}`} className={styles.actionLink}>Open this register →</Link> : <p className={styles.hint}>Ask the class teacher to complete these dates.</p>}</Card> : null}
-      <Card title="Pupil review"><p className={styles.hint}>Attendance counts use the class teacher's daily register. Subject period attendance is separate. {report.rosterAssumption}</p>
-        <div className={styles.tableScroll}><table className={styles.table}><thead><tr><th scope="col">Pupil</th><th scope="col">Recorded / expected</th><th scope="col">Absent</th><th scope="col">Missing pupil entries</th><th scope="col">Attendance</th><th scope="col">Review</th></tr></thead><tbody>{report.students.map((student) => <tr key={student.studentId}><td><strong>{student.fullName}</strong><small>{student.admissionNo}</small></td><td>{student.recordedDays} / {student.expectedDays}</td><td>{student.absentDays}</td><td>{student.missingEntryDates.length ? student.missingEntryDates.join(", ") : "—"}</td><td>{student.percentage === null ? "Awaiting complete data" : `${student.percentage.toFixed(2)}%`}</td><td>{student.shortfall === null ? <StatusBadge status="neutral">Needs data</StatusBadge> : student.shortfall ? <StatusBadge status="warn">Below threshold</StatusBadge> : <StatusBadge status="good">On track</StatusBadge>}</td></tr>)}</tbody></table></div>
-        {report.students.length === 0 ? <EmptyState title="No pupils in this section" body="The current roster has no pupils for this academic year." /> : null}
+      <Card title="Pupil review"><p className={styles.hint}>Attendance counts use the class teacher's daily register and each pupil's verified enrollment dates. Subject period attendance is separate. A missing effective date never becomes an absence; an administrator can correct it in Student records.</p>
+        <div className={styles.tableScroll}><table className={styles.table}><thead><tr><th scope="col">Pupil</th><th scope="col">Enrolled in section</th><th scope="col">Recorded / expected</th><th scope="col">Absent</th><th scope="col">Missing pupil entries</th><th scope="col">Attendance</th><th scope="col">Review</th></tr></thead><tbody>{report.students.map((student) => <tr key={student.studentId}><td><strong>{student.fullName}</strong><small>{student.admissionNo}</small></td><td>{student.enrollmentDates.map((window, index) => <span key={`${window.from}-${index}`}>{index ? ", " : ""}{window.from ?? "Date needed"} – {window.to ?? "current"}</span>)}</td><td>{student.expectedDays === null ? "—" : `${student.recordedDays} / ${student.expectedDays}`}</td><td>{student.absentDays ?? "—"}</td><td>{student.missingEntryDates.length ? student.missingEntryDates.join(", ") : "—"}</td><td>{student.dateIssue ?? (student.percentage === null ? "Awaiting complete data" : `${student.percentage.toFixed(2)}%`)}</td><td>{student.dateIssue ? <Link href={`/students/${encodeURIComponent(student.studentId)}?tab=history`} className={styles.actionLink}>Check dates →</Link> : student.shortfall === null ? <StatusBadge status="neutral">Needs data</StatusBadge> : student.shortfall ? <StatusBadge status="warn">Below threshold</StatusBadge> : <StatusBadge status="good">On track</StatusBadge>}</td></tr>)}</tbody></table></div>
+        {report.students.length === 0 ? <EmptyState title="No pupils in this section" body="No enrollment history exists for this section and academic year." /> : null}
       </Card>
     </> : null}
   </>;

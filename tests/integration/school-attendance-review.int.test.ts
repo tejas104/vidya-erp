@@ -9,6 +9,8 @@ let sectionId: string;
 let termId: string;
 let pupilA: string;
 let pupilB: string;
+let pupilC: string;
+let pupilUnknown: string;
 const year = "2026-27";
 const suffix = randomUUID().slice(0, 8);
 const days = ["2026-09-21", "2026-09-22", "2026-09-23"];
@@ -35,7 +37,11 @@ beforeAll(async () => {
   sectionId = (await create("people.section-create", { classId: schoolClass.id, name: "A" })).id;
   pupilA = (await create("people.student-create", { collegeId, admissionNo: `AR-A-${suffix}`, fullName: "Asha Rao" })).id;
   pupilB = (await create("people.student-create", { collegeId, admissionNo: `AR-B-${suffix}`, fullName: "Bela Sen" })).id;
-  for (const studentId of [pupilA, pupilB]) expect((await stack.call("people.student-enroll", { cookie: admin, params: { studentId }, body: { sectionId, academicYear: year } })).status).toBe(200);
+  pupilC = (await create("people.student-create", { collegeId, admissionNo: `AR-C-${suffix}`, fullName: "Chetan Shah" })).id;
+  pupilUnknown = (await create("people.student-create", { collegeId, admissionNo: `AR-U-${suffix}`, fullName: "Unverified Pupil" })).id;
+  for (const studentId of [pupilA, pupilB]) expect((await stack.call("people.student-enroll", { cookie: admin, params: { studentId }, body: { sectionId, academicYear: year, startsOn: days[0] } })).status).toBe(200);
+  expect((await stack.call("people.student-enroll", { cookie: admin, params: { studentId: pupilC }, body: { sectionId, academicYear: year, startsOn: days[2] } })).status).toBe(200);
+  expect((await stack.call("people.student-enroll", { cookie: admin, params: { studentId: pupilUnknown }, body: { sectionId, academicYear: year } })).status).toBe(200);
   termId = (await create("school-academics.create", { collegeId, name: `Review ${suffix}`, academicYear: year, startsOn: "2026-09-01", endsOn: "2026-12-31" })).id;
 });
 afterAll(async () => { await stack?.close(); });
@@ -63,11 +69,24 @@ describe("school attendance review with real database and authorization", () => 
     expect(result.unsubmittedDates).toEqual([days[1], days[2]]);
     expect(result.students.find((student) => student.studentId === pupilB)).toMatchObject({ absentDays: 1, percentage: null, shortfall: null });
     await insertSession(days[1]!, "day", "", [{ studentId: pupilA, status: "present" }]);
-    await insertSession(days[2]!, "day", "", [{ studentId: pupilA, status: "present" }, { studentId: pupilB, status: "absent" }]);
+    await insertSession(days[2]!, "day", "", [{ studentId: pupilA, status: "present" }, { studentId: pupilB, status: "absent" }, { studentId: pupilC, status: "present" }]);
     response = await stack.call("school-academics.attendance-shortfall", { cookie: admin, params: { sectionId }, query: { termId, through: days[2]! } });
     result = await response.json();
     expect(result.unsubmittedDates).toEqual([]);
     expect(result.students.find((student) => student.studentId === pupilA)).toMatchObject({ percentage: 100, shortfall: false });
     expect(result.students.find((student) => student.studentId === pupilB)).toMatchObject({ absentDays: 2, percentage: null, shortfall: null });
+    expect(result.students.find((student) => student.studentId === pupilC)).toMatchObject({ expectedDays: 1, recordedDays: 1, percentage: 100, shortfall: false });
+    expect(result.students.find((student) => student.studentId === pupilUnknown)).toMatchObject({ expectedDays: null, percentage: null, shortfall: null, dateIssue: "Enrollment start date needs verification" });
+  });
+
+  it("accepts an audited correction for a legacy date without inventing earlier absences", async () => {
+    const history = await stack.call("people.student-history", { cookie: admin, params: { studentId: pupilUnknown } });
+    expect(history.status).toBe(200);
+    const enrollmentId = ((await history.json()) as { enrollments: { id: string }[] }).enrollments[0]!.id;
+    const correction = await stack.call("people.student-enrollment-dates", { cookie: admin, params: { studentId: pupilUnknown, enrollmentId }, body: { startsOn: days[2], endsOn: null, expectedStartsOn: null, expectedEndsOn: null } });
+    expect(correction.status, await correction.clone().text()).toBe(200);
+    const review = await stack.call("school-academics.attendance-shortfall", { cookie: admin, params: { sectionId }, query: { termId, through: days[2]! } });
+    const result = await review.json() as { students: { studentId: string; expectedDays: number | null; dateIssue: string | null }[] };
+    expect(result.students.find((student) => student.studentId === pupilUnknown)).toMatchObject({ expectedDays: 1, dateIssue: null });
   });
 });

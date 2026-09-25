@@ -58,6 +58,7 @@ function buildSources(opts: {
   source?: SchoolTermResultSource | null;
   days?: SectionAttendanceDay[];
   studentKnown?: boolean;
+  windows?: { sectionId: string; startsOn: string | null; endsOn: string | null; status: string }[];
 }) {
   const schoolAcademics: SchoolAcademicsReadModel = {
     getTerm: async () => TERM,
@@ -69,6 +70,8 @@ function buildSources(opts: {
     sectionDailyRegisterWindow: async () => opts.days ?? [],
   } as unknown as AcademicsReadModel;
   const directory = {
+    sectionPath: async () => ({ collegeId: "col-1", departmentId: "dept-1", classId: "cls-1", sectionId: "sec-1" }),
+    studentEnrollmentWindows: async () => opts.windows ?? [{ sectionId: "sec-1", startsOn: TERM.startsOn, endsOn: TERM.endsOn, status: "enrolled" }],
     studentsBrief: async () =>
       opts.studentKnown === false
         ? new Map()
@@ -93,6 +96,18 @@ function fullAttendance(status: "present" | "absent" = "present"): SectionAttend
 }
 
 describe("ReportCardBuilder", () => {
+  it("uses an effective mid-term start instead of counting earlier class days", async () => {
+    const builder = new ReportCardBuilder(buildSources({ days: fullAttendance(), windows: [{ sectionId: "sec-1", startsOn: "2026-06-03", endsOn: null, status: "enrolled" }] }));
+    const card = await builder.build(INPUT);
+    expect(card.attendance).toMatchObject({ eligibleDays: 3, percentage: 100, complete: true, missingDates: [] });
+  });
+
+  it("withholds attendance when a legacy enrollment has no verified effective date", async () => {
+    const builder = new ReportCardBuilder(buildSources({ days: fullAttendance(), windows: [{ sectionId: "sec-1", startsOn: null, endsOn: null, status: "enrolled" }] }));
+    const card = await builder.build(INPUT);
+    expect(card.attendance).toMatchObject({ percentage: null, complete: false });
+    expect(card.warnings.join(" ")).toContain("effective enrollment dates");
+  });
   it("reports a complete subject with the grade from the term's own bands", async () => {
     const builder = new ReportCardBuilder(buildSources({ days: fullAttendance() }));
     const card = await builder.build(INPUT);

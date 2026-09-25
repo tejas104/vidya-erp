@@ -325,7 +325,8 @@ function HistoryPanel({ studentId }: { studentId: string }) {
           <div className={styles.panelList}>{history.enrollments.map((entry) => (
             <div className="card" key={entry.id}>
               <strong>{entry.className} · Section {entry.sectionName}</strong>
-              <span>{entry.academicYear} · {entry.status} · Recorded {dateLabel(entry.createdAt)}</span>
+              <span>{entry.academicYear} · {entry.status} · Effective {entry.startsOn ?? "date needs verification"} to {entry.endsOn ?? (entry.status === "enrolled" ? "current" : "end date needs verification")}</span>
+              <span>Record entered {dateLabel(entry.createdAt)}</span>
             </div>
           ))}</div>
         )}

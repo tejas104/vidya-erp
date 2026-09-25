@@ -500,10 +500,10 @@ export class InMemoryPeopleRepo implements PeopleRepo {
       .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id));
   }
 
-  async withdrawEnrollment(enrollmentId: string): Promise<void> {
+  async withdrawEnrollment(enrollmentId: string, endsOn?: string | null): Promise<void> {
     const enrollment = this.enrollments.get(enrollmentId);
     if (enrollment !== undefined) {
-      this.enrollments.set(enrollmentId, { ...enrollment, status: "withdrawn", updatedAt: now() });
+      this.enrollments.set(enrollmentId, { ...enrollment, status: "withdrawn", endsOn: endsOn === undefined ? enrollment.endsOn : endsOn, updatedAt: now() });
     }
   }
 
@@ -511,6 +511,7 @@ export class InMemoryPeopleRepo implements PeopleRepo {
     studentId: string;
     sectionId: string;
     academicYear: string;
+    startsOn?: string | null;
   }): Promise<PplEnrollmentRow> {
     if ((await this.activeEnrollment(input.studentId, input.academicYear)) !== null) {
       throw new Error("student already has a live enrollment for this academic year");
@@ -521,11 +522,21 @@ export class InMemoryPeopleRepo implements PeopleRepo {
       sectionId: input.sectionId,
       academicYear: input.academicYear,
       status: "enrolled",
+      startsOn: input.startsOn ?? null,
+      endsOn: null,
       createdAt: now(),
       updatedAt: now(),
     };
     this.enrollments.set(row.id, row);
     return row;
+  }
+
+  async replaceEnrollment(previousId: string, input: { studentId: string; sectionId: string; academicYear: string; startsOn?: string | null }, previousEndsOn: string | null): Promise<PplEnrollmentRow> {
+    const previous = this.enrollments.get(previousId);
+    if (!previous || previous.status !== "enrolled" || previous.studentId !== input.studentId) throw new Error("Enrollment changed");
+    await this.withdrawEnrollment(previousId, previousEndsOn);
+    try { return await this.createEnrollment(input); }
+    catch (error) { this.enrollments.set(previousId, previous); throw error; }
   }
 
   async roster(sectionId: string): Promise<{ enrollment: PplEnrollmentRow; student: PplStudentRow }[]> {
@@ -539,6 +550,18 @@ export class InMemoryPeopleRepo implements PeopleRepo {
       }
     }
     return rows.sort((a, b) => a.student.fullName.localeCompare(b.student.fullName));
+  }
+
+  async sectionEnrollmentHistory(sectionId: string, academicYear: string): Promise<PplEnrollmentRow[]> {
+    return [...this.enrollments.values()].filter((row) => row.sectionId === sectionId && row.academicYear === academicYear);
+  }
+
+  async updateEnrollmentDates(enrollmentId: string, startsOn: string, endsOn: string | null, expectedStartsOn: string | null, expectedEndsOn: string | null): Promise<PplEnrollmentRow | null> {
+    const row = this.enrollments.get(enrollmentId);
+    if (!row || row.startsOn !== expectedStartsOn || row.endsOn !== expectedEndsOn) return null;
+    const updated = { ...row, startsOn, endsOn, updatedAt: now() };
+    this.enrollments.set(enrollmentId, updated);
+    return updated;
   }
 
   async createAssignment(input: {

@@ -54,7 +54,8 @@ describe("school class register", () => {
     fireEvent.click(screen.getByRole("button", { name: "Add pupil" }));
     fireEvent.change(screen.getByLabelText("Admission number"), { target: { value: "S-102" } });
     fireEvent.change(screen.getByLabelText("Full name"), { target: { value: "Mira Das" } });
+    fireEvent.change(screen.getByLabelText("Enrollment effective from"), { target: { value: "2026-09-23" } });
     fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Add pupil" }));
-    await waitFor(() => expect(api.createStudent).toHaveBeenCalledWith({ collegeId: "col_1", admissionNo: "S-102", fullName: "Mira Das", sectionId: "sec_1", academicYear: expect.any(String) }));
+    await waitFor(() => expect(api.createStudent).toHaveBeenCalledWith({ collegeId: "col_1", admissionNo: "S-102", fullName: "Mira Das", sectionId: "sec_1", academicYear: expect.any(String), startsOn: "2026-09-23" }));
   });
 });

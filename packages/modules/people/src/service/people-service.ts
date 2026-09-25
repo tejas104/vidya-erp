@@ -1,6 +1,6 @@
 import type { OrgPath } from "@vidya/platform";
 import type { OrgRepo } from "../repo/org-repo";
-import type { PeopleRepo, PersonStatus, StudentStatus } from "../repo/people-repo";
+import { EnrollmentConflictError, type PeopleRepo, type PersonStatus, type StudentStatus } from "../repo/people-repo";
 import type { PplEnrollmentRow, PplStudentRow, PplTeacherRow } from "../db/schema";
 
 export class UnknownReferenceError extends Error {
@@ -8,6 +8,10 @@ export class UnknownReferenceError extends Error {
     super(`unknown reference: ${what}`);
     this.name = "UnknownReferenceError";
   }
+}
+
+export class InvalidEnrollmentDatesError extends Error {
+  constructor(message: string) { super(message); this.name = "InvalidEnrollmentDatesError"; }
 }
 
 export interface PeopleServiceDeps {
@@ -97,6 +101,7 @@ export class PeopleService {
     studentId: string;
     sectionId: string;
     academicYear: string;
+    startsOn?: string | null;
   }): Promise<{ enrollment: PplEnrollmentRow; previous: PplEnrollmentRow | null } | null> {
     const student = await this.deps.repo.getStudent(input.studentId);
     if (student === null) {
@@ -111,10 +116,12 @@ export class PeopleService {
       throw new UnknownReferenceError("section is not in the student's college");
     }
     const previous = await this.deps.repo.activeEnrollment(input.studentId, input.academicYear);
-    if (previous !== null) {
-      await this.deps.repo.withdrawEnrollment(previous.id);
+    if (previous?.startsOn && input.startsOn && input.startsOn <= previous.startsOn) {
+      throw new InvalidEnrollmentDatesError("The transfer date must be after the previous enrollment began.");
     }
-    const enrollment = await this.deps.repo.createEnrollment(input);
+    const endsOn = input.startsOn ? new Date(Date.parse(`${input.startsOn}T00:00:00Z`) - 86_400_000).toISOString().slice(0, 10) : null;
+    const enrollment = previous === null ? await this.deps.repo.createEnrollment(input)
+      : await this.deps.repo.replaceEnrollment(previous.id, input, endsOn);
     return { enrollment, previous };
   }
 
@@ -134,6 +141,25 @@ export class PeopleService {
     return this.deps.repo.listEnrollments(studentId);
   }
 
+  async correctEnrollmentDates(studentId: string, enrollmentId: string, startsOn: string, endsOn: string | null, expectedStartsOn: string | null, expectedEndsOn: string | null): Promise<PplEnrollmentRow | null> {
+    const records = await this.deps.repo.listEnrollments(studentId);
+    const current = records.find((row) => row.id === enrollmentId);
+    if (!current) return null;
+    if (current.startsOn !== expectedStartsOn || current.endsOn !== expectedEndsOn) throw new EnrollmentConflictError();
+    if (endsOn !== null && endsOn < startsOn) throw new InvalidEnrollmentDatesError("End date cannot precede start date.");
+    if (current.status === "enrolled" && endsOn !== null) throw new InvalidEnrollmentDatesError("An active enrollment cannot have an end date.");
+    if (current.status !== "enrolled" && endsOn === null) throw new InvalidEnrollmentDatesError("A past enrollment needs an end date.");
+    for (const other of records) {
+      if (other.id === enrollmentId || other.academicYear !== current.academicYear || !other.startsOn) continue;
+      if (startsOn <= (other.endsOn ?? "9999-12-31") && other.startsOn <= (endsOn ?? "9999-12-31")) {
+        throw new InvalidEnrollmentDatesError("Enrollment dates overlap another section for this pupil.");
+      }
+    }
+    const updated = await this.deps.repo.updateEnrollmentDates(enrollmentId, startsOn, endsOn, expectedStartsOn, expectedEndsOn);
+    if (!updated) throw new EnrollmentConflictError();
+    return updated;
+  }
+
   async enrollmentDisplay(enrollment: PplEnrollmentRow) {
     const section = await this.deps.orgRepo.getSection(enrollment.sectionId);
     const klass = section === null ? null : await this.deps.orgRepo.getClass(section.classId);
@@ -145,6 +171,8 @@ export class PeopleService {
       className: klass?.name ?? "Unknown class",
       academicYear: enrollment.academicYear,
       status: enrollment.status,
+      startsOn: enrollment.startsOn,
+      endsOn: enrollment.endsOn,
       createdAt: enrollment.createdAt.toISOString(),
       updatedAt: enrollment.updatedAt.toISOString(),
     };

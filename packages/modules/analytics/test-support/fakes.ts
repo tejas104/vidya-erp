@@ -101,6 +101,10 @@ export class FakeAcademicsRead implements AcademicsReadModel {
       .sort((left, right) => left.heldOn.localeCompare(right.heldOn));
   }
 
+  async sectionDailyRegisterWindow(sectionId: string, from: string, to: string) {
+    return this.sectionAttendanceWindow(sectionId, from, to);
+  }
+
   async studentAttendance(studentId: string, academicYear?: string) {
     return this.attendance.filter(
       (row) =>
@@ -151,6 +155,14 @@ export class FakeDirectory implements PeopleDirectory {
   roster: { studentId: string; academicYear: string }[] = [];
   async sectionRoster(sectionId: string) {
     return sectionId === ORG.sectionA ? this.roster : [];
+  }
+  async sectionEnrollmentHistory(sectionId: string, academicYear: string) {
+    return (await this.sectionRoster(sectionId)).filter((row) => row.academicYear === academicYear)
+      .map((row) => ({ studentId: row.studentId, startsOn: "2026-04-01", endsOn: null, status: "enrolled" }));
+  }
+  async studentEnrollmentWindows(studentId: string, academicYear: string) {
+    const row = this.roster.find((entry) => entry.studentId === studentId && entry.academicYear === academicYear);
+    return row ? [{ sectionId: ORG.sectionA, startsOn: "2026-04-01", endsOn: null, status: "enrolled" }] : [];
   }
   async studentPosition(studentId: string): Promise<OrgPath | null> {
     return this.positions.get(studentId) ?? null;

@@ -3,7 +3,7 @@ import { request, type APIRequestContext } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 
 /** Synthetic, local-only school fixture created through the same HTTP API as the UI. */
-const baseURL = "http://localhost:3125";
+const baseURL = process.env.SCHOOL_DEMO_BASE_URL ?? "http://localhost:3125";
 const academicYear = "2026-27";
 const adminCredentials = { username: "school-demo-admin", password: "school-demo-admin-pass-2026" };
 const teacherCredentials = { username: "school-demo-teacher", password: "school-demo-teacher-pass-2026" };
@@ -52,7 +52,7 @@ async function main(): Promise<void> {
     const students = [] as { id: string; name: string }[];
     for (const [index, name] of ["Asha Sharma", "Aarav Mehta", "Meera Das", "Kabir Roy", "Riya Sen"].entries()) {
       const { id } = await api<{ id: string }>(admin, "post", "/api/v1/people/students", { collegeId, admissionNo: `VDEMO-8A-${String(index + 1).padStart(3, "0")}`, fullName: name });
-      await api(admin, "post", `/api/v1/people/students/${id}/enrollment`, { sectionId, academicYear });
+      await api(admin, "post", `/api/v1/people/students/${id}/enrollment`, { sectionId, academicYear, startsOn: "2026-04-01" });
       students.push({ id, name });
     }
 

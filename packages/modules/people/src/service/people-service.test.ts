@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { PeopleService, UnknownReferenceError } from "./people-service";
+import { InvalidEnrollmentDatesError, PeopleService, UnknownReferenceError } from "./people-service";
 import { InMemoryOrgRepo, InMemoryPeopleRepo, seedOrg } from "../../test-support/fakes";
 
 async function makeHarness() {
@@ -58,17 +58,34 @@ describe("enroll / transfer", () => {
       studentId: student.id,
       sectionId: org.section.id,
       academicYear: "2026-27",
+      startsOn: "2026-04-01",
     });
     const second = await service.enroll({
       studentId: student.id,
       sectionId: sectionB.id,
       academicYear: "2026-27",
+      startsOn: "2026-09-23",
     });
     expect(second?.previous?.id).toBe(first?.enrollment.id);
     expect(repo.enrollments.get(first!.enrollment.id)?.status).toBe("withdrawn");
+    expect(repo.enrollments.get(first!.enrollment.id)?.endsOn).toBe("2026-09-22");
     expect(await service.getActiveEnrollment(student.id, "2026-27")).toMatchObject({
       sectionId: sectionB.id,
+      startsOn: "2026-09-23",
     });
+  });
+
+  it("rejects a backdated transfer and overlapping date correction without changing the live enrollment", async () => {
+    const { service, orgRepo, org, repo } = await makeHarness();
+    const sectionB = await orgRepo.createSection({ classId: org.classRow.id, name: "B" });
+    const pupil = await service.createStudent({ collegeId: org.college.id, admissionNo: "A2", fullName: "Asha" });
+    const first = (await service.enroll({ studentId: pupil.id, sectionId: org.section.id, academicYear: "2026-27", startsOn: "2026-04-01" }))!.enrollment;
+    await expect(service.enroll({ studentId: pupil.id, sectionId: sectionB.id, academicYear: "2026-27", startsOn: "2026-04-01" })).rejects.toThrow(InvalidEnrollmentDatesError);
+    expect(repo.enrollments.get(first.id)?.status).toBe("enrolled");
+    const second = (await service.enroll({ studentId: pupil.id, sectionId: sectionB.id, academicYear: "2026-27", startsOn: "2026-09-23" }))!.enrollment;
+    await expect(service.correctEnrollmentDates(pupil.id, first.id, "2026-04-01", "2026-09-23", "2026-04-01", "2026-09-22")).rejects.toThrow(/overlap/);
+    expect(repo.enrollments.get(first.id)?.endsOn).toBe("2026-09-22");
+    expect(repo.enrollments.get(second.id)?.status).toBe("enrolled");
   });
 
   it("keeps different academic years independent", async () => {

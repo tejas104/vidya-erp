@@ -103,6 +103,17 @@ export class FakePeopleDirectory implements PeopleDirectory {
     return [];
   }
 
+  async sectionEnrollmentHistory(sectionId: string, academicYear: string) {
+    return (await this.sectionRoster(sectionId)).filter((row) => row.academicYear === academicYear)
+      .map((row) => ({ studentId: row.studentId, startsOn: "2026-04-01", endsOn: null, status: "enrolled" }));
+  }
+
+  async studentEnrollmentWindows(studentId: string, academicYear: string) {
+    const sectionId = studentId === ORG.studentB1 ? ORG.sectionB : ORG.sectionA;
+    return (await this.sectionRoster(sectionId)).some((row) => row.studentId === studentId && row.academicYear === academicYear)
+      ? [{ sectionId, startsOn: "2026-04-01", endsOn: null, status: "enrolled" }] : [];
+  }
+
   async studentByIdentityUser(): Promise<{
     studentId: string;
     collegeId: string;

@@ -12,4 +12,6 @@ Open a student from a class roster, the student directory, search, or the needs-
 - **Family** shows guardian invitations and relationships for authorized staff.
 - **History** keeps enrollment rows, including withdrawn rows, status changes, and their audit events.
 
+An administrator can set or correct effective enrollment dates from **Student records → Enrollment dates**. When adding or moving a pupil, choose the first day they belonged to the new section. A move ends the previous section the day before. Legacy rows without verified dates remain visibly incomplete in attendance reviews and report cards until corrected.
+
 Each tab has its own loading, error, and access state. **Not recorded** means there is no source value; **Not in your scope** means that source is not available to your account. A student's record and history are never hard-deleted as part of routine school work.

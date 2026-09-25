@@ -235,11 +235,22 @@ export class ReportCardBuilder {
       return empty;
     }
 
-    const days = await this.sources.academics.sectionDailyRegisterWindow(
-      input.sectionId,
-      source.term.startsOn,
-      source.term.endsOn,
-    );
+    const history = await this.sources.directory.studentEnrollmentWindows(input.studentId, source.term.academicYear);
+    const windows = (await Promise.all(history.map(async (row) => ({ ...row, path: await this.sources.directory.sectionPath(row.sectionId) }))))
+      .filter((row) => row.path?.classId === input.classId);
+    if (windows.length === 0) {
+      warnings.push("No enrollment history exists for this pupil in this class during the term.");
+      return empty;
+    }
+    if (windows.some((row) => row.startsOn === null || (row.status !== "enrolled" && row.endsOn === null))) {
+      warnings.push("Verify this pupil's effective enrollment dates before calculating attendance.");
+      return empty;
+    }
+    const sectionDays = await Promise.all([...new Set(windows.map((row) => row.sectionId))].map(async (sectionId) => ({
+      sectionId,
+      days: await this.sources.academics.sectionDailyRegisterWindow(sectionId, source.term.startsOn, source.term.endsOn),
+    })));
+    const days = sectionDays.flatMap((section) => section.days);
     if (days.length === 0 && source.term.instructionalDays == null) {
       warnings.push("No attendance registers were taken for this section during the term.");
       return empty;
@@ -250,10 +261,12 @@ export class ReportCardBuilder {
     // with no entry for them is a register that was never completed, which
     // S02 reports separately from an absence.
     const records: AttendanceRecord[] = [];
-    for (const day of days) {
-      const entry = day.entries.find((candidate) => candidate.studentId === input.studentId);
-      if (entry !== undefined) {
-        records.push({ date: day.heldOn, status: entry.status as RecordedAttendanceStatus });
+    for (const section of sectionDays) {
+      const sectionWindows = windows.filter((window) => window.sectionId === section.sectionId);
+      for (const day of section.days) {
+        if (!sectionWindows.some((window) => day.heldOn >= window.startsOn! && (window.endsOn === null || day.heldOn <= window.endsOn))) continue;
+        const entry = day.entries.find((candidate) => candidate.studentId === input.studentId);
+        if (entry !== undefined) records.push({ date: day.heldOn, status: entry.status as RecordedAttendanceStatus });
       }
     }
 
@@ -261,10 +274,7 @@ export class ReportCardBuilder {
       policy: SCHOOL_ATTENDANCE_POLICY,
       interval: { from: source.term.startsOn, to: source.term.endsOn },
       calendar: { instructionalDays: source.term.instructionalDays ?? days.map((day) => day.heldOn) },
-      // The term window is the enrollment span we can defend from attendance
-      // evidence alone. A mid-term admission or transfer is not yet modelled;
-      // its effect is visible as missing dates rather than hidden.
-      enrollments: [{ from: source.term.startsOn, to: source.term.endsOn }],
+      enrollments: windows.map((row) => ({ from: row.startsOn!, to: row.endsOn })),
       records,
     });
 
