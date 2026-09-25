@@ -14,6 +14,7 @@ export class InvalidStaffAttendanceTarget extends Error {
 
 export interface StaffAttendanceRepo {
   forTeachers(teacherIds: readonly string[], attendedOn: string): Promise<PplTeacherAttendanceRow[]>;
+  forSchoolDate(collegeId: string, attendedOn: string): Promise<{ teacher: typeof pplTeachers.$inferSelect; attendance: PplTeacherAttendanceRow | null }[]>;
   saveBatch(input: {
     collegeId: string;
     attendedOn: string;
@@ -30,6 +31,18 @@ export function createStaffAttendanceRepo(db: Db): StaffAttendanceRepo {
         inArray(pplTeacherAttendance.teacherId, [...teacherIds]),
         eq(pplTeacherAttendance.attendedOn, attendedOn),
       ));
+    },
+    async forSchoolDate(collegeId, attendedOn) {
+      const rows = await db.select({ teacher: pplTeachers, attendance: pplTeacherAttendance })
+        .from(pplTeachers)
+        .leftJoin(pplTeacherAttendance, and(
+          eq(pplTeacherAttendance.teacherId, pplTeachers.id),
+          eq(pplTeacherAttendance.collegeId, collegeId),
+          eq(pplTeacherAttendance.attendedOn, attendedOn),
+        ))
+        .where(eq(pplTeachers.collegeId, collegeId))
+        .orderBy(asc(pplTeachers.fullName), asc(pplTeachers.id));
+      return rows;
     },
     async saveBatch({ collegeId, attendedOn, markedBy, entries }) {
       if (entries.length === 0) return { rows: [], before: [] };

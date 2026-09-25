@@ -35,6 +35,7 @@ import {
 import { createOrgRepo } from "./repo/org-repo";
 import { createPeopleRepo } from "./repo/people-repo";
 import { createStaffAttendanceRepo } from "./repo/staff-attendance-repo";
+import { createStaffAttendanceSource, type StaffAttendanceSource } from "./service/staff-attendance-source";
 import { createImportsRepo } from "./repo/imports-repo";
 import { OrgService } from "./service/org-service";
 import { PeopleService } from "./service/people-service";
@@ -60,6 +61,7 @@ export { IMPLICIT_DEPARTMENT_CODE, IMPLICIT_DEPARTMENT_NAME } from "./service/or
 export type { CredentialIssuer } from "./service/import-service";
 export type { GuardianAccountCreator, StudentBrief } from "./guardians/service";
 export type { GuardianAccessDecision, GuardianRecordCategory, PublicationState } from "./guardian-contract/types";
+export type { StaffAttendanceSource } from "./service/staff-attendance-source";
 /** Shared username derivation (#11 B4) — the reporting module's per-class
  *  credential sheet reuses this so the scheme is identical everywhere. */
 export { usernameFromCode } from "./ids";
@@ -153,6 +155,8 @@ export interface PeopleModuleService {
   readonly orgDirectory: OrgDirectory;
   /** Read-only resolution/validation surface for other modules (#4+). */
   readonly directory: PeopleDirectory;
+  /** Scoped full-day teacher register for queued PDF/Excel/CSV reporting. */
+  readonly staffAttendanceSource: StaffAttendanceSource;
   /** Active-student headcount, org-wide (system module's license page seat usage, #11.75 item 1). */
   countActiveStudents(): Promise<number>;
   /** One-time operator bootstrap (scripts/create-admin.ts). Idempotent by code. */
@@ -277,6 +281,7 @@ export function createPeopleModule(deps: PeopleModuleDeps): RuntimeModule<People
     readinessChecks: [],
     service: {
       orgDirectory: org.orgDirectory,
+      staffAttendanceSource: createStaffAttendanceSource({ edition, org: orgRepo, attendance: staffAttendance, scopeChecker: deps.scopeChecker }),
       directory: {
         sectionPath: (sectionId) => orgRepo.pathForSection(sectionId),
         classPath: (classId) => orgRepo.pathForClass(classId),

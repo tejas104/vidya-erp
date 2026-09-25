@@ -201,6 +201,7 @@ export interface AtRiskEntry {
 export type ReportParams =
   | { kind: "student-performance"; studentId: string }
   | { kind: "section-attendance"; sectionId: string }
+  | { kind: "teacher-attendance"; collegeId: string; date: string }
   | { kind: "marks-summary"; classId: string }
   | { kind: "at-risk"; level: string; nodeId: string }
   | { kind: "grade-card"; studentId: string }

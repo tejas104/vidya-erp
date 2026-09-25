@@ -129,6 +129,34 @@ describe("section attendance report", () => {
   });
 });
 
+describe("teacher attendance report", () => {
+  it("formats the full dated staff register from the scoped people source", async () => {
+    const read = new FakeAnalyticsReadModel();
+    const sources = { teacherAttendance: async () => ({ access: "ok" as const, schoolName: "Vidya School", rows: [
+      { staffNo: "T01", fullName: "Asha Rao", teacherStatus: "active", presence: "absent" as const, note: "Reported ill", updatedAt: "2026-09-25T08:00:00Z" },
+      { staffNo: "T02", fullName: "Meera Shah", teacherStatus: "active", presence: null, note: null, updatedAt: null },
+    ] }) };
+    const params = { kind: "teacher-attendance" as const, collegeId: "col_1", date: "2026-09-25" };
+    expect(await canProduce(read, caller, params, YEAR, sources)).toBe("ok");
+    const data = await collectReport(read, caller, params, YEAR, "Admin", sources);
+    expect(data).toMatchObject({ title: "Teacher attendance", subtitle: "Vidya School · 2026-09-25", rowCount: 2 });
+    expect(data!.tables[0]!.rows).toEqual([
+        ["T01", "Asha Rao", "active", "absent", "Reported ill", "2026-09-25T08:00:00Z"],
+        ["T02", "Meera Shah", "active", "Not marked", "", ""],
+      ]);
+      expect(data!.stats).toContainEqual({ label: "Absent", value: "1" });
+      expect(data!.stats).toContainEqual({ label: "Not marked", value: "1" });
+  });
+
+  it("does not generate or download when the source denies current scope", async () => {
+    const read = new FakeAnalyticsReadModel();
+    const params = { kind: "teacher-attendance" as const, collegeId: "col_1", date: "2026-09-25" };
+    const sources = { teacherAttendance: async () => ({ access: "forbidden" as const }) };
+    expect(await canProduce(read, caller, params, YEAR, sources)).toBe("forbidden");
+    expect(await collectReport(read, caller, params, YEAR, "Admin", sources)).toBeNull();
+  });
+});
+
 describe("canProduce access decisions", () => {
   it("student ok/denied/not-found map through", async () => {
     const read = new FakeAnalyticsReadModel();

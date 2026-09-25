@@ -9,10 +9,13 @@ export const idSchema = z.string().min(1).max(64);
 export const academicYearSchema = z.string().regex(/^\d{4}-\d{2}$/, 'academic year like "2026-27"');
 export const formatSchema = z.enum(["pdf", "csv", "xlsx"]);
 export const scopeLevelSchema = z.enum(["section", "class", "department", "college"]);
+const schoolDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
+  .refine((value) => !Number.isNaN(Date.parse(`${value}T00:00:00Z`)) && new Date(`${value}T00:00:00Z`).toISOString().slice(0, 10) === value, "valid calendar date required");
 
 export const reportParamsSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("student-performance"), studentId: idSchema }),
   z.object({ kind: z.literal("section-attendance"), sectionId: idSchema }),
+  z.object({ kind: z.literal("teacher-attendance"), collegeId: idSchema, date: schoolDateSchema }),
   z.object({ kind: z.literal("marks-summary"), classId: idSchema }),
   z.object({ kind: z.literal("at-risk"), level: scopeLevelSchema, nodeId: idSchema }),
   // --- results ---
@@ -26,6 +29,7 @@ const reportViewSchema = z.object({
   kind: z.enum([
     "student-performance",
     "section-attendance",
+    "teacher-attendance",
     "marks-summary",
     "at-risk",
     "grade-card",

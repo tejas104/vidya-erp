@@ -160,6 +160,7 @@ async function main(): Promise<void> {
   const people = createPeopleModule({
     db,
     metrics,
+    edition: config.edition,
     audit: system.service.audit,
     scopeChecker: identityCore.scopeChecker,
     identityGrants: identity.service.derivedGrants,
@@ -279,7 +280,7 @@ async function main(): Promise<void> {
     metrics,
     audit: system.service.audit,
     analyticsRead: analytics.service.readModel,
-    sources: { gradeCard: results.service.gradeCard, hallTicket: exams.service.hallTicket },
+    sources: { gradeCard: results.service.gradeCard, hallTicket: exams.service.hallTicket, teacherAttendance: people.service.staffAttendanceSource },
     storage: { client: objectStorage, bucket: config.s3.bucket },
     enqueueReport: async (payload) => {
       await reportingQueue.queue.add(REPORT_JOB_NAME, payload);

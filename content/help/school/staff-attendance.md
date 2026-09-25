@@ -15,4 +15,6 @@ Administrators can record and correct teacher presence. Principals can review th
 
 The date can be changed to review or correct an earlier record. Inactive teachers remain visible for historical review but cannot be edited. **On leave** is a manual presence status; it does not approve a leave request.
 
+Use **Prepare PDF**, **Prepare Excel**, or **Prepare CSV** to export the complete school register for the selected date, including teachers on other search pages. When generation finishes, select the download link. Downloads are checked against your current school access.
+
 If saving fails, the entries remain on the page so you can review them and retry. Search and pagination show up to 50 teachers at a time; save changes before switching pages.

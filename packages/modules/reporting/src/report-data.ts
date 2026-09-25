@@ -1,19 +1,19 @@
 import type { AnalyticsReadModel } from "@vidya/module-analytics";
 import type { GradeCardSource } from "@vidya/module-results";
 import type { HallTicketSource } from "@vidya/module-exams";
+import type { StaffAttendanceSource } from "@vidya/module-people";
 import type { Principal } from "@vidya/platform";
 
 /**
- * Report content is assembled ONLY through the analytics read model, which
- * enforces constituent-closure, the minimum-cohort rule and at-risk
- * field-gating (ADR-0018). A report therefore contains exactly what the
- * requester's live view would — no exemption because it is "a document"
- * (ADR-0020). Access is decided by `canProduce`; content by `collectReport`.
+ * Analytics reports use the scope-filtered analytics read model (ADR-0018).
+ * Other reports use scoped module sources. Documents receive the same access
+ * checks as the corresponding live view (ADR-0020).
  */
 
 export type ReportKind =
   | "student-performance"
   | "section-attendance"
+  | "teacher-attendance"
   | "marks-summary"
   | "at-risk"
   | "grade-card"
@@ -24,6 +24,7 @@ export type ScopeLevel = "section" | "class" | "department" | "college";
 export type ReportParams =
   | { readonly kind: "student-performance"; readonly studentId: string }
   | { readonly kind: "section-attendance"; readonly sectionId: string }
+  | { readonly kind: "teacher-attendance"; readonly collegeId: string; readonly date: string }
   | { readonly kind: "marks-summary"; readonly classId: string }
   | { readonly kind: "at-risk"; readonly level: ScopeLevel; readonly nodeId: string }
   | { readonly kind: "grade-card"; readonly studentId: string }
@@ -33,6 +34,7 @@ export type ReportParams =
 export interface ReportSources {
   readonly gradeCard?: GradeCardSource;
   readonly hallTicket?: HallTicketSource;
+  readonly teacherAttendance?: StaffAttendanceSource;
 }
 
 export interface ReportTable {
@@ -96,6 +98,11 @@ export async function canProduce(
       if (sources.hallTicket === undefined) return "not-found";
       const result = await sources.hallTicket(principal, params.studentId);
       return result.access === "ok" ? "ok" : result.access === "forbidden" ? "forbidden" : "not-found";
+    }
+    case "teacher-attendance": {
+      if (sources.teacherAttendance === undefined) return "not-found";
+      const result = await sources.teacherAttendance(principal, params.collegeId, params.date);
+      return result.access;
     }
     case "student-performance": {
       const perf = await readModel.studentPerformance(principal, params.studentId, academicYear);
@@ -200,6 +207,34 @@ export async function collectReport(
           rows.length === 0
             ? ["No exams are scheduled yet."]
             : ["Carry this ticket and your college ID card to every paper."],
+        rowCount: rows.length,
+      };
+    }
+
+    case "teacher-attendance": {
+      if (sources.teacherAttendance === undefined) return null;
+      const result = await sources.teacherAttendance(principal, params.collegeId, params.date);
+      if (result.access !== "ok") return null;
+      const count = (status: "present" | "absent" | "late" | "leave") =>
+        result.rows.filter((row) => row.presence === status).length;
+      const rows = result.rows.map((row) => [
+        row.staffNo, row.fullName, row.teacherStatus, row.presence ?? "Not marked",
+        row.note ?? "", row.updatedAt ?? "",
+      ]);
+      return {
+        ...base,
+        kind: params.kind,
+        title: "Teacher attendance",
+        subtitle: `${result.schoolName} · ${params.date}`,
+        stats: [
+          { label: "Present", value: String(count("present")) },
+          { label: "Absent", value: String(count("absent")) },
+          { label: "Late", value: String(count("late")) },
+          { label: "On leave", value: String(count("leave")) },
+          { label: "Not marked", value: String(result.rows.filter((row) => row.presence === null).length) },
+        ],
+        tables: [{ caption: "Daily teacher register", columns: ["Staff number", "Teacher", "Employment status", "Presence", "Note", "Recorded at"], rows }],
+        notes: ["On leave is a manual presence status; it does not approve a leave request."],
         rowCount: rows.length,
       };
     }

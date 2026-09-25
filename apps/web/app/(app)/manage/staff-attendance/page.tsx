@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { api, ApiError, type StaffAttendancePage, type StaffPresence } from "@/ui/api";
+import { api, ApiError, currentAcademicYear, type StaffAttendancePage, type StaffPresence } from "@/ui/api";
 import { HelpButton } from "@/ui/help/HelpButton";
+import { ReportButton } from "@/ui/ReportButton";
 import { Button, EmptyState, Input, PageHeader, StatusBadge, useToast } from "@vidya/ui-system";
 import styles from "./page.module.css";
 
@@ -136,6 +137,16 @@ export default function StaffAttendancePage() {
           <StatusBadge status="warn">{counts.late} late</StatusBadge>
           <StatusBadge status="neutral">{counts.leave} on leave</StatusBadge>
           <span>{counts.unmarked} not marked · {page.teachers.length} shown</span>
+        </div>
+        <div className={styles.exportBar} aria-label="Export teacher attendance">
+          <span>Export the complete school register for {date}.</span>
+          {(["pdf", "xlsx", "csv"] as const).map((format) => <ReportButton
+            key={`${collegeId}:${date}:${format}`}
+            params={{ kind: "teacher-attendance", collegeId, date }}
+            year={currentAcademicYear(new Date(`${date}T12:00:00`))}
+            format={format}
+            label={`Prepare ${format === "xlsx" ? "Excel" : format.toUpperCase()}`}
+          />)}
         </div>
         {canEdit ? <div className={styles.toolbar}>
           <Button variant="secondary" disabled={saving || counts.unmarked === 0} onClick={() => setDrafts((current) => Object.fromEntries(page.teachers.map(({ teacher }) => [teacher.id,

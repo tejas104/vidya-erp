@@ -10,7 +10,7 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ back, push }) }));
 
 vi.mock("./api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./api")>();
-  return { ...actual, api: { ...actual.api, colleges: vi.fn(), session: vi.fn(), listStaffAttendance: vi.fn(), saveStaffAttendance: vi.fn() } };
+  return { ...actual, api: { ...actual.api, colleges: vi.fn(), session: vi.fn(), listStaffAttendance: vi.fn(), saveStaffAttendance: vi.fn(), requestReport: vi.fn(), reportStatus: vi.fn() } };
 });
 
 const teacher = { id: "tch_1", collegeId: "col_1", staffNo: "T01", fullName: "Asha Rao", status: "active", identityUserId: null };
@@ -25,6 +25,8 @@ beforeEach(() => {
   (api.session as ReturnType<typeof vi.fn>).mockResolvedValue({ roles: ["admin"] });
   (api.listStaffAttendance as ReturnType<typeof vi.fn>).mockResolvedValue({ teachers: [{ teacher, attendance: null }], nextOffset: null });
   (api.saveStaffAttendance as ReturnType<typeof vi.fn>).mockResolvedValue({ attendance: [] });
+  (api.requestReport as ReturnType<typeof vi.fn>).mockResolvedValue("rpt_1");
+  (api.reportStatus as ReturnType<typeof vi.fn>).mockResolvedValue({ status: "completed" });
 });
 
 describe("teacher attendance page", () => {
@@ -75,5 +77,19 @@ describe("teacher attendance page", () => {
     expect((api.saveStaffAttendance as ReturnType<typeof vi.fn>).mock.calls[0]![0].entries).toEqual([
       { teacherId: "tch_2", status: "present", note: null },
     ]);
+  });
+
+  it("offers PDF, Excel and CSV for the complete selected school day", async () => {
+    renderPage();
+    expect(await screen.findByText("Asha Rao")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Prepare PDF" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Prepare CSV" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Prepare Excel" }));
+    await waitFor(() => expect(api.requestReport).toHaveBeenCalledTimes(1));
+    expect(api.requestReport).toHaveBeenCalledWith(
+      { kind: "teacher-attendance", collegeId: "col_1", date: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/) },
+      "xlsx", expect.stringMatching(/^\d{4}-\d{2}$/),
+    );
+    expect(await screen.findByRole("link", { name: "Download XLSX" })).toHaveAttribute("href", "/api/v1/reports/rpt_1/download");
   });
 });

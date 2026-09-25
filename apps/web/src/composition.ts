@@ -395,7 +395,7 @@ function buildWebRuntime(): WebRuntime {
     metrics,
     audit: system.service.audit,
     analyticsRead: analytics.service.readModel,
-    sources: { gradeCard: results.service.gradeCard, hallTicket: exams.service.hallTicket },
+    sources: { gradeCard: results.service.gradeCard, hallTicket: exams.service.hallTicket, teacherAttendance: people.service.staffAttendanceSource },
     storage: { client: objectStorage, bucket: config.s3.bucket },
     enqueueReport: async (payload) => {
       await reportingQueue.queue.add(REPORT_JOB_NAME, payload);

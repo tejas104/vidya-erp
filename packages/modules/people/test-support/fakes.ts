@@ -614,6 +614,13 @@ export class InMemoryStaffAttendanceRepo implements StaffAttendanceRepo {
     return [...this.rows.values()].filter((row) => row.attendedOn === attendedOn && teacherIds.includes(row.teacherId));
   }
 
+  async forSchoolDate(collegeId: string, attendedOn: string) {
+    return [...this.people.teachers.values()]
+      .filter((teacher) => teacher.collegeId === collegeId)
+      .sort((a, b) => a.fullName.localeCompare(b.fullName) || a.id.localeCompare(b.id))
+      .map((teacher) => ({ teacher, attendance: this.rows.get(`${teacher.id}:${attendedOn}`) ?? null }));
+  }
+
   async saveBatch(input: { collegeId: string; attendedOn: string; markedBy: string; entries: readonly { teacherId: string; status: "present" | "absent" | "late" | "leave"; note?: string | null }[] }) {
     const ids = input.entries.map((entry) => entry.teacherId);
     if (new Set(ids).size !== ids.length || ids.some((id) => {
