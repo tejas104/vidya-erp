@@ -25,4 +25,13 @@
   .summary > span:last-child { margin-left: 0; width: 100%; }
   .footer, .pager { width: 100%; }
   .pager { justify-content: space-between; }
+  .table { min-width: 0; }
+  .table thead { display: none; }
+  .table tbody { display: grid; gap: var(--space-3); padding: var(--space-3); }
+  .table tbody tr { display: grid; gap: var(--space-3); padding: var(--space-3); border: 1px solid var(--rule); border-radius: var(--radius-sm); }
+  .table tbody th, .table tbody td { display: grid; grid-template-columns: 76px minmax(0, 1fr); align-items: center; gap: var(--space-2); padding: 0; border: 0; }
+  .table tbody th { display: block; padding-bottom: var(--space-2); border-bottom: 1px solid var(--rule); }
+  .table tbody td::before { content: attr(data-label); color: var(--ink-2); font-size: var(--text-12); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+  .table select, .table input { width: 100%; }
+  .recorded { white-space: normal; }
 }

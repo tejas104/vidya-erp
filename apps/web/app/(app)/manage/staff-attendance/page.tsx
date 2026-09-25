@@ -152,11 +152,11 @@ export default function StaffAttendancePage() {
             const editable = canEdit && teacher.status === "active";
             return <tr key={teacher.id}>
               <th scope="row"><strong>{teacher.fullName}</strong><small>{teacher.staffNo}{teacher.status === "inactive" ? " · inactive" : ""}</small></th>
-              <td>{editable ? <select aria-label={`${teacher.fullName} presence`} value={draft.status} onChange={(event) => update(teacher.id, { status: event.target.value as Draft["status"] })}>
+              <td data-label="Presence">{editable ? <select aria-label={`${teacher.fullName} presence`} value={draft.status} onChange={(event) => update(teacher.id, { status: event.target.value as Draft["status"] })}>
                 <option value="">Not marked</option>{STATUS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
               </select> : <span>{STATUS.find((option) => option.value === draft.status)?.label ?? "Not marked"}</span>}</td>
-              <td>{editable ? <input aria-label={`${teacher.fullName} note`} maxLength={240} value={draft.note} onChange={(event) => update(teacher.id, { note: event.target.value })} placeholder="Optional context" /> : <span>{draft.note || "—"}</span>}</td>
-              <td className={styles.recorded}>{attendance ? new Date(attendance.updatedAt).toLocaleString() : "Not recorded"}</td>
+              <td data-label="Note">{editable ? <input aria-label={`${teacher.fullName} note`} maxLength={240} value={draft.note} onChange={(event) => update(teacher.id, { note: event.target.value })} placeholder="Optional context" /> : <span>{draft.note || "—"}</span>}</td>
+              <td data-label="Recorded" className={styles.recorded}>{attendance ? new Date(attendance.updatedAt).toLocaleString() : "Not recorded"}</td>
             </tr>;
           })}</tbody>
         </table></div>
