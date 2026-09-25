@@ -180,3 +180,37 @@ describe("canProduce access decisions", () => {
     expect(await canProduce(read, caller, { kind: "at-risk", level: "class", nodeId: "c" }, YEAR)).toBe("not-found");
   });
 });
+
+describe("school attendance review export", () => {
+  const params = { kind: "school-attendance-review" as const, sectionId: "sec_1", termId: "term_1", through: "2026-09-25" };
+
+  it("uses the scoped live calculation and preserves withheld enrollment dates in CSV", async () => {
+    const source = async () => ({
+      access: "ok" as const, termName: "Term 2", sectionName: "A", academicYear: YEAR,
+      data: {
+        termId: "term_1", sectionId: "sec_1", through: "2026-09-25", calendarVersion: 2, threshold: 75,
+        scheduledDates: ["2026-09-23", "2026-09-24"], unsubmittedDates: ["2026-09-24"],
+        students: [
+          { studentId: "stu_1", fullName: "Asha Rao", admissionNo: "A-01", enrollmentDates: [{ from: "2026-09-23", to: null }], dateIssue: null, expectedDays: 2, recordedDays: 1, absentDays: 0, missingEntryDates: [], percentageDenominator: 2, percentage: null, shortfall: null },
+          { studentId: "stu_2", fullName: "=HYPERLINK(\"unsafe\")", admissionNo: "A-02", enrollmentDates: [{ from: null, to: null }], dateIssue: "Enrollment start date needs verification", expectedDays: null, recordedDays: null, absentDays: null, missingEntryDates: [], percentageDenominator: null, percentage: null, shortfall: null },
+        ],
+      },
+    });
+    const sources = { schoolAttendanceReview: source };
+    expect(await canProduce(new FakeAnalyticsReadModel(), caller, params, YEAR, sources)).toBe("ok");
+    const report = await collectReport(new FakeAnalyticsReadModel(), caller, params, YEAR, "Admin", sources);
+    expect(report?.stats).toContainEqual({ label: "Dates to verify", value: "1" });
+    expect(report?.tables[1]?.rows).toEqual([["2026-09-24"]]);
+    const csv = renderCsv(report!);
+    expect(csv).toContain("Enrollment start date needs verification");
+    expect(csv).toContain("Awaiting complete data");
+    expect(csv).toContain("'=HYPERLINK");
+  });
+
+  it("refuses exports when the current scope is denied", async () => {
+    const sources = { schoolAttendanceReview: async () => ({ access: "forbidden" as const }) };
+    const read = new FakeAnalyticsReadModel();
+    expect(await canProduce(read, caller, params, YEAR, sources)).toBe("forbidden");
+    expect(await collectReport(read, caller, params, YEAR, "Admin", sources)).toBeNull();
+  });
+});

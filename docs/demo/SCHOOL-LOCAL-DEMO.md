@@ -55,6 +55,9 @@ daily registers separately from pupil absence. Standard 8 A has registers for
 through 25 September, with one pupil below 75%, one missing pupil entry, and
 classmates on track. The configured calendar covers the full term. School
 holidays should be removed from the calendar before a real pilot.
+After loading a review, use **Prepare PDF**, **Prepare Excel**, or **Prepare CSV**
+to create a scoped copy through the selected date. The background worker must
+be running; the download link appears when generation finishes.
 The open term deliberately withholds those newer marks from pupils until the
 school closes it. There are future exams for both standards, event notices,
 a pending staff leave request, and 40 generated invoices spanning unpaid,

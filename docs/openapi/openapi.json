@@ -15286,6 +15286,37 @@
                           "kind": {
                             "type": "string",
                             "enum": [
+                              "school-attendance-review"
+                            ]
+                          },
+                          "sectionId": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 64
+                          },
+                          "termId": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 64
+                          },
+                          "through": {
+                            "type": "string",
+                            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "sectionId",
+                          "termId",
+                          "through"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "type": "string",
+                            "enum": [
                               "marks-summary"
                             ]
                           },
@@ -15512,6 +15543,7 @@
                               "student-performance",
                               "section-attendance",
                               "teacher-attendance",
+                              "school-attendance-review",
                               "marks-summary",
                               "at-risk",
                               "grade-card",
@@ -15619,6 +15651,7 @@
                         "student-performance",
                         "section-attendance",
                         "teacher-attendance",
+                        "school-attendance-review",
                         "marks-summary",
                         "at-risk",
                         "grade-card",

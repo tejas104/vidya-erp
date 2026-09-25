@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Button, Card, EmptyState, PageHeader, Select, StatusBadge } from "@vidya/ui-system";
 import { api, ApiError, currentAcademicYear, type OrgTree, type SchoolAttendanceShortfall } from "./api";
 import { HelpButton } from "./help/HelpButton";
+import { ReportButton } from "./ReportButton";
 import styles from "./SchoolAttendanceReviewPage.module.css";
 
 type SectionOption = { id: string; label: string; collegeId: string };
@@ -83,6 +84,10 @@ export function SchoolAttendanceReviewPage() {
       {error ? <p className={styles.error} role="alert">{error} {error.includes("instructional") ? <Link href="/manage/terms">Set school days →</Link> : null}</p> : null}
     </Card>
     {report ? <>
+      <div className={styles.exportBar} role="group" aria-label="Export attendance review">
+        <p>Share this reviewed section through {report.through}. Exports keep missing evidence and unverified dates visible.</p>
+        <div className={styles.exportActions}>{(["pdf", "xlsx", "csv"] as const).map((format) => <ReportButton key={`${report.termId}:${report.sectionId}:${report.through}:${format}`} params={{ kind: "school-attendance-review", sectionId: report.sectionId, termId: report.termId, through: report.through }} year={term?.academicYear ?? currentAcademicYear()} format={format} label={`Prepare ${format === "xlsx" ? "Excel" : format.toUpperCase()}`} />)}</div>
+      </div>
       <div className={styles.metrics}>
         <div><span>Scheduled days</span><strong>{report.scheduledDates.length}</strong></div>
         <div><span>Registers missing</span><strong>{report.unsubmittedDates.length}</strong></div>

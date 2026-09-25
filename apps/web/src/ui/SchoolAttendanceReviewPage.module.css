@@ -5,6 +5,9 @@
 .dateLabel input { min-height: 2.75rem; padding: var(--space-2); border: 1px solid var(--rule-strong); border-radius: var(--radius-sm); background: var(--surface); color: inherit; font: inherit; }
 .error { color: var(--bad); }
 .error a { color: var(--section-link); font-weight: 700; text-decoration: underline; }
+.exportBar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: var(--space-3); padding: var(--space-4); border: 1px solid var(--rule); border-radius: var(--radius); background: var(--surface); }
+.exportBar p { margin: 0; color: var(--ink-2); }
+.exportActions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 .metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-3); margin: var(--space-5) 0; }
 .metrics > div { display: grid; gap: var(--space-2); border: 1px solid var(--rule); border-radius: var(--radius); background: var(--surface); padding: var(--space-4); }
 .metrics span, .hint, .table small { color: var(--ink-2); }

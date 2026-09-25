@@ -16,6 +16,7 @@ export const reportParamsSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("student-performance"), studentId: idSchema }),
   z.object({ kind: z.literal("section-attendance"), sectionId: idSchema }),
   z.object({ kind: z.literal("teacher-attendance"), collegeId: idSchema, date: schoolDateSchema }),
+  z.object({ kind: z.literal("school-attendance-review"), sectionId: idSchema, termId: idSchema, through: schoolDateSchema }),
   z.object({ kind: z.literal("marks-summary"), classId: idSchema }),
   z.object({ kind: z.literal("at-risk"), level: scopeLevelSchema, nodeId: idSchema }),
   // --- results ---
@@ -30,6 +31,7 @@ const reportViewSchema = z.object({
     "student-performance",
     "section-attendance",
     "teacher-attendance",
+    "school-attendance-review",
     "marks-summary",
     "at-risk",
     "grade-card",
