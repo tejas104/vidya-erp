@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { pino } from "pino";
+import ExcelJS from "exceljs";
 import { ReportService } from "./report-service";
 import type { StudentPerformanceReport } from "@vidya/module-analytics";
 import {
@@ -67,6 +68,32 @@ describe("request → generate → store", () => {
     const bytes = store.objects.get(`reports/${row.id}.pdf`)!;
     expect(bytes.length).toBeGreaterThan(500);
     expect(new TextDecoder().decode(bytes.slice(0, 5))).toBe("%PDF-");
+  });
+
+  it("generates a readable Excel workbook and retains scoped download checks", async () => {
+    const read = new FakeAnalyticsReadModel();
+    read.student = { ...okStudent, name: "=DANGEROUS()" };
+    const { service, store } = makeService(read);
+    const requester = principal("teacher-1");
+    const row = await service.createRequest(requester, { kind: "student-performance", studentId: "stu_1" }, "xlsx", YEAR);
+    await service.run(row.id, log);
+    const bytes = store.objects.get(`reports/${row.id}.xlsx`)!;
+    expect(new TextDecoder().decode(bytes.slice(0, 2))).toBe("PK");
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(Buffer.from(bytes) as unknown as Parameters<typeof workbook.xlsx.load>[0]);
+    expect(workbook.getWorksheet("Overview")?.getCell("A1").value).toContain("Student performance");
+    expect(workbook.getWorksheet("Overview")?.getCell("A2").value).toBe("'=DANGEROUS()");
+    const cells = workbook.getWorksheet("Table 1")!.getRows(1, 20)!.flatMap((sheetRow) => sheetRow.values as unknown[]);
+    expect(cells).toContain("Mathematics");
+    const download = await service.download(requester, row.id);
+    expect(download.state).toBe("ok");
+    if (download.state === "ok") {
+      expect(download.contentType).toBe("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+      expect(download.filename).toMatch(/\.xlsx$/);
+    }
+    expect((await service.download(principal("other"), row.id)).state).toBe("forbidden");
+    read.student = { state: "denied" };
+    expect((await service.download(requester, row.id)).state).toBe("forbidden");
   });
 
   it("fails closed (audited) when the requester's scope no longer yields content at generation", async () => {

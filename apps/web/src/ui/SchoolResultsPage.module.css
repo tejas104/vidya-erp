@@ -1,8 +1,8 @@
 .steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-3); }
 .step { display: grid; gap: var(--space-2); padding: var(--space-5); border: 1px solid var(--rule); border-radius: var(--radius); background: var(--surface); color: var(--ink); text-decoration: none; }
 .step:hover, .step:focus-visible { border-color: var(--brand); outline-color: var(--focus); }
-.step span { color: var(--brand); font-family: var(--font-figure); font-size: var(--text-12); }
-.step strong { font-size: var(--text-20); }
+.step span { color: var(--section-link); font-family: var(--font-figure); font-size: var(--text-12); }
+.step strong { color: var(--section-link); font-size: var(--text-20); text-decoration: underline; text-underline-offset: 3px; }
 .step small { color: var(--ink-2); font-size: var(--text-14); }
 .explain { max-width: 68ch; color: var(--ink-2); font-size: var(--text-14); line-height: 1.5; }
 .scales { display: grid; gap: var(--space-2); }

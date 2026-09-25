@@ -56,7 +56,7 @@
 .stepText { display: grid; gap: var(--space-1); min-width: 0; }
 .stepText strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .stepText small { color: var(--ink-2); }
-.nextSteps a { white-space: nowrap; color: var(--brand); font-weight: 700; text-decoration: none; }
+.nextSteps a { white-space: nowrap; color: var(--section-link); font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
 .nextSteps a:hover { text-decoration: underline; }
 .nextSteps a:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .nextStepsEmpty { padding: var(--space-4); margin: 0; border: 1px solid var(--rule); border-radius: var(--radius); color: var(--ink-2); }
@@ -75,6 +75,7 @@
   border-radius: var(--radius-md);
   transition: border-color 160ms ease, transform 160ms ease;
 }
+.quickGrid a strong { color: var(--section-link); text-decoration: underline; text-underline-offset: 3px; }
 .quickGrid a:hover {
   border-color: var(--focus);
   transform: translateY(-2px);

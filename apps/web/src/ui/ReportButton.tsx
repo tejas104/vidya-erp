@@ -22,7 +22,7 @@ export function ReportButton({
 }: {
   params: ReportParams;
   year: string;
-  format?: "pdf" | "csv";
+  format?: "pdf" | "csv" | "xlsx";
   label: string;
 }) {
   const [phase, setPhase] = useState<Phase>({ name: "idle" });

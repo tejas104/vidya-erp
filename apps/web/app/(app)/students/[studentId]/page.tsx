@@ -6,7 +6,7 @@ import {
   type FeeInvoiceView, type StudentAttendance, type StudentDetailView,
   type StudentDocument, type StudentHistory, type StudentMarksRow, type StudentPerformance,
 } from "@/ui/api";
-import { Sparkline, StatTile, SubjectBars } from "@/ui/charts";
+import { AttendanceColumns, Sparkline, StatTile, SubjectBars } from "@/ui/charts";
 import { ReportButton } from "@/ui/ReportButton";
 import { DeniedState } from "@/ui/DeniedState";
 import { AsyncState } from "@/ui/AsyncState";
@@ -217,6 +217,7 @@ function PerformancePanel({ data, year }: { data: StudentPerformance; year: stri
       <p className={styles.explainer}>Figures use only attendance and subjects you are permitted to read. Overall marks appear only when every subject is visible.</p>
       <div className={styles.reportRow}>
         <ReportButton params={{ kind: "student-performance", studentId: data.studentId }} year={year} format="pdf" label="Download report (PDF)" />
+        <ReportButton params={{ kind: "student-performance", studentId: data.studentId }} year={year} format="xlsx" label="Export (Excel)" />
         <ReportButton params={{ kind: "student-performance", studentId: data.studentId }} year={year} format="csv" label="Export (CSV)" />
       </div>
       <div className={`card ${styles.statsCard}`}>
@@ -231,7 +232,7 @@ function PerformancePanel({ data, year }: { data: StudentPerformance; year: stri
         {data.attendance !== null && data.attendance.monthly.length > 0 ? (
           <div className={styles.trendWrap}>
             <div className={`tile-kind ${styles.trendLabel}`}>Attendance trend</div>
-            <Sparkline label="Monthly attendance" points={data.attendance.monthly.map((point) => ({ x: point.month, y: point.pct }))} />
+            <AttendanceColumns label="Monthly attendance" points={data.attendance.monthly.map((point) => ({ x: point.month, y: point.pct }))} height={125} />
           </div>
         ) : null}
       </div>

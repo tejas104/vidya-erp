@@ -2,6 +2,7 @@ import type { AuditLogger, Logger, Principal } from "@vidya/platform";
 import type { AnalyticsReadModel } from "@vidya/module-analytics";
 import { renderCsv } from "../render/csv";
 import { renderPdf } from "../render/pdf";
+import { renderXlsx } from "../render/xlsx";
 import {
   canProduce,
   collectReport,
@@ -30,6 +31,7 @@ export interface ReportServiceDeps {
 const CONTENT_TYPE: Record<ReportFormat, string> = {
   pdf: "application/pdf",
   csv: "text/csv; charset=utf-8",
+  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
 };
 
 /** Rebuilds a Principal from the stored scope snapshot (generation-time scope). */
@@ -119,9 +121,10 @@ export class ReportService {
         this.deps.onFinished?.(row.kind, format, "failed");
         return;
       }
-      const bytes =
-        format === "csv"
-          ? new TextEncoder().encode(renderCsv(data))
+      const bytes = format === "csv"
+        ? new TextEncoder().encode(renderCsv(data))
+        : format === "xlsx"
+          ? await renderXlsx(data)
           : new Uint8Array(await renderPdf(data));
       const objectKey = `reports/${reportId}.${format}`;
       await this.deps.store.put(objectKey, bytes, CONTENT_TYPE[format]);

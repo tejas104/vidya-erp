@@ -102,9 +102,16 @@
   font-size: var(--text-12);
 }
 .sectionTitle a {
-  color: var(--brand);
+  color: var(--section-link);
   font-family: var(--font-body);
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
+.sectionTitle a::after,
+.classList a::after,
+.periods a::after,
+.riskList a::after { content: " ↗"; }
 .workspaces,
 .panel {
   padding: var(--space-5);
@@ -121,7 +128,7 @@
   min-height: 62px;
   padding: var(--space-2) 0;
   border-bottom: 1px solid var(--rule);
-  color: var(--ink);
+  color: var(--section-link);
   text-decoration: none;
 }
 .action:last-child {
@@ -129,13 +136,14 @@
 }
 .action:hover .actionText strong,
 .riskList a:hover {
-  color: var(--brand);
+  color: var(--section-link);
 }
 .actionNumber,
 .actionArrow {
   color: var(--ink-3);
 }
 .actionArrow {
+  color: var(--section-link);
   text-align: right;
 }
 .actionText {
@@ -167,11 +175,14 @@
   text-decoration: none;
 }
 .metricLink strong {
+  color: var(--section-link);
+  text-decoration: underline;
+  text-underline-offset: 3px;
   font-family: var(--font-figure);
   font-size: var(--text-24);
 }
 .metricLink strong span {
-  color: var(--brand);
+  color: var(--section-link);
   font-size: var(--text-16);
 }
 .metricLink > span {
@@ -216,7 +227,7 @@
   border-top: 1px solid var(--rule);
 }
 .classList a {
-  color: var(--brand);
+  color: var(--section-link);
   font-size: var(--text-12);
   font-weight: 600;
 }
@@ -230,7 +241,7 @@
   font-size: var(--text-12);
 }
 .periods a {
-  color: var(--brand);
+  color: var(--section-link);
   font-size: var(--text-12);
   font-weight: 600;
 }
@@ -243,7 +254,7 @@
   border-top: 1px solid var(--rule);
 }
 .riskList a {
-  color: var(--ink);
+  color: var(--section-link);
   font-weight: 600;
 }
 .riskList span {

@@ -257,6 +257,56 @@ export function TrendLine({
   );
 }
 
+/** Monthly attendance as columns, with the exact percentage on each bar. */
+export function AttendanceColumns({
+  points,
+  label,
+  height = 190,
+}: {
+  points: { x: string; y: number }[];
+  label: string;
+  height?: number;
+}) {
+  if (points.length === 0) return <div className="strip-empty">No attendance yet.</div>;
+  const w = 640;
+  const left = 34;
+  const right = 12;
+  const top = 24;
+  const bottom = 31;
+  const plotH = height - top - bottom;
+  const plotW = w - left - right;
+  const groupW = plotW / points.length;
+  const barW = Math.min(38, groupW * 0.58);
+  const yFor = (value: number) => top + plotH * (1 - Math.max(0, Math.min(100, value)) / 100);
+  const month = (value: string) => {
+    const match = /^(\d{4})-(\d{2})$/.exec(value);
+    if (!match) return value;
+    const index = Number(match[2]) - 1;
+    return index >= 0 && index < 12 ? new Intl.DateTimeFormat("en", { month: "short" }).format(new Date(2020, index, 1)) : value;
+  };
+  return (
+    <div className="attendance-chart-scroll">
+    <svg viewBox={`0 0 ${w} ${height}`} width="100%" height={height} role="img"
+      aria-label={`${label}. ${points.map((point) => `${point.x}: ${point.y}%`).join(", ")}`}>
+      {[0, 50, 100].map((tick) => <g key={tick}>
+        <line x1={left} y1={yFor(tick)} x2={w - right} y2={yFor(tick)} stroke="var(--rule)" />
+        <text x={left - 7} y={yFor(tick) + 3} textAnchor="end" fontSize="10" fill="var(--ink-2)">{tick}</text>
+      </g>)}
+      {points.map((point, index) => {
+        const value = Math.max(0, Math.min(100, point.y));
+        const x = left + groupW * (index + 0.5);
+        const y = yFor(value);
+        return <g key={`${point.x}-${index}`}>
+          <rect x={x - barW / 2} y={y} width={barW} height={Math.max(1, top + plotH - y)} rx="4" fill="var(--attendance-chart)" />
+          <text x={x} y={Math.max(12, y - 6)} textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--ink)">{Math.round(point.y)}%</text>
+          <text x={x} y={height - 7} textAnchor="middle" fontSize="10" fill="var(--ink-2)">{month(point.x)}</text>
+        </g>;
+      })}
+    </svg>
+    </div>
+  );
+}
+
 /** Per-child comparison: one row each, an attendance bar and a marks bar. */
 export function CompareBars({
   rows,

@@ -27,13 +27,13 @@ const TONE: Record<ReportView["status"], "good" | "warn" | "danger" | "neutral">
 };
 
 type Need = "student" | "section" | "class";
-const KINDS: { kind: ReportParams["kind"]; label: string; need: Need; formats: ("pdf" | "csv")[] }[] = [
-  { kind: "grade-card", label: "Grade card — one student", need: "student", formats: ["pdf"] },
-  { kind: "hall-ticket", label: "Exam hall ticket — one student", need: "student", formats: ["pdf"] },
-  { kind: "student-performance", label: "Student performance", need: "student", formats: ["pdf", "csv"] },
-  { kind: "section-attendance", label: "Section attendance register", need: "section", formats: ["pdf", "csv"] },
-  { kind: "marks-summary", label: "Class marks summary", need: "class", formats: ["pdf", "csv"] },
-  { kind: "at-risk", label: "At-risk students — a class", need: "class", formats: ["pdf", "csv"] },
+const KINDS: { kind: ReportParams["kind"]; label: string; need: Need; formats: ("pdf" | "csv" | "xlsx")[] }[] = [
+  { kind: "grade-card", label: "Grade card — one student", need: "student", formats: ["pdf", "xlsx", "csv"] },
+  { kind: "hall-ticket", label: "Exam hall ticket — one student", need: "student", formats: ["pdf", "xlsx", "csv"] },
+  { kind: "student-performance", label: "Student performance", need: "student", formats: ["pdf", "xlsx", "csv"] },
+  { kind: "section-attendance", label: "Section attendance register", need: "section", formats: ["pdf", "xlsx", "csv"] },
+  { kind: "marks-summary", label: "Class marks summary", need: "class", formats: ["pdf", "xlsx", "csv"] },
+  { kind: "at-risk", label: "At-risk students — a class", need: "class", formats: ["pdf", "xlsx", "csv"] },
 ];
 
 type ReportRow = {
@@ -52,7 +52,7 @@ export default function ReportsPage() {
   const [sectionId, setSectionId] = useState("");
   const [studentId, setStudentId] = useState("");
   const [roster, setRoster] = useState<StudentView[]>([]);
-  const [format, setFormat] = useState<"pdf" | "csv">("pdf");
+  const [format, setFormat] = useState<"pdf" | "csv" | "xlsx">("pdf");
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
@@ -199,8 +199,8 @@ export default function ReportsPage() {
 
           <Select
             id="r-fmt" label="Format"
-            value={format} onChange={(e) => setFormat(e.target.value as "pdf" | "csv")}
-            options={spec.formats.map((f) => ({ value: f, label: f.toUpperCase() }))}
+            value={format} onChange={(e) => setFormat(e.target.value as "pdf" | "csv" | "xlsx")}
+            options={spec.formats.map((f) => ({ value: f, label: f === "xlsx" ? "Excel (.xlsx)" : f.toUpperCase() }))}
           />
 
           <Button onClick={() => void generate()} loading={busy}>Generate report</Button>

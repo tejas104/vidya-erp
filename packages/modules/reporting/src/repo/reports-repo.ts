@@ -4,7 +4,7 @@ import type { Db, Role, ScopeGrant } from "@vidya/platform";
 import { rptReports, type RptReportRow } from "../db/schema";
 import type { ReportParams } from "../report-data";
 
-export type ReportFormat = "pdf" | "csv";
+export type ReportFormat = "pdf" | "csv" | "xlsx";
 export type ReportStatus = "pending" | "running" | "completed" | "failed";
 
 /** The minimal scope snapshot rehydrated into a Principal for generation. */

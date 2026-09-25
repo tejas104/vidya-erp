@@ -7,7 +7,7 @@ export const TABLE_PREFIX = "rpt_";
 
 export const idSchema = z.string().min(1).max(64);
 export const academicYearSchema = z.string().regex(/^\d{4}-\d{2}$/, 'academic year like "2026-27"');
-export const formatSchema = z.enum(["pdf", "csv"]);
+export const formatSchema = z.enum(["pdf", "csv", "xlsx"]);
 export const scopeLevelSchema = z.enum(["section", "class", "department", "college"]);
 
 export const reportParamsSchema = z.discriminatedUnion("kind", [
@@ -144,7 +144,7 @@ const routes: RouteSpec[] = [
     auth: ANY_AUTHENTICATED,
     request: { params: z.object({ reportId: idSchema }) },
     responses: {
-      200: { description: "The PDF or CSV artifact", contentType: "application/octet-stream" },
+      200: { description: "The PDF, Excel, or CSV artifact", contentType: "application/octet-stream" },
       403: { description: "Not the requester, or outside current scope", schema: problemSchema },
       404: { description: "No such report", schema: problemSchema },
       409: { description: "Report is not ready yet", schema: problemSchema },
@@ -316,7 +316,7 @@ const jobs: JobSpec[] = [
     name: REPORT_JOB_NAME,
     module: MODULE_NAME,
     summary:
-      "Generates a report with the requester's scope snapshot (scope-filtered via the analytics read model), uploads the PDF/CSV to object storage, and audits actor + kind + scope + counts.",
+      "Generates a report with the requester's scope snapshot (scope-filtered via the analytics read model), uploads the PDF/Excel/CSV artifact to object storage, and audits actor + kind + scope + counts.",
     payloadSchema: reportJobPayloadSchema,
   },
 ];

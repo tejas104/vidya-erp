@@ -209,7 +209,7 @@ export type ReportParams =
 export interface ReportView {
   id: string;
   kind: string;
-  format: "pdf" | "csv";
+  format: "pdf" | "csv" | "xlsx";
   academicYear: string;
   status: "pending" | "running" | "completed" | "failed";
   rows: number;
@@ -1254,7 +1254,7 @@ export const api = {
       () => undefined,
     );
   },
-  async requestReport(report: ReportParams, format: "pdf" | "csv", year: string): Promise<string> {
+  async requestReport(report: ReportParams, format: "pdf" | "csv" | "xlsx", year: string): Promise<string> {
     const response = await fetch("/api/v1/reports", {
       method: "POST",
       credentials: "same-origin",

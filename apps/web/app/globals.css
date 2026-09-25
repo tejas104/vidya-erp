@@ -304,10 +304,11 @@ a {
 }
 
 .risk-name {
+  color: var(--section-link);
   font-weight: 600;
   /* the examiner's underline — always paired with the reason label, never color alone */
   text-decoration: underline;
-  text-decoration-color: var(--accent);
+  text-decoration-color: var(--section-link);
   text-decoration-thickness: 2px;
   text-underline-offset: 3px;
 }
@@ -555,6 +556,37 @@ a {
   text-underline-offset: 2px;
   font-weight: 600;
 }
+
+/* In-page navigation has one recognizable purple treatment. Download links and
+   action buttons keep their existing styles. */
+a.linklike[href^="/"]:not([href^="/api/"]) {
+  color: var(--section-link);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 4px;
+}
+a.linklike[href^="/"]:not([href^="/api/"]):not(.backlink)::after,
+a.risk-name[href^="/"]::after {
+  content: " ↗";
+  font-size: .85em;
+  text-decoration: none;
+}
+.section-back {
+  display: inline-flex;
+  align-items: center;
+  gap: .5rem;
+  min-height: 44px;
+  padding: .4rem .75rem;
+  margin: 0 0 var(--space-4);
+  border: 1px solid var(--section-link);
+  border-radius: var(--radius-sm);
+  background: var(--section-link-soft);
+  color: var(--section-link);
+  font: 600 var(--text-14) var(--font-body);
+  cursor: pointer;
+}
+.section-back:hover { text-decoration: underline; }
+.attendance-chart-scroll { overflow-x: auto; }
+.attendance-chart-scroll svg { display: block; min-width: 480px; }
 
 .formerror {
   color: var(--accent);

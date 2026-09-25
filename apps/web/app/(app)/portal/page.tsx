@@ -33,7 +33,7 @@ import {
   type TableColumn,
 } from "@vidya/ui-system";
 import { AsyncState } from "@/ui/AsyncState";
-import { StatTile, Sparkline, SubjectBars, TrendLine } from "@/ui/charts";
+import { AttendanceColumns, StatTile, Sparkline, SubjectBars } from "@/ui/charts";
 import { formatPaise } from "@/ui/money";
 import { Noticeboard } from "@/ui/Noticeboard";
 import { ReportButton } from "@/ui/ReportButton";
@@ -402,7 +402,7 @@ export default function PortalPage({ view = "overview" }: { view?: PortalView })
         <section className="section" aria-label="Attendance trend">
           <div className="section-head"><h2>Attendance by month</h2></div>
           <Card>
-            <TrendLine label="My monthly attendance" points={attendance.monthly.map((m) => ({ x: m.month, y: m.pct }))} />
+            <AttendanceColumns label="My monthly attendance" points={attendance.monthly.map((m) => ({ x: m.month, y: m.pct }))} />
           </Card>
         </section>
       ) : null}

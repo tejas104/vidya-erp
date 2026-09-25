@@ -1,7 +1,7 @@
 /**
  * @vidya/module-reporting — PUBLIC API (the only importable surface).
  *
- * Scope-filtered PDF/CSV reports built through #5's AnalyticsReadModel (and
+ * Scope-filtered PDF/Excel/CSV reports built through #5's AnalyticsReadModel (and
  * #4's read model), so a report inherits constituent-closure, the
  * minimum-cohort rule and at-risk field-gating — a report is a disclosure
  * surface, no exemption because it is "a document" (ADR-0020). CSV cells are

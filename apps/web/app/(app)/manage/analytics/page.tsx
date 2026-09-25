@@ -12,7 +12,7 @@ import {
   type Session,
 } from "@/ui/api";
 import { Button, PageHeader } from "@vidya/ui-system";
-import { CompareBars, Histogram, RegisterStrip, SubjectBars, TrendLine } from "@/ui/charts";
+import { AttendanceColumns, CompareBars, Histogram, RegisterStrip, SubjectBars } from "@/ui/charts";
 import { focusOf, type Focus } from "@/ui/oversightFocus";
 import { HelpButton } from "@/ui/help/HelpButton";
 
@@ -146,7 +146,7 @@ export default function AnalyticsPage() {
             <section className="section" aria-label="Attendance trend">
               <div className="section-head"><h2>Attendance trend</h2></div>
               <div className="card">
-                <TrendLine
+                <AttendanceColumns
                   label="Monthly attendance"
                   points={kpiAttendance.value.monthly.map((m) => ({ x: m.month, y: m.pct }))}
                 />

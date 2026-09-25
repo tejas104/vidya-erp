@@ -31,6 +31,9 @@
   --brand-soft: #eef0fe;
   --on-brand: #fff;
   --line: #4a5bd8; /* chart/link hue = brand blue */
+  --section-link: #6630b2;
+  --section-link-soft: #f3edfb;
+  --attendance-chart: #7352c9;
   --focus: #4a5bd8;
   --good: #1f9268;
   --good-soft: #e9f7f1;
@@ -122,6 +125,9 @@
     --brand-soft: #23273b;
     --on-brand: #171a26; /* lighter brand blue in dark mode reads better with dark text than white (~4.9:1 vs ~3.6:1) */
     --line: #6b7bff;
+    --section-link: #c7a5ff;
+    --section-link-soft: #332544;
+    --attendance-chart: #a78bfa;
     --focus: #6b7bff;
     --good: #4fb88a;
     --good-soft: #15271f;
@@ -155,6 +161,9 @@
   }
 }
 :root[data-theme="dark"] {
+  --section-link: #c7a5ff;
+  --section-link-soft: #332544;
+  --attendance-chart: #a78bfa;
   --paper: #14161f;
   --paper-raised: #1c1f2b;
   --paper-sunken: #22252f;

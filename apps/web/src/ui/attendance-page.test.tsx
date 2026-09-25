@@ -4,6 +4,10 @@ import { ToastProvider } from "@vidya/ui-system";
 import AttendancePage from "../../app/(app)/manage/attendance/page";
 import { api } from "./api";
 
+const back = vi.fn();
+const push = vi.fn();
+vi.mock("next/navigation", () => ({ useRouter: () => ({ back, push }) }));
+
 function renderPage() {
   return render(
     <ToastProvider>
@@ -37,6 +41,11 @@ beforeEach(() => {
 });
 
 describe("attendance register", () => {
+  it("offers a visible previous-section control with a safe classes fallback", async () => {
+    renderPage();
+    fireEvent.click(screen.getByRole("button", { name: "Back to previous section" }));
+    expect(back.mock.calls.length + push.mock.calls.length).toBe(1);
+  });
   it("blocks a second register for the same section, date and period", async () => {
     const today = new Date().toISOString().slice(0, 10);
     (api.sessionAttendance as ReturnType<typeof vi.fn>).mockResolvedValue({ sessions: [{ id: "ses_existing", heldOn: today, slot: "day", subjectId: "", academicYear: "2026-27", counts: { present: 2, absent: 0, late: 0, excused: 0 } }] });

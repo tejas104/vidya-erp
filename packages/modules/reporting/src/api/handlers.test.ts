@@ -144,6 +144,18 @@ describe("report request handler", () => {
     expect(result.audit?.details).toMatchObject({ kind: "student-performance", format: "csv" });
   });
 
+  it("accepts Excel requests through the same scoped queue", async () => {
+    const read = new FakeAnalyticsReadModel();
+    read.student = okStudent;
+    const { handlers, enqueued } = makeHarness(read);
+    const result = await handlers["reporting.request"]!(
+      ctx(principal("t1"), { body: { format: "xlsx", academicYear: YEAR, report: { kind: "student-performance", studentId: "stu_1" } } }),
+    );
+    expect(result.status).toBe(202);
+    expect(enqueued).toHaveLength(1);
+    expect(result.audit?.details).toMatchObject({ kind: "student-performance", format: "xlsx" });
+  });
+
   it("403 when the target is out of scope, 404 when it does not exist", async () => {
     const read = new FakeAnalyticsReadModel();
     read.student = { state: "denied" };

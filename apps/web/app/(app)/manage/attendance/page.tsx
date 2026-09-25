@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { api, currentAcademicYear, type AttendanceStatus, type SessionSummary, type SessionView } from "@/ui/api";
 import { useMutation } from "@/ui/useMutation";
 import { DeniedState } from "@/ui/DeniedState";
@@ -24,6 +25,7 @@ function fromSecondary(value: string): AttendanceStatus {
 }
 
 export default function AttendancePage() {
+  const router = useRouter();
   const year = useMemo(() => currentAcademicYear(), []);
   const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
   const [sections, setSections] = useState<SectionOpt[]>([]);
@@ -144,6 +146,12 @@ export default function AttendancePage() {
 
   return (
     <>
+      <button className="section-back" type="button" onClick={() => {
+        if (window.history.length > 1 && window.history.state?.__NA) router.back();
+        else router.push("/manage/classes");
+      }} aria-label="Back to previous section">
+        <span aria-hidden="true">←</span> Back to previous section
+      </button>
       <PageHeader
         eyebrow="Attendance"
         title="Class attendance"

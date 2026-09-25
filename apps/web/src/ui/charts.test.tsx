@@ -1,11 +1,17 @@
 import { describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/react";
-import { TrendLine, CompareBars, Histogram, RiskDonut } from "./charts";
+import { AttendanceColumns, TrendLine, CompareBars, Histogram, RiskDonut } from "./charts";
 
 describe("chart primitives", () => {
   it("TrendLine renders an accessible titled line", () => {
     render(<TrendLine label="Attendance trend" points={[{ x: "2026-06", y: 80 }, { x: "2026-07", y: 88 }]} />);
     expect(screen.getByRole("img", { name: /Attendance trend/ })).toBeInTheDocument();
+  });
+  it("AttendanceColumns shows monthly percentages and an accessible summary", () => {
+    render(<AttendanceColumns label="Monthly attendance" points={[{ x: "2026-06", y: 80 }, { x: "2026-07", y: 88 }]} />);
+    expect(screen.getByRole("img", { name: /2026-06: 80%, 2026-07: 88%/ })).toBeInTheDocument();
+    expect(screen.getByText("Jun")).toBeInTheDocument();
+    expect(screen.getByText("88%")).toBeInTheDocument();
   });
   it("CompareBars lists each child with its figures", () => {
     render(<CompareBars rows={[{ label: "Computer Science", attendancePct: 86, marksPct: 74, atRisk: 1 }]} />);

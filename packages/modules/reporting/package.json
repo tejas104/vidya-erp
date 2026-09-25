@@ -2,7 +2,7 @@
   "name": "@vidya/module-reporting",
   "version": "0.1.0",
   "private": true,
-  "description": "Vidya reporting & export module (rpt_): scope-filtered PDF/CSV reports built from #4/#5 public interfaces, with CSV formula-injection escaping and scoped download. A report is a disclosure surface Ã¢â‚¬â€ same rules as a live view.",
+  "description": "Vidya reporting and export module: scope-filtered PDF, Excel, and CSV reports with spreadsheet formula-injection escaping and scoped download.",
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
@@ -12,15 +12,16 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@vidya/module-analytics": "workspace:*",
-    "@vidya/module-results": "workspace:*",
-    "@vidya/module-exams": "workspace:*",
     "@vidya/module-academics": "workspace:*",
-    "@vidya/module-school-academics": "workspace:*",
-    "@vidya/module-people": "workspace:*",
+    "@vidya/module-analytics": "workspace:*",
+    "@vidya/module-exams": "workspace:*",
     "@vidya/module-identity": "workspace:*",
+    "@vidya/module-people": "workspace:*",
+    "@vidya/module-results": "workspace:*",
+    "@vidya/module-school-academics": "workspace:*",
     "@vidya/platform": "workspace:*",
     "drizzle-orm": "^0.44.2",
+    "exceljs": "^4.4.0",
     "pdfkit": "^0.15.0",
     "prom-client": "^15.1.3",
     "zod": "^3.25.0"
