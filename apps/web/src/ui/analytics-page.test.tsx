@@ -40,7 +40,9 @@ const dashboard: Dashboard = {
       classId: "class-se-a",
       attendance: {
         state: "ok",
-        value: { pct: 88, sessions: 40, distinctStudents: 30, monthly: [{ month: "2026-07", pct: 88 }] },
+        value: { pct: 88, sessions: 40, distinctStudents: 30, monthly: [
+          { month: "2026-07", pct: 80 }, { month: "2026-08", pct: 88 },
+        ] },
       },
       marks: { state: "insufficient-cohort", minCohort: 5 },
       atRisk: 1,
@@ -69,6 +71,38 @@ describe("AnalyticsPage", () => {
     // The trend section is what actually moved off /dashboard — assert the
     // content, not just the shell, or the split could silently render nothing.
     expect(await screen.findByRole("region", { name: "Attendance trend" })).toBeInTheDocument();
+  });
+
+  it("switches attendance between columns, line, area and exact values", async () => {
+    render(<AnalyticsPage />);
+    await screen.findByRole("region", { name: "Attendance trend" });
+    expect(screen.getByRole("button", { name: "Columns" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByText(/Up 8 percentage points from Jul 2026/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Line" }));
+    expect(screen.getByRole("button", { name: "Line" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("img", { name: /Line chart of monthly attendance/ })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Area" }));
+    expect(screen.getByRole("img", { name: /Area chart of monthly attendance/ })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Data" }));
+    const values = screen.getByRole("table", { name: "Monthly attendance values" });
+    expect(values).toHaveTextContent("Jul 2026");
+    expect(values).toHaveTextContent("88%");
+  });
+
+  it("uses columns or values for a single recorded month", async () => {
+    mocked(api.dashboard).mockResolvedValue({ ...dashboard, tiles: [{
+      ...dashboard.tiles[0], attendance: { state: "ok", value: {
+        pct: 88, sessions: 10, distinctStudents: 30, monthly: [{ month: "2026-08", pct: 88 }],
+      } },
+    }] });
+    render(<AnalyticsPage />);
+    await screen.findByRole("region", { name: "Attendance trend" });
+    expect(screen.queryByRole("button", { name: "Line" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Area" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Data" })).toBeInTheDocument();
   });
 
   it("derives its focus from the dashboard tiles and fetches that node's rollups", async () => {

@@ -12,11 +12,36 @@ import {
   type Session,
 } from "@/ui/api";
 import { Button, PageHeader } from "@vidya/ui-system";
-import { AttendanceColumns, CompareBars, Histogram, RegisterStrip, SubjectBars } from "@/ui/charts";
+import { AttendanceColumns, CompareBars, Histogram, RegisterStrip, SubjectBars, TrendLine } from "@/ui/charts";
 import { focusOf, type Focus } from "@/ui/oversightFocus";
 import { HelpButton } from "@/ui/help/HelpButton";
+import styles from "./page.module.css";
 
 export const dynamic = "force-dynamic";
+
+type TrendView = "columns" | "line" | "area" | "data";
+const TREND_VIEWS: { value: TrendView; label: string }[] = [
+  { value: "columns", label: "Columns" },
+  { value: "line", label: "Line" },
+  { value: "area", label: "Area" },
+  { value: "data", label: "Data" },
+];
+
+function monthLabel(month: string): string {
+  const match = /^(\d{4})-(\d{2})$/.exec(month);
+  if (!match) return month;
+  const index = Number(match[2]) - 1;
+  if (index < 0 || index > 11) return month;
+  return new Intl.DateTimeFormat("en-IN", { month: "short", year: "numeric" }).format(new Date(Number(match[1]), index, 1));
+}
+
+function decimal(value: number): string {
+  return new Intl.NumberFormat("en-IN", { maximumFractionDigits: 1 }).format(value);
+}
+
+function percent(value: number): string {
+  return `${decimal(value)}%`;
+}
 
 // The real ANALYTICS screen (nav entry: navConfig.ts). Everything below used
 // to live inline on /dashboard for oversight roles — split out so the nav
@@ -38,6 +63,7 @@ export default function AnalyticsPage() {
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [recomputing, setRecomputing] = useState(false);
+  const [trendView, setTrendView] = useState<TrendView>("columns");
 
   async function handleRecompute() {
     setRecomputing(true);
@@ -107,7 +133,12 @@ export default function AnalyticsPage() {
   const focusTile = focus?.tile ?? null;
   const kpiAttendance = focusTile && "attendance" in focusTile ? focusTile.attendance : null;
 
-  const hasTrend = kpiAttendance !== null && kpiAttendance.state === "ok" && kpiAttendance.value.monthly.length > 0;
+  const monthly = kpiAttendance !== null && kpiAttendance.state === "ok"
+    ? [...kpiAttendance.value.monthly].sort((a, b) => a.month.localeCompare(b.month)) : [];
+  const hasTrend = monthly.length > 0;
+  const firstMonth = monthly[0];
+  const lastMonth = monthly[monthly.length - 1];
+  const change = firstMonth && lastMonth ? Math.round((lastMonth.pct - firstMonth.pct) * 10) / 10 : 0;
   const hasSubjects = rollup !== null && rollup.marks.bySubject.length > 0;
   const hasComparison = compare !== null && compare.children.length > 0;
   const hasDistribution = distribution !== null;
@@ -142,14 +173,36 @@ export default function AnalyticsPage() {
       ) : (
         <>
           {/* ATTENDANCE TREND */}
-          {hasTrend && kpiAttendance && kpiAttendance.state === "ok" ? (
+          {hasTrend ? (
             <section className="section" aria-label="Attendance trend">
-              <div className="section-head"><h2>Attendance trend</h2></div>
+              <div className={`section-head ${styles.chartHead}`}>
+                <h2>Attendance trend</h2>
+                <div className={styles.chartModes} role="group" aria-label="Attendance chart view">
+                  {TREND_VIEWS.filter((view) => monthly.length > 1 || view.value === "columns" || view.value === "data").map((view) => (
+                    <button key={view.value} type="button" className={styles.chartMode}
+                      aria-pressed={trendView === view.value} onClick={() => setTrendView(view.value)}>{view.label}</button>
+                  ))}
+                </div>
+              </div>
               <div className="card">
-                <AttendanceColumns
-                  label="Monthly attendance"
-                  points={kpiAttendance.value.monthly.map((m) => ({ x: m.month, y: m.pct }))}
-                />
+                <p className={styles.trendSummary}>
+                  {lastMonth ? `Latest: ${percent(lastMonth.pct)} in ${monthLabel(lastMonth.month)}.` : ""}
+                  {firstMonth && lastMonth && monthly.length > 1 ? ` ${change === 0 ? "No change" : `${change > 0 ? "Up" : "Down"} ${decimal(Math.abs(change))} percentage points`} from ${monthLabel(firstMonth.month)}.` : ""}
+                </p>
+                {trendView === "columns" || monthly.length === 1 && trendView !== "data" ? (
+                  <AttendanceColumns label="Monthly attendance" points={monthly.map((m) => ({ x: m.month, y: m.pct }))} />
+                ) : trendView === "line" || trendView === "area" ? (
+                  <div className="attendance-chart-scroll">
+                    <TrendLine label={`${trendView === "line" ? "Line" : "Area"} chart of monthly attendance`}
+                      points={monthly.map((m) => ({ x: monthLabel(m.month), y: m.pct }))}
+                      height={190} fillOpacity={trendView === "area" ? 0.26 : 0} />
+                  </div>
+                ) : (
+                  <table className={styles.dataTable} aria-label="Monthly attendance values">
+                    <thead><tr><th scope="col">Month</th><th scope="col">Attendance</th></tr></thead>
+                    <tbody>{monthly.map((m) => <tr key={m.month}><th scope="row">{monthLabel(m.month)}</th><td>{percent(m.pct)}</td></tr>)}</tbody>
+                  </table>
+                )}
               </div>
             </section>
           ) : null}

@@ -212,10 +212,12 @@ export function TrendLine({
   points,
   label,
   height = 160,
+  fillOpacity = 0.1,
 }: {
   points: { x: string; y: number }[];
   label: string;
   height?: number;
+  fillOpacity?: number;
 }) {
   if (points.length === 0) return <div className="strip-empty">No trend yet.</div>;
   const w = 640;
@@ -240,12 +242,17 @@ export function TrendLine({
           <text x={padL - 6} y={yFor(g) + 3} textAnchor="end" fontSize="10" fill="var(--muted, #8a8a8a)">{g}</text>
         </g>
       ))}
-      <path d={area} fill="var(--line)" opacity="0.1" />
+      {fillOpacity > 0 ? <path d={area} fill="var(--line)" opacity={fillOpacity} /> : null}
       <path d={line} fill="none" stroke="var(--line)" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
       {points.map((p, i) => (
         // last point matches Sparkline's emphasized-endpoint convention (r 3.2 vs 2.6)
         <circle key={`pt-${i}`} cx={xFor(i)} cy={yFor(p.y)} r={i === n - 1 ? "3.2" : "2.6"} fill="var(--line)" />
       ))}
+      {n <= 6 ? points.map((p, i) => (
+        <text key={`val-${i}`} x={Math.min(w - 24, Math.max(24, xFor(i)))} y={Math.max(11, yFor(p.y) - 9)} textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--ink)">
+          {Math.round(p.y * 10) / 10}%
+        </text>
+      )) : null}
       {points.map((p, i) =>
         i === 0 || i === n - 1 || n <= 6 ? (
           <text key={`lb-${i}`} x={xFor(i)} y={h - 8} textAnchor="middle" fontSize="10" fill="var(--muted, #8a8a8a)">

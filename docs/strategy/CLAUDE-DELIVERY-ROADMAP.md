@@ -7,7 +7,7 @@ changes — this is a living record, not a plan written once.
 - Worktree: `D:\ATLAS\.worktrees\claude-school-product`
 - Base: `a9d5fc16f075b86474050fbefd4f0860ac21f006` (gate-04 reviewed checkpoint)
 - Integration commit: `0ddf80cc3ab8ff1ecc1b663fd0e6d152badeb161`
-- Last revised: 2026-09-24 (N0/N1 complete; ERP-wide UI direction added)
+- Last revised: 2026-09-25 (comparison recheck and school analytics increment)
 
 Companion documents: [COMPETITIVE-PARITY-MATRIX.md](COMPETITIVE-PARITY-MATRIX.md),
 `DELIVERY-AND-REVIEW-REQUIREMENTS.md`, `VIDYA-SCHOOL-FIRST-SAAS-PLAN.md`.
@@ -18,6 +18,23 @@ Companion documents: [COMPETITIVE-PARITY-MATRIX.md](COMPETITIVE-PARITY-MATRIX.md
 
 A slice is `DONE` only against the 12-point Definition of Done in the owner
 brief. Schema alone, backend alone, UI alone or a document alone is not `DONE`.
+
+### 2026-09-25 continuation checkpoint
+
+The owner asked to complete the wider school ERP while comparing Alma, EdPlus
+and Vidyalaya. Their public feature pages were rechecked; the dated current
+state is in [COMPETITIVE-PARITY-MATRIX.md](COMPETITIVE-PARITY-MATRIX.md). Public
+module lists guide job selection but do not prove workflow quality or parity.
+
+The local school demo now includes audited teacher attendance and scoped
+PDF/Excel/CSV exports (`e14f43b` through `b903823`). Analytics adds Columns,
+Line, Area and exact Data views for monthly attendance in the current UI slice.
+These are useful school-demo increments, not completion of N5's shortfall and
+unsubmitted-register workflow. N4 bulk marks import, N5 attendance shortfall,
+N6 promotion/transfer, N7 certificates, N8 fee follow-up and Phase 2/3
+admissions, finance depth and hosted control-plane work remain on the critical
+path. The current chart change has focused UI and local browser evidence; it
+does not replace full school and hosting gates.
 
 ---
 
