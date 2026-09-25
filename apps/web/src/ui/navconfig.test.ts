@@ -2,6 +2,15 @@ import { describe, expect, it } from "vitest";
 import { visibleNav, crumbsFor } from "./navConfig";
 
 describe("navConfig job-shaped regroup", () => {
+  it("shows teacher presence to school administrators and principals only", () => {
+    const links = (roles: Parameters<typeof visibleNav>[0], edition: "college" | "school") =>
+      visibleNav(roles, edition).flatMap((group) => group.entries).map((entry) => entry.href);
+    expect(links(["admin"], "school")).toContain("/manage/staff-attendance");
+    expect(links(["principal"], "school")).toContain("/manage/staff-attendance");
+    expect(links(["teacher"], "school")).not.toContain("/manage/staff-attendance");
+    expect(links(["admin"], "college")).not.toContain("/manage/staff-attendance");
+    expect(crumbsFor("/manage/staff-attendance", "school")).toEqual([{ label: "People & comms" }, { label: "Teacher attendance" }]);
+  });
   it("shows school term management only on the school edition and to oversight roles", () => {
     const links = (roles: Parameters<typeof visibleNav>[0], edition: "college" | "school") => visibleNav(roles, edition).flatMap((group) => group.entries).map((entry) => entry.href);
     expect(links(["admin"], "school")).toContain("/manage/terms");

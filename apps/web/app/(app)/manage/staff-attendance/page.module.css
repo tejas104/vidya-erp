@@ -1,0 +1,28 @@
+.controls { display: flex; flex-wrap: wrap; align-items: end; gap: var(--space-4); margin: var(--space-5) 0; padding: var(--space-5); background: var(--surface); border: 1px solid var(--rule); border-radius: var(--radius); }
+.controls > :not(.search) { min-width: 180px; }
+.field { display: grid; gap: var(--space-2); color: var(--ink-2); font-size: var(--text-14); font-weight: 600; }
+.field select, .table select, .table input { min-height: 42px; border: 1px solid var(--rule-strong); border-radius: var(--radius-sm); background: var(--surface); color: var(--ink); font: inherit; padding: var(--space-2) var(--space-3); }
+.search { display: flex; align-items: end; gap: var(--space-2); flex: 1; min-width: min(100%, 270px); }
+.search > :first-child { flex: 1; }
+.summary { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; margin: var(--space-5) 0 var(--space-3); }
+.summary > span:last-child { color: var(--ink-2); font-size: var(--text-14); margin-left: auto; }
+.toolbar, .footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-3) 0; }
+.toolbar span, .readOnly { color: var(--ink-2); font-size: var(--text-14); }
+.tableWrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--rule); border-radius: var(--radius); }
+.table { border-collapse: collapse; width: 100%; min-width: 720px; }
+.table th, .table td { padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--rule); text-align: left; vertical-align: middle; }
+.table tr:last-child th, .table tr:last-child td { border-bottom: 0; }
+.table thead th { background: var(--paper-sunken); color: var(--ink-2); font-size: var(--text-12); text-transform: uppercase; letter-spacing: .06em; }
+.table tbody th { font-weight: 400; }
+.table tbody th strong, .table tbody th small { display: block; }
+.table tbody th small { color: var(--ink-2); font-size: var(--text-12); }
+.table select { width: 150px; }
+.table input { width: min(100%, 300px); }
+.recorded { color: var(--ink-2); font-size: var(--text-12); white-space: nowrap; }
+.pager { display: flex; align-items: center; gap: var(--space-2); color: var(--ink-2); font-size: var(--text-14); }
+@media (max-width: 680px) {
+  .controls, .search { display: grid; grid-template-columns: minmax(0, 1fr); }
+  .summary > span:last-child { margin-left: 0; width: 100%; }
+  .footer, .pager { width: 100%; }
+  .pager { justify-content: space-between; }
+}

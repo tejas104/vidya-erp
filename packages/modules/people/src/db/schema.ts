@@ -174,6 +174,24 @@ export const pplImports = pgTable("ppl_imports", {
   finishedAt: timestamp("finished_at", { withTimezone: true }),
 });
 
+/** One staff presence decision per teacher and calendar date. Retained for
+ * audit/history even when the teacher later becomes inactive. */
+export const pplTeacherAttendance = pgTable("ppl_teacher_attendance", {
+  id: text("id").primaryKey(),
+  collegeId: text("college_id").notNull().references(() => pplColleges.id, { onDelete: "restrict" }),
+  teacherId: text("teacher_id").notNull().references(() => pplTeachers.id, { onDelete: "restrict" }),
+  attendedOn: date("attended_on", { mode: "string" }).notNull(),
+  status: text("status").notNull(),
+  note: text("note"),
+  markedBy: text("marked_by").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("ppl_teacher_attendance_day_idx").on(table.teacherId, table.attendedOn),
+  index("ppl_teacher_attendance_college_day_idx").on(table.collegeId, table.attendedOn),
+]);
+export type PplTeacherAttendanceRow = typeof pplTeacherAttendance.$inferSelect;
+
 export type PplCollegeRow = typeof pplColleges.$inferSelect;
 export type PplDepartmentRow = typeof pplDepartments.$inferSelect;
 export type PplClassRow = typeof pplClasses.$inferSelect;

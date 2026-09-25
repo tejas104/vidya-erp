@@ -362,6 +362,20 @@ export interface TeacherView {
   id: string; collegeId: string; staffNo: string; fullName: string;
   status: "active" | "inactive"; identityUserId: string | null;
 }
+export type StaffPresence = "present" | "absent" | "late" | "leave";
+export interface StaffAttendanceView {
+  id: string;
+  teacherId: string;
+  attendedOn: string;
+  status: StaffPresence;
+  note: string | null;
+  markedBy: string;
+  updatedAt: string;
+}
+export interface StaffAttendancePage {
+  teachers: { teacher: TeacherView; attendance: StaffAttendanceView | null }[];
+  nextOffset: number | null;
+}
 export interface AssignmentView {
   id: string; teacherId: string; classId: string; subjectId: string | null;
   kind: "subject_teacher" | "class_teacher"; academicYear: string;
@@ -480,6 +494,7 @@ export interface NoticeView {
   createdBy: string;
   createdAt: string;
 }
+
 export type ChildNotice = Pick<NoticeView, "id" | "kind" | "eventDate" | "title" | "body" | "publishAt" | "expiresAt">;
 
 // --- fees ---
@@ -926,6 +941,13 @@ export const api = {
     if (options.q) query.set("q", options.q);
     return get<{ teachers: TeacherView[]; nextOffset: number | null }>(`/api/v1/people/teachers?${query}`);
   },
+  listStaffAttendance: (collegeId: string, date: string, options: { q?: string; offset?: number; limit?: number } = {}) => {
+    const query = new URLSearchParams({ collegeId, date, offset: String(options.offset ?? 0), limit: String(options.limit ?? 50) });
+    if (options.q) query.set("q", options.q);
+    return get<StaffAttendancePage>(`/api/v1/people/teachers/attendance?${query}`);
+  },
+  saveStaffAttendance: (body: { collegeId: string; date: string; entries: { teacherId: string; status: StaffPresence; note?: string | null }[] }) =>
+    put<{ attendance: StaffAttendanceView[] }>("/api/v1/people/teachers/attendance", body),
   getTeacher: (teacherId: string) => get<TeacherView>(`/api/v1/people/teachers/${encodeURIComponent(teacherId)}`),
   updateTeacher: (teacherId: string, body: { fullName?: string; status?: "active" | "inactive" }) =>
     patch<TeacherView>(`/api/v1/people/teachers/${encodeURIComponent(teacherId)}`, body),

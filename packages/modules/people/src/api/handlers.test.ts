@@ -18,6 +18,7 @@ import {
   InMemoryImportsRepo,
   InMemoryOrgRepo,
   InMemoryPeopleRepo,
+  InMemoryStaffAttendanceRepo,
   MemoryObjectStore,
   RecordingAudit,
   seedOrg,
@@ -49,6 +50,7 @@ function fakeIdentity(): CredentialIssuer {
 async function makeHarness(opts: { identity?: CredentialIssuer; edition?: "college" | "school"; accountForLink?: (userId: string) => Promise<{ collegeId: string; accountKind: "staff" | "guardian"; roles: readonly string[] } | null> } = {}) {
   const orgRepo = new InMemoryOrgRepo();
   const peopleRepo = new InMemoryPeopleRepo();
+  const staffAttendance = new InMemoryStaffAttendanceRepo(peopleRepo);
   const importsRepo = new InMemoryImportsRepo();
   const audit = new RecordingAudit();
   const scopeChecker = new StubScopeChecker();
@@ -59,6 +61,7 @@ async function makeHarness(opts: { identity?: CredentialIssuer; edition?: "colle
   const deps: PeopleHandlerDeps = {
     org: new OrgService({ repo: orgRepo, audit }),
     people: new PeopleService({ repo: peopleRepo, orgRepo }),
+    staffAttendance,
     assignments: new AssignmentsService({ repo: peopleRepo, orgRepo, identityGrants, audit }),
     imports: new ImportService({
       imports: importsRepo,
@@ -81,6 +84,7 @@ async function makeHarness(opts: { identity?: CredentialIssuer; edition?: "colle
     handlers: createPeopleHandlers(deps),
     orgRepo,
     peopleRepo,
+    staffAttendance,
     importsRepo,
     scopeChecker,
     org,
@@ -382,6 +386,46 @@ describe("student handlers", () => {
 });
 
 describe("teacher & assignment handlers", () => {
+  it("records and corrects dated staff presence with scope and audit boundaries", async () => {
+    const harness = await makeHarness({ edition: "school" });
+    const collegeId = harness.org.college.id;
+    const first = await harness.peopleRepo.createTeacher({ collegeId, staffNo: "T10", fullName: "Asha" });
+    const second = await harness.peopleRepo.createTeacher({ collegeId, staffNo: "T11", fullName: "Meera" });
+    const foreign = await harness.peopleRepo.createTeacher({ collegeId: "col_else", staffNo: "T12", fullName: "Outside" });
+    const date = "2026-09-25";
+    const body = { collegeId, date, entries: [
+      { teacherId: first.id, status: "present" as const },
+      { teacherId: second.id, status: "late" as const, note: "Arrived after assembly" },
+    ] };
+    const save = await harness.handlers["people.teacher-attendance-save"]!(ctx({ body }));
+    expect(save.status).toBe(200);
+    expect(save.audit?.details).toMatchObject({ changes: [
+      { teacherId: first.id, before: null, after: "present" },
+      { teacherId: second.id, before: null, after: "late" },
+    ] });
+    const list = await harness.handlers["people.teacher-attendance-list"]!(ctx({ query: { collegeId, date, offset: 0, limit: 50 } }));
+    expect(list.status).toBe(200);
+    const principalRead = await harness.handlers["people.teacher-attendance-list"]!({
+      ...ctx({ query: { collegeId, date, offset: 0, limit: 50 } }),
+      principal: { ...admin, roles: ["principal"] as Principal["roles"] },
+    });
+    expect(principalRead.status).toBe(200);
+    const teachers = (list.body as { teachers: { teacher: { id: string }; attendance: { status: string; note: string | null } | null }[] }).teachers;
+    expect(teachers.find((row) => row.teacher.id === second.id)?.attendance).toMatchObject({ status: "late", note: "Arrived after assembly" });
+    const corrected = await harness.handlers["people.teacher-attendance-save"]!(ctx({ body: { collegeId, date, entries: [{ teacherId: first.id, status: "absent" }] } }));
+    expect(corrected.audit?.details).toMatchObject({ changes: [{ teacherId: first.id, before: "present", after: "absent" }] });
+    expect(harness.staffAttendance.rows.size).toBe(2);
+    const bad = await harness.handlers["people.teacher-attendance-save"]!(ctx({ body: { collegeId, date, entries: [
+      { teacherId: first.id, status: "leave" }, { teacherId: foreign.id, status: "present" },
+    ] } }));
+    expect(bad.status).toBe(404);
+    expect(harness.staffAttendance.rows.get(`${first.id}:${date}`)?.status).toBe("absent");
+    const nonAdmin = { ...ctx({ body }), principal: { ...admin, roles: ["teacher"] as Principal["roles"] } };
+    expect((await harness.handlers["people.teacher-attendance-save"]!(nonAdmin)).status).toBe(403);
+    expect((await harness.handlers["people.teacher-attendance-save"]!({ ...ctx({ body }), principal: { ...admin, roles: ["principal"] as Principal["roles"] } })).status).toBe(403);
+    harness.scopeChecker.decision = { granted: false, reason: "other school" };
+    expect((await harness.handlers["people.teacher-attendance-list"]!(ctx({ query: { collegeId, date, offset: 0, limit: 50 } }))).status).toBe(403);
+  });
   it("lists only scoped teachers with search and pagination", async () => {
     const harness = await makeHarness();
     const collegeId = harness.org.college.id;

@@ -153,6 +153,19 @@ export const teacherViewSchema = z.object({
   identityUserId: z.string().nullable(),
 });
 
+export const staffAttendanceDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "ISO date YYYY-MM-DD")
+  .refine((value) => !Number.isNaN(Date.parse(`${value}T00:00:00Z`)) && new Date(`${value}T00:00:00Z`).toISOString().slice(0, 10) === value, "valid calendar date required");
+export const staffPresenceSchema = z.enum(["present", "absent", "late", "leave"]);
+export const staffAttendanceViewSchema = z.object({
+  id: z.string(),
+  teacherId: z.string(),
+  attendedOn: staffAttendanceDateSchema,
+  status: staffPresenceSchema,
+  note: z.string().nullable(),
+  markedBy: z.string(),
+  updatedAt: z.string(),
+});
+
 /** #11 B4: the individual staff "issue login" action's response — the
  *  temporary password appears exactly once, here. */
 export const teacherCredentialViewSchema = z.object({
@@ -197,6 +210,7 @@ const problemSchema = z.object({
 });
 
 const ADMIN_ONLY = { public: false as const, requirement: { rolesAnyOf: ["admin" as const] } };
+const ADMIN_OR_PRINCIPAL = { public: false as const, requirement: { rolesAnyOf: ["admin" as const, "principal" as const] } };
 const ADMIN_OR_CLASS_TEACHER = {
   public: false as const,
   requirement: { rolesAnyOf: ["admin" as const, "class_teacher" as const] },
@@ -571,6 +585,57 @@ const routes: RouteSpec[] = [
       200: { description: "College-scoped teacher page", schema: z.object({ teachers: z.array(teacherViewSchema), nextOffset: z.number().nullable() }) },
       403: { description: "Scope check denied", schema: problemSchema },
       404: { description: "No such college", schema: problemSchema },
+    },
+  },
+  {
+    id: "people.teacher-attendance-list",
+    module: MODULE_NAME,
+    method: "GET",
+    path: "/api/v1/people/teachers/attendance",
+    summary: "Dated teacher presence register (admin and principal; school scoped)",
+    tags: ["people-teachers"],
+    auth: ADMIN_OR_PRINCIPAL,
+    request: { query: z.object({
+      collegeId: idSchema,
+      date: staffAttendanceDateSchema,
+      q: z.string().trim().max(80).optional(),
+      offset: z.coerce.number().int().min(0).default(0),
+      limit: z.coerce.number().int().min(1).max(100).default(50),
+    }) },
+    responses: {
+      200: { description: "Teacher page and recorded presence for the date", schema: z.object({
+        teachers: z.array(z.object({ teacher: teacherViewSchema, attendance: staffAttendanceViewSchema.nullable() })),
+        nextOffset: z.number().nullable(),
+      }) },
+      403: { description: "Scope check denied", schema: problemSchema },
+      404: { description: "No such school", schema: problemSchema },
+    },
+  },
+  {
+    id: "people.teacher-attendance-save",
+    module: MODULE_NAME,
+    method: "PUT",
+    path: "/api/v1/people/teachers/attendance",
+    summary: "Record or correct a teacher presence page (admin, audited, all-or-nothing)",
+    tags: ["people-teachers"],
+    auth: ADMIN_ONLY,
+    request: { body: z.object({
+      collegeId: idSchema,
+      date: staffAttendanceDateSchema,
+      entries: z.array(z.object({
+        teacherId: idSchema,
+        status: staffPresenceSchema,
+        note: z.string().trim().max(240).nullable().optional(),
+      })).min(1).max(100),
+    }).superRefine((body, ctx) => {
+      const ids = body.entries.map((entry) => entry.teacherId);
+      if (new Set(ids).size !== ids.length) ctx.addIssue({ code: "custom", path: ["entries"], message: "each teacher may appear only once" });
+    }) },
+    audit: { action: "people.teacher-attendance-recorded", resourceType: "teacher-attendance" },
+    responses: {
+      200: { description: "Saved presence entries", schema: z.object({ attendance: z.array(staffAttendanceViewSchema) }) },
+      403: { description: "Scope check denied", schema: problemSchema },
+      404: { description: "Unknown, inactive, or outside-school teacher", schema: problemSchema },
     },
   },
   {

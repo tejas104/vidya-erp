@@ -34,6 +34,7 @@ import {
 } from "./definition";
 import { createOrgRepo } from "./repo/org-repo";
 import { createPeopleRepo } from "./repo/people-repo";
+import { createStaffAttendanceRepo } from "./repo/staff-attendance-repo";
 import { createImportsRepo } from "./repo/imports-repo";
 import { OrgService } from "./service/org-service";
 import { PeopleService } from "./service/people-service";
@@ -188,6 +189,7 @@ export interface PeopleModuleService {
 export function createPeopleModule(deps: PeopleModuleDeps): RuntimeModule<PeopleModuleService> {
   const orgRepo = createOrgRepo(deps.db);
   const peopleRepo = createPeopleRepo(deps.db);
+  const staffAttendance = createStaffAttendanceRepo(deps.db);
   const importsRepo = createImportsRepo(deps.db);
 
   const org = new OrgService({ repo: orgRepo, audit: deps.audit });
@@ -257,6 +259,7 @@ export function createPeopleModule(deps: PeopleModuleDeps): RuntimeModule<People
       ...createPeopleHandlers({
       org,
       people,
+      staffAttendance,
       assignments,
       imports,
       scopeChecker: deps.scopeChecker,

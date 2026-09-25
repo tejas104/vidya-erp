@@ -24,6 +24,7 @@ import type { AssignmentsService } from "../service/assignments-service";
 import type { CredentialIssuer, ImportService } from "../service/import-service";
 import { DuplicateCodeError, UnitInUseError, type OrgUnitType } from "../repo/org-repo";
 import { DuplicateAssignmentError, DuplicatePersonError, type StudentStatus } from "../repo/people-repo";
+import { InvalidStaffAttendanceTarget, type StaffAttendanceRepo, type StaffPresenceEntry } from "../repo/staff-attendance-repo";
 import type { RowError } from "../repo/imports-repo";
 import type {
   PplEnrollmentRow,
@@ -31,6 +32,7 @@ import type {
   PplStudentDocumentRow,
   PplStudentRow,
   PplTeacherRow,
+  PplTeacherAttendanceRow,
 } from "../db/schema";
 import type { importJobPayloadSchema } from "../definition";
 import type { z } from "zod";
@@ -38,6 +40,7 @@ import type { z } from "zod";
 export interface PeopleHandlerDeps {
   readonly org: OrgService;
   readonly people: PeopleService;
+  readonly staffAttendance: StaffAttendanceRepo;
   readonly assignments: AssignmentsService;
   readonly imports: ImportService;
   readonly scopeChecker: ScopeChecker;
@@ -112,6 +115,18 @@ function teacherView(teacher: PplTeacherRow) {
     fullName: teacher.fullName,
     status: teacher.status,
     identityUserId: teacher.identityUserId,
+  };
+}
+
+function staffAttendanceView(row: PplTeacherAttendanceRow) {
+  return {
+    id: row.id,
+    teacherId: row.teacherId,
+    attendedOn: row.attendedOn,
+    status: row.status,
+    note: row.note,
+    markedBy: row.markedBy,
+    updatedAt: row.updatedAt.toISOString(),
   };
 }
 
@@ -733,6 +748,55 @@ export function createPeopleHandlers(deps: PeopleHandlerDeps): Record<string, Ro
     return { status: 200, body: { teachers: page.teachers.map(teacherView), nextOffset: page.nextOffset } };
   };
 
+  const teacherAttendanceList: RouteHandler = async (ctx) => {
+    const principal = ctx.principal as Principal;
+    if (!principal.roles.includes("admin") && !principal.roles.includes("principal")) return denied(ctx, "staff register requires leadership role");
+    const query = ctx.request.query as { collegeId: string; date: string; q?: string; offset: number; limit: number };
+    if ((await deps.org.getCollege(query.collegeId)) === null) return notFound();
+    const scope = checkScope(deps.scopeChecker, ctx, principal, "read", {
+      module: "people", resourceType: "teacher-attendance", org: { collegeId: query.collegeId },
+    });
+    if (!scope.ok) return scope.result;
+    const page = await deps.people.listTeachers(query.collegeId, query);
+    const records = await deps.staffAttendance.forTeachers(page.teachers.map((teacher) => teacher.id), query.date);
+    const byTeacher = new Map(records.map((row) => [row.teacherId, row]));
+    return { status: 200, body: {
+      teachers: page.teachers.map((teacher) => ({ teacher: teacherView(teacher), attendance: byTeacher.has(teacher.id) ? staffAttendanceView(byTeacher.get(teacher.id)!) : null })),
+      nextOffset: page.nextOffset,
+    } };
+  };
+
+  const teacherAttendanceSave: RouteHandler = async (ctx) => {
+    const principal = ctx.principal as Principal;
+    if (!principal.roles.includes("admin")) return denied(ctx, "staff register edits require admin role");
+    const body = ctx.request.body as { collegeId: string; date: string; entries: StaffPresenceEntry[] };
+    if ((await deps.org.getCollege(body.collegeId)) === null) return notFound();
+    const scope = checkScope(deps.scopeChecker, ctx, principal, "update", {
+      module: "people", resourceType: "teacher-attendance", org: { collegeId: body.collegeId },
+    });
+    if (!scope.ok) return scope.result;
+    try {
+      const saved = await deps.staffAttendance.saveBatch({
+        collegeId: body.collegeId, attendedOn: body.date, markedBy: principal.id, entries: body.entries,
+      });
+      const prior = new Map(saved.before.map((row) => [row.teacherId, row]));
+      return {
+        status: 200,
+        body: { attendance: saved.rows.map(staffAttendanceView) },
+        audit: {
+          resourceId: `${body.collegeId}:${body.date}`,
+          details: { collegeId: body.collegeId, date: body.date, changes: saved.rows.map((row) => ({
+            teacherId: row.teacherId, before: prior.get(row.teacherId)?.status ?? null, after: row.status,
+            noteChanged: (prior.get(row.teacherId)?.note ?? null) !== row.note,
+          })) },
+        },
+      };
+    } catch (error) {
+      if (error instanceof InvalidStaffAttendanceTarget) return notFound();
+      throw error;
+    }
+  };
+
   const teacherCreate: RouteHandler = async (ctx) => {
     const principal = ctx.principal as Principal;
     const body = ctx.request.body as { collegeId: string; staffNo: string; fullName: string };
@@ -1296,6 +1360,8 @@ export function createPeopleHandlers(deps: PeopleHandlerDeps): Record<string, Ro
     "people.document-delete": documentDelete,
     "people.section-roster": sectionRoster,
     "people.teacher-list": teacherList,
+    "people.teacher-attendance-list": teacherAttendanceList,
+    "people.teacher-attendance-save": teacherAttendanceSave,
     "people.teacher-create": teacherCreate,
     "people.teacher-get": teacherGet,
     "people.teacher-update": teacherUpdate,

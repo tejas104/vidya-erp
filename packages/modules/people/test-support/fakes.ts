@@ -27,6 +27,7 @@ import {
   type PeopleRepo,
 } from "../src/repo/people-repo";
 import type { ImportsRepo, RowError } from "../src/repo/imports-repo";
+import { InvalidStaffAttendanceTarget, type StaffAttendanceRepo } from "../src/repo/staff-attendance-repo";
 import type {
   PplAssignmentRow,
   PplClassRow,
@@ -39,6 +40,7 @@ import type {
   PplStudentRow,
   PplSubjectRow,
   PplTeacherRow,
+  PplTeacherAttendanceRow,
 } from "../src/db/schema";
 import type { ImportObjectStore } from "../src/service/import-service";
 
@@ -601,6 +603,42 @@ export class InMemoryPeopleRepo implements PeopleRepo {
   // routing — stub empty until a test needs real department data here.
   async departmentsForTeacher(_teacherId: string): Promise<string[]> {
     return [];
+  }
+}
+
+export class InMemoryStaffAttendanceRepo implements StaffAttendanceRepo {
+  readonly rows = new Map<string, PplTeacherAttendanceRow>();
+  constructor(private readonly people: InMemoryPeopleRepo) {}
+
+  async forTeachers(teacherIds: readonly string[], attendedOn: string): Promise<PplTeacherAttendanceRow[]> {
+    return [...this.rows.values()].filter((row) => row.attendedOn === attendedOn && teacherIds.includes(row.teacherId));
+  }
+
+  async saveBatch(input: { collegeId: string; attendedOn: string; markedBy: string; entries: readonly { teacherId: string; status: "present" | "absent" | "late" | "leave"; note?: string | null }[] }) {
+    const ids = input.entries.map((entry) => entry.teacherId);
+    if (new Set(ids).size !== ids.length || ids.some((id) => {
+      const teacher = this.people.teachers.get(id);
+      return teacher?.collegeId !== input.collegeId || teacher.status !== "active";
+    })) throw new InvalidStaffAttendanceTarget();
+    const before = await this.forTeachers(ids, input.attendedOn);
+    const rows = input.entries.map((entry) => {
+      const key = `${entry.teacherId}:${input.attendedOn}`;
+      const existing = this.rows.get(key);
+      const row: PplTeacherAttendanceRow = {
+        id: existing?.id ?? `sat_${randomUUID()}`,
+        collegeId: input.collegeId,
+        teacherId: entry.teacherId,
+        attendedOn: input.attendedOn,
+        status: entry.status,
+        note: entry.note?.trim() || null,
+        markedBy: input.markedBy,
+        createdAt: existing?.createdAt ?? now(),
+        updatedAt: now(),
+      };
+      this.rows.set(key, row);
+      return row;
+    });
+    return { rows, before };
   }
 }
 

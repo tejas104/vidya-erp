@@ -71,6 +71,7 @@ export const NAV: NavEntry[] = [
   { href: "/manage/fees", label: "Fees", icon: "rupee", group: "MONEY", roles: ["accountant", "admin", "principal"] },
   // --- PEOPLE: staff and the messages that go out to everyone.
   { href: "/manage/teachers", label: "Teachers", icon: "teachers", group: "PEOPLE", roles: ["admin"] },
+  { href: "/manage/staff-attendance", label: "Teacher attendance", icon: "attendance", group: "PEOPLE", roles: ["admin", "principal"], editions: ["school"] },
   { href: "/manage/import/staff", label: "Import Staff", icon: "upload", group: "PEOPLE", roles: ["admin"] },
   { href: "/manage/leave", label: "Leave", icon: "file", group: "PEOPLE", roles: ["teacher", "class_teacher", "hod", "principal"] },
   { href: "/manage/notices", label: "Notices", icon: "bell", group: "PEOPLE", roles: ["admin", "principal"] },
