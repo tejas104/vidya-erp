@@ -652,6 +652,9 @@ importers:
 
   packages/modules/school-academics:
     dependencies:
+      '@vidya/module-academics':
+        specifier: workspace:*
+        version: link:../academics
       '@vidya/module-people':
         specifier: workspace:*
         version: link:../people

@@ -40,6 +40,7 @@ export interface TermsRepo {
   }): Promise<SchTermRow | null>;
   /** Explicitly release a previously closed term (e.g. one closed before rollout). */
   releaseMarks(id: string): Promise<SchTermRow | null>;
+  setCalendar(input: { id: string; expectedVersion: number; instructionalDays: string[]; shortfallThreshold: number }): Promise<SchTermRow | null>;
 }
 
 export function createTermsRepo(db: Db): TermsRepo {
@@ -95,6 +96,13 @@ export function createTermsRepo(db: Db): TermsRepo {
       const rows = await db.update(schTerms)
         .set({ marksReleasedAt: new Date(), updatedAt: new Date() })
         .where(and(eq(schTerms.id, id), eq(schTerms.status, "closed"), isNull(schTerms.marksReleasedAt)))
+        .returning();
+      return rows[0] ?? null;
+    },
+    async setCalendar(input) {
+      const rows = await db.update(schTerms)
+        .set({ instructionalDays: input.instructionalDays, shortfallThreshold: String(input.shortfallThreshold), calendarVersion: input.expectedVersion + 1, updatedAt: new Date() })
+        .where(and(eq(schTerms.id, input.id), eq(schTerms.status, "open"), eq(schTerms.calendarVersion, input.expectedVersion)))
         .returning();
       return rows[0] ?? null;
     },

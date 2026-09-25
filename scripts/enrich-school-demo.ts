@@ -175,6 +175,15 @@ async function main() {
       const terms = await api<{ terms: { id: string; name: string }[] }>(admin, "get", `/api/v1/school/terms?academicYear=${academicYear}`);
       const term2 = terms.terms.find((item) => item.name === "Term 2");
       if (!term2) throw new Error("Expected the original open Term 2");
+      const calendar = await api<{ instructionalDays: string[] | null; version: number }>(admin, "get", `/api/v1/school/terms/${term2.id}/calendar`);
+      if (calendar.instructionalDays === null) {
+        const instructionalDays: string[] = [];
+        for (let tick = Date.parse("2026-09-01T00:00:00Z"); tick <= Date.parse("2026-12-31T00:00:00Z"); tick += 86_400_000) {
+          const day = new Date(tick);
+          if (day.getUTCDay() !== 0 && day.getUTCDay() !== 6) instructionalDays.push(day.toISOString().slice(0, 10));
+        }
+        await api(admin, "put", `/api/v1/school/terms/${term2.id}/calendar`, { instructionalDays, shortfallThreshold: 75, expectedVersion: calendar.version });
+      }
       let { types } = await api<{ types: { id: string; name: string }[] }>(admin, "get", `/api/v1/school/terms/${term2.id}/assessment-types`);
       if (types.length === 0) {
         const configured = await api<{ types: { id: string; name: string }[] }>(admin, "put", `/api/v1/school/terms/${term2.id}/assessment-types`, {
@@ -254,6 +263,22 @@ async function main() {
               index === (dayIndex + 10) % roster.length ? "excused" : "present" })),
           });
         }
+      }
+      // A second, contrasting register lets reviewers see a confirmed
+      // shortfall, an incomplete pupil entry, and on-track pupils together.
+      const bRoster = rosters.get("8B")!;
+      const bSessions = await api<{ sessions: { heldOn: string; slot: string; subjectId: string }[] }>(classTeacher, "get", `/api/v1/academics/sections/${section8B.id}/attendance?from=2026-09-01&to=2026-09-25&limit=100`);
+      const bRecorded = new Set(bSessions.sessions.filter((item) => item.slot === "day" && !item.subjectId).map((item) => item.heldOn));
+      let scheduledIndex = 0;
+      for (let tick = Date.parse("2026-09-01T00:00:00Z"); tick <= Date.parse("2026-09-25T00:00:00Z"); tick += 86_400_000) {
+        const day = new Date(tick);
+        if (day.getUTCDay() === 0 || day.getUTCDay() === 6) continue;
+        const heldOn = day.toISOString().slice(0, 10);
+        if (!bRecorded.has(heldOn)) await api(classTeacher, "post", "/api/v1/academics/attendance/sessions", {
+          sectionId: section8B.id, heldOn, slot: "day", academicYear,
+          entries: bRoster.flatMap((student, index) => index === 1 && heldOn === "2026-09-24" ? [] : [{ studentId: student.id, status: index === 0 && scheduledIndex < 6 ? "absent" : "present" }]),
+        });
+        scheduledIndex++;
       }
       const subjectSessions = await api<{ sessions: { heldOn: string; slot: string; subjectId: string }[] }>(teacher, "get", `/api/v1/academics/sections/${sectionA.id}/attendance?from=2026-09-23&to=2026-09-23&limit=100`);
       if (!subjectSessions.sessions.some((item) => item.heldOn === "2026-09-23" && item.slot === "p1" && item.subjectId === maths.id))
@@ -342,7 +367,9 @@ async function main() {
     ].map(async ([code, classId]) => {
       const result = await api<{ assessments: { termId: string }[] }>(admin, "get", `/api/v1/school/classes/${classId}/assessments?academicYear=${academicYear}`);
       const count = result.assessments.filter((item) => item.termId === verificationTerm2Id).length;
-      if (count !== 4) throw new Error(`Expected four Term 2 assessments in ${code}, got ${count}`);
+      // Staff may add assessments while trying the demo. Keep the seed
+      // idempotent without treating legitimate extra records as a failure.
+      if (count < 4) throw new Error(`Expected at least four Term 2 assessments in ${code}, got ${count}`);
       return [code, count] as const;
     })));
     const class9Student = await login("school-demo-student-9a", "school-demo-student-9a-pass-2026");
@@ -357,7 +384,7 @@ async function main() {
           schoolExams.slots.length !== 2 || schoolSyllabus.subjects.length !== 2 || schoolCoursework.assignments.length === 0)
         throw new Error("Standard 9 student demo is missing a timetable, fee, exams, syllabus, or coursework");
     } finally { await class9Student.dispose(); }
-    console.log(JSON.stringify({ baseURL, school: "VDEMO", sections: Object.fromEntries(sectionData.map((group) => [group.code, rosters.get(group.code)!.length])), invoices: sectionInvoiceCounts, timetableEntries: timetableCounts, term2Assessments, attendanceDates: ["2026-09-21", "2026-09-22", "2026-09-23"], fixture: "synthetic", repeatable: true }, null, 2));
+    console.log(JSON.stringify({ baseURL, school: "VDEMO", sections: Object.fromEntries(sectionData.map((group) => [group.code, rosters.get(group.code)!.length])), invoices: sectionInvoiceCounts, timetableEntries: timetableCounts, term2Assessments, attendanceFixture: "8A has 21–23 September registers; 8B has weekday daily registers through 25 September with one missing pupil entry", fixture: "synthetic", repeatable: true }, null, 2));
   } finally { await admin.dispose(); }
 }
 

@@ -77,6 +77,7 @@ export const NAV: NavEntry[] = [
   { href: "/manage/notices", label: "Notices", icon: "bell", group: "PEOPLE", roles: ["admin", "principal"] },
   // --- REVIEW: look back at what happened, never change it.
   { href: "/manage/reports", label: "Reports", icon: "file", group: "REVIEW", roles: ALL },
+  { href: "/manage/attendance-review", label: "Attendance review", icon: "attendance", group: "REVIEW", roles: ["admin", "principal", "class_teacher"], editions: ["school"] },
   // Real screen at apps/web/app/(app)/manage/analytics/page.tsx: the deeper
   // trend/comparison/distribution views for oversight roles (admin/principal/
   // hod). /dashboard keeps the at-a-glance KPIs, at-risk composition and the

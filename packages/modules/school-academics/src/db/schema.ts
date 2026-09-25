@@ -32,6 +32,10 @@ export const schTerms = pgTable(
     closedReason: text("closed_reason"),
     /** Null on old closed terms and while open; set only by release or new close. */
     marksReleasedAt: timestamp("marks_released_at", { withTimezone: true }),
+    /** Explicit dates; null means the school has not configured a calendar. */
+    instructionalDays: jsonb("instructional_days").$type<string[]>(),
+    shortfallThreshold: numeric("shortfall_threshold", { precision: 5, scale: 2 }),
+    calendarVersion: integer("calendar_version").notNull().default(0),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

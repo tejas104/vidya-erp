@@ -1,6 +1,7 @@
 import {
   SCHOOL_ATTENDANCE_ENGINE_VERSION,
   SCHOOL_ATTENDANCE_POLICY_VERSION,
+  SCHOOL_DAILY_ATTENDANCE_POLICY,
   summarizeAttendance,
   type AcademicsReadModel,
   type AttendancePolicy,
@@ -54,10 +55,7 @@ import {
  * - `half-day` earns half credit.
  */
 export const SCHOOL_ATTENDANCE_POLICY: AttendancePolicy = {
-  version: SCHOOL_ATTENDANCE_POLICY_VERSION,
-  lateTreatment: "counts-as-present",
-  excusedTreatment: "excluded-from-denominator",
-  halfDayTreatment: "half-credit",
+  ...SCHOOL_DAILY_ATTENDANCE_POLICY,
 };
 
 export interface ReportCardSources {
@@ -237,12 +235,12 @@ export class ReportCardBuilder {
       return empty;
     }
 
-    const days = await this.sources.academics.sectionAttendanceWindow(
+    const days = await this.sources.academics.sectionDailyRegisterWindow(
       input.sectionId,
       source.term.startsOn,
       source.term.endsOn,
     );
-    if (days.length === 0) {
+    if (days.length === 0 && source.term.instructionalDays == null) {
       warnings.push("No attendance registers were taken for this section during the term.");
       return empty;
     }
@@ -262,7 +260,7 @@ export class ReportCardBuilder {
     const outcome = summarizeAttendance({
       policy: SCHOOL_ATTENDANCE_POLICY,
       interval: { from: source.term.startsOn, to: source.term.endsOn },
-      calendar: { instructionalDays: days.map((day) => day.heldOn) },
+      calendar: { instructionalDays: source.term.instructionalDays ?? days.map((day) => day.heldOn) },
       // The term window is the enrollment span we can defend from attendance
       // evidence alone. A mid-term admission or transfer is not yet modelled;
       // its effect is visible as missing dates rather than hidden.

@@ -60,6 +60,14 @@ export type {
   SchoolCalendar,
 } from "./school-attendance-summary";
 
+/** Shared daily attendance policy for school reports and shortfall review. */
+export const SCHOOL_DAILY_ATTENDANCE_POLICY = {
+  version: "school-attendance-summary.policy.v1",
+  lateTreatment: "counts-as-present",
+  excusedTreatment: "excluded-from-denominator",
+  halfDayTreatment: "half-credit",
+} as const;
+
 export { attendanceRef, marksRef } from "./resource-refs";
 export type { AttendancePosition, AssessmentPosition } from "./resource-refs";
 export type { AuditHistoryEntry } from "./api/handlers";
@@ -131,6 +139,8 @@ export interface AcademicsReadModel {
     from: string,
     to: string,
   ): Promise<SectionAttendanceDay[]>;
+  /** Only the class teacher's whole-day register; subject periods are excluded. */
+  sectionDailyRegisterWindow(sectionId: string, from: string, to: string): Promise<SectionAttendanceDay[]>;
   /** A section's most recent sessions with present-%, newest first (register strip). */
   sectionRecentDensity(
     sectionId: string,
@@ -269,6 +279,12 @@ export function createAcademicsModule(
           }
           return [...byDate.entries()]
             .map(([heldOn, entries]) => ({ heldOn, entries }))
+            .sort((left, right) => left.heldOn.localeCompare(right.heldOn));
+        },
+        async sectionDailyRegisterWindow(sectionId, from, to) {
+          const rows = await attendanceRepo.listSessions(sectionId, { from, to, limit: 10_000 });
+          return rows.filter(({ session }) => session.slot === "day" && session.subjectId === "")
+            .map(({ session, entries }) => ({ heldOn: session.heldOn, entries: entries.map((entry) => ({ studentId: entry.studentId, status: entry.status as AttendanceRecordView["status"] })) }))
             .sort((left, right) => left.heldOn.localeCompare(right.heldOn));
         },
         sectionRecentDensity: (sectionId, limit) =>

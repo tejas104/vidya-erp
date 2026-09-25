@@ -3,6 +3,8 @@ import type { ReportData } from "../report-data";
 
 // Preserve the CSV export's spreadsheet-injection boundary for free-text cells.
 function safeCell(value: string | number): string | number {
+  // Leading control characters can hide a spreadsheet formula from a naive check.
+  // eslint-disable-next-line no-control-regex
   return typeof value === "string" && /^[\s\u0000-\u001f]*[=+\-@]/.test(value) ? `'${value}` : value;
 }
 

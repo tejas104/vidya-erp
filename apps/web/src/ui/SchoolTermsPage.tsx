@@ -4,6 +4,7 @@ import { Button, Card, EmptyState, Input, Modal, PageHeader, Select, StatusBadge
 import { api, ApiError, currentAcademicYear, type SchoolTermView } from "./api";
 import { AsyncState } from "./AsyncState";
 import { AssessmentTypesEditor } from "./AssessmentTypesEditor";
+import { SchoolCalendarEditor } from "./SchoolCalendarEditor";
 import { schoolVocabulary } from "./editionVocabulary";
 import { HelpButton } from "./help/HelpButton";
 import styles from "./SchoolTermsPage.module.css";
@@ -28,6 +29,7 @@ export function SchoolTermsPage() {
   const [target, setTarget] = useState<SchoolTermView | null>(null);
   const [releaseTarget, setReleaseTarget] = useState<SchoolTermView | null>(null);
   const [configuring, setConfiguring] = useState<SchoolTermView | null>(null);
+  const [calendarTerm, setCalendarTerm] = useState<SchoolTermView | null>(null);
   const [reason, setReason] = useState("");
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -126,7 +128,7 @@ export function SchoolTermsPage() {
             dates: <span className="num">{term.startsOn} – {term.endsOn}</span>,
             status: <><StatusBadge status={term.status === "open" ? "good" : "neutral"}>{term.status === "open" ? "Open" : "Closed"}</StatusBadge>{term.status === "closed" ? <div className={styles.secondary}>{term.marksReleasedAt ? "Marks released" : "Marks private"}</div> : null}</>,
             reason: term.closedReason ?? "—",
-            actions: <div className={styles.rowActions}><Button variant="ghost" size="sm" onClick={() => setConfiguring(term)}>Assessment types</Button>{admin ? <><Button variant="ghost" size="sm" onClick={() => { setTarget(term); setReason(""); setSaveError(null); }}>{term.status === "open" ? "Close term" : "Reopen term"}</Button>{term.status === "closed" && !term.marksReleasedAt ? <Button variant="ghost" size="sm" onClick={() => { setReleaseTarget(term); setSaveError(null); }}>Release marks</Button> : null}</> : <span>Read only</span>}</div>,
+            actions: <div className={styles.rowActions}><Button variant="ghost" size="sm" onClick={() => setCalendarTerm(term)}>School days</Button><Button variant="ghost" size="sm" onClick={() => setConfiguring(term)}>Assessment types</Button>{admin ? <><Button variant="ghost" size="sm" onClick={() => { setTarget(term); setReason(""); setSaveError(null); }}>{term.status === "open" ? "Close term" : "Reopen term"}</Button>{term.status === "closed" && !term.marksReleasedAt ? <Button variant="ghost" size="sm" onClick={() => { setReleaseTarget(term); setSaveError(null); }}>Release marks</Button> : null}</> : <span>Read only</span>}</div>,
           }))} /></div>
       </Card>
     </AsyncState>
@@ -154,5 +156,6 @@ export function SchoolTermsPage() {
       {saveError ? <p className="formerror" role="alert">{saveError}</p> : null}
     </Modal>
     {configuring ? <AssessmentTypesEditor key={configuring.id} term={configuring} admin={admin} onClose={() => setConfiguring(null)} /> : null}
+    {calendarTerm ? <SchoolCalendarEditor key={calendarTerm.id} term={calendarTerm} admin={admin} onClose={() => setCalendarTerm(null)} /> : null}
   </>;
 }

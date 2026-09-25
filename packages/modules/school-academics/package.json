@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@vidya/module-academics": "workspace:*",
     "@vidya/module-results": "workspace:*",
     "@vidya/module-people": "workspace:*",
     "@vidya/platform": "workspace:*",

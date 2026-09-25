@@ -383,6 +383,7 @@ function buildWebRuntime(): WebRuntime {
   // --- school-academics --- (editions: ["school"]; filtered out on college)
   const schoolAcademics = createSchoolAcademicsModule({
     gradeScales: results.service.repo,
+    academicsReadModel: academics.service.readModel,
     db,
     scopeChecker: identityCore.scopeChecker,
     peopleDirectory: people.service.directory,

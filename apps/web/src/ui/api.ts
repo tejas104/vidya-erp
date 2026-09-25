@@ -101,6 +101,12 @@ export interface SchoolReportCardRosterStudent {
   generatedAt: string | null;
   publishedSnapshotId: string | null;
 }
+export interface SchoolTermCalendar { termId: string; instructionalDays: string[] | null; shortfallThreshold: number | null; version: number; locked: boolean }
+export interface SchoolAttendanceShortfall {
+  termId: string; sectionId: string; through: string; calendarVersion: number; threshold: number;
+  scheduledDates: string[]; unsubmittedDates: string[]; rosterAssumption: string;
+  students: { studentId: string; fullName: string; admissionNo: string; expectedDays: number; recordedDays: number; absentDays: number; missingEntryDates: string[]; percentageDenominator: number; percentage: number | null; shortfall: boolean | null }[];
+}
 
 export interface ChildReportCard {
   snapshotId: string;
@@ -339,7 +345,7 @@ export interface StudentView extends StudentProfile {
 }
 export interface SchoolReportCardDeskScope {
     classes: { id: string; collegeId: string; name: string; canPublish: boolean }[];
-    terms: { id: string; collegeId: string; name: string; academicYear: string }[];
+    terms: { id: string; collegeId: string; name: string; academicYear: string; startsOn: string; endsOn: string }[];
 }
 export interface StudentDetailView extends Omit<StudentView, "enrollment"> {
   enrollment: {
@@ -1229,6 +1235,9 @@ export const api = {
   },
   schoolTerms: (academicYear?: string) =>
     get<{ terms: SchoolTermView[] }>(`/api/v1/school/terms${academicYear ? `?academicYear=${encodeURIComponent(academicYear)}` : ""}`),
+  schoolTermCalendar: (termId: string) => get<SchoolTermCalendar>(`/api/v1/school/terms/${encodeURIComponent(termId)}/calendar`),
+  schoolSetTermCalendar: (termId: string, body: { instructionalDays: string[]; shortfallThreshold: number; expectedVersion: number }) => put<SchoolTermCalendar>(`/api/v1/school/terms/${encodeURIComponent(termId)}/calendar`, body),
+  schoolAttendanceShortfall: (sectionId: string, termId: string, through?: string) => get<SchoolAttendanceShortfall>(`/api/v1/school/sections/${encodeURIComponent(sectionId)}/attendance-shortfall?${new URLSearchParams({ termId, ...(through ? { through } : {}) })}`),
   schoolCreateTerm: (body: { collegeId: string; name: string; academicYear: string; startsOn: string; endsOn: string }) =>
     post<SchoolTermView>("/api/v1/school/terms", body),
   schoolAssessmentTypes: (termId: string) =>

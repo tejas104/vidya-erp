@@ -182,7 +182,7 @@ export function buildStack(edition: "college" | "school" = "college") {
   // results, then school-academics, then reporting: reporting composes the
   // school term-result read model with academics' attendance read model.
   const results = createResultsModule({ db, audit: system.service.audit, peopleDirectory: people.service.directory, marksReadModel: academics.service.readModel, scopeChecker: core.scopeChecker });
-  const schoolAcademics = createSchoolAcademicsModule({ db, peopleDirectory: people.service.directory, scopeChecker: core.scopeChecker, gradeScales: results.service.repo });
+  const schoolAcademics = createSchoolAcademicsModule({ db, peopleDirectory: people.service.directory, scopeChecker: core.scopeChecker, gradeScales: results.service.repo, academicsReadModel: academics.service.readModel });
 
   const enqueuedReports: { reportId: string; source: string }[] = [];
   const reporting = createReportingModule({

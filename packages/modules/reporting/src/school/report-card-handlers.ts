@@ -90,7 +90,7 @@ export function createSchoolReportCardHandlers(
     const collegeIds = [...new Set(classes.map((item) => item.collegeId))];
     const terms = (await deps.schoolAcademics.listTermsForColleges(collegeIds))
       .filter((term) => collegeIds.includes(term.collegeId))
-      .map(({ id, collegeId, name, academicYear }) => ({ id, collegeId, name, academicYear }))
+      .map(({ id, collegeId, name, academicYear, startsOn, endsOn }) => ({ id, collegeId, name, academicYear, startsOn, endsOn }))
       .sort((a, b) => b.academicYear.localeCompare(a.academicYear) || a.name.localeCompare(b.name));
     return { status: 200, body: { classes, terms } };
   };

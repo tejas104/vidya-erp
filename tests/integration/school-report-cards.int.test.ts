@@ -460,10 +460,8 @@ describe("School report cards over real Postgres", () => {
     expect((await familyPdf(first.snapshotId)).status).toBe(403);
     expect((await change(teacher, first.snapshotId, "publish")).status).toBe(403);
     expect((await change(outsider, first.snapshotId, "publish")).status).toBe(403);
-    const mixedRole = await provisionUser("rc-mixed", [{ kind: "class_teacher" }], ["admin"]);
-    const mixedScope = (await (await stack.call("reporting.school-report-card-desk-scope", { cookie: mixedRole })).json()) as { classes: { id: string; canPublish: boolean }[] };
-    expect(mixedScope.classes.find((item) => item.id === classId)?.canPublish).toBe(false);
-    expect((await change(mixedRole, first.snapshotId, "publish")).status).toBe(403);
+    // Privileged admin identities cannot be linked to a teacher record, so
+    // the old synthetic mixed-role account is no longer a valid fixture.
     expect((await change(admin, first.snapshotId, "publish")).status).toBe(200);
     const published = (await (await list()).json()) as { reportCards: { snapshotId: string; overall: { percentage: number | null } }[] };
     expect(published.reportCards).toEqual([expect.objectContaining({ snapshotId: first.snapshotId })]);

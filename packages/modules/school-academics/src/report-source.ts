@@ -61,6 +61,8 @@ export interface SchoolTermRecord {
   readonly endsOn: string;
   readonly status: "open" | "closed";
   readonly marksReleasedAt: string | null;
+  /** Authoritative scheduled days when configured; otherwise unavailable. */
+  readonly instructionalDays?: readonly string[] | null;
   /** The grading basis frozen onto the term by its first assessment. Null
    *  until then — a term with no assessments has no grade bands yet. */
   readonly gradeBands: readonly Band[] | null;
@@ -129,6 +131,7 @@ function termRecord(row: typeof schTerms.$inferSelect): SchoolTermRecord {
     endsOn: row.endsOn,
     status: row.status as "open" | "closed",
     marksReleasedAt: row.marksReleasedAt?.toISOString() ?? null,
+    instructionalDays: row.instructionalDays,
     gradeBands: row.gradeBands ?? null,
   };
 }

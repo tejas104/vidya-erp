@@ -14,7 +14,7 @@ const completePreview: SchoolReportCardPreview = { student: { id: "stu_1", fullN
 
 beforeEach(() => {
   vi.resetAllMocks();
-  vi.mocked(api.schoolReportCardDeskScope).mockResolvedValue({ classes: [{ id: "class_1", collegeId: "col_1", name: "Class 8A", canPublish: true }], terms: [{ id: "term_1", collegeId: "col_1", name: "Term 1", academicYear: "2026-27" }] });
+  vi.mocked(api.schoolReportCardDeskScope).mockResolvedValue({ classes: [{ id: "class_1", collegeId: "col_1", name: "Class 8A", canPublish: true }], terms: [{ id: "term_1", collegeId: "col_1", name: "Term 1", academicYear: "2026-27", startsOn: "2026-04-01", endsOn: "2026-09-30" }] });
   vi.mocked(api.schoolReportCardRoster).mockResolvedValue({ students: [{ studentId: "stu_1", fullName: "Meera Nair", admissionNo: "NG-001", snapshotId: null, generatedAt: null, publishedSnapshotId: null }] });
   vi.mocked(api.schoolReportCardPreview).mockResolvedValue(completePreview);
   vi.mocked(api.schoolGenerateReportCard).mockResolvedValue({ snapshotId: "snap_1", generatedAt: "2026-09-21T00:00:00.000Z" });
@@ -44,7 +44,7 @@ describe("School report-card desk", () => {
   it("uses the scoped class choices and keeps classes from another school out of the selected term", async () => {
     vi.mocked(api.schoolReportCardDeskScope).mockResolvedValue({
       classes: [{ id: "class_1", collegeId: "col_1", name: "Class 8A", canPublish: false }, { id: "class_2", collegeId: "col_2", name: "Class 9B", canPublish: false }],
-      terms: [{ id: "term_1", collegeId: "col_1", name: "Term 1", academicYear: "2026-27" }],
+      terms: [{ id: "term_1", collegeId: "col_1", name: "Term 1", academicYear: "2026-27", startsOn: "2026-04-01", endsOn: "2026-09-30" }],
     });
     renderPage();
     await screen.findByRole("heading", { name: "Report card desk" });

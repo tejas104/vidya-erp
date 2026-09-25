@@ -1,0 +1,21 @@
+.back, .actionLink { display: inline-flex; color: var(--section-link); font-weight: 700; text-decoration: underline; text-underline-offset: 3px; margin: 0 0 var(--space-4); background: none; border: 0; padding: 0; font: inherit; cursor: pointer; }
+.back:hover, .actionLink:hover { text-decoration-thickness: 2px; }
+.filters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) auto; gap: var(--space-3); align-items: end; }
+.dateLabel { display: grid; gap: var(--space-2); font-weight: 600; }
+.dateLabel input { min-height: 2.75rem; padding: var(--space-2); border: 1px solid var(--rule-strong); border-radius: var(--radius-sm); background: var(--surface); color: inherit; font: inherit; }
+.error { color: var(--bad); }
+.error a { color: var(--section-link); font-weight: 700; text-decoration: underline; }
+.metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-3); margin: var(--space-5) 0; }
+.metrics > div { display: grid; gap: var(--space-2); border: 1px solid var(--rule); border-radius: var(--radius); background: var(--surface); padding: var(--space-4); }
+.metrics span, .hint, .table small { color: var(--ink-2); }
+.metrics strong { font-size: 1.8rem; line-height: 1; }
+.dates { display: flex; flex-wrap: wrap; gap: var(--space-2); margin: var(--space-3) 0; }
+.dates span { padding: var(--space-2) var(--space-3); border-radius: 99px; background: var(--surface); border: 1px solid var(--rule); font-variant-numeric: tabular-nums; }
+.tableScroll { overflow-x: auto; }
+.table { width: 100%; min-width: 54rem; border-collapse: collapse; text-align: left; }
+.table th, .table td { border-bottom: 1px solid var(--rule); padding: var(--space-3); vertical-align: top; }
+.table th { color: var(--ink-2); font-size: .8rem; }
+.table td:first-child { min-width: 12rem; }
+.table small { display: block; margin-top: .25rem; }
+@media (max-width: 900px) { .filters { grid-template-columns: repeat(2, minmax(0, 1fr)); } .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 520px) { .filters { grid-template-columns: 1fr; } .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

@@ -19,6 +19,10 @@ Choose the Academic Year, term name, and start and end dates with the school adm
 
 The new term is open and appears in the term register. It can be used to set up assessment types and, after a grade scale is available, to create assessments.
 
+## Set instructional days
+
+Select **School days** for the term. Enter one date per line, or select **Fill weekdays** as a starting point and remove holidays and other closed days. Save an integer **Shortfall below (%)** threshold. These dates determine which class teacher daily registers are expected; a missing register is never counted as a pupil absence. Only an administrator can save the calendar, and a closed term must be reopened with a reason first. If another administrator changed it, reload before saving again.
+
 If the end date is before the start date, correct the dates before saving. If a term with the same name already exists for that Academic Year, use the existing term or choose the correct name instead of creating a duplicate.
 
 ## Configure assessment types

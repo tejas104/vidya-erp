@@ -15,6 +15,7 @@ import {
   type ScopeChecker,
 } from "@vidya/platform";
 import type { PeopleDirectory } from "@vidya/module-people";
+import type { AcademicsReadModel } from "@vidya/module-academics";
 import { schoolAcademicsModuleDefinition } from "./definition";
 import { createSchoolAcademicsHandlers } from "./handlers";
 import { createTermsRepo } from "./repo";
@@ -23,6 +24,7 @@ import { createAssessmentTypesHandlers } from "./assessment-types-handlers";
 import { createSchoolMarksRepo } from "./marks-repo";
 import { createSchoolMarksHandlers } from "./marks-handlers";
 import type { SchoolGradeScales } from "./marks-contracts";
+import { createAttendanceReviewHandlers } from "./attendance-review-handlers";
 import {
   createSchoolAcademicsReadModel,
   type SchoolAcademicsReadModel,
@@ -71,6 +73,7 @@ export interface SchoolAcademicsModuleDeps {
   readonly peopleDirectory: PeopleDirectory;
   readonly scopeChecker: ScopeChecker;
   readonly gradeScales: SchoolGradeScales;
+  readonly academicsReadModel: AcademicsReadModel;
 }
 
 /** The school-academics public service: the term-result read model that the
@@ -91,7 +94,8 @@ export function createSchoolAcademicsModule(
       directory: deps.peopleDirectory,
       scopeChecker: deps.scopeChecker,
     }), ...createAssessmentTypesHandlers({ terms: repo, types, scopeChecker: deps.scopeChecker }),
-    ...createSchoolMarksHandlers({ repo: createSchoolMarksRepo(deps.db), terms: repo, types, directory: deps.peopleDirectory, gradeScales: deps.gradeScales, scopeChecker: deps.scopeChecker }) },
+    ...createSchoolMarksHandlers({ repo: createSchoolMarksRepo(deps.db), terms: repo, types, directory: deps.peopleDirectory, gradeScales: deps.gradeScales, scopeChecker: deps.scopeChecker }),
+    ...createAttendanceReviewHandlers({ terms: repo, directory: deps.peopleDirectory, scopeChecker: deps.scopeChecker, academics: deps.academicsReadModel }) },
     jobProcessors: {},
     readinessChecks: [],
     service: { readModel: createSchoolAcademicsReadModel(deps.db) },

@@ -41,6 +41,28 @@ const termsResponseSchema = z.object({ terms: z.array(termViewSchema) });
 const routes: RouteSpec[] = [
   ...schoolMarksRoutes,
   {
+    id: "school-academics.calendar", module: MODULE_NAME, method: "GET",
+    path: "/api/v1/school/terms/{termId}/calendar", summary: "Read a term's explicit instructional days and attendance threshold",
+    tags: ["school-academics"], auth: ANY_AUTHENTICATED,
+    request: { params: z.object({ termId: idSchema }) },
+    responses: { 200: { description: "Term calendar", schema: z.object({ termId: idSchema, instructionalDays: z.array(dateSchema).nullable(), shortfallThreshold: z.number().nullable(), version: z.number().int(), locked: z.boolean() }) }, 403: { description: "Outside scope", schema: problemSchema }, 404: { description: "No such term", schema: problemSchema } },
+  },
+  {
+    id: "school-academics.calendar-set", module: MODULE_NAME, method: "PUT",
+    path: "/api/v1/school/terms/{termId}/calendar", summary: "Set instructional dates with a version guard",
+    tags: ["school-academics"], auth: ANY_AUTHENTICATED,
+    request: { params: z.object({ termId: idSchema }), body: z.object({ instructionalDays: z.array(dateSchema).max(400), shortfallThreshold: z.number().int().min(0).max(100), expectedVersion: z.number().int().nonnegative() }) },
+    audit: { action: "school-academics.calendar-set", resourceType: "term" },
+    responses: { 200: { description: "Saved term calendar", schema: z.object({ termId: idSchema, instructionalDays: z.array(dateSchema).nullable(), shortfallThreshold: z.number().nullable(), version: z.number().int(), locked: z.boolean() }) }, 403: { description: "Outside scope", schema: problemSchema }, 404: { description: "No such term", schema: problemSchema }, 409: { description: "Closed or stale term", schema: problemSchema }, 422: { description: "Invalid dates", schema: problemSchema } },
+  },
+  {
+    id: "school-academics.attendance-shortfall", module: MODULE_NAME, method: "GET",
+    path: "/api/v1/school/sections/{sectionId}/attendance-shortfall", summary: "Review daily-register gaps and pupil attendance shortfall",
+    tags: ["school-academics"], auth: ANY_AUTHENTICATED,
+    request: { params: z.object({ sectionId: idSchema }), query: z.object({ termId: idSchema, through: dateSchema.optional() }) },
+    responses: { 200: { description: "Attendance review", schema: z.object({ termId: idSchema, sectionId: idSchema, through: dateSchema, calendarVersion: z.number().int(), threshold: z.number(), scheduledDates: z.array(dateSchema), unsubmittedDates: z.array(dateSchema), rosterAssumption: z.string(), students: z.array(z.object({ studentId: idSchema, fullName: z.string(), admissionNo: z.string(), expectedDays: z.number(), recordedDays: z.number(), absentDays: z.number(), missingEntryDates: z.array(dateSchema), percentageDenominator: z.number(), percentage: z.number().nullable(), shortfall: z.boolean().nullable() })) }) }, 403: { description: "Outside scope", schema: problemSchema }, 404: { description: "No such section or term", schema: problemSchema }, 409: { description: "Calendar not configured", schema: problemSchema } },
+  },
+  {
     id: "school-academics.types-list", module: MODULE_NAME, method: "GET",
     path: "/api/v1/school/terms/{termId}/assessment-types",
     summary: "Read assessment types and percentage weights for a school term",

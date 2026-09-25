@@ -268,6 +268,7 @@ async function main(): Promise<void> {
   // composition root does.)
   const schoolAcademics = createSchoolAcademicsModule({
     gradeScales: results.service.repo,
+    academicsReadModel: academics.service.readModel,
     db,
     scopeChecker: identityCore.scopeChecker,
     peopleDirectory: people.service.directory,

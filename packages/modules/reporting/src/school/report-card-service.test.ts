@@ -66,6 +66,7 @@ function buildSources(opts: {
   };
   const academics = {
     sectionAttendanceWindow: async () => opts.days ?? [],
+    sectionDailyRegisterWindow: async () => opts.days ?? [],
   } as unknown as AcademicsReadModel;
   const directory = {
     studentsBrief: async () =>

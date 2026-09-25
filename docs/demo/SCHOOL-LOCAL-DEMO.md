@@ -41,6 +41,13 @@ four subjects, section timetables, dated registers with present, absent, late
 and excused entries, syllabus coverage, assignments and a study file. It has
 closed Term 1 marks and a published report card for Asha, plus open Term 2
 assessments with recorded marks across both standards for teacher review.
+Term 2 also has explicit instructional weekdays and a 75% shortfall threshold.
+Open **Attendance review** as an administrator or class teacher to see missing
+daily registers separately from pupil absence. Standard 8 A has registers for
+21–23 September and shows unsubmitted days. Standard 8 B has daily registers
+through 25 September, with one pupil below 75%, one missing pupil entry, and
+classmates on track. The configured calendar covers the full term. School
+holidays should be removed from the calendar before a real pilot.
 The open term deliberately withholds those newer marks from pupils until the
 school closes it. There are future exams for both standards, event notices,
 a pending staff leave request, and 40 generated invoices spanning unpaid,

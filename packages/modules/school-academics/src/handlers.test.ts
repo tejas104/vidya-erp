@@ -65,6 +65,9 @@ function row(over: Partial<SchTermRow> = {}): SchTermRow {
     closedBy: null,
     closedReason: null,
     marksReleasedAt: null,
+    instructionalDays: null,
+    shortfallThreshold: null,
+    calendarVersion: 0,
     createdAt: new Date(),
     updatedAt: new Date(),
     ...over,
@@ -75,6 +78,14 @@ function fakeRepo(seed: SchTermRow[] = []): TermsRepo & { rows: SchTermRow[] } {
   const rows = [...seed];
   return {
     rows,
+    async setCalendar(input) {
+      const target = rows.find((r) => r.id === input.id);
+      if (!target || target.status !== "open" || target.calendarVersion !== input.expectedVersion) return null;
+      target.instructionalDays = input.instructionalDays;
+      target.shortfallThreshold = String(input.shortfallThreshold);
+      target.calendarVersion += 1;
+      return target;
+    },
     async create(input: NewTerm) {
       const created = row({ id: `trm_${rows.length + 1}`, ...input });
       rows.push(created);

@@ -175,7 +175,7 @@ const routes: RouteSpec[] = [
     responses: {
       200: { description: "Report-card desk choices", schema: z.object({
         classes: z.array(z.object({ id: z.string(), collegeId: z.string(), name: z.string(), canPublish: z.boolean() })),
-        terms: z.array(z.object({ id: z.string(), collegeId: z.string(), name: z.string(), academicYear: z.string() })),
+        terms: z.array(z.object({ id: z.string(), collegeId: z.string(), name: z.string(), academicYear: z.string(), startsOn: z.string().date(), endsOn: z.string().date() })),
       }) },
     },
   },
