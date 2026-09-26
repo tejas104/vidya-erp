@@ -50,6 +50,7 @@ import { GuardianService, type GuardianAccountCreator, type StudentBrief } from 
 import { createGuardianHandlers } from "./guardians/handlers";
 import type { GuardianAccessDecision, GuardianRecordCategory, PublicationState } from "./guardian-contract/types";
 import { createReconcileProcessor } from "./jobs/reconcile-job";
+import { certificateSourceInTransaction, type CertificateSource } from "./service/certificate-source";
 
 export {
   IMPORT_JOB_NAME,
@@ -64,6 +65,7 @@ export type { CredentialIssuer } from "./service/import-service";
 export type { GuardianAccountCreator, StudentBrief } from "./guardians/service";
 export type { GuardianAccessDecision, GuardianRecordCategory, PublicationState } from "./guardian-contract/types";
 export type { StaffAttendanceSource } from "./service/staff-attendance-source";
+export type { CertificateSource } from "./service/certificate-source";
 /** Shared username derivation (#11 B4) — the reporting module's per-class
  *  credential sheet reuses this so the scheme is identical everywhere. */
 export { usernameFromCode } from "./ids";
@@ -102,6 +104,8 @@ export interface PeopleModuleDeps {
  * consumer). All ids are the same opaque identifiers grants carry.
  */
 export interface PeopleDirectory {
+  /** Issuance-only read on the caller's DB transaction; locks verified source rows. */
+  certificateSourceInTransaction(tx: Db, studentId: string, enrollmentId: string): Promise<CertificateSource | null>;
   sectionPath(sectionId: string): Promise<OrgPath | null>;
   classPath(classId: string): Promise<OrgPath | null>;
   departmentPath(departmentId: string): Promise<OrgPath | null>;
@@ -304,6 +308,7 @@ export function createPeopleModule(deps: PeopleModuleDeps): RuntimeModule<People
       orgDirectory: org.orgDirectory,
       staffAttendanceSource: createStaffAttendanceSource({ edition, org: orgRepo, attendance: staffAttendance, scopeChecker: deps.scopeChecker }),
       directory: {
+        certificateSourceInTransaction,
         sectionPath: (sectionId) => orgRepo.pathForSection(sectionId),
         classPath: (classId) => orgRepo.pathForClass(classId),
         departmentPath: (departmentId) => orgRepo.pathForDepartment(departmentId),

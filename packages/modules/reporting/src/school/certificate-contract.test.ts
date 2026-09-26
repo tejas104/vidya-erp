@@ -27,7 +27,7 @@ describe("school certificate stored contract", () => {
   it("requires recorded transfer provenance or a specific approved exception", () => {
     const transfer = { ...common, kind: "transfer", leavingOn: "2026-09-26",
       leavingReason: "Family moved", enrollment: { ...common.enrollment, endsOn: "2026-09-26" },
-      source: { kind: "recorded_transfer", progressionAuditId: "audit_44444444" } };
+      source: { kind: "recorded_transfer" } };
     expect(certificateSnapshotSchema.safeParse(transfer).success).toBe(true);
     expect(certificateSnapshotSchema.safeParse({ ...transfer, enrollment: common.enrollment }).success).toBe(false);
     expect(certificateSnapshotSchema.safeParse({ ...transfer,

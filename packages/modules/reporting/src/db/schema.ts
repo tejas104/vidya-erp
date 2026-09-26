@@ -1,5 +1,6 @@
 import { bigint, index, integer, jsonb, pgTable, primaryKey, text, timestamp } from "drizzle-orm/pg-core";
 import type { DocumentStyle } from "../school/document-format";
+import type { CertificateSnapshot } from "../school/certificate-contract";
 
 /**
  * INTERNAL to the reporting module (not exported from index.ts). One table,
@@ -116,3 +117,27 @@ export const rptSchoolDocumentFormats = pgTable("rpt_school_document_formats", {
 }, (table) => [primaryKey({ columns: [table.collegeId, table.family, table.version] })]);
 
 export type RptSchoolDocumentFormatRow = typeof rptSchoolDocumentFormats.$inferSelect;
+
+/** Frozen, append-only school certificates. No cross-module foreign keys. */
+export const rptSchoolCertificates = pgTable("rpt_school_certificates", {
+  id: text("id").primaryKey(),
+  collegeId: text("college_id").notNull(),
+  academicYear: text("academic_year").notNull(),
+  sequence: integer("sequence").notNull(),
+  number: text("number").notNull(),
+  studentId: text("student_id").notNull(),
+  enrollmentId: text("enrollment_id").notNull(),
+  departmentId: text("department_id").notNull(),
+  classId: text("class_id").notNull(),
+  sectionId: text("section_id").notNull(),
+  kind: text("kind").$type<"bonafide" | "transfer">().notNull(),
+  payload: jsonb("payload").$type<CertificateSnapshot>().notNull(),
+  correctionOfId: text("correction_of_id"),
+  requestId: text("request_id").notNull(),
+  issuedBy: text("issued_by").notNull(),
+  issuedAt: timestamp("issued_at", { withTimezone: true }).notNull(),
+}, (table) => [
+  index("rpt_school_certificates_student_idx").on(table.studentId, table.issuedAt),
+]);
+
+export type RptSchoolCertificateRow = typeof rptSchoolCertificates.$inferSelect;

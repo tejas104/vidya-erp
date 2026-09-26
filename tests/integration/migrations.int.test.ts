@@ -273,6 +273,14 @@ const EXPECTATIONS: Record<string, MigrationExpectation> = {
     functions: ["rpt_school_document_formats_immutable"],
     triggers: [{ table: "rpt_school_document_formats", name: "rpt_school_document_formats_no_update" }],
   },
+  "reporting/0010_school_certificates": {
+    tables: ["rpt_school_certificates"],
+    indexes: ["rpt_school_certificates_student_idx", "rpt_school_certificates_school_id_key",
+      "rpt_school_certificates_number_key", "rpt_school_certificates_sequence_key",
+      "rpt_school_certificates_request_key", "rpt_school_certificates_correction_key"],
+    functions: ["rpt_school_certificates_immutable"],
+    triggers: [{ table: "rpt_school_certificates", name: "rpt_school_certificates_no_update" }],
+  },
 
   "timetable/0000_timetable": { tables: ["ttb_periods", "ttb_entries"] },
   "coursework/0000_coursework": {

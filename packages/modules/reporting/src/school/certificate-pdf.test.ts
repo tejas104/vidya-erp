@@ -45,8 +45,7 @@ const common = {
 describe("school certificate PDF", () => {
   it("prints recorded transfer facts and both signatory roles without internal audit IDs", async () => {
     const snapshot: CertificateSnapshot = { ...common, kind: "transfer", leavingOn: "2026-09-26",
-      leavingReason: "Family moved to Pune", source: { kind: "recorded_transfer",
-        progressionAuditId: "44444444-4444-4444-8444-444444444444" } };
+      leavingReason: "Family moved to Pune", source: { kind: "recorded_transfer" } };
     const bytes = await renderCertificatePdf(snapshot);
     const text = pdfText(bytes);
     expect(bytes.subarray(0, 5).toString()).toBe("%PDF-");
@@ -75,7 +74,7 @@ describe("school certificate PDF", () => {
       student: { ...common.student, fullName: "Ananya Lakshmi Narayan Subramanian Sharma Kulkarni" },
       style: { ...common.style, schoolName: "Greenfield International School of Learning and Community Development" },
       leavingOn: "2026-09-26", leavingReason: longReason,
-      source: { kind: "recorded_transfer", progressionAuditId: "44444444-4444-4444-8444-444444444444" } };
+      source: { kind: "recorded_transfer" } };
     const text = pdfText(await renderCertificatePdf(snapshot));
     expect(text).toContain(snapshot.student.fullName);
     expect(text).toContain(snapshot.style.schoolName);

@@ -11,7 +11,10 @@ const dateOnly = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine((value) => {
 // People and audit identifiers are opaque strings (for example stu_<UUID>),
 // not bare UUIDs. Keep their length bound aligned with the platform ID contract.
 const opaqueId = z.string().min(1).max(64).refine(
-  (value) => value === value.trim() && !/[\x00-\x1f\x7f]/.test(value),
+  (value) => value === value.trim() && ![...value].some((char) => {
+    const code = char.charCodeAt(0);
+    return code < 32 || code === 127;
+  }),
   "valid opaque identifier required",
 );
 
@@ -26,12 +29,12 @@ const common = z.object({
   issuedBy: z.enum(["admin", "principal"]),
   correctionOfNumber: z.string().trim().min(3).max(64).nullable(),
   student: z.object({
-    fullName: z.string().trim().min(2).max(120),
+    fullName: z.string().trim().min(1).max(128),
     admissionNo: z.string().trim().min(1).max(64),
   }).strict(),
   enrollment: z.object({
-    className: z.string().trim().min(1).max(80),
-    sectionName: z.string().trim().min(1).max(40),
+    className: z.string().trim().min(1).max(128),
+    sectionName: z.string().trim().min(1).max(128),
     startsOn: dateOnly,
     endsOn: dateOnly.nullable(),
   }).strict(),
@@ -40,7 +43,9 @@ const common = z.object({
 }).strict();
 
 const transferSource = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("recorded_transfer"), progressionAuditId: opaqueId }).strict(),
+  // The enrollmentId above is the verified source row. Progression audit IDs
+  // are not stored on that row, so an issuer must not invent one here.
+  z.object({ kind: z.literal("recorded_transfer") }).strict(),
   z.object({ kind: z.literal("manual_exception"), approvalAuditId: opaqueId,
     exceptionReason: z.string().trim().min(3).max(300) }).strict(),
 ]);

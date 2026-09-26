@@ -19,7 +19,7 @@ const snapshot: CertificateSnapshot = {
   enrollment: { className: "Class 7", sectionName: "A", startsOn: "2026-06-01", endsOn: "2026-09-26" },
   leavingOn: "2026-09-26",
   leavingReason: "Family relocated to another city",
-  source: { kind: "recorded_transfer", progressionAuditId: "44444444-4444-4444-8444-444444444444" },
+  source: { kind: "recorded_transfer" },
   style: { schoolName: "Vidya Fictional Demo School", accentColor: "#176A57",
     footerText: "SYNTHETIC PREVIEW - not issued by a school" },
 };

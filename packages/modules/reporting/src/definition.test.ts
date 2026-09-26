@@ -9,10 +9,10 @@ describe("reporting module definition (contract conformance)", () => {
   });
 
   it("versions every route under its declared families and keeps them all authenticated", () => {
-    // Reporting serves queued exports, permanent school report cards, and
+    // Reporting serves queued exports, permanent school documents, and
     // administrator document-format policy. Other prefixes belong elsewhere.
     for (const route of reportingModuleDefinition.routes) {
-      expect(route.path, route.id).toMatch(/^\/api\/v1\/(reports|school\/(report-cards|document-formats))/);
+      expect(route.path, route.id).toMatch(/^\/api\/v1\/(reports|school\/(report-cards|certificates|document-formats))/);
       expect(route.auth.public, route.id).toBe(false);
     }
   });
@@ -24,6 +24,7 @@ describe("reporting module definition (contract conformance)", () => {
     expect(stateChanging.map((route) => route.id).sort()).toEqual([
       "reporting.class-credentials",
       "reporting.request",
+      "reporting.school-certificate-issue",
       "reporting.school-document-format-save",
       "reporting.school-report-card-generate",
       "reporting.school-report-card-preview",

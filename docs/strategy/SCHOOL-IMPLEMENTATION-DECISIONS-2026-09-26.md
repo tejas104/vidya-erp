@@ -39,14 +39,21 @@ report cards and attendance PDFs, with an uploaded sample as a private human
 reference. Certificate styling is stored for the later certificate renderer.
 Arbitrary layout mapping and automatic sample conversion are still open.
 
-A pure N7 renderer now produces an English transfer or bonafide PDF from a
+A pure N7 renderer produces an English transfer or bonafide PDF from a
 versioned, frozen certificate snapshot. The local `pnpm
 preview:school-certificate` command writes one explicitly fictional PDF under
-`output/pdf/` for layout review. It does not issue a certificate from a pupil
-record, allocate a school/year number, approve an exception, create an audit
-event, or make number/QR verification available. Those are the next N7 service
-and database steps. Hindi text needs a packaged, licensed font and layout
-proof before the pilot option can be enabled.
+`output/pdf/` for layout review. The next API slice now has a People-owned
+locked source read, append-only certificate migration, per-school/year
+numbering, in-transaction audit, idempotent issue, scoped list and PDF
+download for bonafide certificates tied to a verified enrollment. The
+recorded-transfer source rule exists internally; the public transfer route
+returns 409 until both-role exit approval and fee clearance are enforced.
+Bonafide issuance for a pupil with no verified enrollment also remains open.
+The new database path is not yet
+verified because Docker was deferred, and the persistent demo still runs its
+older image. Manual exception approval, fee clearance, two-role sign-off,
+number/QR verification and the school UI remain open. Hindi text needs a
+packaged, licensed font and layout proof before the pilot option can be enabled.
 
 ## N5: attendance escalation
 

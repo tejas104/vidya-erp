@@ -3,7 +3,7 @@ import { z } from "zod";
 /** Only presentation may be edited. Figures and identity always come from records. */
 export const documentFamilySchema = z.enum(["report_card", "attendance_review", "certificate"]);
 export const documentStyleSchema = z.object({
-  schoolName: z.string().trim().min(1).max(100),
+  schoolName: z.string().trim().min(1).max(128),
   accentColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/),
   footerText: z.string().trim().max(180),
 }).strict();

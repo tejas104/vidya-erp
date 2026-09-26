@@ -43,6 +43,8 @@ import { ReportCardBuilder } from "./school/report-card-service";
 import { createSchoolReportCardHandlers } from "./school/report-card-handlers";
 import { createDocumentFormatRepo } from "./school/document-format-repo";
 import { createSchoolDocumentFormatHandlers } from "./school/document-format-handlers";
+import { createCertificateRepo } from "./school/certificate-repo";
+import { createSchoolCertificateHandlers } from "./school/certificate-handlers";
 
 export {
   REPORT_JOB_NAME,
@@ -92,6 +94,7 @@ export type ReportingService = Record<string, never>;
 export function createReportingModule(deps: ReportingModuleDeps): RuntimeModule<ReportingService> {
   const repo = createReportsRepo(deps.db);
   const formatRepo = createDocumentFormatRepo(deps.db, deps.audit);
+  const certificateRepo = createCertificateRepo(deps.db, deps.audit, deps.peopleDirectory);
   const reportsTotal = new Counter({
     name: "vidya_reports_total",
     help: "Report generation by kind, format and outcome",
@@ -127,6 +130,8 @@ export function createReportingModule(deps: ReportingModuleDeps): RuntimeModule<
   const module: RuntimeModule<ReportingService> = {
     definition: reportingModuleDefinition,
     handlers: {
+      ...createSchoolCertificateHandlers({ edition: deps.edition, repo: certificateRepo,
+        directory: deps.peopleDirectory, scopeChecker: deps.scopeChecker }),
       ...createSchoolDocumentFormatHandlers({
         edition: deps.edition, repo: formatRepo, directory: deps.peopleDirectory, scopeChecker: deps.scopeChecker,
         store: {
