@@ -89,3 +89,11 @@ requires a provider-configured MFA `acr` and a fresh `auth_time` (no older than
 signature, audience, issuer, nonce, expiry and the login transaction. The
 adapter, provider selection, session, and production route are still absent;
 this gate is **not** an authentication implementation or a live console.
+
+The next registry migration gives each subscription write a caller-generated
+UUID request key. A retry with the same key, operator and exact command returns
+the original revision; a conflicting reuse fails. The event and operator audit
+remain one transaction, so an audit failure rolls back the renewal. Existing
+events receive their event ID as a legacy request key during migration. The
+updated migration and retry path still require isolated PostgreSQL verification
+when Docker capacity is available.

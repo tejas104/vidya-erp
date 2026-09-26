@@ -73,11 +73,24 @@ describe("separate vendor registry database", () => {
     expect((await pool.query("SELECT count(*)::int AS n FROM cp_tenants")).rows[0]?.n).toBe(1);
     expect((await pool.query("SELECT count(*)::int AS n FROM cp_operator_audit WHERE action = 'tenant.registered'")).rows[0]?.n).toBe(1);
 
-    const saved = await repo.recordSubscription({ tenantId: first.id, expectedRevision: 0, state: "trial",
-      paidThrough: "2026-10-31", reason: "Synthetic trial approved" }, operatorId);
+    const subscriptionInput = { tenantId: first.id, expectedRevision: 0, state: "trial",
+      paidThrough: "2026-10-31", reason: "Synthetic trial approved" };
+    const subscriptionRequestId = randomUUID();
+    const [saved, replayed] = await Promise.all([
+      repo.recordSubscription(subscriptionInput, subscriptionRequestId, operatorId),
+      repo.recordSubscription(subscriptionInput, subscriptionRequestId, operatorId),
+    ]);
+    expect([saved, replayed].map((result) => result.created).sort()).toEqual([false, true]);
     expect(saved.revision).toBe(1);
+    expect(replayed.revision).toBe(1);
+    await expect(repo.recordSubscription({ ...subscriptionInput, state: "active" },
+      subscriptionRequestId, operatorId)).rejects.toBeInstanceOf(RegistryConflict);
+    expect((await pool.query("SELECT count(*)::int AS n FROM cp_subscription_events")).rows[0]?.n).toBe(1);
+    expect((await pool.query("SELECT count(*)::int AS n FROM cp_operator_audit WHERE action = 'subscription.recorded'")).rows[0]?.n).toBe(1);
+    expect((await pool.query("SELECT detail->>'requestId' AS request_id FROM cp_operator_audit WHERE action = 'subscription.recorded'"))
+      .rows[0]?.request_id).toBe(subscriptionRequestId);
     await expect(repo.recordSubscription({ tenantId: first.id, expectedRevision: 0, state: "active",
-      paidThrough: "2027-10-31", reason: "stale renewal" }, operatorId)).rejects.toBeInstanceOf(RegistryConflict);
+      paidThrough: "2027-10-31", reason: "stale renewal" }, randomUUID(), operatorId)).rejects.toBeInstanceOf(RegistryConflict);
     const latest = (await repo.listTenants(operatorId))[0]!;
     expect(latest).toMatchObject({ id: first.id, subscription_state: "trial", grace_days: 30, subscription_revision: 1 });
     expect(tenantAccessView(latest, new Date("2026-12-01T00:00:00Z"))).toMatchObject({
@@ -89,7 +102,7 @@ describe("separate vendor registry database", () => {
       BEGIN IF NEW.action = 'subscription.recorded' THEN RAISE EXCEPTION 'audit fault'; END IF; RETURN NEW; END $$`);
     await pool.query("CREATE TRIGGER cp_test_audit_fault BEFORE INSERT ON cp_operator_audit FOR EACH ROW EXECUTE FUNCTION cp_test_fail_audit()");
     await expect(repo.recordSubscription({ tenantId: first.id, expectedRevision: 1, state: "active",
-      paidThrough: "2027-10-31", reason: "should roll back" }, operatorId)).rejects.toThrow(/audit fault/);
+      paidThrough: "2027-10-31", reason: "should roll back" }, randomUUID(), operatorId)).rejects.toThrow(/audit fault/);
     expect((await repo.listTenants(operatorId))[0]?.subscription_revision).toBe(1);
     await expect(pool.query("DELETE FROM cp_subscription_events WHERE tenant_id = $1", [first.id])).rejects.toThrow(/append-only/);
 
@@ -98,7 +111,7 @@ describe("separate vendor registry database", () => {
     await expect(repo.listTenants(operatorId)).rejects.toThrow(/active operator required/);
     await expect(repo.registerTenant({ ...input, code: "another-school" }, randomUUID(), operatorId)).rejects.toThrow(/active operator required/);
 
-    await migrateDown(pool, source, 2, logger);
+    await migrateDown(pool, source, 3, logger);
     expect((await pool.query("SELECT to_regclass('cp_tenants') AS tenant_table")).rows[0]?.tenant_table).toBeNull();
     await migrateUp(pool, source, logger);
     expect((await pool.query("SELECT to_regclass('cp_tenants') AS tenant_table")).rows[0]?.tenant_table).toBe("cp_tenants");

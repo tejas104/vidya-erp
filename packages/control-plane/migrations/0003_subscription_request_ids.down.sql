@@ -1,0 +1,2 @@
+ALTER TABLE cp_subscription_events DROP CONSTRAINT cp_subscription_events_request_id_key;
+ALTER TABLE cp_subscription_events DROP COLUMN request_id;

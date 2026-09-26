@@ -115,28 +115,50 @@ export function createRegistryRepo(pool: Pool) {
       });
     },
 
-    async recordSubscription(raw: unknown, operatorId: string): Promise<{ revision: number }> {
+    /** Reuse the same request ID only for an exact retry of the same operator command. */
+    async recordSubscription(raw: unknown, requestId: string, operatorId: string): Promise<{ revision: number; created: boolean }> {
       const input = subscriptionChangeSchema.parse(raw);
-      if (!z.string().uuid().safeParse(operatorId).success) throw new Error("valid operator ID required");
+      if (!z.string().uuid().safeParse(requestId).success || !z.string().uuid().safeParse(operatorId).success) {
+        throw new Error("valid request and operator IDs required");
+      }
       return transaction(pool, async (client) => {
         await requireActiveOperator(client, operatorId);
         const tenant = await client.query("SELECT id FROM cp_tenants WHERE id = $1 FOR UPDATE", [input.tenantId]);
         if (tenant.rowCount !== 1) throw new RegistryConflict("no such tenant");
+        const previous = await client.query<{
+          tenant_id: string; revision: number; state: string; paid_through: string;
+          operator_id: string; reason: string;
+        }>(`SELECT tenant_id, revision, state, paid_through::text, operator_id, reason
+            FROM cp_subscription_events WHERE request_id = $1`, [requestId]);
+        if (previous.rows[0]) {
+          const event = previous.rows[0];
+          if (event.tenant_id !== input.tenantId || event.revision !== input.expectedRevision + 1 ||
+              event.state !== input.state || event.paid_through !== input.paidThrough ||
+              event.operator_id !== operatorId || event.reason !== input.reason) {
+            throw new RegistryConflict("request ID was already used for different subscription details");
+          }
+          return { revision: event.revision, created: false };
+        }
         const current = await client.query<{ revision: number }>(
           "SELECT revision FROM cp_subscription_events WHERE tenant_id = $1 ORDER BY revision DESC LIMIT 1", [input.tenantId],
         );
         const revision = current.rows[0]?.revision ?? 0;
         if (revision !== input.expectedRevision) throw new RegistryConflict("subscription changed since it was read");
-        await client.query(`INSERT INTO cp_subscription_events
-          (id, tenant_id, revision, state, paid_through, grace_days, operator_id, reason)
-          VALUES ($1,$2,$3,$4,$5,30,$6,$7)`,
-        [randomUUID(), input.tenantId, revision + 1, input.state, input.paidThrough, operatorId, input.reason]);
+        try {
+          await client.query(`INSERT INTO cp_subscription_events
+            (id, request_id, tenant_id, revision, state, paid_through, grace_days, operator_id, reason)
+            VALUES ($1,$2,$3,$4,$5,$6,30,$7,$8)`,
+          [randomUUID(), requestId, input.tenantId, revision + 1, input.state, input.paidThrough, operatorId, input.reason]);
+        } catch (error) {
+          if ((error as { code?: string }).code === "23505") throw new RegistryConflict("subscription request ID or revision already exists");
+          throw error;
+        }
         await client.query(
           "INSERT INTO cp_operator_audit (id, operator_id, action, tenant_id, detail) VALUES ($1,$2,$3,$4,$5)",
           [randomUUID(), operatorId, "subscription.recorded", input.tenantId,
-            JSON.stringify({ revision: revision + 1, state: input.state, paidThrough: input.paidThrough })],
+            JSON.stringify({ requestId, revision: revision + 1, state: input.state, paidThrough: input.paidThrough })],
         );
-        return { revision: revision + 1 };
+        return { revision: revision + 1, created: true };
       });
     },
   };
