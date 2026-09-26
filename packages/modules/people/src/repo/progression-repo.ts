@@ -60,6 +60,9 @@ export interface ProgressionReverseInput {
   readonly studentId: string;
   readonly sourceEnrollmentId: string;
   readonly nextEnrollmentId: string | null;
+  readonly sectionId: string;
+  readonly academicYear: string;
+  readonly next: { readonly sectionId: string; readonly academicYear: string; readonly startsOn: string } | null;
   readonly outcome: RecordedOutcome;
   readonly endsOn: string;
   readonly today: string;
@@ -106,6 +109,7 @@ export function createProgressionRepo(
         )).for("update");
         const original = source[0];
         if (!original || original.outcome !== input.outcome || original.endsOn !== input.endsOn ||
+            original.sectionId !== input.sectionId || original.academicYear !== input.academicYear ||
             original.status !== (input.outcome === "transferred_out" ? "withdrawn" : "completed")) {
           throw new ProgressionReversalConflictError("The recorded outcome has changed. Reload the pupil's history.");
         }
@@ -116,6 +120,8 @@ export function createProgressionRepo(
         const next = input.nextEnrollmentId === null ? null : enrollments.find((row) => row.id === input.nextEnrollmentId);
         if (input.nextEnrollmentId !== null) {
           if (!next || next.status !== "enrolled" || next.outcome !== null || next.startsOn === null ||
+              !input.next || next.sectionId !== input.next.sectionId ||
+              next.academicYear !== input.next.academicYear || next.startsOn !== input.next.startsOn ||
               next.academicYear <= original.academicYear || next.startsOn <= input.endsOn) {
             throw new ProgressionReversalConflictError("The next-year enrollment has changed.");
           }

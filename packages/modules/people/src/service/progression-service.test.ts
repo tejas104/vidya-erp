@@ -16,6 +16,7 @@ describe("one-pupil progression correction evidence", () => {
         id: 5, action: "people.student-progressed",
         details: {
           closedEnrollmentId: "enr_1", newEnrollmentId: null, outcome: "transferred_out", endsOn: "2026-09-25",
+          sectionId: "sec_1", academicYear: "2026-27", next: null,
           before: { status: "active" }, after: { status: "transferred" },
           familyAccess: [{
             relationshipId: "rel_1",
@@ -28,7 +29,8 @@ describe("one-pupil progression correction evidence", () => {
     await service.reverse(request);
     expect(reverse).toHaveBeenCalledWith(expect.objectContaining({
       studentId: "stu_1", sourceEnrollmentId: "enr_1", nextEnrollmentId: null,
-      outcome: "transferred_out", endsOn: "2026-09-25", statusBefore: "active", statusAfter: "transferred",
+      outcome: "transferred_out", endsOn: "2026-09-25", sectionId: "sec_1", academicYear: "2026-27",
+      next: null, statusBefore: "active", statusAfter: "transferred",
       familyAccess: [expect.objectContaining({ relationshipId: "rel_1" })],
     }));
   });
@@ -42,5 +44,24 @@ describe("one-pupil progression correction evidence", () => {
     });
     await expect(service.reverse(request)).rejects.toBeInstanceOf(ProgressionReversalConflictError);
     expect(reverse).not.toHaveBeenCalled();
+  });
+
+  it("passes the recorded next-year placement to the transactional correction", async () => {
+    const reverse = vi.fn().mockResolvedValue({ correctionId: "prc_1", reinstatedEnrollmentId: "enr_3", receipt: {} });
+    const next = { sectionId: "sec_2", academicYear: "2027-28", startsOn: "2027-04-01" };
+    const service = new ProgressionService({
+      people: {} as never, org: {} as never, relationships: async () => [],
+      repo: { apply: vi.fn() as never, reverse },
+      readAudit: async () => [{
+        id: 6, action: "people.student-progressed",
+        details: {
+          closedEnrollmentId: "enr_1", newEnrollmentId: "enr_2", outcome: "promoted", endsOn: "2027-03-31",
+          sectionId: "sec_1", academicYear: "2026-27", next,
+          before: { status: "active" }, after: { status: "active" }, familyAccess: [],
+        },
+      }],
+    });
+    await service.reverse(request);
+    expect(reverse).toHaveBeenCalledWith(expect.objectContaining({ nextEnrollmentId: "enr_2", next }));
   });
 });

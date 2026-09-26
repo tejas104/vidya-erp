@@ -235,6 +235,10 @@ describe("Year-end progression over real Postgres (N6)", () => {
     });
     expect((await reverse(used.studentId, used.enrollmentId)).status).toBe(409);
     expect((await stack.pool.query("SELECT status FROM ppl_enrollments WHERE id=$1", [target.rows[0].id])).rows[0].status).toBe("enrolled");
+    const cleanTarget = await stack.pool.query("SELECT id, starts_on::text AS starts_on FROM ppl_enrollments WHERE student_id=$1 AND academic_year=$2", [clean.studentId, NEXT]);
+    await stack.pool.query("UPDATE ppl_enrollments SET starts_on=$2 WHERE id=$1", [cleanTarget.rows[0].id, shift(today, 3)]);
+    expect((await reverse(clean.studentId, clean.enrollmentId)).status).toBe(409);
+    await stack.pool.query("UPDATE ppl_enrollments SET starts_on=$2 WHERE id=$1", [cleanTarget.rows[0].id, cleanTarget.rows[0].starts_on]);
     const corrected = await reverse(clean.studentId, clean.enrollmentId);
     expect(corrected.status, await corrected.clone().text()).toBe(200);
     expect((await stack.pool.query("SELECT status FROM ppl_enrollments WHERE student_id=$1 AND academic_year=$2", [clean.studentId, NEXT])).rows[0].status).toBe("voided");

@@ -102,6 +102,8 @@ export class ProgressionService {
     let beforeId: number | undefined;
     let evidence: {
       outcome: RecordedOutcome; endsOn: string; newEnrollmentId: string | null;
+      sectionId: string; academicYear: string;
+      next: { sectionId: string; academicYear: string; startsOn: string } | null;
       before: { status: StudentStatus }; after: { status: StudentStatus };
       familyAccess: readonly {
         relationshipId: string;
@@ -118,6 +120,7 @@ export class ProgressionService {
         const detail = found.details as Record<string, unknown>;
         if (!["promoted", "detained", "transferred_out", "graduated"].includes(String(detail.outcome)) ||
             typeof detail.endsOn !== "string" || typeof detail.newEnrollmentId !== "string" && detail.newEnrollmentId !== null ||
+            typeof detail.sectionId !== "string" || typeof detail.academicYear !== "string" ||
             typeof detail.before !== "object" || detail.before === null ||
             typeof detail.after !== "object" || detail.after === null ||
             !Array.isArray(detail.familyAccess)) {
@@ -128,6 +131,15 @@ export class ProgressionService {
         const statuses: StudentStatus[] = ["active", "inactive", "backlog", "year_back", "transferred", "dropped", "alumni"];
         if (!statuses.includes(before.status as StudentStatus) || !statuses.includes(after.status as StudentStatus)) {
           throw new ProgressionReversalConflictError("The original status audit is incomplete.");
+        }
+        const next = detail.next;
+        if ((detail.newEnrollmentId === null ? next !== null :
+          typeof next !== "object" || next === null ||
+          typeof (next as Record<string, unknown>).sectionId !== "string" ||
+          typeof (next as Record<string, unknown>).academicYear !== "string" ||
+          typeof (next as Record<string, unknown>).startsOn !== "string") ||
+          (["promoted", "detained"].includes(String(detail.outcome)) !== (detail.newEnrollmentId !== null))) {
+          throw new ProgressionReversalConflictError("The original next-year placement audit is incomplete.");
         }
         const familyAccess = detail.familyAccess as {
           relationshipId: string; before: { validUntil: string | null; historicalAccessUntil: string | null };
@@ -141,6 +153,8 @@ export class ProgressionService {
         evidence = {
           outcome: detail.outcome as RecordedOutcome, endsOn: detail.endsOn,
           newEnrollmentId: detail.newEnrollmentId as string | null,
+          sectionId: detail.sectionId as string, academicYear: detail.academicYear as string,
+          next: next as { sectionId: string; academicYear: string; startsOn: string } | null,
           before: { status: before.status as StudentStatus }, after: { status: after.status as StudentStatus },
           familyAccess,
         };
@@ -153,6 +167,7 @@ export class ProgressionService {
     return this.deps.repo.reverse({
       studentId: input.studentId, sourceEnrollmentId: input.sourceEnrollmentId,
       nextEnrollmentId: evidence.newEnrollmentId, outcome: evidence.outcome, endsOn: evidence.endsOn,
+      sectionId: evidence.sectionId, academicYear: evidence.academicYear, next: evidence.next,
       today: this.deps.today?.() ?? schoolToday(),
       statusBefore: evidence.before.status, statusAfter: evidence.after.status,
       familyAccess: evidence.familyAccess, reason: input.reason, org: input.org, attribution: input.attribution,
