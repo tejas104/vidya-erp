@@ -23,7 +23,7 @@ import type { OrgService } from "../service/org-service";
 import { InvalidEnrollmentDatesError, PeopleService, UnknownReferenceError } from "../service/people-service";
 import type { AssignmentsService } from "../service/assignments-service";
 import { ProgressionBlockedError, type ProgressionPlan, type ProgressionService } from "../service/progression-service";
-import { PROGRESSION_AUDIT, ProgressionConflictError, ProgressionReversalConflictError } from "../repo/progression-repo";
+import { GuardianHistoryPolicyConflictError, PROGRESSION_AUDIT, ProgressionConflictError, ProgressionReversalConflictError } from "../repo/progression-repo";
 import type { CredentialIssuer, ImportService } from "../service/import-service";
 import { DuplicateCodeError, UnitInUseError, type OrgUnitType } from "../repo/org-repo";
 import { DuplicateAssignmentError, DuplicatePersonError, EnrollmentConflictError, type StudentStatus } from "../repo/people-repo";
@@ -774,6 +774,46 @@ export function createPeopleHandlers(deps: PeopleHandlerDeps): Record<string, Ro
     };
   };
 
+  const guardianHistoryPolicyGet: RouteHandler = async (ctx) => {
+    if (deps.edition !== "school") return notFound();
+    const { collegeId } = ctx.request.params as { collegeId: string };
+    const path = await deps.org.pathForUnit("college", collegeId);
+    if (!path) return notFound();
+    const scope = checkScope(deps.scopeChecker, ctx, ctx.principal as Principal, "read", {
+      module: "people", resourceType: "college", org: path,
+    });
+    if (!scope.ok) return scope.result;
+    const policy = await deps.progression.getHistoryPolicy(collegeId);
+    return policy ? { status: 200, body: policy } : notFound();
+  };
+
+  const guardianHistoryPolicyUpdate: RouteHandler = async (ctx) => {
+    if (deps.edition !== "school") return notFound();
+    const principal = ctx.principal as Principal;
+    const { collegeId } = ctx.request.params as { collegeId: string };
+    const { days, expectedVersion } = ctx.request.body as { days: number; expectedVersion: number };
+    const path = await deps.org.pathForUnit("college", collegeId);
+    if (!path) return notFound();
+    const scope = checkScope(deps.scopeChecker, ctx, principal, "update", {
+      module: "people", resourceType: "college", org: path,
+    });
+    if (!scope.ok) return scope.result;
+    try {
+      const updated = await deps.progression.updateHistoryPolicy({
+        collegeId, days, expectedVersion,
+        attribution: { requestId: ctx.requestId, actorType: principal.kind, actorId: principal.id },
+      });
+      if (!updated) return notFound();
+      return {
+        status: 200, body: updated.policy,
+        audit: { org: path, resourceId: collegeId, persisted: { kind: "in-transaction", receipt: updated.receipt } },
+      };
+    } catch (error) {
+      if (error instanceof GuardianHistoryPolicyConflictError) return { status: 409, body: { message: error.message } };
+      throw error;
+    }
+  };
+
   const progressionApply: RouteHandler = async (ctx) => {
     const principal = ctx.principal as Principal;
     const plan = ctx.request.body as ProgressionPlan;
@@ -790,6 +830,7 @@ export function createPeopleHandlers(deps: PeopleHandlerDeps): Record<string, Ro
     } catch (error) {
       if (error instanceof ProgressionBlockedError) return { status: 422, body: { message: error.message, preview: error.preview } };
       if (error instanceof ProgressionConflictError) return { status: 409, body: { message: error.message } };
+      if (error instanceof GuardianHistoryPolicyConflictError) return { status: 409, body: { message: error.message } };
       throw error;
     }
   };
@@ -1502,6 +1543,8 @@ export function createPeopleHandlers(deps: PeopleHandlerDeps): Record<string, Ro
     "people.student-enrollment-dates": studentEnrollmentDates,
     "people.progression-preview": progressionPreview,
     "people.progression-apply": progressionApply,
+    "people.guardian-history-policy-get": guardianHistoryPolicyGet,
+    "people.guardian-history-policy-update": guardianHistoryPolicyUpdate,
     "people.progression-reverse": progressionReverse,
     "people.document-upload": documentUpload,
     "people.document-list": documentList,

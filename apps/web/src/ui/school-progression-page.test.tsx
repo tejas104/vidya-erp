@@ -6,7 +6,7 @@ import { HelpEditionProvider } from "./help/HelpEditionContext";
 
 vi.mock("./api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./api")>();
-  return { ...actual, api: { ...actual.api, colleges: vi.fn(), collegeTree: vi.fn(), sectionRoster: vi.fn(), schoolTerms: vi.fn(), progressionPreview: vi.fn(), progressionApply: vi.fn() } };
+  return { ...actual, api: { ...actual.api, colleges: vi.fn(), collegeTree: vi.fn(), sectionRoster: vi.fn(), schoolTerms: vi.fn(), progressionPreview: vi.fn(), progressionApply: vi.fn(), guardianHistoryPolicy: vi.fn(), updateGuardianHistoryPolicy: vi.fn() } };
 });
 
 const YEAR = currentAcademicYear();
@@ -16,7 +16,7 @@ const pupil = (id: string, fullName: string) => ({
 });
 const previewOf = (overrides: Partial<ProgressionPreview> = {}): ProgressionPreview => ({
   sectionId: "sec_5a", academicYear: YEAR, endsOn: "2027-03-31", targetAcademicYear: "2027-28", startsOn: "2027-06-01",
-  familyAccess: { liveUntil: "2027-04-01T00:00:00.000Z", historicalAccessUntil: "2027-06-30T00:00:00.000Z" },
+  familyAccess: { liveUntil: "2027-04-01T00:00:00.000Z", historicalAccessUntil: "2027-06-30T00:00:00.000Z", days: 90, policyVersion: 1 },
   pupils: [
     { studentId: "1", admissionNo: "A-1", fullName: "Asha Rao", enrollmentId: "enr_1", outcome: "promote", statusBefore: "active", statusAfter: "active", targetSectionId: "sec_6a", reason: null, familyLinks: 0, problems: [] },
     { studentId: "2", admissionNo: "A-2", fullName: "Dev Rao", enrollmentId: "enr_2", outcome: "transfer_out", statusBefore: "active", statusAfter: "transferred", targetSectionId: null, reason: "Moved to Pune", familyLinks: 2, problems: [] },
@@ -39,6 +39,7 @@ beforeEach(() => {
   });
   vi.mocked(api.sectionRoster).mockResolvedValue({ students: [pupil("1", "Asha Rao"), pupil("2", "Dev Rao"), pupil("3", "Ira Rao")] });
   vi.mocked(api.schoolTerms).mockResolvedValue({ terms: [{ id: "t2", collegeId: "col_1", name: "Term 2", academicYear: YEAR, startsOn: "2026-09-01", endsOn: "2026-12-31", status: "open", closedAt: null, closedBy: null, closedReason: null, marksReleasedAt: null }] });
+  vi.mocked(api.guardianHistoryPolicy).mockResolvedValue({ days: 90, version: 1 });
 });
 
 function renderPage() {
@@ -91,6 +92,7 @@ describe("year-end progression page", () => {
     expect(api.progressionApply).not.toHaveBeenCalled();
     fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Apply now" }));
     await waitFor(() => expect(api.progressionApply).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(api.progressionApply).mock.calls[0]![0].expectedHistoryPolicyVersion).toBe(1);
     expect(await screen.findByText(/Recorded for 2 pupils/)).toBeInTheDocument();
     expect(screen.getByText(/Transfer out\s*, 2 family links moved to read-only/)).toBeInTheDocument();
     expect(apply).toBeDefined();
@@ -103,5 +105,20 @@ describe("year-end progression page", () => {
     fireEvent.click(screen.getByRole("button", { name: "Preview changes" }));
     expect(await screen.findByText("The closing date cannot be later than today.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Apply to 2 pupils" })).toBeDisabled();
+  });
+
+  it("saves a future-exit window and clears a preview made with the old policy", async () => {
+    vi.mocked(api.progressionPreview).mockResolvedValue(previewOf());
+    vi.mocked(api.updateGuardianHistoryPolicy).mockResolvedValue({ days: 30, version: 2 });
+    renderPage();
+    await screen.findByText("Asha Rao");
+    await screen.findByDisplayValue("90");
+    fireEvent.click(screen.getByRole("button", { name: "Preview changes" }));
+    await screen.findByText("3. Check and apply");
+    fireEvent.change(screen.getByRole("spinbutton", { name: "Days after exit" }), { target: { value: "30" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save window" }));
+    await waitFor(() => expect(api.updateGuardianHistoryPolicy).toHaveBeenCalledWith("col_1", { days: 30, expectedVersion: 1 }));
+    expect(await screen.findByText(/Existing exit dates are unchanged/)).toBeInTheDocument();
+    expect(screen.queryByText("3. Check and apply")).not.toBeInTheDocument();
   });
 });

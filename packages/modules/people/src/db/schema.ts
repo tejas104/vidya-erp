@@ -23,6 +23,8 @@ export const pplColleges = pgTable("ppl_colleges", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
   code: text("code").notNull(),
+  guardianHistoryDays: integer("guardian_history_days").notNull().default(90),
+  guardianHistoryVersion: integer("guardian_history_version").notNull().default(1),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [uniqueIndex("ppl_colleges_code_idx").on(table.code)]);

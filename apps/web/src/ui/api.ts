@@ -366,14 +366,16 @@ export interface ProgressionPlan {
   promoteToSectionId?: string;
   detainInSectionId?: string;
   pupils: { studentId: string; enrollmentId: string; outcome: ProgressionChoice; reason?: string }[];
+  expectedHistoryPolicyVersion?: number;
 }
+export interface GuardianHistoryPolicy { days: number; version: number }
 export interface ProgressionPreview {
   sectionId: string;
   academicYear: string;
   endsOn: string;
   targetAcademicYear: string | null;
   startsOn: string | null;
-  familyAccess: { liveUntil: string; historicalAccessUntil: string } | null;
+  familyAccess: { liveUntil: string; historicalAccessUntil: string; days: number; policyVersion: number } | null;
   pupils: {
     studentId: string; admissionNo: string; fullName: string; enrollmentId: string; outcome: ProgressionChoice;
     statusBefore: string; statusAfter: StudentStatus; targetSectionId: string | null; reason: string | null;
@@ -983,6 +985,9 @@ export const api = {
     ),
   progressionPreview: (plan: ProgressionPlan) => post<ProgressionPreview>("/api/v1/people/progression/preview", plan),
   progressionApply: (plan: ProgressionPlan) => post<ProgressionResult>("/api/v1/people/progression/apply", plan),
+  guardianHistoryPolicy: (collegeId: string) => get<GuardianHistoryPolicy>(`/api/v1/people/colleges/${encodeURIComponent(collegeId)}/guardian-history-policy`),
+  updateGuardianHistoryPolicy: (collegeId: string, body: { days: number; expectedVersion: number }) =>
+    patch<GuardianHistoryPolicy>(`/api/v1/people/colleges/${encodeURIComponent(collegeId)}/guardian-history-policy`, body),
   progressionReverse: (studentId: string, enrollmentId: string, reason: string) =>
     post<{ correctionId: string; reinstatedEnrollmentId: string }>(
       `/api/v1/people/students/${encodeURIComponent(studentId)}/enrollments/${encodeURIComponent(enrollmentId)}/progression-reversal`,

@@ -3,12 +3,12 @@ import { useEffect, useMemo, useState } from "react";
 import { Button, Card, EmptyState, Modal, PageHeader, Select, StatusBadge } from "@vidya/ui-system";
 import {
   api, ApiError, currentAcademicYear,
-  type OrgTree, type ProgressionChoice, type ProgressionPlan, type ProgressionPreview, type ProgressionResult, type SchoolTermView, type StudentView,
+  type GuardianHistoryPolicy, type OrgTree, type ProgressionChoice, type ProgressionPlan, type ProgressionPreview, type ProgressionResult, type SchoolTermView, type StudentView,
 } from "./api";
 import { HelpButton } from "./help/HelpButton";
 import styles from "./SchoolProgressionPage.module.css";
 
-type SectionOption = { id: string; label: string; classId: string };
+type SectionOption = { id: string; label: string; classId: string; collegeId: string };
 type Choice = ProgressionChoice | "undecided";
 
 const CHOICES: { value: Choice; label: string }[] = [
@@ -33,7 +33,7 @@ function nextAcademicYear(year: string): string {
 }
 function sectionsFromTree(tree: OrgTree): SectionOption[] {
   return tree.departments.flatMap((department) => department.classes.flatMap((klass) =>
-    klass.sections.map((section) => ({ id: section.id, label: `${klass.name} · ${section.name}`, classId: klass.id }))));
+    klass.sections.map((section) => ({ id: section.id, label: `${klass.name} · ${section.name}`, classId: klass.id, collegeId: tree.college.id }))));
 }
 const longDate = (iso: string) => new Date(iso.length === 10 ? `${iso}T00:00:00Z` : iso).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
 
@@ -47,6 +47,11 @@ export function SchoolProgressionPage() {
   const [sections, setSections] = useState<SectionOption[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [sectionId, setSectionId] = useState("");
+  const [historyPolicy, setHistoryPolicy] = useState<GuardianHistoryPolicy | null>(null);
+  const [historyDraft, setHistoryDraft] = useState("");
+  const [historyError, setHistoryError] = useState<string | null>(null);
+  const [historyMessage, setHistoryMessage] = useState<string | null>(null);
+  const [historySaving, setHistorySaving] = useState(false);
   const [roster, setRoster] = useState<StudentView[] | null>(null);
   const [openTerms, setOpenTerms] = useState<SchoolTermView[]>([]);
   const [endsOn, setEndsOn] = useState(schoolToday);
@@ -78,6 +83,15 @@ export function SchoolProgressionPage() {
   }, [year]);
 
   const source = sections?.find((section) => section.id === sectionId);
+  useEffect(() => {
+    if (!source?.collegeId) return;
+    let active = true;
+    setHistoryPolicy(null); setHistoryError(null); setHistoryMessage(null);
+    api.guardianHistoryPolicy(source.collegeId).then((policy) => {
+      if (active) { setHistoryPolicy(policy); setHistoryDraft(String(policy.days)); }
+    }).catch(() => { if (active) setHistoryError("Could not load this school's history window. Reload before recording an exit."); });
+    return () => { active = false; };
+  }, [source?.collegeId]);
   useEffect(() => {
     if (!sectionId) return;
     let active = true;
@@ -128,7 +142,7 @@ export function SchoolProgressionPage() {
     if (!plan || !current?.ready) return;
     setConfirming(false); setBusy("apply"); setError(null);
     try {
-      setResult(await api.progressionApply(plan));
+      setResult(await api.progressionApply({ ...plan, ...(current.familyAccess ? { expectedHistoryPolicyVersion: current.familyAccess.policyVersion } : {}) }));
       setPreview(null);
       const { students } = await api.sectionRoster(plan.sectionId);
       const remaining = students.filter((student) => student.enrollment?.academicYear === year);
@@ -148,6 +162,23 @@ export function SchoolProgressionPage() {
   const continuing = plan?.pupils.some((pupil) => pupil.outcome === "promote" || pupil.outcome === "detain") ?? false;
   const missingReason = roster?.some((student) => needsReason(choices[student.id]?.outcome ?? "undecided") && !choices[student.id]?.reason.trim()) ?? false;
   const counts = current ? CHOICES.slice(0, 4).map((choice) => ({ ...choice, n: current.pupils.filter((pupil) => pupil.outcome === choice.value).length })).filter((row) => row.n > 0) : [];
+  const validHistoryDays = /^\d{1,3}$/.test(historyDraft) && Number(historyDraft) <= 365;
+
+  async function saveHistoryPolicy() {
+    if (!source || !historyPolicy || !validHistoryDays || historySaving) return;
+    setHistorySaving(true); setHistoryError(null); setHistoryMessage(null);
+    try {
+      const saved = await api.updateGuardianHistoryPolicy(source.collegeId, { days: Number(historyDraft), expectedVersion: historyPolicy.version });
+      setHistoryPolicy(saved); setHistoryDraft(String(saved.days)); setPreview(null);
+      setHistoryMessage("History window saved for future exits. Existing exit dates are unchanged.");
+    } catch (caught) {
+      setHistoryError(caught instanceof ApiError ? caught.message : "Could not save the history window.");
+      if (caught instanceof ApiError && caught.status === 409) {
+        const latest = await api.guardianHistoryPolicy(source.collegeId).catch(() => null);
+        if (latest) { setHistoryPolicy(latest); setHistoryDraft(String(latest.days)); setPreview(null); }
+      }
+    } finally { setHistorySaving(false); }
+  }
 
   return <>
     <PageHeader eyebrow="Students" title="Promotion and exits"
@@ -156,7 +187,7 @@ export function SchoolProgressionPage() {
 
     <Card title="1. Section and dates">
       <div className={styles.filters}>
-        <Select label="Section" value={sectionId} onChange={(event) => setSectionId(event.target.value)}
+        <Select label="Section" value={sectionId} disabled={historySaving} onChange={(event) => setSectionId(event.target.value)}
           options={(sections ?? []).map((section) => ({ value: section.id, label: section.label }))} />
         <label className={styles.field}>Last day of {year}<input type="date" value={endsOn} max={schoolToday()} onChange={(event) => setEndsOn(event.target.value)} /><small>Also the leaving date for pupils who leave.</small></label>
         {continuing ? <>
@@ -173,6 +204,15 @@ export function SchoolProgressionPage() {
       {openTerms.length > 0 ? <p className={styles.warning} role="status">
         {openTerms.map((term) => term.name).join(", ")} {openTerms.length === 1 ? "is" : "are"} still open for {year}. Finish marks and report cards first: once promoted or gone, pupils leave this section's live roll and marks can no longer be entered for them here.
       </p> : null}
+      <div className={styles.policy}>
+        <div><strong>Guardian history after exit</strong><p className={styles.hint}>For future transfers and graduations, families can read earlier attendance and published report cards for this many days after live access ends. Zero closes access immediately. Existing exit dates do not change.</p></div>
+        <div className={styles.policyForm}>
+          <label className={styles.field}>Days after exit<input type="number" min={0} max={365} step={1} inputMode="numeric" value={historyDraft} disabled={!historyPolicy || historySaving} onChange={(event) => { setHistoryDraft(event.target.value); setHistoryMessage(null); }} /></label>
+          <Button variant="secondary" loading={historySaving} disabled={!historyPolicy || !validHistoryDays || Number(historyDraft) === historyPolicy.days} onClick={() => void saveHistoryPolicy()}>Save window</Button>
+        </div>
+        {historyError ? <p className={styles.error} role="alert">{historyError}</p> : null}
+        {historyMessage ? <p role="status">{historyMessage}</p> : null}
+      </div>
     </Card>
 
     <Card title="2. Decide each pupil" actions={roster && roster.length > 0 ? <Select label="Set every pupil to" value="" onChange={(event) => {
@@ -210,7 +250,9 @@ export function SchoolProgressionPage() {
         {current.undecided.length > 0 ? <span><strong>{current.undecided.length}</strong> undecided, unchanged</span> : null}
       </div>
       {current.familyAccess ? <p className={styles.notice}>
-        Families of leaving pupils keep live access through {longDate(current.endsOn)}. After that they can read attendance and published report cards as they stood on that day, through {longDate(new Date(Date.parse(current.familyAccess.historicalAccessUntil) - 1).toISOString())}. Unused invitation codes are cancelled.
+        Families of leaving pupils keep live access through {longDate(current.endsOn)}. {current.familyAccess.days === 0
+          ? "After that, family access closes immediately."
+          : `After that they can read attendance and published report cards as they stood on that day for ${current.familyAccess.days} days, through ${longDate(new Date(Date.parse(current.familyAccess.historicalAccessUntil) - 1).toISOString())}.`} Unused invitation codes are cancelled.
       </p> : null}
       {current.problems.length > 0 ? <ul className={styles.problems} role="alert">{current.problems.map((problem) => <li key={problem}>{problem}</li>)}</ul> : null}
       <div className={styles.tableScroll}><table className={styles.table}>

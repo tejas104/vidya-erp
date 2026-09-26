@@ -1,7 +1,7 @@
 import { and, eq, gt, inArray, isNull, or, sql } from "drizzle-orm";
 import type { ActorType, Db, DurableAuditReceipt, OrgPath, TransactionalAuditLogger } from "@vidya/platform";
 import { newId } from "../ids";
-import { pplEnrollments, pplGuardianInvitations, pplProgressionCorrections, pplStudentGuardians, pplStudents } from "../db/schema";
+import { pplColleges, pplEnrollments, pplGuardianInvitations, pplProgressionCorrections, pplStudentGuardians, pplStudents } from "../db/schema";
 import type { StudentStatus } from "./people-repo";
 
 /** Shared with the RouteSpec so the in-transaction receipt matches (ADR-0026). */
@@ -9,7 +9,10 @@ export const PROGRESSION_AUDIT = {
   applied: { action: "people.progression-applied", resourceType: "progression-run" },
   pupil: { action: "people.student-progressed", resourceType: "student" },
   reversed: { action: "people.progression-reversed", resourceType: "student" },
+  historyPolicy: { action: "people.guardian-history-policy-updated", resourceType: "college" },
 } as const;
+
+export interface GuardianHistoryPolicy { readonly days: number; readonly version: number }
 
 export type RecordedOutcome = "promoted" | "detained" | "transferred_out" | "graduated";
 
@@ -28,6 +31,7 @@ export interface ProgressionApplyInput {
   readonly endsOn: string;
   /** Exits only: when live family access ends and read-only access ends (ADR-0027 Decision 9). */
   readonly familyAccess: { readonly liveUntil: Date; readonly historicalAccessUntil: Date };
+  readonly guardianHistoryPolicyVersion: number | null;
   readonly rows: readonly ProgressionApplyRow[];
   readonly attribution: { readonly requestId: string; readonly actorType: ActorType; readonly actorId: string | null };
 }
@@ -51,7 +55,16 @@ export class ProgressionConflictError extends Error {
   }
 }
 
+export class GuardianHistoryPolicyConflictError extends Error {
+  constructor() {
+    super("The school's guardian history setting changed. Preview again before applying.");
+    this.name = "GuardianHistoryPolicyConflictError";
+  }
+}
+
 export interface ProgressionRepo {
+  getHistoryPolicy(collegeId: string): Promise<GuardianHistoryPolicy | null>;
+  updateHistoryPolicy(input: { collegeId: string; days: number; expectedVersion: number; attribution: ProgressionApplyInput["attribution"] }): Promise<{ policy: GuardianHistoryPolicy; receipt: DurableAuditReceipt } | null>;
   apply(input: ProgressionApplyInput): Promise<{ runId: string; pupils: AppliedPupil[]; receipt: DurableAuditReceipt }>;
   reverse(input: ProgressionReverseInput): Promise<{ correctionId: string; reinstatedEnrollmentId: string; receipt: DurableAuditReceipt }>;
 }
@@ -97,6 +110,30 @@ export function createProgressionRepo(
   hasNextYearRecords: (tx: Db, studentId: string, year: string) => Promise<boolean>,
 ): ProgressionRepo {
   return {
+    async getHistoryPolicy(collegeId) {
+      const rows = await db.select({ days: pplColleges.guardianHistoryDays, version: pplColleges.guardianHistoryVersion })
+        .from(pplColleges).where(eq(pplColleges.id, collegeId)).limit(1);
+      return rows[0] ?? null;
+    },
+    async updateHistoryPolicy(input) {
+      return db.transaction(async (tx) => {
+        const old = await tx.select({ days: pplColleges.guardianHistoryDays, version: pplColleges.guardianHistoryVersion })
+          .from(pplColleges).where(eq(pplColleges.id, input.collegeId)).for("update");
+        if (!old[0]) return null;
+        if (old[0].version !== input.expectedVersion) throw new GuardianHistoryPolicyConflictError();
+        const changed = await tx.update(pplColleges).set({
+          guardianHistoryDays: input.days, guardianHistoryVersion: old[0].version + 1, updatedAt: new Date(),
+        }).where(eq(pplColleges.id, input.collegeId))
+          .returning({ days: pplColleges.guardianHistoryDays, version: pplColleges.guardianHistoryVersion });
+        const receipt = await audit.recordInTransaction(tx as unknown as Db, {
+          org: { collegeId: input.collegeId }, module: "people", ...PROGRESSION_AUDIT.historyPolicy,
+          actorType: input.attribution.actorType, actorId: input.attribution.actorId,
+          resourceId: input.collegeId, requestId: input.attribution.requestId,
+          details: { routeId: "people.guardian-history-policy-update", status: 200, before: old[0], after: changed[0] },
+        });
+        return { policy: changed[0]!, receipt };
+      });
+    },
     async reverse(input) {
       const correctionId = newId("prc");
       return db.transaction(async (tx) => {
@@ -189,6 +226,11 @@ export function createProgressionRepo(
       const runId = newId("prg");
       return db.transaction(async (tx) => {
         const handle = tx as unknown as Db;
+        if (input.rows.some((row) => row.outcome === "transferred_out" || row.outcome === "graduated")) {
+          const policy = await tx.select({ version: pplColleges.guardianHistoryVersion })
+            .from(pplColleges).where(eq(pplColleges.id, input.source.org.collegeId)).for("share");
+          if (policy[0]?.version !== input.guardianHistoryPolicyVersion) throw new GuardianHistoryPolicyConflictError();
+        }
         const pupils: AppliedPupil[] = [];
         const rows = [...input.rows].sort((a, b) => a.studentId.localeCompare(b.studentId));
         for (const row of rows) {

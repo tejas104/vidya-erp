@@ -1,11 +1,11 @@
 import type { OrgPath } from "@vidya/platform";
 import type { OrgRepo } from "../repo/org-repo";
 import type { PeopleRepo, StudentStatus } from "../repo/people-repo";
-import { PROGRESSION_AUDIT, ProgressionReversalConflictError, type AppliedPupil, type ProgressionApplyInput, type ProgressionRepo, type RecordedOutcome } from "../repo/progression-repo";
+import { GuardianHistoryPolicyConflictError, PROGRESSION_AUDIT, ProgressionReversalConflictError, type AppliedPupil, type ProgressionApplyInput, type ProgressionRepo, type RecordedOutcome } from "../repo/progression-repo";
 
 export type ProgressionChoice = "promote" | "detain" | "transfer_out" | "graduate";
 
-/** ADR-0027 Decision 9. ponytail: one deployment default; a per-school setting when a school needs another. */
+/** ADR-0027 Decision 9 default for schools with no customized policy. */
 export const HISTORICAL_ACCESS_DAYS = 90;
 const DAY_MS = 86_400_000;
 
@@ -19,6 +19,8 @@ export interface ProgressionPlan {
   readonly promoteToSectionId?: string;
   readonly detainInSectionId?: string;
   readonly pupils: readonly { readonly studentId: string; readonly enrollmentId: string; readonly outcome: ProgressionChoice; readonly reason?: string }[];
+  /** The policy version displayed in the last preview; required to apply an exit. */
+  readonly expectedHistoryPolicyVersion?: number;
 }
 
 export interface PreviewPupil {
@@ -42,7 +44,7 @@ export interface ProgressionPreview {
   readonly endsOn: string;
   readonly targetAcademicYear: string | null;
   readonly startsOn: string | null;
-  readonly familyAccess: { readonly liveUntil: string; readonly historicalAccessUntil: string } | null;
+  readonly familyAccess: { readonly liveUntil: string; readonly historicalAccessUntil: string; readonly days: number; readonly policyVersion: number } | null;
   readonly pupils: PreviewPupil[];
   /** On the roll but not in this plan: left exactly as they are. */
   readonly undecided: { readonly studentId: string; readonly admissionNo: string; readonly fullName: string }[];
@@ -71,10 +73,10 @@ function schoolToday(): string {
   return `${read("year")}-${read("month")}-${read("day")}`;
 }
 
-/** Live family access ends after the leaving day; read-only access runs 90 days beyond it. */
-export function familyAccessWindow(endsOn: string): { liveUntil: Date; historicalAccessUntil: Date } {
+/** Live family access ends after the leaving day; read-only access uses the school's policy. */
+export function familyAccessWindow(endsOn: string, days = HISTORICAL_ACCESS_DAYS): { liveUntil: Date; historicalAccessUntil: Date } {
   const liveUntil = new Date(Date.parse(`${endsOn}T00:00:00Z`) + DAY_MS);
-  return { liveUntil, historicalAccessUntil: new Date(liveUntil.getTime() + HISTORICAL_ACCESS_DAYS * DAY_MS) };
+  return { liveUntil, historicalAccessUntil: new Date(liveUntil.getTime() + days * DAY_MS) };
 }
 
 export interface ProgressionServiceDeps {
@@ -93,6 +95,12 @@ export interface ProgressionServiceDeps {
  */
 export class ProgressionService {
   constructor(private readonly deps: ProgressionServiceDeps) {}
+
+  getHistoryPolicy(collegeId: string) { return this.deps.repo.getHistoryPolicy(collegeId); }
+
+  updateHistoryPolicy(input: Parameters<ProgressionRepo["updateHistoryPolicy"]>[0]) {
+    return this.deps.repo.updateHistoryPolicy(input);
+  }
 
   async reverse(input: {
     studentId: string; sourceEnrollmentId: string; reason: string; org: OrgPath;
@@ -179,7 +187,6 @@ export class ProgressionService {
     const problems: string[] = [];
     const continuing = plan.pupils.some((pupil) => pupil.outcome === "promote" || pupil.outcome === "detain");
     const exits = plan.pupils.some((pupil) => pupil.outcome === "transfer_out" || pupil.outcome === "graduate");
-    const window = familyAccessWindow(plan.endsOn);
 
     if (plan.endsOn > today) problems.push("The closing date cannot be later than today.");
     if (continuing) {
@@ -187,6 +194,10 @@ export class ProgressionService {
       if (!plan.startsOn || plan.startsOn <= plan.endsOn) problems.push("The new year must start after the closing date.");
     }
     const source = await this.deps.org.getSection(plan.sectionId);
+    const sourcePath = await this.deps.org.pathForSection(plan.sectionId);
+    const policy = sourcePath ? await this.deps.repo.getHistoryPolicy(sourcePath.collegeId) : null;
+    if (exits && policy === null) problems.push("The school's guardian history setting could not be loaded.");
+    const window = familyAccessWindow(plan.endsOn, policy?.days ?? HISTORICAL_ACCESS_DAYS);
     const sourceClassId = source?.classId ?? null;
     const target = async (sectionId: string | undefined, needed: boolean, sameClass: boolean, label: string) => {
       if (!needed) return;
@@ -247,7 +258,10 @@ export class ProgressionService {
       endsOn: plan.endsOn,
       targetAcademicYear: continuing ? plan.targetAcademicYear ?? null : null,
       startsOn: continuing ? plan.startsOn ?? null : null,
-      familyAccess: exits ? { liveUntil: window.liveUntil.toISOString(), historicalAccessUntil: window.historicalAccessUntil.toISOString() } : null,
+      familyAccess: exits && policy ? {
+        liveUntil: window.liveUntil.toISOString(), historicalAccessUntil: window.historicalAccessUntil.toISOString(),
+        days: policy.days, policyVersion: policy.version,
+      } : null,
       pupils,
       undecided: roll.filter((entry) => !seen.has(entry.student.id))
         .map((entry) => ({ studentId: entry.student.id, admissionNo: entry.student.admissionNo, fullName: entry.student.fullName })),
@@ -259,10 +273,14 @@ export class ProgressionService {
   async apply(plan: ProgressionPlan, org: OrgPath, attribution: ProgressionApplyInput["attribution"]): Promise<{ preview: ProgressionPreview; runId: string; pupils: AppliedPupil[]; receipt: Awaited<ReturnType<ProgressionRepo["apply"]>>["receipt"] }> {
     const preview = await this.preview(plan);
     if (!preview.ready) throw new ProgressionBlockedError(preview);
+    if (preview.familyAccess && preview.familyAccess.policyVersion !== plan.expectedHistoryPolicyVersion) {
+      throw new GuardianHistoryPolicyConflictError();
+    }
     const applied = await this.deps.repo.apply({
       source: { sectionId: plan.sectionId, academicYear: plan.academicYear, org },
       endsOn: plan.endsOn,
-      familyAccess: familyAccessWindow(plan.endsOn),
+      familyAccess: familyAccessWindow(plan.endsOn, preview.familyAccess?.days ?? HISTORICAL_ACCESS_DAYS),
+      guardianHistoryPolicyVersion: preview.familyAccess?.policyVersion ?? null,
       rows: preview.pupils.map((pupil) => ({
         studentId: pupil.studentId,
         enrollmentId: pupil.enrollmentId,

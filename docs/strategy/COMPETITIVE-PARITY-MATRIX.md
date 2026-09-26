@@ -464,8 +464,9 @@ checks prove only the named local flows.
   graduation as one audited batch; concluded enrollment rows keep their
   outcome and reason, and exits apply ADR-0027 Decision 9 to guardian access.
   An audited one-pupil correction retains the original record and refuses
-  dependent next-year records. Database concurrency and browser journeys pass;
-  a per-school guardian history window, mid-year exit entry, and real-school
+  dependent next-year records. A versioned per-school guardian history window
+  governs future exits without rewriting existing exit dates. Database
+  concurrency and browser journeys pass; mid-year exit entry and real-school
   pilot review remain.
 - **India requirement** — Year-end promotion is an annual all-school event with
   legal weight; detention rules vary by board and state.

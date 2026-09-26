@@ -75,6 +75,8 @@ analytics marks rollup is not presented as a school grade figure.
    transfer and graduation. Preview is safe; **Apply** really moves the demo
    pupils. A mistaken outcome for one pupil can be corrected from that pupil's
    History tab only while the next-year placement has no dependent records.
+   The administrator can set the guardian history window on this page for
+   future exits; it defaults to 90 days and does not rewrite earlier exits.
    Apply only to a section you create for the purpose.
 2. Sign in as principal: inspect the leadership dashboard, analytics, leave
    decisions, report cards, and notices.

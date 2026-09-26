@@ -8,7 +8,9 @@ Select **Preview changes**. The preview lists each pupil's status before and aft
 
 Applying is one step for the whole batch: every pupil changes, or none does, and every change is audited. The year's enrollment record is never deleted. It is closed with its outcome, and the pupil's page shows it in the history.
 
-When a pupil transfers out or graduates, their family's live access ends after the leaving day. For 90 days after that, the family can still read attendance and published report cards as they stood on the leaving day. Fees, notices, marks and timetable close at once. Unused invitation codes are cancelled and no new ones can be issued.
+Before recording exits, check **Guardian history after exit** on this page. An administrator can set the school's read-only window from 0 to 365 days; it starts when live access ends after the leaving day and defaults to 90 days. Zero days closes family access immediately. The setting applies to future exits only, and a changed setting makes an earlier preview stale. Existing exit dates remain as recorded.
+
+During that window, the family can read attendance and published report cards as they stood on the leaving day. Fees, notices, marks and timetable close when live access ends. Unused invitation codes are cancelled and no new ones can be issued.
 
 Finish marks and report cards before promoting. Afterwards pupils are no longer on this section's live roll, so marks cannot be entered for them here.
 

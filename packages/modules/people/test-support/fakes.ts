@@ -71,7 +71,7 @@ export class InMemoryOrgRepo implements OrgRepo {
         throw new DuplicateCodeError("college", code);
       }
     }
-    const row: PplCollegeRow = { id: `col_${randomUUID()}`, name, code, createdAt: now(), updatedAt: now() };
+    const row: PplCollegeRow = { id: `col_${randomUUID()}`, name, code, guardianHistoryDays: 90, guardianHistoryVersion: 1, createdAt: now(), updatedAt: now() };
     this.colleges.set(row.id, row);
     return row;
   }

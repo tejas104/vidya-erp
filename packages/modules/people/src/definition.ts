@@ -237,6 +237,7 @@ const progressionPlanSchema = z.object({
     outcome: progressionChoiceSchema,
     reason: z.string().trim().max(240).optional(),
   })).min(1).max(200),
+  expectedHistoryPolicyVersion: z.number().int().positive().optional(),
 });
 const progressionPreviewSchema = z.object({
   sectionId: z.string(),
@@ -244,7 +245,7 @@ const progressionPreviewSchema = z.object({
   endsOn: z.string(),
   targetAcademicYear: z.string().nullable(),
   startsOn: z.string().nullable(),
-  familyAccess: z.object({ liveUntil: z.string(), historicalAccessUntil: z.string() }).nullable(),
+  familyAccess: z.object({ liveUntil: z.string(), historicalAccessUntil: z.string(), days: z.number().int(), policyVersion: z.number().int() }).nullable(),
   pupils: z.array(z.object({
     studentId: z.string(),
     admissionNo: z.string(),
@@ -532,6 +533,39 @@ const routes: RouteSpec[] = [
     },
   },
   {
+    id: "people.guardian-history-policy-get",
+    module: MODULE_NAME,
+    method: "GET",
+    path: "/api/v1/people/colleges/{collegeId}/guardian-history-policy",
+    summary: "Read the school's guardian history window for future exits",
+    tags: ["people-students"],
+    auth: ADMIN_ONLY,
+    request: { params: z.object({ collegeId: idSchema }) },
+    responses: {
+      200: { description: "Current window and version", schema: z.object({ days: z.number().int(), version: z.number().int() }) },
+      403: { description: "Outside scope", schema: problemSchema },
+      404: { description: "No such school or unavailable edition", schema: problemSchema },
+    },
+  },
+  {
+    id: "people.guardian-history-policy-update",
+    module: MODULE_NAME,
+    method: "PATCH",
+    path: "/api/v1/people/colleges/{collegeId}/guardian-history-policy",
+    summary: "Set the guardian history window for future school exits",
+    description: "Administrator only. A versioned, audited setting; previous exits keep their recorded dates. Zero days disables read-only wind-down for future exits.",
+    tags: ["people-students"],
+    auth: ADMIN_ONLY,
+    request: { params: z.object({ collegeId: idSchema }), body: z.object({ days: z.number().int().min(0).max(365), expectedVersion: z.number().int().positive() }) },
+    audit: { action: "people.guardian-history-policy-updated", resourceType: "college" },
+    responses: {
+      200: { description: "Updated setting", schema: z.object({ days: z.number().int(), version: z.number().int() }) },
+      403: { description: "Outside scope", schema: problemSchema },
+      404: { description: "No such school or unavailable edition", schema: problemSchema },
+      409: { description: "Setting changed since the editor loaded", schema: problemSchema },
+    },
+  },
+  {
     id: "people.progression-preview",
     module: MODULE_NAME,
     method: "POST",
@@ -556,7 +590,7 @@ const routes: RouteSpec[] = [
     path: "/api/v1/people/progression/apply",
     summary: "Apply a section's year-end promotion, detention and exits",
     description:
-      "All pupils or none, in one transaction with one audit event per pupil and one for the batch. Concluded enrollment rows are kept with their outcome; exits end live guardian access after the leaving day and allow read-only historical access for 90 days (ADR-0027 Decision 9).",
+      "All pupils or none, in one transaction with one audit event per pupil and one for the batch. Concluded enrollment rows are kept with their outcome; exits end live guardian access after the leaving day and use the school's versioned read-only historical access setting (ADR-0027 Decision 9).",
     tags: ["people-students"],
     auth: ADMIN_ONLY,
     request: { body: progressionPlanSchema },

@@ -100,6 +100,7 @@ describe("Year-end progression over real Postgres (N6)", () => {
 
     const plan = {
       sectionId: section5A, academicYear: YEAR, endsOn, targetAcademicYear: NEXT, startsOn: shift(today, 1),
+      expectedHistoryPolicyVersion: 1,
       promoteToSectionId: section6A, detainInSectionId: section5B,
       pupils: [
         { ...asha, outcome: "promote" },
@@ -301,7 +302,7 @@ describe("Year-end progression over real Postgres (N6)", () => {
 
   it("rolls back a one-pupil correction when its audit event fails", async () => {
     const row = await pupil(section5B, "Graduation correction");
-    const plan = { sectionId: section5B, academicYear: YEAR, endsOn, pupils: [{ ...row, outcome: "graduate" }] };
+    const plan = { sectionId: section5B, academicYear: YEAR, endsOn, expectedHistoryPolicyVersion: 1, pupils: [{ ...row, outcome: "graduate" }] };
     expect((await stack.call("people.progression-apply", { cookie: admin, body: plan })).status).toBe(200);
     const request = { cookie: admin, params: { studentId: row.studentId, enrollmentId: row.enrollmentId }, body: { reason: "Graduation recorded in error" } };
     stack.peopleAuditFault.failAction = "people.progression-reversed";
@@ -318,6 +319,7 @@ describe("Year-end progression over real Postgres (N6)", () => {
     const omar = await pupil(section5B, "Omar Pillai");
     const plan = {
       sectionId: section5B, academicYear: YEAR, endsOn, targetAcademicYear: NEXT, startsOn: shift(today, 1),
+      expectedHistoryPolicyVersion: 1,
       promoteToSectionId: section6A,
       pupils: [{ ...zara, outcome: "promote" }, { ...omar, outcome: "graduate" }],
     };
@@ -341,5 +343,72 @@ describe("Year-end progression over real Postgres (N6)", () => {
     expect((await stack.call("people.progression-apply", { cookie: admin, body: plan })).status).toBe(200);
     const graduated = await stack.pool.query("SELECT status FROM ppl_students WHERE id = $1", [omar.studentId]);
     expect(graduated.rows[0].status).toBe("alumni");
+  });
+
+  it("uses a versioned school history window for future exits and preserves issued dates", async () => {
+    const route = "people.guardian-history-policy-get";
+    const params = { collegeId };
+    const initial = await stack.call(route, { cookie: admin, params });
+    expect(initial.status).toBe(200);
+    expect(await initial.json()).toEqual({ days: 90, version: 1 });
+    expect((await stack.call(route, { cookie: classTeacher, params })).status).toBe(403);
+    expect((await stack.call("people.guardian-history-policy-update", { cookie: classTeacher, params, body: { days: 30, expectedVersion: 1 } })).status).toBe(403);
+
+    const otherCollege = `col_n6_${randomUUID()}`;
+    await stack.pool.query("INSERT INTO ppl_colleges(id, name, code) VALUES($1,$2,$3)", [otherCollege, "Other school", `N6-${randomUUID()}`]);
+    expect((await stack.call(route, { cookie: admin, params: { collegeId: otherCollege } })).status).toBe(403);
+    expect((await stack.pool.query("SELECT guardian_history_days, guardian_history_version FROM ppl_colleges WHERE id=$1", [otherCollege])).rows[0])
+      .toEqual({ guardian_history_days: 90, guardian_history_version: 1 });
+
+    const changed = await stack.call("people.guardian-history-policy-update", { cookie: admin, params, body: { days: 30, expectedVersion: 1 } });
+    expect(changed.status, await changed.clone().text()).toBe(200);
+    expect(await changed.json()).toEqual({ days: 30, version: 2 });
+    expect((await stack.call("people.guardian-history-policy-update", { cookie: admin, params, body: { days: 15, expectedVersion: 1 } })).status).toBe(409);
+    expect((await stack.call("people.guardian-history-policy-update", { cookie: admin, params, body: { days: 366, expectedVersion: 2 } })).status).toBe(400);
+    const audit = await stack.pool.query("SELECT details FROM sys_audit_log WHERE action='people.guardian-history-policy-updated' AND resource_id=$1 ORDER BY id DESC LIMIT 1", [collegeId]);
+    expect(audit.rows[0].details).toMatchObject({ before: { days: 90, version: 1 }, after: { days: 30, version: 2 } });
+
+    const row = await pupil(section5B, "Policy exit");
+    const issued = await invite(row.studentId);
+    const { code } = (await issued.json()) as { code: string };
+    const username = `n6-policy-${randomUUID().slice(0, 8)}`;
+    expect((await stack.call("people.guardian-activate", { body: { code, fullName: "Policy parent", username, password: "n6-parent-pass-123" } })).status).toBe(201);
+    const parent = await stack.login(username, "n6-parent-pass-123");
+    const plan = { sectionId: section5B, academicYear: YEAR, endsOn, pupils: [{ ...row, outcome: "transfer_out", reason: "Family moved" }] };
+    const preview = await stack.call("people.progression-preview", { cookie: admin, body: plan });
+    expect(preview.status).toBe(200);
+    expect((await preview.json() as { familyAccess: unknown }).familyAccess).toEqual({
+      liveUntil: `${today}T00:00:00.000Z`, historicalAccessUntil: new Date(Date.parse(`${today}T00:00:00Z`) + 30 * DAY).toISOString(),
+      days: 30, policyVersion: 2,
+    });
+    const applied = await stack.call("people.progression-apply", { cookie: admin, body: { ...plan, expectedHistoryPolicyVersion: 2 } });
+    expect(applied.status, await applied.clone().text()).toBe(200);
+    const exitDates = (await stack.pool.query("SELECT valid_until, historical_access_until FROM ppl_student_guardians WHERE student_id=$1", [row.studentId])).rows[0];
+    expect(exitDates).toEqual({ valid_until: new Date(`${today}T00:00:00Z`), historical_access_until: new Date(Date.parse(`${today}T00:00:00Z`) + 30 * DAY) });
+    expect((await stack.call("portal.child-attendance", { cookie: parent, params: { studentId: row.studentId }, query: { academicYear: YEAR } })).status).toBe(200);
+
+    stack.peopleAuditFault.failAction = "people.guardian-history-policy-updated";
+    expect((await stack.call("people.guardian-history-policy-update", { cookie: admin, params, body: { days: 0, expectedVersion: 2 } })).status).toBe(500);
+    stack.peopleAuditFault.failAction = null;
+    expect(await (await stack.call(route, { cookie: admin, params })).json()).toEqual({ days: 30, version: 2 });
+    expect((await stack.call("people.guardian-history-policy-update", { cookie: admin, params, body: { days: 0, expectedVersion: 2 } })).status).toBe(200);
+    expect((await stack.pool.query("SELECT valid_until, historical_access_until FROM ppl_student_guardians WHERE student_id=$1", [row.studentId])).rows[0]).toEqual(exitDates);
+
+    const later = await pupil(section5B, "Zero window exit");
+    const laterInvite = await invite(later.studentId);
+    const laterCode = (await laterInvite.json() as { code: string }).code;
+    const laterUsername = `n6-zero-${randomUUID().slice(0, 8)}`;
+    expect((await stack.call("people.guardian-activate", { body: { code: laterCode, fullName: "Zero parent", username: laterUsername, password: "n6-parent-pass-123" } })).status).toBe(201);
+    const laterParent = await stack.login(laterUsername, "n6-parent-pass-123");
+    const laterPlan = { sectionId: section5B, academicYear: YEAR, endsOn, pupils: [{ ...later, outcome: "graduate" }] };
+    expect((await stack.call("people.progression-apply", { cookie: admin, body: { ...laterPlan, expectedHistoryPolicyVersion: 2 } })).status).toBe(409);
+    expect((await stack.pool.query("SELECT status FROM ppl_enrollments WHERE id=$1", [later.enrollmentId])).rows[0].status).toBe("enrolled");
+    const zeroPreview = await stack.call("people.progression-preview", { cookie: admin, body: laterPlan });
+    expect((await zeroPreview.json() as { familyAccess: { days: number; policyVersion: number } }).familyAccess).toMatchObject({ days: 0, policyVersion: 3 });
+    expect((await stack.call("people.progression-apply", { cookie: admin, body: { ...laterPlan, expectedHistoryPolicyVersion: 3 } })).status).toBe(200);
+    expect((await stack.pool.query("SELECT valid_until, historical_access_until FROM ppl_student_guardians WHERE student_id=$1", [later.studentId])).rows[0])
+      .toEqual({ valid_until: new Date(`${today}T00:00:00Z`), historical_access_until: new Date(`${today}T00:00:00Z`) });
+    expect((await stack.call("portal.child-attendance", { cookie: laterParent, params: { studentId: later.studentId }, query: { academicYear: YEAR } })).status).toBe(403);
+    expect((await stack.call("people.guardian-history-policy-update", { cookie: admin, params, body: { days: 90, expectedVersion: 3 } })).status).toBe(200);
   });
 });

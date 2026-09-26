@@ -206,6 +206,7 @@ const EXPECTATIONS: Record<string, MigrationExpectation> = {
     indexes: ["ppl_progression_corrections_student_idx"],
   },
   "people/0012_progression_write_guard": { functions: ["ppl_lock_progression_year", "ppl_guard_progression_year"] },
+  "people/0013_guardian_history_policy": { columns: [{ table: "ppl_colleges", column: "guardian_history_days" }, { table: "ppl_colleges", column: "guardian_history_version" }] },
   "fees/0001_payment_idempotency": {
     columns: [{ table: "fee_payments", column: "idempotency_key" }],
     indexes: ["fee_payments_idempotency_uq"],
@@ -390,6 +391,7 @@ describe("migration harness (ADR-0008)", () => {
     // anyway, so clear exactly those rows first.
     await pool.query("DELETE FROM rpt_reports WHERE format = 'xlsx' OR kind IN ('teacher-attendance', 'school-attendance-review')");
     await pool.query("DELETE FROM ppl_progression_corrections");
+    await pool.query("UPDATE ppl_colleges SET guardian_history_days = 90, guardian_history_version = 1");
     await pool.query("DELETE FROM ppl_enrollments WHERE status = 'voided'");
     await pool.query("UPDATE ppl_enrollments SET outcome = NULL, outcome_reason = NULL WHERE outcome IS NOT NULL");
 

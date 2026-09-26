@@ -11,7 +11,7 @@ describe("one-pupil progression correction evidence", () => {
     const reverse = vi.fn().mockResolvedValue({ correctionId: "prc_1", reinstatedEnrollmentId: "enr_3", receipt: {} });
     const service = new ProgressionService({
       people: {} as never, org: {} as never, relationships: async () => [],
-      repo: { apply: vi.fn() as never, reverse },
+      repo: { apply: vi.fn() as never, reverse, getHistoryPolicy: vi.fn() as never, updateHistoryPolicy: vi.fn() as never },
       readAudit: async () => [{
         id: 5, action: "people.student-progressed",
         details: {
@@ -39,7 +39,7 @@ describe("one-pupil progression correction evidence", () => {
     const reverse = vi.fn();
     const service = new ProgressionService({
       people: {} as never, org: {} as never, relationships: async () => [],
-      repo: { apply: vi.fn() as never, reverse },
+      repo: { apply: vi.fn() as never, reverse, getHistoryPolicy: vi.fn() as never, updateHistoryPolicy: vi.fn() as never },
       readAudit: async () => [],
     });
     await expect(service.reverse(request)).rejects.toBeInstanceOf(ProgressionReversalConflictError);
@@ -51,7 +51,7 @@ describe("one-pupil progression correction evidence", () => {
     const next = { sectionId: "sec_2", academicYear: "2027-28", startsOn: "2027-04-01" };
     const service = new ProgressionService({
       people: {} as never, org: {} as never, relationships: async () => [],
-      repo: { apply: vi.fn() as never, reverse },
+      repo: { apply: vi.fn() as never, reverse, getHistoryPolicy: vi.fn() as never, updateHistoryPolicy: vi.fn() as never },
       readAudit: async () => [{
         id: 6, action: "people.student-progressed",
         details: {

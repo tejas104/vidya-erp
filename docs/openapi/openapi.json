@@ -5440,6 +5440,285 @@
         }
       }
     },
+    "/api/v1/people/colleges/{collegeId}/guardian-history-policy": {
+      "get": {
+        "summary": "Read the school's guardian history window for future exits",
+        "description": "**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "people-students"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "collegeId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current window and version",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "days": {
+                      "type": "integer"
+                    },
+                    "version": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "days",
+                    "version"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Outside scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such school or unavailable edition",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "summary": "Set the guardian history window for future school exits",
+        "description": "Administrator only. A versioned, audited setting; previous exits keep their recorded dates. Zero days disables read-only wind-down for future exits.\n\n**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "people-students"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "required": true,
+            "name": "collegeId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "days": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 365
+                  },
+                  "expectedVersion": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "exclusiveMinimum": true
+                  }
+                },
+                "required": [
+                  "days",
+                  "expectedVersion"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated setting",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "days": {
+                      "type": "integer"
+                    },
+                    "version": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "days",
+                    "version"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Outside scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such school or unavailable edition",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Setting changed since the editor loaded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/people/progression/preview": {
       "post": {
         "summary": "Preview a section's year-end promotion, detention and exits",
@@ -5526,6 +5805,11 @@
                     },
                     "minItems": 1,
                     "maxItems": 200
+                  },
+                  "expectedHistoryPolicyVersion": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "exclusiveMinimum": true
                   }
                 },
                 "required": [
@@ -5572,11 +5856,19 @@
                         },
                         "historicalAccessUntil": {
                           "type": "string"
+                        },
+                        "days": {
+                          "type": "integer"
+                        },
+                        "policyVersion": {
+                          "type": "integer"
                         }
                       },
                       "required": [
                         "liveUntil",
-                        "historicalAccessUntil"
+                        "historicalAccessUntil",
+                        "days",
+                        "policyVersion"
                       ]
                     },
                     "pupils": {
@@ -5770,7 +6062,7 @@
     "/api/v1/people/progression/apply": {
       "post": {
         "summary": "Apply a section's year-end promotion, detention and exits",
-        "description": "All pupils or none, in one transaction with one audit event per pupil and one for the batch. Concluded enrollment rows are kept with their outcome; exits end live guardian access after the leaving day and allow read-only historical access for 90 days (ADR-0027 Decision 9).\n\n**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "description": "All pupils or none, in one transaction with one audit event per pupil and one for the batch. Concluded enrollment rows are kept with their outcome; exits end live guardian access after the leaving day and use the school's versioned read-only historical access setting (ADR-0027 Decision 9).\n\n**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
         "tags": [
           "people-students"
         ],
@@ -5853,6 +6145,11 @@
                     },
                     "minItems": 1,
                     "maxItems": 200
+                  },
+                  "expectedHistoryPolicyVersion": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "exclusiveMinimum": true
                   }
                 },
                 "required": [
@@ -5905,11 +6202,19 @@
                             },
                             "historicalAccessUntil": {
                               "type": "string"
+                            },
+                            "days": {
+                              "type": "integer"
+                            },
+                            "policyVersion": {
+                              "type": "integer"
                             }
                           },
                           "required": [
                             "liveUntil",
-                            "historicalAccessUntil"
+                            "historicalAccessUntil",
+                            "days",
+                            "policyVersion"
                           ]
                         },
                         "pupils": {
@@ -6231,11 +6536,19 @@
                             },
                             "historicalAccessUntil": {
                               "type": "string"
+                            },
+                            "days": {
+                              "type": "integer"
+                            },
+                            "policyVersion": {
+                              "type": "integer"
                             }
                           },
                           "required": [
                             "liveUntil",
-                            "historicalAccessUntil"
+                            "historicalAccessUntil",
+                            "days",
+                            "policyVersion"
                           ]
                         },
                         "pupils": {

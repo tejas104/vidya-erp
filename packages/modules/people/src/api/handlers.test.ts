@@ -75,6 +75,11 @@ async function makeHarness(opts: { identity?: CredentialIssuer; edition?: "colle
       relationships: async () => [{ status: "active", validUntil: null }],
       today: () => "2027-04-10",
       repo: {
+        getHistoryPolicy: async () => ({ days: 90, version: 1 }),
+        updateHistoryPolicy: async (input) => ({
+          policy: { days: input.days, version: input.expectedVersion + 1 },
+          receipt: issueDurableAuditReceipt({ module: "people", action: "people.guardian-history-policy-updated", actorType: "user", actorId: input.attribution.actorId, resourceType: "college", resourceId: input.collegeId, requestId: input.attribution.requestId, details: {} }),
+        }),
         reverse: async (input) => ({
           correctionId: "prc_test",
           reinstatedEnrollmentId: "enr_reinstated",
@@ -907,6 +912,7 @@ describe("year-end progression (N6)", () => {
       targetAcademicYear: "2027-28", startsOn: "2027-06-01",
       promoteToSectionId: nextSection.id, detainInSectionId: repeatSection.id,
       pupils: [choice(0, "promote"), choice(1, "detain", "Below the attendance minimum"), choice(2, "transfer_out", "Family moved to Pune")],
+      expectedHistoryPolicyVersion: 1,
       ...overrides,
     });
     return { ...harness, nextSection, repeatSection, pupils, choice, plan };
@@ -935,7 +941,7 @@ describe("year-end progression (N6)", () => {
     ]);
     expect(preview.undecided.map((pupil) => pupil.fullName)).toEqual(["Kabir"]);
     // Live family access ends after the leaving day; read-only access runs 90 days more.
-    expect(preview.familyAccess).toEqual({ liveUntil: "2027-04-01T00:00:00.000Z", historicalAccessUntil: "2027-06-30T00:00:00.000Z" });
+    expect(preview.familyAccess).toEqual({ liveUntil: "2027-04-01T00:00:00.000Z", historicalAccessUntil: "2027-06-30T00:00:00.000Z", days: 90, policyVersion: 1 });
     expect(await peopleRepo.roster(org.section.id)).toHaveLength(4);
     expect(applied).toEqual([]);
   });
@@ -954,6 +960,13 @@ describe("year-end progression (N6)", () => {
       { studentId: pupils[1]!.student.id, enrollmentId: pupils[1]!.enrollment.id, outcome: "detained", reason: "Below the attendance minimum", statusAfter: "active", next: { sectionId: repeatSection.id, academicYear: "2027-28", startsOn: "2027-06-01" } },
       { studentId: pupils[2]!.student.id, enrollmentId: pupils[2]!.enrollment.id, outcome: "transferred_out", reason: "Family moved to Pune", statusAfter: "transferred", next: null },
     ]);
+  });
+
+  it("refuses an exit apply without the policy version shown in its preview", async () => {
+    const { handlers, plan, applied } = await yearEnd();
+    const result = await handlers["people.progression-apply"]!(ctx({ body: plan({ expectedHistoryPolicyVersion: undefined }) }));
+    expect(result.status).toBe(409);
+    expect(applied).toEqual([]);
   });
 
   it("refuses a plan with problems, names them, and writes nothing", async () => {

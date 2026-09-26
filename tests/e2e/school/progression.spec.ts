@@ -58,6 +58,10 @@ test("administrator promotes, detains and transfers out a section; the leaving f
     await page.goto("/manage/progression");
     await expect(page.getByRole("heading", { name: "Promotion and exits" })).toBeVisible();
     await page.getByRole("combobox", { name: "Section" }).selectOption(fiveA.id);
+    await expect(page.getByRole("spinbutton", { name: "Days after exit" })).toHaveValue("90");
+    await page.getByRole("spinbutton", { name: "Days after exit" }).fill("30");
+    await page.getByRole("button", { name: "Save window" }).click();
+    await expect(page.getByText("History window saved for future exits. Existing exit dates are unchanged.")).toBeVisible();
     await expect(page.getByRole("combobox", { name: "Outcome for Asha Progress" })).toHaveValue("promote");
     await page.getByLabel(`Last day of ${year}`).fill(endsOn);
     await page.getByRole("combobox", { name: "Outcome for Dev Progress" }).selectOption("detain");
@@ -77,6 +81,7 @@ test("administrator promotes, detains and transfers out a section; the leaving f
     await expect(leaver).toContainText("Leaves the school");
     await expect(page.getByRole("row").filter({ hasText: "Asha Progress" }).last()).toContainText(`Standard 6 ${suffix} · A from ${startYear + 1}-06-01`);
     await expect(page.getByText(/can read attendance and published report cards as they stood on that day/)).toBeVisible();
+    await expect(page.getByText(/for 30 days, through/)).toBeVisible();
     await page.screenshot({ path: testInfo.outputPath("progression-preview.png"), fullPage: true });
 
     await page.getByRole("button", { name: "Apply to 3 pupils" }).click();
