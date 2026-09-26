@@ -94,7 +94,7 @@ they do not establish depth, usability, security or customer acceptance.
 | Fees and recovery | Alma [A1], EdPlus [E1] and Vidyalaya [V1] advertise fees. | **Partial.** Vidya has invoice/payment/adjustment records and family fee reads. Follow-up state, concessions, installments and reconciliation are not complete. | N8 and Phase 2 finance workflows with audit and restore proof. |
 | Fast data onboarding | Alma [A1] advertises validated bulk uploads; EdPlus [E1] advertises Excel-led setup. | **Partial.** Student and staff CSV imports and a teacher marks CSV flow exist. Guided school setup and measured large-cohort onboarding do not. | N4 scaling proof plus guided school setup with a pilot-sized synthetic school. |
 | Wider school operations | EdPlus [E1] and Vidyalaya [V1] advertise transport, HR, certificates and other modules. | **Missing/deferred.** Staff attendance exists; payroll, transport and library are not built. Certificates depend on a recorded exit. | N6/N7 first; choose further modules from pilot demand. |
-| Repeatable hosted SaaS | This is Vidya's delivery requirement, not a vendor parity claim. | **Design only.** ADR-0030 defines the control-plane boundary; this checkout has no deployed tenant provisioning or hosted licence/subscription service. | Phase 3 implementation and two-tenant isolation, restore and entitlement proof. |
+| Repeatable hosted SaaS | Alma's public terms describe a school subscription; EdPlus and Vidyalaya publish product/quote signals but not private licensing controls. | **Foundation only.** ADR-0030 defines the boundary; a separate registry and subscription history and a fictional operator UI preview exist. No authenticated live dashboard, tenant provisioner or entitlement delivery exists. | Named operator MFA, live registry, two-tenant isolation, restore and entitlement proof. |
 
 The ordered work remains in [CLAUDE-DELIVERY-ROADMAP.md](CLAUDE-DELIVERY-ROADMAP.md).
 No row is validated by a real school user yet. Current demo data and browser
@@ -532,6 +532,20 @@ until that gating exists.
 ---
 
 ## Priority 8 — SaaS owner control plane (no benchmark parity)
+
+### Public commercial signals checked 2026-09-26
+
+| Vendor | Publicly verifiable commercial model | What is not public |
+|---|---|---|
+| Alma | Its [terms](https://www.getalma.com/terms/) describe school or district subscriptions with term, estimated enrollment, fees and payment schedule agreed in a statement of work. Student, parent and teacher accounts are currently included with the school's subscription. | Operator dashboard, technical entitlement enforcement, renewal automation and tenant architecture. |
+| EdPlus AI | Its [product site](https://www.edpluss.com/) advertises a pricing entry point, broad ERP modules, Excel-led setup and operator support. | A reliable public description of licence calculation, expiry behavior or internal vendor controls. |
+| Vidyalaya School Software | Its [pricing explanation](https://www.vidyalayaschoolsoftware.com/blog/2025/11/integrating-lms-with-school-erp/) says quotes depend on features, users and support, with a demonstration before purchase. | Internal subscription dashboard, entitlement protocol and enforcement policy. |
+
+These public pages describe sales terms or advertised capabilities, not how a
+competitor operates its private licensing system. Vidya should provide a clear
+school-facing subscription summary and a separate, audited operator console,
+then validate pricing and renewal UX with school buyers. Do not infer private
+vendor controls or claim superior ease of use from marketing pages.
 
 Neither Alma nor EdPlus publicly documents a vendor control plane, because it is
 internal to them. There is **no parity row here** — this is Vidya-specific and

@@ -27,6 +27,8 @@
     "db:migrate": "tsx scripts/migrate.ts up",
     "db:rollback": "tsx scripts/migrate.ts down --steps 1",
     "db:status": "tsx scripts/migrate.ts status",
+    "control-plane:migrate": "tsx scripts/control-plane-migrate.ts up",
+    "control-plane:status": "tsx scripts/control-plane-migrate.ts status",
     "openapi:generate": "tsx scripts/generate-openapi.ts",
     "openapi:check": "tsx scripts/generate-openapi.ts --check",
     "seed:demo": "tsx scripts/seed-demo.ts",
@@ -37,6 +39,7 @@
     "compose:down": "docker compose down",
     "test:e2e": "playwright test",
     "test:e2e:school": "tsx scripts/school-e2e.ts run",
+    "test:e2e:operator-preview": "playwright test --config=playwright.operator.config.ts",
     "test:e2e:school:cleanup": "tsx scripts/school-e2e.ts cleanup"
   },
   "devDependencies": {

@@ -123,6 +123,37 @@ importers:
         specifier: ^3.25.0
         version: 3.25.76
 
+  apps/operator:
+    dependencies:
+      '@vidya/control-plane':
+        specifier: workspace:*
+        version: link:../../packages/control-plane
+      '@vidya/ui-system':
+        specifier: workspace:*
+        version: link:../../packages/ui-system
+      next:
+        specifier: ^16.0.0
+        version: 16.2.9(@opentelemetry/api@1.9.1)(@playwright/test@1.61.1)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      react:
+        specifier: ^19.2.0
+        version: 19.2.7
+      react-dom:
+        specifier: ^19.2.0
+        version: 19.2.7(react@19.2.7)
+    devDependencies:
+      '@types/node':
+        specifier: ^22.15.0
+        version: 22.20.0
+      '@types/react':
+        specifier: ^19.1.0
+        version: 19.2.17
+      '@types/react-dom':
+        specifier: ^19.1.0
+        version: 19.2.3(@types/react@19.2.17)
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
+
   apps/web:
     dependencies:
       '@vidya/module-academics':
@@ -244,6 +275,25 @@ importers:
       '@types/node':
         specifier: ^22.15.0
         version: 22.20.0
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
+
+  packages/control-plane:
+    dependencies:
+      pg:
+        specifier: ^8.16.0
+        version: 8.22.0
+      zod:
+        specifier: ^3.25.0
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: ^22.15.0
+        version: 22.20.0
+      '@types/pg':
+        specifier: ^8.15.0
+        version: 8.20.0
       typescript:
         specifier: ^5.8.3
         version: 5.9.3

@@ -1,5 +1,13 @@
 # Vidya hosting readiness and remaining work
 
+> **2026-09-26 checkpoint:** A separate control-plane registry, append-only
+> subscription history, 30-day grace calculation and fictional local operator
+> portfolio preview now exist on the school branch. This does not change the
+> SaaS FAIL gates below: there is no operator MFA login, live dashboard,
+> tenant provisioner, entitlement delivery, hosted restore or two-tenant
+> isolation proof. The estimates below predate this checkpoint and remain
+> planning ranges, not a delivery promise.
+
 **Baseline:** 2026-09-24, `codex/claude-school-product` at `45c00a6ab86c6f5541bfd1415917341840b96b87`. This is a repository assessment, not a production sign-off or a claim that a cloud environment was tested. The existing `docker-compose.prod.yml` overlay validates with `docker compose config --quiet` on Docker 29.7.2. The previous N3.1 local gates passed 1,207 unit, 318 UI, 151 disposable-database integration, and seven isolated browser tests. Those tests establish the named school flows, not a hosted service.
 
 ## What “host both” means

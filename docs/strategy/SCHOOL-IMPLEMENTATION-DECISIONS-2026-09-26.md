@@ -67,3 +67,13 @@ satisfied by the fictional local demo.
 Polish Student 360 next, for both desktop and Android phone widths. Keep
 English primary and offer Hindi where family help and certificates need it.
 Move growing school settings to a dedicated administrator-editable policy page.
+
+## Hosted vendor licensing (owner answers 2026-09-26)
+
+Use a separate Vidya operator console. Only named Vidya operators with MFA may
+manage multiple school tenants; a school administrator account has no vendor
+authority. Keep the commercial price and plan model undecided until owner
+review. A hosted school receives 30 calendar days of full access after its
+paid-through date, then read-only access. Existing reports, receipts,
+certificates and full data export stay available. Expiry never deletes school
+data. The operator identity provider is still an open selection.
