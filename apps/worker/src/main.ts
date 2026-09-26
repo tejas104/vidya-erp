@@ -64,6 +64,12 @@ import { createResultsModule } from "@vidya/module-results";
 import { createExamsModule } from "@vidya/module-exams";
 import { createLeaveModule } from "@vidya/module-leave";
 import { createSchoolAcademicsModule } from "@vidya/module-school-academics";
+import { academicsHasPupilYearRecords } from "@vidya/module-academics";
+import { schoolAcademicsHasPupilYearRecords } from "@vidya/module-school-academics";
+import { reportingHasPupilYearRecords } from "@vidya/module-reporting";
+import { courseworkHasPupilYearRecords } from "@vidya/module-coursework";
+import { feesHasPupilYearRecords } from "@vidya/module-fees";
+import { analyticsHasPupilYearRecords } from "@vidya/module-analytics";
 import { createMetricsServer } from "./metrics-server";
 
 const RESET_CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
@@ -158,6 +164,13 @@ async function main(): Promise<void> {
   });
   lifecycle.onShutdown("people-queue", () => peopleQueue.close());
   const people = createPeopleModule({
+    hasNextYearRecords: async (tx, studentId, year) => {
+      for (const check of [academicsHasPupilYearRecords, schoolAcademicsHasPupilYearRecords,
+        reportingHasPupilYearRecords, courseworkHasPupilYearRecords, feesHasPupilYearRecords, analyticsHasPupilYearRecords]) {
+        if (await check(tx, studentId, year)) return true;
+      }
+      return false;
+    },
     db,
     metrics,
     edition: config.edition,
@@ -276,12 +289,13 @@ async function main(): Promise<void> {
 
   const reporting = createReportingModule({
     db,
+    edition: config.edition,
     schoolAcademicsRead: schoolAcademics.service.readModel,
     academicsRead: academics.service.readModel,
     metrics,
     audit: system.service.audit,
     analyticsRead: analytics.service.readModel,
-    sources: { gradeCard: results.service.gradeCard, hallTicket: exams.service.hallTicket, teacherAttendance: people.service.staffAttendanceSource },
+    sources: { gradeCard: results.service.gradeCard, hallTicket: exams.service.hallTicket, teacherAttendance: people.service.staffAttendanceSource, ...(config.edition === "school" ? { schoolAttendanceReview: schoolAcademics.service.attendanceReview } : {}) },
     storage: { client: objectStorage, bucket: config.s3.bucket },
     enqueueReport: async (payload) => {
       await reportingQueue.queue.add(REPORT_JOB_NAME, payload);

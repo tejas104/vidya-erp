@@ -4,7 +4,7 @@ import { use, useEffect, useMemo, useRef, useState, type ReactNode } from "react
 import {
   api, ApiError, currentAcademicYear,
   type FeeInvoiceView, type StudentAttendance, type StudentDetailView,
-  type StudentDocument, type StudentHistory, type StudentMarksRow, type StudentPerformance,
+  type StudentDocument, type EnrollmentOutcome, type StudentHistory, type StudentMarksRow, type StudentPerformance,
 } from "@/ui/api";
 import { AttendanceColumns, Sparkline, StatTile, SubjectBars } from "@/ui/charts";
 import { ReportButton } from "@/ui/ReportButton";
@@ -94,6 +94,7 @@ export default function StudentPage({ params }: { params: Promise<{ studentId: s
   const [profile, retryProfile] = useResource(() => api.studentGet(studentId), [studentId]);
   const [tab, setTab] = useState<TabId>("summary");
   const [accountantOnly, setAccountantOnly] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
     setTab(tabFromUrl());
@@ -105,6 +106,7 @@ export default function StudentPage({ params }: { params: Promise<{ studentId: s
     let alive = true;
     void api.session().then((session) => {
       if (alive) setAccountantOnly(session.roles.length > 0 && session.roles.every((role) => role === "accountant"));
+      if (alive) setIsAdmin(session.roles.includes("admin"));
     }).catch(() => undefined);
     return () => { alive = false; };
   }, []);
@@ -135,19 +137,21 @@ export default function StudentPage({ params }: { params: Promise<{ studentId: s
           tab={tab}
           changeTab={changeTab}
           accountantOnly={accountantOnly}
+          isAdmin={isAdmin}
         />
       ) : null}
     </>
   );
 }
 
-function StudentRecord({ student, studentId, year, tab, changeTab, accountantOnly }: {
+function StudentRecord({ student, studentId, year, tab, changeTab, accountantOnly, isAdmin }: {
   student: StudentDetailView;
   studentId: string;
   year: string;
   tab: TabId;
   changeTab: (tab: string) => void;
   accountantOnly: boolean;
+  isAdmin: boolean;
 }) {
   const tabScroller = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -186,7 +190,7 @@ function StudentRecord({ student, studentId, year, tab, changeTab, accountantOnl
         {tab === "finance" ? <FinancePanel studentId={studentId} /> : null}
         {tab === "documents" ? <DocumentsPanel studentId={studentId} /> : null}
         {tab === "family" ? <GuardiansPanel studentId={studentId} /> : null}
-        {tab === "history" ? <HistoryPanel studentId={studentId} /> : null}
+        {tab === "history" ? <HistoryPanel studentId={studentId} isAdmin={isAdmin} /> : null}
       </section>
     </>
   );
@@ -316,16 +320,48 @@ function DocumentsPanel({ studentId }: { studentId: string }) {
   </ResourcePanel>;
 }
 
-function HistoryPanel({ studentId }: { studentId: string }) {
-  return <ResourcePanel load={() => api.studentHistory(studentId)} identity={[studentId]}>
+const OUTCOME_LABEL: Record<EnrollmentOutcome, string> = { promoted: "Promoted", detained: "Detained", transferred_out: "Transferred out", graduated: "Graduated" };
+
+function HistoryPanel({ studentId, isAdmin }: { studentId: string; isAdmin: boolean }) {
+  const [revision, setRevision] = useState(0);
+  const [selected, setSelected] = useState<string | null>(null);
+  const [reason, setReason] = useState("");
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  const reverse = async (enrollmentId: string) => {
+    setPending(true); setError(null); setSuccess(null);
+    try {
+      await api.progressionReverse(studentId, enrollmentId, reason.trim());
+      setSelected(null); setReason("");
+      setSuccess("Correction recorded. The pupil's history has been refreshed.");
+      setRevision((value) => value + 1);
+    } catch (caught) {
+      setError(caught instanceof ApiError ? caught.message : "Could not reverse this outcome. Reload the pupil's history.");
+    } finally { setPending(false); }
+  };
+  return <ResourcePanel load={() => api.studentHistory(studentId)} identity={[studentId, revision]}>
     {(history: StudentHistory) => <div className={styles.historySections}>
+      {success ? <p role="status">{success}</p> : null}
       <section aria-label="Enrollment history">
         <h2>Enrollment history</h2>
         {history.enrollments.length === 0 ? <EmptyState title="No enrollment recorded." /> : (
           <div className={styles.panelList}>{history.enrollments.map((entry) => (
             <div className="card" key={entry.id}>
               <strong>{entry.className} · Section {entry.sectionName}</strong>
-              <span>{entry.academicYear} · {entry.status} · Effective {entry.startsOn ?? "date needs verification"} to {entry.endsOn ?? (entry.status === "enrolled" ? "current" : "end date needs verification")}</span>
+              <span>{entry.academicYear} · {entry.status} · Effective {entry.startsOn ?? "date needs verification"} to {entry.endsOn ?? (entry.status === "enrolled" ? "current" : entry.status === "voided" ? "voided before use" : "end date needs verification")}</span>
+              {entry.outcome ? <span>Recorded outcome: {OUTCOME_LABEL[entry.outcome]}{entry.outcomeReason ? ` — ${entry.outcomeReason}` : ""}</span> : null}
+              {history.correctedEnrollmentIds.includes(entry.id) ? <span>Outcome corrected; the original record is retained.</span> : null}
+              {isAdmin && entry.outcome && !history.correctedEnrollmentIds.includes(entry.id) ? (
+                selected === entry.id ? <form onSubmit={(event) => { event.preventDefault(); void reverse(entry.id); }}>
+                  <label htmlFor={`reversal-reason-${entry.id}`}>Reason for correcting this outcome</label>
+                  <input id={`reversal-reason-${entry.id}`} value={reason} onChange={(event) => setReason(event.target.value)} maxLength={240} required />
+                  <p>The original outcome stays in history. An unused next-year placement is voided; any revoked invitation code stays revoked.</p>
+                  {error ? <p role="alert">{error}</p> : null}
+                  <button type="submit" disabled={pending || !reason.trim()}>Record correction</button>
+                  <button type="button" disabled={pending} onClick={() => { setSelected(null); setReason(""); setError(null); }}>Cancel</button>
+                </form> : <button type="button" onClick={() => { setSelected(entry.id); setReason(""); setError(null); }}>Correct this outcome</button>
+              ) : null}
               <span>Record entered {dateLabel(entry.createdAt)}</span>
             </div>
           ))}</div>

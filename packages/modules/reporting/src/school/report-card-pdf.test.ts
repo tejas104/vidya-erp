@@ -91,6 +91,15 @@ function snapshot(overrides: Partial<ReportCardSnapshot> = {}): ReportCardSnapsh
 }
 
 describe("renderReportCardPdf", () => {
+  it("prints the frozen school format without changing verified pupil figures", async () => {
+    const text = pdfText(await renderReportCardPdf(snapshot(), ISSUED, {
+      schoolName: "Greenfield School", accentColor: "#176A57", footerText: "School office copy",
+    }));
+    expect(text).toContain("Greenfield School");
+    expect(text).toContain("School office copy");
+    expect(text).toContain("90.50%");
+    expect(text).not.toContain("VIDYA");
+  });
   it("prints the pupil, term, every subject and the summary figures", async () => {
     const text = pdfText(await renderReportCardPdf(snapshot(), ISSUED));
 

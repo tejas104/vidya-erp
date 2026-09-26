@@ -10,6 +10,9 @@ import { createPeopleHandlers, type PeopleHandlerDeps } from "./handlers";
 import { OrgService } from "../service/org-service";
 import { PeopleService } from "../service/people-service";
 import { AssignmentsService } from "../service/assignments-service";
+import { ProgressionService } from "../service/progression-service";
+import type { ProgressionApplyInput } from "../repo/progression-repo";
+import { issueDurableAuditReceipt } from "@vidya/platform";
 import { ImportService, type CredentialIssuer } from "../service/import-service";
 import { UsernameTakenError } from "@vidya/module-identity";
 import { usernameFromCode } from "../ids";
@@ -58,11 +61,40 @@ async function makeHarness(opts: { identity?: CredentialIssuer; edition?: "colle
   const identity = opts.identity ?? fakeIdentity();
   const org = await seedOrg(orgRepo);
   const enqueued: unknown[] = [];
+  const applied: ProgressionApplyInput[] = [];
   const deps: PeopleHandlerDeps = {
     org: new OrgService({ repo: orgRepo, audit }),
     people: new PeopleService({ repo: peopleRepo, orgRepo }),
     staffAttendance,
     assignments: new AssignmentsService({ repo: peopleRepo, orgRepo, identityGrants, audit }),
+    // The transaction itself is exercised against Postgres (tests/integration/progression.int.test.ts);
+    // here the fake records what the service asked the repo to write.
+    progression: new ProgressionService({
+      people: peopleRepo,
+      org: orgRepo,
+      relationships: async () => [{ status: "active", validUntil: null }],
+      today: () => "2027-04-10",
+      repo: {
+        getHistoryPolicy: async () => ({ days: 90, version: 1 }),
+        updateHistoryPolicy: async (input) => ({
+          policy: { days: input.days, version: input.expectedVersion + 1 },
+          receipt: issueDurableAuditReceipt({ module: "people", action: "people.guardian-history-policy-updated", actorType: "user", actorId: input.attribution.actorId, resourceType: "college", resourceId: input.collegeId, requestId: input.attribution.requestId, details: {} }),
+        }),
+        reverse: async (input) => ({
+          correctionId: "prc_test",
+          reinstatedEnrollmentId: "enr_reinstated",
+          receipt: issueDurableAuditReceipt({ module: "people", action: "people.progression-reversed", actorType: "user", actorId: input.attribution.actorId, resourceType: "student", resourceId: input.studentId, requestId: input.attribution.requestId, details: {} }),
+        }),
+        apply: async (input) => {
+          applied.push(input);
+          return {
+            runId: "prg_test",
+            pupils: [],
+            receipt: issueDurableAuditReceipt({ module: "people", action: "people.progression-applied", actorType: "user", actorId: input.attribution.actorId, resourceType: "progression-run", resourceId: "prg_test", requestId: input.attribution.requestId, details: {} }),
+          };
+        },
+      },
+    }),
     imports: new ImportService({
       imports: importsRepo,
       people: peopleRepo,
@@ -90,6 +122,7 @@ async function makeHarness(opts: { identity?: CredentialIssuer; edition?: "colle
     org,
     enqueued,
     identity,
+    applied,
   };
 }
 
@@ -856,5 +889,179 @@ describe("people.import-template diverges by edition (#13, ADR-0023)", () => {
         "\r\n",
       )[0];
     expect(await headerFor(school)).toBe(await headerFor(college));
+  });
+});
+
+describe("year-end progression (N6)", () => {
+  async function yearEnd() {
+    const harness = await makeHarness({ edition: "school" });
+    const { orgRepo, peopleRepo, org } = harness;
+    const nextClass = await orgRepo.createClass({ departmentId: org.department.id, name: "Standard 6", code: "STD6" });
+    const nextSection = await orgRepo.createSection({ classId: nextClass.id, name: "A" });
+    const repeatSection = await orgRepo.createSection({ classId: org.classRow.id, name: "B" });
+    const pupils: { student: Awaited<ReturnType<typeof peopleRepo.createStudent>>; enrollment: Awaited<ReturnType<typeof peopleRepo.createEnrollment>> }[] = [];
+    for (const [n, name] of ["Asha", "Dev", "Ira", "Kabir"].entries()) {
+      const student = await peopleRepo.createStudent({ collegeId: org.college.id, admissionNo: `S-${n}`, fullName: name });
+      const enrollment = await peopleRepo.createEnrollment({ studentId: student.id, sectionId: org.section.id, academicYear: "2026-27", startsOn: "2026-06-01" });
+      pupils.push({ student, enrollment });
+    }
+    const choice = (index: number, outcome: string, reason?: string) =>
+      ({ studentId: pupils[index]!.student.id, enrollmentId: pupils[index]!.enrollment.id, outcome, ...(reason ? { reason } : {}) });
+    const plan = (overrides: Record<string, unknown> = {}) => ({
+      sectionId: org.section.id, academicYear: "2026-27", endsOn: "2027-03-31",
+      targetAcademicYear: "2027-28", startsOn: "2027-06-01",
+      promoteToSectionId: nextSection.id, detainInSectionId: repeatSection.id,
+      pupils: [choice(0, "promote"), choice(1, "detain", "Below the attendance minimum"), choice(2, "transfer_out", "Family moved to Pune")],
+      expectedHistoryPolicyVersion: 1,
+      ...overrides,
+    });
+    return { ...harness, nextSection, repeatSection, pupils, choice, plan };
+  }
+
+  it("checks enrollment scope before reading reversal audit evidence", async () => {
+    const { handlers, scopeChecker, pupils } = await yearEnd();
+    scopeChecker.decision = { granted: false, reason: "outside scope" };
+    const result = await handlers["people.progression-reverse"]!(ctx({
+      params: { studentId: pupils[0]!.student.id, enrollmentId: pupils[0]!.enrollment.id },
+      body: { reason: "Wrong result" },
+    }));
+    expect(result.status).toBe(403);
+  });
+
+  it("previews every pupil's change, and who is left undecided, without writing", async () => {
+    const { handlers, plan, peopleRepo, org, applied } = await yearEnd();
+    const result = await handlers["people.progression-preview"]!(ctx({ body: plan() }));
+    expect(result.status).toBe(200);
+    const preview = result.body as { ready: boolean; pupils: { fullName: string; outcome: string; statusAfter: string; familyLinks: number }[]; undecided: { fullName: string }[]; familyAccess: unknown };
+    expect(preview.ready).toBe(true);
+    expect(preview.pupils.map((pupil) => [pupil.fullName, pupil.outcome, pupil.statusAfter, pupil.familyLinks])).toEqual([
+      ["Asha", "promote", "active", 0],
+      ["Dev", "detain", "active", 0],
+      ["Ira", "transfer_out", "transferred", 1],
+    ]);
+    expect(preview.undecided.map((pupil) => pupil.fullName)).toEqual(["Kabir"]);
+    // Live family access ends after the leaving day; read-only access runs 90 days more.
+    expect(preview.familyAccess).toEqual({ liveUntil: "2027-04-01T00:00:00.000Z", historicalAccessUntil: "2027-06-30T00:00:00.000Z", days: 90, policyVersion: 1 });
+    expect(await peopleRepo.roster(org.section.id)).toHaveLength(4);
+    expect(applied).toEqual([]);
+  });
+
+  it("applies exactly the previewed rows, attributed to the caller and audited in the transaction", async () => {
+    const { handlers, plan, applied, nextSection, repeatSection, pupils } = await yearEnd();
+    const result = await handlers["people.progression-apply"]!(ctx({ body: plan() }));
+    expect(result.status).toBe(200);
+    expect(result.audit?.persisted?.kind).toBe("in-transaction");
+    expect(applied).toHaveLength(1);
+    const [input] = applied;
+    expect(input!.attribution).toEqual({ requestId: "req-1", actorType: "user", actorId: "admin-1" });
+    expect(input!.familyAccess).toEqual({ liveUntil: new Date("2027-04-01T00:00:00Z"), historicalAccessUntil: new Date("2027-06-30T00:00:00Z") });
+    expect(input!.rows).toEqual([
+      { studentId: pupils[0]!.student.id, enrollmentId: pupils[0]!.enrollment.id, outcome: "promoted", reason: null, statusAfter: "active", next: { sectionId: nextSection.id, academicYear: "2027-28", startsOn: "2027-06-01" } },
+      { studentId: pupils[1]!.student.id, enrollmentId: pupils[1]!.enrollment.id, outcome: "detained", reason: "Below the attendance minimum", statusAfter: "active", next: { sectionId: repeatSection.id, academicYear: "2027-28", startsOn: "2027-06-01" } },
+      { studentId: pupils[2]!.student.id, enrollmentId: pupils[2]!.enrollment.id, outcome: "transferred_out", reason: "Family moved to Pune", statusAfter: "transferred", next: null },
+    ]);
+  });
+
+  it("refuses an exit apply without the policy version shown in its preview", async () => {
+    const { handlers, plan, applied } = await yearEnd();
+    const result = await handlers["people.progression-apply"]!(ctx({ body: plan({ expectedHistoryPolicyVersion: undefined }) }));
+    expect(result.status).toBe(409);
+    expect(applied).toEqual([]);
+  });
+
+  it("refuses a plan with problems, names them, and writes nothing", async () => {
+    const { handlers, plan, choice, applied, org } = await yearEnd();
+    const blocked = await handlers["people.progression-apply"]!(ctx({ body: plan({
+      endsOn: "2027-04-11",
+      promoteToSectionId: org.section.id,
+      pupils: [choice(0, "promote"), choice(1, "detain"), { ...choice(2, "graduate"), enrollmentId: "enr_stale" }, choice(3, "transfer_out", "Moved")],
+    }) }));
+    expect(blocked.status).toBe(422);
+    const preview = (blocked.body as { preview: { ready: boolean; problems: string[]; pupils: { problems: string[] }[] } }).preview;
+    expect(preview.ready).toBe(false);
+    expect(preview.problems).toEqual(["The closing date cannot be later than today.", "Promoted pupils move to a section of a different standard."]);
+    expect(preview.pupils.map((pupil) => pupil.problems)).toEqual([
+      [],
+      ["Record why the pupil is detained."],
+      ["Not on this section's 2026-27 roll any more. Reload the roster.", "Record the reason for leaving."],
+      [],
+    ]);
+    expect(applied).toEqual([]);
+  });
+
+  it("requires a reason for graduation before applying any exit", async () => {
+    const { handlers, plan, choice, applied } = await yearEnd();
+    const result = await handlers["people.progression-apply"]!(ctx({ body: plan({
+      pupils: [choice(3, "graduate")],
+    }) }));
+    expect(result.status).toBe(422);
+    expect((result.body as { preview: { pupils: { problems: string[] }[] } }).preview.pupils[0]!.problems)
+      .toEqual(["Record the reason for leaving."]);
+    expect(applied).toEqual([]);
+  });
+
+  it("limits the one-pupil exit workflow to today and one leaving pupil", async () => {
+    const { handlers, plan, choice, applied } = await yearEnd();
+    const one = { workflow: "single_exit", targetAcademicYear: undefined, startsOn: undefined,
+      promoteToSectionId: undefined, detainInSectionId: undefined,
+      pupils: [choice(0, "graduate", "Completed final standard")] };
+    const past = await handlers["people.progression-apply"]!(ctx({ body: plan({ ...one, endsOn: "2027-04-09" }) }));
+    expect(past.status).toBe(422);
+    expect((past.body as { preview: { problems: string[] } }).preview.problems)
+      .toContain("A one-pupil exit must be recorded for today.");
+    const mixed = await handlers["people.progression-preview"]!(ctx({ body: plan({ ...one,
+      endsOn: "2027-04-10", pupils: [choice(0, "graduate", "Completed"), choice(1, "promote")],
+    }) }));
+    expect((mixed.body as { ready: boolean; problems: string[] }).problems)
+      .toContain("Choose one pupil to transfer or graduate.");
+    const today = await handlers["people.progression-preview"]!(ctx({ body: plan({ ...one, endsOn: "2027-04-10" }) }));
+    expect((today.body as { ready: boolean }).ready).toBe(true);
+    expect(applied).toEqual([]);
+  });
+
+  it("needs a next year that follows the closed one, starting after the closing date", async () => {
+    const { handlers, plan } = await yearEnd();
+    const result = await handlers["people.progression-preview"]!(ctx({ body: plan({ targetAcademicYear: "2026-27", startsOn: "2027-03-31" }) }));
+    expect((result.body as { problems: string[] }).problems).toEqual([
+      "Choose a next academic year after the one being closed.",
+      "The new year must start after the closing date.",
+    ]);
+  });
+
+  it("flags a pupil already enrolled for the next year", async () => {
+    const { handlers, plan, peopleRepo, pupils, nextSection } = await yearEnd();
+    await peopleRepo.createEnrollment({ studentId: pupils[0]!.student.id, sectionId: nextSection.id, academicYear: "2027-28", startsOn: "2027-06-01" });
+    const result = await handlers["people.progression-preview"]!(ctx({ body: plan() }));
+    expect((result.body as { pupils: { problems: string[] }[] }).pupils[0]!.problems).toEqual(["Already enrolled for 2027-28."]);
+  });
+
+  it("checks scope on the source section and every target, and refuses outside it", async () => {
+    const { handlers, plan, scopeChecker, org, nextSection, repeatSection } = await yearEnd();
+    await handlers["people.progression-preview"]!(ctx({ body: plan() }));
+    expect(scopeChecker.calls.map((call) => [call.action, (call.resource as { org: { sectionId?: string } }).org.sectionId])).toEqual([
+      ["update", org.section.id], ["create", nextSection.id], ["create", repeatSection.id],
+    ]);
+    scopeChecker.decision = { granted: false, reason: "stub-deny" };
+    expect((await handlers["people.progression-apply"]!(ctx({ body: plan() }))).status).toBe(403);
+  });
+
+  it("treats a target section in another school as not found", async () => {
+    const { handlers, plan, orgRepo } = await yearEnd();
+    const elsewhere = await orgRepo.createCollege({ name: "Other", code: "OT" });
+    const department = await orgRepo.createDepartment({ collegeId: elsewhere.id, name: "School", code: "SCH" });
+    const klass = await orgRepo.createClass({ departmentId: department.id, name: "Standard 6", code: "STD6" });
+    const section = await orgRepo.createSection({ classId: klass.id, name: "A" });
+    expect((await handlers["people.progression-apply"]!(ctx({ body: plan({ promoteToSectionId: section.id }) }))).status).toBe(404);
+  });
+
+  it("refuses a bare exit status in the school edition, so every exit goes through the recorded workflow", async () => {
+    const { handlers, pupils } = await yearEnd();
+    const flip = (status: string) => handlers["people.student-update"]!(ctx({ params: { studentId: pupils[0]!.student.id }, body: { status } }));
+    expect((await flip("transferred")).status).toBe(409);
+    expect((await flip("alumni")).status).toBe(409);
+    expect((await flip("dropped")).status).toBe(200);
+    const college = await makeHarness({ edition: "college" });
+    const student = await college.peopleRepo.createStudent({ collegeId: college.org.college.id, admissionNo: "C-1", fullName: "College Pupil" });
+    expect((await college.handlers["people.student-update"]!(ctx({ params: { studentId: student.id }, body: { status: "transferred" } }))).status).toBe(200);
   });
 });

@@ -5,6 +5,7 @@ import type { PeopleDirectory } from "@vidya/module-people";
 import type { TermsRepo } from "./repo";
 import { termRef } from "./resource-refs";
 import type { SchTermRow } from "./db/schema";
+import type { AttendanceReview } from "./definition";
 
 interface Deps {
   terms: TermsRepo;
@@ -12,6 +13,11 @@ interface Deps {
   scopeChecker: ScopeChecker;
   academics: AcademicsReadModel;
 }
+
+export type AttendanceReviewSourceResult =
+  | { access: "ok"; data: AttendanceReview; termName: string; sectionName: string; academicYear: string }
+  | { access: "not-found" | "forbidden" | "unconfigured" };
+export type AttendanceReviewSource = (principal: Principal, sectionId: string, termId: string, through?: string, academicYear?: string) => Promise<AttendanceReviewSourceResult>;
 
 /** School edition currently uses the Indian school day until per-school time zones exist. */
 function schoolToday(): string {
@@ -30,34 +36,13 @@ function view(term: SchTermRow) {
   };
 }
 
-export function createAttendanceReviewHandlers(deps: Deps): Record<string, RouteHandler> {
-  const calendar = (write: boolean): RouteHandler => async (ctx) => {
-    const { termId } = ctx.request.params as { termId: string };
-    const term = await deps.terms.get(termId);
-    if (!term) return { status: 404, body: { message: "No such term." } };
-    const principal = ctx.principal as Principal;
-    if (!deps.scopeChecker.check(principal, "read", termRef(term)).granted) return { status: 403, body: { message: "Access denied." } };
-    if (!write) return { status: 200, body: view(term) };
-    if (!principal.roles.includes("admin")) return { status: 403, body: { message: "Only an administrator can set instructional days." } };
-    if (term.status !== "open") return { status: 409, body: { message: "Reopen the term before changing its calendar." } };
-    const input = ctx.request.body as { instructionalDays: string[]; shortfallThreshold: number; expectedVersion: number };
-    const unique = new Set(input.instructionalDays);
-    if (unique.size !== input.instructionalDays.length || input.instructionalDays.some((date) => date < term.startsOn || date > term.endsOn)) {
-      return { status: 422, body: { message: "Dates must be unique and within the term." } };
-    }
-    const updated = await deps.terms.setCalendar({ id: term.id, expectedVersion: input.expectedVersion, instructionalDays: [...unique].sort(), shortfallThreshold: input.shortfallThreshold });
-    if (!updated) return { status: 409, body: { message: "The term or calendar changed. Reload before saving." } };
-    return { status: 200, body: view(updated), audit: { org: termRef(term).org, resourceId: term.id, details: { beforeVersion: term.calendarVersion, afterVersion: updated.calendarVersion, previousDates: term.instructionalDays, instructionalDays: updated.instructionalDays, previousThreshold: term.shortfallThreshold, shortfallThreshold: updated.shortfallThreshold } } };
-  };
-
-  const shortfall: RouteHandler = async (ctx) => {
-    const { sectionId } = ctx.request.params as { sectionId: string };
-    const { termId, through } = ctx.request.query as { termId: string; through?: string };
+/** One scoped calculation supplies both the live screen and queued exports. */
+export function createAttendanceReviewSource(deps: Deps): AttendanceReviewSource {
+  return async (principal, sectionId, termId, through, academicYear) => {
     const [term, path] = await Promise.all([deps.terms.get(termId), deps.directory.sectionPath(sectionId)]);
-    if (!term || !path || !path.departmentId || !path.classId || path.collegeId !== term.collegeId || path.departmentId !== term.departmentId) return { status: 404, body: { message: "No such section in this term's school." } };
-    const principal = ctx.principal as Principal;
-    if (!deps.scopeChecker.check(principal, "read", attendanceRef({ collegeId: path.collegeId, departmentId: path.departmentId, classId: path.classId, sectionId })).granted) return { status: 403, body: { message: "Access denied." } };
-    if (term.instructionalDays === null || term.shortfallThreshold === null) return { status: 409, body: { message: "Configure this term's instructional days and threshold first." } };
+    if (!term || !path || !path.departmentId || !path.classId || path.collegeId !== term.collegeId || path.departmentId !== term.departmentId || (academicYear && term.academicYear !== academicYear)) return { access: "not-found" };
+    if (!deps.scopeChecker.check(principal, "read", attendanceRef({ collegeId: path.collegeId, departmentId: path.departmentId, classId: path.classId, sectionId })).granted) return { access: "forbidden" };
+    if (term.instructionalDays === null || term.shortfallThreshold === null) return { access: "unconfigured" };
     const today = schoolToday();
     const until = [through ?? today, today, term.endsOn].sort()[0]!;
     const scheduledDates = term.instructionalDays.filter((date) => date <= until);
@@ -80,7 +65,39 @@ export function createAttendanceReviewHandlers(deps: Deps): Record<string, Route
       const summary = outcome.result;
       return { studentId, fullName: brief?.fullName ?? "Student", admissionNo: brief?.admissionNo ?? "", enrollmentDates: windows.map((window) => ({ from: window.startsOn, to: window.endsOn })), dateIssue: null, expectedDays: summary.expectedDays, recordedDays: summary.recordedDays, absentDays: summary.statusTotals.absent, missingEntryDates: summary.missingDates.filter((date) => registerByDate.has(date)), percentageDenominator: summary.percentageDenominator, percentage: summary.percentage, shortfall: summary.percentage === null ? null : summary.percentage < Number(term.shortfallThreshold) };
     }).sort((a, b) => a.fullName.localeCompare(b.fullName));
-    return { status: 200, body: { termId, sectionId, through: until, calendarVersion: term.calendarVersion, threshold: Number(term.shortfallThreshold), scheduledDates, unsubmittedDates, students } };
+    const sectionName = (await deps.directory.namesFor([sectionId])).get(sectionId) ?? "Section";
+    return { access: "ok", termName: term.name, sectionName, academicYear: term.academicYear, data: { termId, sectionId, through: until, calendarVersion: term.calendarVersion, threshold: Number(term.shortfallThreshold), scheduledDates, unsubmittedDates, students } };
+  };
+}
+
+export function createAttendanceReviewHandlers(deps: Deps, source: AttendanceReviewSource = createAttendanceReviewSource(deps)): Record<string, RouteHandler> {
+  const calendar = (write: boolean): RouteHandler => async (ctx) => {
+    const { termId } = ctx.request.params as { termId: string };
+    const term = await deps.terms.get(termId);
+    if (!term) return { status: 404, body: { message: "No such term." } };
+    const principal = ctx.principal as Principal;
+    if (!deps.scopeChecker.check(principal, "read", termRef(term)).granted) return { status: 403, body: { message: "Access denied." } };
+    if (!write) return { status: 200, body: view(term) };
+    if (!principal.roles.includes("admin")) return { status: 403, body: { message: "Only an administrator can set instructional days." } };
+    if (term.status !== "open") return { status: 409, body: { message: "Reopen the term before changing its calendar." } };
+    const input = ctx.request.body as { instructionalDays: string[]; shortfallThreshold: number; expectedVersion: number };
+    const unique = new Set(input.instructionalDays);
+    if (unique.size !== input.instructionalDays.length || input.instructionalDays.some((date) => date < term.startsOn || date > term.endsOn)) {
+      return { status: 422, body: { message: "Dates must be unique and within the term." } };
+    }
+    const updated = await deps.terms.setCalendar({ id: term.id, expectedVersion: input.expectedVersion, instructionalDays: [...unique].sort(), shortfallThreshold: input.shortfallThreshold });
+    if (!updated) return { status: 409, body: { message: "The term or calendar changed. Reload before saving." } };
+    return { status: 200, body: view(updated), audit: { org: termRef(term).org, resourceId: term.id, details: { beforeVersion: term.calendarVersion, afterVersion: updated.calendarVersion, previousDates: term.instructionalDays, instructionalDays: updated.instructionalDays, previousThreshold: term.shortfallThreshold, shortfallThreshold: updated.shortfallThreshold } } };
+  };
+
+  const shortfall: RouteHandler = async (ctx) => {
+    const { sectionId } = ctx.request.params as { sectionId: string };
+    const { termId, through } = ctx.request.query as { termId: string; through?: string };
+    const result = await source(ctx.principal as Principal, sectionId, termId, through);
+    if (result.access === "ok") return { status: 200, body: result.data };
+    if (result.access === "not-found") return { status: 404, body: { message: "No such section in this term's school." } };
+    if (result.access === "forbidden") return { status: 403, body: { message: "Access denied." } };
+    return { status: 409, body: { message: "Configure this term's instructional days and threshold first." } };
   };
   return { "school-academics.calendar": calendar(false), "school-academics.calendar-set": calendar(true), "school-academics.attendance-shortfall": shortfall };
 }

@@ -26,6 +26,7 @@ function attendanceRow(
     studentId,
     status,
     heldOn,
+    recordedAt: `${heldOn}T10:00:00.000Z`,
     academicYear: YEAR,
     position: { ...paths.class, sectionId },
   };

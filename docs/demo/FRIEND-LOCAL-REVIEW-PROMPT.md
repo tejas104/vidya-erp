@@ -27,7 +27,7 @@ Copy the text below into Claude on the reviewer's computer. This is a
 > desktop and phone widths. Use the fictional accounts in the demo guide:
 > administrator, principal, class teacher, subject teacher, student, Standard
 > 9 student, and family. Check the role navigation, class register, attendance
-> review, academic terms, report cards and PDF, results, assignments, syllabus,
+> review and its PDF/Excel/CSV exports, academic terms, report cards and PDF, results, assignments, syllabus,
 > timetable, notices, fees, and student/family pages. In Attendance review,
 > distinguish missing daily registers, missing pupil entries, absence, and
 > enrollment dates that still need verification. Record screenshots and

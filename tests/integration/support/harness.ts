@@ -18,6 +18,7 @@ import {
   type OrgDirectory,
   type RouteDependencies,
   type RouteSpec,
+  type TransactionalAuditLogger,
 } from "@vidya/platform";
 import { createSystemModule } from "@vidya/module-system";
 import { createIdentityCore, createIdentityModule } from "@vidya/module-identity";
@@ -32,6 +33,12 @@ import { createResultsModule } from "@vidya/module-results";
 import { createPortalModule } from "@vidya/module-portal";
 import { createFeesModule } from "@vidya/module-fees";
 import { createNoticesModule } from "@vidya/module-notices";
+import { academicsHasPupilYearRecords } from "@vidya/module-academics";
+import { schoolAcademicsHasPupilYearRecords } from "@vidya/module-school-academics";
+import { reportingHasPupilYearRecords } from "@vidya/module-reporting";
+import { courseworkHasPupilYearRecords } from "@vidya/module-coursework";
+import { feesHasPupilYearRecords } from "@vidya/module-fees";
+import { analyticsHasPupilYearRecords } from "@vidya/module-analytics";
 import { integrationDatabaseUrl } from "./db-url";
 
 export const ADMIN_USERNAME = "int-admin";
@@ -121,11 +128,38 @@ export function buildStack(edition: "college" | "school" = "college") {
     forcePathStyle: true,
   });
   const enqueuedImports: { importId: string; source: string }[] = [];
+  // ADR-0026 fault injection: fail the people module's in-transaction audit
+  // write for one action, after its insert, to prove the mutation rolls back.
+  const peopleAuditFault: { failAction: string | null } = { failAction: null };
+  const peopleAudit: TransactionalAuditLogger = {
+    record: (event) => system.service.audit.record(event),
+    recordInTransaction: async (tx, event) => {
+      const receipt = await system.service.audit.recordInTransaction(tx, event);
+      if (peopleAuditFault.failAction === event.action) throw new Error("injected audit failure");
+      return receipt;
+    },
+  };
+  const reportingAuditFault: { failAction: string | null } = { failAction: null };
+  const reportingAudit: TransactionalAuditLogger = {
+    record: (event) => system.service.audit.record(event),
+    recordInTransaction: async (tx, event) => {
+      const receipt = await system.service.audit.recordInTransaction(tx, event);
+      if (reportingAuditFault.failAction === event.action) throw new Error("injected reporting audit failure");
+      return receipt;
+    },
+  };
   const people = createPeopleModule({
+    hasNextYearRecords: async (tx, studentId, year) => {
+      for (const check of [academicsHasPupilYearRecords, schoolAcademicsHasPupilYearRecords,
+        reportingHasPupilYearRecords, courseworkHasPupilYearRecords, feesHasPupilYearRecords, analyticsHasPupilYearRecords]) {
+        if (await check(tx, studentId, year)) return true;
+      }
+      return false;
+    },
     edition,
     db,
     metrics,
-    audit: system.service.audit,
+    audit: peopleAudit,
     scopeChecker: core.scopeChecker,
     identityGrants: identity.service.derivedGrants,
     identity: { issueCredential: identity.service.issueCredential, accountForLink: identity.service.accountForLink },
@@ -187,11 +221,14 @@ export function buildStack(edition: "college" | "school" = "college") {
   const enqueuedReports: { reportId: string; source: string }[] = [];
   const reporting = createReportingModule({
     db,
+    edition,
     schoolAcademicsRead: schoolAcademics.service.readModel,
     academicsRead: academics.service.readModel,
     metrics,
-    audit: system.service.audit,
+    audit: reportingAudit,
     analyticsRead: analytics.service.readModel,
+    sources: { gradeCard: results.service.gradeCard, teacherAttendance: people.service.staffAttendanceSource,
+      ...(edition === "school" ? { schoolAttendanceReview: schoolAcademics.service.attendanceReview } : {}) },
     storage: { client: objectStorage, bucket: process.env.S3_BUCKET ?? "vidya-int" },
     enqueueReport: async (payload) => {
       enqueuedReports.push(payload);
@@ -345,6 +382,8 @@ export function buildStack(edition: "college" | "school" = "college") {
     enqueuedFees,
     core,
     enqueuedImports,
+    peopleAuditFault,
+    reportingAuditFault,
     enqueuedRollups,
     enqueuedReports,
     call,

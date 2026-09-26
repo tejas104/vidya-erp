@@ -105,10 +105,10 @@ beforeAll(async () => {
   studentId = (await create("people.student-create", { collegeId, admissionNo: `RC-${suffix}`, fullName: "Asha Kulkarni" })).id;
   otherStudentId = (await create("people.student-create", { collegeId, admissionNo: `RCO-${suffix}`, fullName: "Ravi Deshmukh" })).id;
   expect(
-    (await stack.call("people.student-enroll", { cookie: admin, body: { sectionId, academicYear }, params: { studentId } })).status,
+    (await stack.call("people.student-enroll", { cookie: admin, body: { sectionId, academicYear, startsOn: "2026-06-01" }, params: { studentId } })).status,
   ).toBe(200);
   expect(
-    (await stack.call("people.student-enroll", { cookie: admin, body: { sectionId: otherSectionId, academicYear }, params: { studentId: otherStudentId } })).status,
+    (await stack.call("people.student-enroll", { cookie: admin, body: { sectionId: otherSectionId, academicYear, startsOn: "2026-06-01" }, params: { studentId: otherStudentId } })).status,
   ).toBe(200);
 
   termId = (await create("school-academics.create", {
@@ -494,5 +494,61 @@ describe("School report cards over real Postgres", () => {
       "reporting.school-report-card-published", "reporting.school-report-card-withdrawn",
     ]));
     await expect(stack.pool.query("DELETE FROM rpt_school_report_card_publications WHERE student_id = $1", [studentId])).rejects.toThrow(/append-only/);
+  });
+
+  it("after the pupil leaves, a family keeps only the report card released before the exit (ADR-0027 Decision 9)", async () => {
+    const before = (await (await generate(admin)).json()) as { snapshotId: string };
+    expect((await stack.call("reporting.school-report-card-publish", { cookie: admin, params: { snapshotId: before.snapshotId } })).status).toBe(200);
+    const invited = await stack.call("people.guardian-invitation-issue", {
+      cookie: admin, params: { studentId }, body: {
+        guardianName: "Ravi Nair", relationshipType: "parent", contactMethod: "email",
+        contactValue: `ravi-${randomUUID()}@example.test`,
+      },
+    });
+    const { code } = (await invited.json()) as { code: string };
+    const username = `rc-left-${randomUUID().slice(0, 8)}`;
+    expect((await stack.call("people.guardian-activate", { body: { code, fullName: "Ravi Nair", username, password: "report-left-pass-123" } })).status).toBe(201);
+    const parent = await stack.login(username, "report-left-pass-123");
+    // The exit, as year-end progression records it: live access ends now, read-only for 90 days.
+    await stack.pool.query(
+      "UPDATE ppl_student_guardians SET valid_until = now(), historical_access_until = now() + interval '90 days' WHERE student_id = $1 AND status = 'active'",
+      [studentId],
+    );
+    const list = async () => ((await (await stack.call("reporting.child-report-cards", { cookie: parent, params: { studentId } })).json()) as { reportCards: { snapshotId: string }[] }).reportCards.map((card) => card.snapshotId);
+    const pdf = (snapshotId: string) => stack.call("reporting.child-report-card-download", { cookie: parent, params: { studentId, snapshotId } });
+
+    expect(await list()).toEqual([before.snapshotId]);
+    expect((await pdf(before.snapshotId)).status).toBe(200);
+    expect((await stack.call("fees.child-fees", { cookie: parent, params: { studentId } })).status).toBe(403);
+
+    // A release after the exit is not shown, and it replaces the earlier one, so neither is.
+    const after = (await (await generate(admin)).json()) as { snapshotId: string };
+    expect((await stack.call("reporting.school-report-card-publish", { cookie: admin, params: { snapshotId: after.snapshotId } })).status).toBe(200);
+    expect(await list()).toEqual([]);
+    expect((await pdf(after.snapshotId)).status).toBe(403);
+    expect((await pdf(before.snapshotId)).status).toBe(403);
+  });
+
+  it("freezes the school's chosen PDF style on each issued report card", async () => {
+    const params = { collegeId, family: "report_card" };
+    const current = await stack.call("reporting.school-document-format-get", { cookie: admin, params });
+    const { version } = (await current.json()) as { version: number };
+    const firstStyle = { schoolName: "Greenfield School", accentColor: "#176A57", footerText: "Term office copy" };
+    expect((await stack.call("reporting.school-document-format-save", { cookie: admin, params,
+      body: { expectedVersion: version, style: firstStyle } })).status).toBe(200);
+    const first = (await (await generate(admin)).json()) as { snapshotId: string };
+    const before = await stack.call("reporting.school-report-card-download", { cookie: admin, params: { snapshotId: first.snapshotId } });
+    expect(before.status).toBe(200);
+    const beforeBytes = Buffer.from(await before.arrayBuffer());
+
+    const secondStyle = { schoolName: "Greenfield Academy", accentColor: "#AA3311", footerText: "Revised office copy" };
+    expect((await stack.call("reporting.school-document-format-save", { cookie: admin, params,
+      body: { expectedVersion: version + 1, style: secondStyle } })).status).toBe(200);
+    const after = await stack.call("reporting.school-report-card-download", { cookie: admin, params: { snapshotId: first.snapshotId } });
+    expect(Buffer.from(await after.arrayBuffer()).equals(beforeBytes)).toBe(true);
+    const second = (await (await generate(admin)).json()) as { snapshotId: string };
+    const rows = await stack.pool.query("SELECT id, document_style FROM rpt_school_report_cards WHERE id = ANY($1)", [[first.snapshotId, second.snapshotId]]);
+    expect(rows.rows.find((row) => row.id === first.snapshotId)?.document_style).toEqual(firstStyle);
+    expect(rows.rows.find((row) => row.id === second.snapshotId)?.document_style).toEqual(secondStyle);
   });
 });

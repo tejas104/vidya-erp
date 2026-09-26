@@ -46,6 +46,9 @@ const childViewSchema = z.object({
   relationshipType: relationshipTypeSchema,
   status: z.enum(["pending", "active", "restricted", "revoked", "expired"]),
   categories: z.array(z.string()),
+  /** ADR-0027 Decision 9: set after the pupil left — records up to `recordsThrough`, read-only until `readOnlyUntil`. */
+  recordsThrough: z.string().nullable(),
+  readOnlyUntil: z.string().nullable(),
 });
 
 const codeSchema = z.string().trim().min(20).max(40);
@@ -102,6 +105,7 @@ export const guardianRoutes: RouteSpec[] = [
       201: { description: "Invitation issued; `code` is shown once", schema: z.object({ invitation: invitationViewSchema, code: z.string() }) },
       403: { description: "Scope check denied", schema: problemSchema },
       404: { description: "No such student", schema: problemSchema },
+      409: { description: "The pupil has left the school (transferred or graduated)", schema: problemSchema },
     },
   },
   {

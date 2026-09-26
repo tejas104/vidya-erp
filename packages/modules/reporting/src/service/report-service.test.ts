@@ -96,6 +96,37 @@ describe("request → generate → store", () => {
     expect((await service.download(requester, row.id)).state).toBe("forbidden");
   });
 
+  it("generates all attendance-review formats and rechecks the section before download", async () => {
+    const repo = new InMemoryReportsRepo();
+    const store = new MemoryStore();
+    let allowed = true;
+    const service = new ReportService({
+      repo, store, audit: new RecordingAudit(), readModel: new FakeAnalyticsReadModel(),
+      sources: { schoolAttendanceReview: async () => allowed ? {
+        access: "ok", termName: "Term 2", sectionName: "A", academicYear: YEAR,
+        data: { termId: "term_1", sectionId: "sec_1", through: "2026-09-25", calendarVersion: 2, threshold: 75,
+          scheduledDates: ["2026-09-23", "2026-09-24"], unsubmittedDates: ["2026-09-24"],
+          students: [{ studentId: "stu_1", fullName: "Asha Rao", admissionNo: "A-01", enrollmentDates: [{ from: "2026-09-23", to: null }], dateIssue: null, expectedDays: 2, recordedDays: 1, absentDays: 0, missingEntryDates: [], percentageDenominator: 2, percentage: null, shortfall: null }],
+        },
+      } : { access: "forbidden" } },
+    });
+    const owner = principal("school-admin");
+    const params = { kind: "school-attendance-review" as const, sectionId: "sec_1", termId: "term_1", through: "2026-09-25" };
+    for (const format of ["pdf", "xlsx", "csv"] as const) {
+      const row = await service.createRequest(owner, params, format, YEAR);
+      await service.run(row.id, log);
+      const bytes = store.objects.get(`reports/${row.id}.${format}`)!;
+      expect(bytes.length).toBeGreaterThan(100);
+      if (format === "pdf") expect(new TextDecoder().decode(bytes.slice(0, 5))).toBe("%PDF-");
+      if (format === "xlsx") expect(new TextDecoder().decode(bytes.slice(0, 2))).toBe("PK");
+      if (format === "csv") expect(new TextDecoder().decode(bytes)).toContain("Asha Rao");
+      expect((await service.download(owner, row.id)).state).toBe("ok");
+      allowed = false;
+      expect((await service.download(owner, row.id)).state).toBe("forbidden");
+      allowed = true;
+    }
+  });
+
   it("fails closed (audited) when the requester's scope no longer yields content at generation", async () => {
     const read = new FakeAnalyticsReadModel();
     read.student = okStudent;

@@ -1,7 +1,7 @@
 import type { AccessAction, OrgPath, Principal, RouteContext, RouteHandler, RouteResult, ScopeChecker } from "@vidya/platform";
 import { UsernameTakenError } from "@vidya/module-identity";
 import type { RelationshipType } from "../guardian-contract/types";
-import type { InvitationRow, RelationshipRow } from "./repo";
+import { PupilHasLeftError, type InvitationRow, type RelationshipRow } from "./repo";
 import { InvitationRefusedError, type GuardianService, type StudentBrief } from "./service";
 
 export interface GuardianHandlerDeps {
@@ -85,7 +85,13 @@ export function createGuardianHandlers(deps: GuardianHandlerDeps): Record<string
     };
     const scope = await staffScope(ctx, studentId, "update");
     if (!scope.ok) return scope.result;
-    const issued = await deps.guardians.issueInvitation({ ...body, student: scope.student, issuedBy: (ctx.principal as Principal).id });
+    let issued;
+    try {
+      issued = await deps.guardians.issueInvitation({ ...body, student: scope.student, issuedBy: (ctx.principal as Principal).id });
+    } catch (error) {
+      if (error instanceof PupilHasLeftError) return { status: 409, body: { message: error.message } };
+      throw error;
+    }
     return {
       status: 201,
       body: { invitation: invitationView(issued.invitation), code: issued.code },

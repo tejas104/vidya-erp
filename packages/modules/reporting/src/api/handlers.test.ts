@@ -34,6 +34,7 @@ const CLASS_PATH: OrgPath = { collegeId: "col_1", departmentId: "dep_1", classId
  *  reached by the class-credentials handler; every other member is unused
  *  filler so this satisfies the interface. */
 class FakePeopleDirectory implements PeopleDirectory {
+  async certificateSourceInTransaction() { return null; }
   roster: { studentId: string; admissionNo: string; fullName: string; identityUserId: string | null }[] = [
     { studentId: "stu_1", admissionNo: "A001", fullName: "Meera Nair", identityUserId: null },
     { studentId: "stu_2", admissionNo: "A002", fullName: "Ravi Kumar", identityUserId: "idn_existing" },

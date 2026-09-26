@@ -21,9 +21,9 @@ describe("HelpPanel", () => {
   });
 
   it("shows the missing-help state for an uncovered school slug without using college content", () => {
-    render(<HelpEditionProvider edition="school"><HelpPanel slug="analytics" open onClose={() => {}} /></HelpEditionProvider>);
+    render(<HelpEditionProvider edition="school"><HelpPanel slug="exams" open onClose={() => {}} /></HelpEditionProvider>);
     expect(screen.getByText(/no help yet/i)).toBeVisible();
-    expect(screen.queryByRole("heading", { name: /reading the analytics screen/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: /setting up exams/i })).not.toBeInTheDocument();
   });
 
   it("renders nothing when closed", () => {

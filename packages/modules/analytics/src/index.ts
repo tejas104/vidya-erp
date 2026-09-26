@@ -128,3 +128,4 @@ export function createAnalyticsModule(deps: AnalyticsModuleDeps): RuntimeModule<
   assertModuleWiring(module);
   return module;
 }
+export { analyticsHasPupilYearRecords } from "./progression-dependencies";

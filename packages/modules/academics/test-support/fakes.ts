@@ -61,6 +61,7 @@ export const ORG = {
 } as const;
 
 export class FakePeopleDirectory implements PeopleDirectory {
+  async certificateSourceInTransaction() { return null; }
   async sectionPath(sectionId: string): Promise<OrgPath | null> {
     if (sectionId === ORG.sectionA || sectionId === ORG.sectionB) {
       return {

@@ -12,4 +12,6 @@ Use **Family** after the school invites you and you activate your guardian accou
 6. Read **School notices** for currently published school and class messages. Staff-only messages do not appear here.
 7. To link another child, enter the invitation code supplied by the school. A link awaiting staff verification will say so before any records appear.
 
+When a child leaves the school (a transfer or graduation), their card says so. For the window the school recorded at exit (90 days by default), you can still read their attendance and published report cards as they stood on the leaving day. A school may set this window to zero days. Fees, notices, marks and the timetable close on the leaving day. Changing the school setting later does not change your recorded exit date.
+
 If a section cannot load, use its **Retry** button. If a child or category is missing, contact the school office to check the relationship or invitation; another child's records are never opened by guessing a link.

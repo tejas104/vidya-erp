@@ -31,6 +31,10 @@ describe("school attendance review", () => {
     expect(await screen.findByText("Asha Rao")).toBeInTheDocument();
     expect(screen.getByText("Needs data")).toBeInTheDocument();
     expect(screen.getByText("Enrollment dates needed")).toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "Export attendance review" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Prepare PDF" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Prepare Excel" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Prepare CSV" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Open this register →" })).toHaveAttribute("href", "/manage/attendance?sectionId=section_1&date=2026-09-22");
   });
 });

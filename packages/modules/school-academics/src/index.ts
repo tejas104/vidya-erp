@@ -24,7 +24,7 @@ import { createAssessmentTypesHandlers } from "./assessment-types-handlers";
 import { createSchoolMarksRepo } from "./marks-repo";
 import { createSchoolMarksHandlers } from "./marks-handlers";
 import type { SchoolGradeScales } from "./marks-contracts";
-import { createAttendanceReviewHandlers } from "./attendance-review-handlers";
+import { createAttendanceReviewHandlers, createAttendanceReviewSource, type AttendanceReviewSource } from "./attendance-review-handlers";
 import {
   createSchoolAcademicsReadModel,
   type SchoolAcademicsReadModel,
@@ -61,6 +61,7 @@ export {
   DEFAULT_WITHIN_TYPE_AGGREGATION,
   schoolCalculationPolicy,
 } from "./report-source";
+export type { AttendanceReviewSource, AttendanceReviewSourceResult } from "./attendance-review-handlers";
 export type {
   SchoolAcademicsReadModel,
   SchoolSubjectSource,
@@ -80,6 +81,7 @@ export interface SchoolAcademicsModuleDeps {
  *  reporting module builds report cards from (S01 integration seam). */
 export interface SchoolAcademicsService {
   readonly readModel: SchoolAcademicsReadModel;
+  readonly attendanceReview: AttendanceReviewSource;
 }
 
 export function createSchoolAcademicsModule(
@@ -87,6 +89,8 @@ export function createSchoolAcademicsModule(
 ): RuntimeModule<SchoolAcademicsService> {
   const repo = createTermsRepo(deps.db);
   const types = createAssessmentTypesRepo(deps.db);
+  const attendanceDeps = { terms: repo, directory: deps.peopleDirectory, scopeChecker: deps.scopeChecker, academics: deps.academicsReadModel };
+  const attendanceReview = createAttendanceReviewSource(attendanceDeps);
   const module: RuntimeModule<SchoolAcademicsService> = {
     definition: schoolAcademicsModuleDefinition,
     handlers: { ...createSchoolAcademicsHandlers({
@@ -95,11 +99,12 @@ export function createSchoolAcademicsModule(
       scopeChecker: deps.scopeChecker,
     }), ...createAssessmentTypesHandlers({ terms: repo, types, scopeChecker: deps.scopeChecker }),
     ...createSchoolMarksHandlers({ repo: createSchoolMarksRepo(deps.db), terms: repo, types, directory: deps.peopleDirectory, gradeScales: deps.gradeScales, scopeChecker: deps.scopeChecker }),
-    ...createAttendanceReviewHandlers({ terms: repo, directory: deps.peopleDirectory, scopeChecker: deps.scopeChecker, academics: deps.academicsReadModel }) },
+    ...createAttendanceReviewHandlers(attendanceDeps, attendanceReview) },
     jobProcessors: {},
     readinessChecks: [],
-    service: { readModel: createSchoolAcademicsReadModel(deps.db) },
+    service: { readModel: createSchoolAcademicsReadModel(deps.db), attendanceReview },
   };
   assertModuleWiring(module);
   return module;
 }
+export { schoolAcademicsHasPupilYearRecords } from "./progression-dependencies";

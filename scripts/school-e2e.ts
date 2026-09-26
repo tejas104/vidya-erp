@@ -147,6 +147,18 @@ async function run(): Promise<void> {
   }
 }
 
+async function runIntegration(filters: string[]): Promise<void> {
+  await access(envFile);
+  await stat(overrideFile);
+  try {
+    await compose(["up", "-d", "postgres", "redis", "minio"]);
+    await Promise.all([waitForHealth("postgres"), waitForHealth("redis"), waitForHealth("minio")]);
+    await command("pnpm", ["test:integration", ...filters], testEnv);
+  } finally {
+    await cleanup();
+  }
+}
+
 const action = process.argv[2] ?? "run";
 if (action === "run") {
   run().catch((error: unknown) => {
@@ -158,7 +170,12 @@ if (action === "run") {
     console.error("school E2E cleanup failed:", error instanceof Error ? error.message : error);
     process.exit(1);
   });
+} else if (action === "integration") {
+  runIntegration(process.argv.slice(3)).catch((error: unknown) => {
+    console.error("school integration run failed:", error instanceof Error ? error.message : error);
+    process.exit(1);
+  });
 } else {
-  console.error("usage: tsx scripts/school-e2e.ts <run|cleanup>");
+  console.error("usage: tsx scripts/school-e2e.ts <run|integration|cleanup>");
   process.exit(2);
 }

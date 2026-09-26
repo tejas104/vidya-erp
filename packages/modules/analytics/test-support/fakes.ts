@@ -127,6 +127,7 @@ export class FakeAcademicsRead implements AcademicsReadModel {
 }
 
 export class FakeDirectory implements PeopleDirectory {
+  async certificateSourceInTransaction() { return null; }
   readonly positions = new Map<string, OrgPath>();
   readonly names = new Map<string, string>([
     [ORG.collegeId, "Test College"],

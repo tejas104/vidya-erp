@@ -2,6 +2,7 @@ import type { AnalyticsReadModel } from "@vidya/module-analytics";
 import type { GradeCardSource } from "@vidya/module-results";
 import type { HallTicketSource } from "@vidya/module-exams";
 import type { StaffAttendanceSource } from "@vidya/module-people";
+import type { AttendanceReviewSource } from "@vidya/module-school-academics";
 import type { Principal } from "@vidya/platform";
 
 /**
@@ -14,6 +15,7 @@ export type ReportKind =
   | "student-performance"
   | "section-attendance"
   | "teacher-attendance"
+  | "school-attendance-review"
   | "marks-summary"
   | "at-risk"
   | "grade-card"
@@ -25,6 +27,7 @@ export type ReportParams =
   | { readonly kind: "student-performance"; readonly studentId: string }
   | { readonly kind: "section-attendance"; readonly sectionId: string }
   | { readonly kind: "teacher-attendance"; readonly collegeId: string; readonly date: string }
+  | { readonly kind: "school-attendance-review"; readonly sectionId: string; readonly termId: string; readonly through: string }
   | { readonly kind: "marks-summary"; readonly classId: string }
   | { readonly kind: "at-risk"; readonly level: ScopeLevel; readonly nodeId: string }
   | { readonly kind: "grade-card"; readonly studentId: string }
@@ -35,6 +38,7 @@ export interface ReportSources {
   readonly gradeCard?: GradeCardSource;
   readonly hallTicket?: HallTicketSource;
   readonly teacherAttendance?: StaffAttendanceSource;
+  readonly schoolAttendanceReview?: AttendanceReviewSource;
 }
 
 export interface ReportTable {
@@ -103,6 +107,11 @@ export async function canProduce(
       if (sources.teacherAttendance === undefined) return "not-found";
       const result = await sources.teacherAttendance(principal, params.collegeId, params.date);
       return result.access;
+    }
+    case "school-attendance-review": {
+      if (sources.schoolAttendanceReview === undefined) return "not-found";
+      const result = await sources.schoolAttendanceReview(principal, params.sectionId, params.termId, params.through, academicYear);
+      return result.access === "unconfigured" ? "not-found" : result.access;
     }
     case "student-performance": {
       const perf = await readModel.studentPerformance(principal, params.studentId, academicYear);
@@ -235,6 +244,39 @@ export async function collectReport(
         ],
         tables: [{ caption: "Daily teacher register", columns: ["Staff number", "Teacher", "Employment status", "Presence", "Note", "Recorded at"], rows }],
         notes: ["On leave is a manual presence status; it does not approve a leave request."],
+        rowCount: rows.length,
+      };
+    }
+
+    case "school-attendance-review": {
+      if (sources.schoolAttendanceReview === undefined) return null;
+      const result = await sources.schoolAttendanceReview(principal, params.sectionId, params.termId, params.through, academicYear);
+      if (result.access !== "ok") return null;
+      const review = result.data;
+      const rows = review.students.map((student) => [
+        student.admissionNo,
+        student.fullName,
+        student.enrollmentDates.map((window) => `${window.from ?? "Date needed"} to ${window.to ?? "current"}`).join("; "),
+        student.expectedDays === null ? "Withheld" : `${student.recordedDays} / ${student.expectedDays}; ${student.absentDays} absent; ${student.missingEntryDates.length} missing entries`,
+        student.dateIssue ?? (student.percentage === null ? "Awaiting complete data" : `${student.percentage.toFixed(2)}% — ${student.shortfall ? "Below threshold" : "On track"}`),
+      ]);
+      return {
+        ...base,
+        kind: params.kind,
+        title: "School attendance review",
+        subtitle: `${result.termName} · ${result.sectionName} · through ${review.through}`,
+        stats: [
+          { label: "Threshold", value: `${review.threshold}%` },
+          { label: "Scheduled days", value: String(review.scheduledDates.length) },
+          { label: "Registers missing", value: String(review.unsubmittedDates.length) },
+          { label: "Dates to verify", value: String(review.students.filter((student) => student.dateIssue !== null).length) },
+          { label: "Below threshold", value: String(review.students.filter((student) => student.shortfall === true).length) },
+        ],
+        tables: [
+          { caption: "Pupil review", columns: ["Admission number", "Pupil", "Enrolled in section", "Recorded / expected", "Attendance review"], rows },
+          { caption: "Unsubmitted daily registers", columns: ["Date"], rows: review.unsubmittedDates.map((date) => [date]) },
+        ],
+        notes: ["A missing register or pupil entry is not an absence. Percentages remain unavailable while evidence or enrollment dates need verification.", `Calendar version ${review.calendarVersion}; the export reflects data at generation time.`],
         rowCount: rows.length,
       };
     }

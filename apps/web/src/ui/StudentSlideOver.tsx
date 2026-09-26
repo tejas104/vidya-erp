@@ -5,6 +5,7 @@ import { api, type DocumentKind, type StudentDocument } from "@/ui/api";
 import { formatPaise } from "@/ui/money";
 import type { StudentFlags } from "@/ui/StudentCard";
 import { ago } from "@/ui/time";
+import { useHelpEdition } from "@/ui/help/HelpEditionContext";
 import styles from "./StudentSlideOver.module.css";
 
 const DOC_KINDS: { value: DocumentKind; label: string }[] = [
@@ -82,6 +83,8 @@ export function StudentSlideOver({
   onSetStatus?: (status: string) => void;
 }) {
   const open = student !== null;
+  // School exits go through Promotion and exits (N6), which records the leaving date and family access.
+  const lifecycle = useHelpEdition() === "school" ? LIFECYCLE.filter((o) => o.value !== "transferred" && o.value !== "alumni") : LIFECYCLE;
   const [tab, setTab] = useState<string>("overview");
   const [docs, setDocs] = useState<StudentDocument[] | null>(null);
   /** outstanding dues in paise; null = loading; "na" = couldn't read (out of scope). */
@@ -215,10 +218,10 @@ export function StudentSlideOver({
                     <label className="field" style={{ margin: 0, flex: 1, minWidth: 160 }}>
                       <span style={{ fontSize: 12 }}>Change status (audited, never deleted)</span>
                       <select value={student.status} onChange={(e) => onSetStatus?.(e.target.value)}>
-                        {LIFECYCLE.map((o) => (
+                        {lifecycle.map((o) => (
                           <option key={o.value} value={o.value}>{o.label}</option>
                         ))}
-                        {LIFECYCLE.every((o) => o.value !== student.status) ? (
+                        {lifecycle.every((o) => o.value !== student.status) ? (
                           <option value={student.status}>{student.status}</option>
                         ) : null}
                       </select>

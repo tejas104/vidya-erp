@@ -208,6 +208,7 @@ export type ReportParams =
   | { kind: "student-performance"; studentId: string }
   | { kind: "section-attendance"; sectionId: string }
   | { kind: "teacher-attendance"; collegeId: string; date: string }
+  | { kind: "school-attendance-review"; sectionId: string; termId: string; through: string }
   | { kind: "marks-summary"; classId: string }
   | { kind: "at-risk"; level: string; nodeId: string }
   | { kind: "grade-card"; studentId: string }
@@ -353,14 +354,53 @@ export interface StudentDetailView extends Omit<StudentView, "enrollment"> {
     className: string; academicYear: string;
   } | null;
 }
+/** N6: the applied result recorded on the enrollment row it concluded. */
+export type EnrollmentOutcome = "promoted" | "detained" | "transferred_out" | "graduated";
+export type ProgressionChoice = "promote" | "detain" | "transfer_out" | "graduate";
+export interface ProgressionPlan {
+  workflow?: "single_exit";
+  sectionId: string;
+  academicYear: string;
+  endsOn: string;
+  targetAcademicYear?: string;
+  startsOn?: string;
+  promoteToSectionId?: string;
+  detainInSectionId?: string;
+  pupils: { studentId: string; enrollmentId: string; outcome: ProgressionChoice; reason?: string }[];
+  expectedHistoryPolicyVersion?: number;
+}
+export interface GuardianHistoryPolicy { days: number; version: number }
+export interface ProgressionPreview {
+  sectionId: string;
+  academicYear: string;
+  endsOn: string;
+  targetAcademicYear: string | null;
+  startsOn: string | null;
+  familyAccess: { liveUntil: string; historicalAccessUntil: string; days: number; policyVersion: number } | null;
+  pupils: {
+    studentId: string; admissionNo: string; fullName: string; enrollmentId: string; outcome: ProgressionChoice;
+    statusBefore: string; statusAfter: StudentStatus; targetSectionId: string | null; reason: string | null;
+    familyLinks: number; problems: string[];
+  }[];
+  undecided: { studentId: string; admissionNo: string; fullName: string }[];
+  problems: string[];
+  ready: boolean;
+}
+export interface ProgressionResult {
+  runId: string;
+  preview: ProgressionPreview;
+  pupils: { studentId: string; outcome: EnrollmentOutcome; closedEnrollmentId: string; newEnrollmentId: string | null; statusBefore: string; statusAfter: StudentStatus; familyAccessChanged: number; invitationsRevoked: number }[];
+}
 export interface StudentHistory {
   enrollments: {
     id: string; sectionId: string; sectionName: string; classId: string | null;
     className: string; academicYear: string; status: string; createdAt: string; updatedAt: string;
     startsOn?: string | null; endsOn?: string | null;
+    outcome?: EnrollmentOutcome | null; outcomeReason?: string | null;
   }[];
   statusChanges: { from: StudentStatus; to: StudentStatus; occurredAt: string; actorId: string | null }[];
   events: { action: string; actorId: string | null; occurredAt: string }[];
+  correctedEnrollmentIds: string[];
 }
 export interface StudentAttendance {
   sessions: { sessionId: string; sectionId: string; heldOn: string; slot: string; status: AttendanceStatus }[];
@@ -801,6 +841,9 @@ export interface GuardianChild {
   relationshipType: GuardianRelationshipType;
   status: GuardianRelationshipStatus;
   categories: string[];
+  /** Set after the pupil left (ADR-0027 Decision 9): records up to this instant, readable until readOnlyUntil. */
+  recordsThrough?: string | null;
+  readOnlyUntil?: string | null;
 }
 export interface GuardianRelationshipView {
   id: string;
@@ -906,6 +949,12 @@ export const api = {
   // people — org
   colleges: () => get<{ colleges: CollegeView[] }>("/api/v1/people/colleges"),
   collegeTree: (collegeId: string) => get<OrgTree>(`/api/v1/people/colleges/${encodeURIComponent(collegeId)}/tree`),
+  schoolDocumentFormat: (collegeId: string, family: "report_card" | "attendance_review" | "certificate") =>
+    get<{ family: string; version: number; style: { schoolName: string; accentColor: string; footerText: string }; sample: { filename: string; contentType: string } | null }>(`/api/v1/school/document-formats/${encodeURIComponent(collegeId)}/${family}`),
+  saveSchoolDocumentFormat: (collegeId: string, family: "report_card" | "attendance_review" | "certificate", body: { expectedVersion: number; style: { schoolName: string; accentColor: string; footerText: string }; sample?: { filename: string; contentType: "application/pdf" | "application/vnd.openxmlformats-officedocument.wordprocessingml.document"; dataBase64: string } }) =>
+    put<{ family: string; version: number; style: { schoolName: string; accentColor: string; footerText: string }; sample: { filename: string; contentType: string } | null }>(`/api/v1/school/document-formats/${encodeURIComponent(collegeId)}/${family}`, body),
+  schoolDocumentFormatSampleUrl: (collegeId: string, family: "report_card" | "attendance_review" | "certificate") =>
+    `/api/v1/school/document-formats/${encodeURIComponent(collegeId)}/${family}/sample`,
   createDepartment: (body: { collegeId: string; name: string; code: string }) =>
     post<DepartmentView>("/api/v1/people/departments", body),
   createClass: (body: { departmentId: string; name: string; code: string }) =>
@@ -940,6 +989,16 @@ export const api = {
     post<{ enrollmentId: string; previousEnrollmentId: string | null }>(
       `/api/v1/people/students/${encodeURIComponent(studentId)}/enrollment`,
       body,
+    ),
+  progressionPreview: (plan: ProgressionPlan) => post<ProgressionPreview>("/api/v1/people/progression/preview", plan),
+  progressionApply: (plan: ProgressionPlan) => post<ProgressionResult>("/api/v1/people/progression/apply", plan),
+  guardianHistoryPolicy: (collegeId: string) => get<GuardianHistoryPolicy>(`/api/v1/people/colleges/${encodeURIComponent(collegeId)}/guardian-history-policy`),
+  updateGuardianHistoryPolicy: (collegeId: string, body: { days: number; expectedVersion: number }) =>
+    patch<GuardianHistoryPolicy>(`/api/v1/people/colleges/${encodeURIComponent(collegeId)}/guardian-history-policy`, body),
+  progressionReverse: (studentId: string, enrollmentId: string, reason: string) =>
+    post<{ correctionId: string; reinstatedEnrollmentId: string }>(
+      `/api/v1/people/students/${encodeURIComponent(studentId)}/enrollments/${encodeURIComponent(enrollmentId)}/progression-reversal`,
+      { reason },
     ),
   correctEnrollmentDates: (studentId: string, enrollmentId: string, body: { startsOn: string; endsOn: string | null; expectedStartsOn: string | null; expectedEndsOn: string | null }) =>
     patch<{ enrollmentId: string; startsOn: string; endsOn: string | null }>(`/api/v1/people/students/${encodeURIComponent(studentId)}/enrollments/${encodeURIComponent(enrollmentId)}/dates`, body),

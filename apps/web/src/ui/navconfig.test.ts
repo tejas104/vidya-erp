@@ -17,6 +17,14 @@ describe("navConfig job-shaped regroup", () => {
     expect(links(["admin"], "college")).not.toContain("/manage/terms");
     expect(links(["teacher"], "school")).not.toContain("/manage/terms");
   });
+  it("shows Promotion & exits to school administrators only", () => {
+    const hrefs = (roles: Parameters<typeof visibleNav>[0], edition: "college" | "school") =>
+      visibleNav(roles, edition).flatMap((group) => group.entries).map((entry) => entry.href);
+    expect(hrefs(["admin"], "school")).toContain("/manage/progression");
+    for (const role of ["principal", "class_teacher", "teacher", "accountant"] as const) expect(hrefs([role], "school")).not.toContain("/manage/progression");
+    expect(hrefs(["admin"], "college")).not.toContain("/manage/progression");
+  });
+
   it("shows Report cards to school administrators, principals, and class teachers", () => {
     const links = (roles: Parameters<typeof visibleNav>[0], edition: "college" | "school") => visibleNav(roles, edition).flatMap((group) => group.entries);
     expect(links(["admin"], "school")).toEqual(expect.arrayContaining([expect.objectContaining({ href: "/manage/report-cards", label: "Report cards" })]));

@@ -1,5 +1,6 @@
 import PDFDocument from "pdfkit";
 import type { ReportData } from "../report-data";
+import { DEFAULT_DOCUMENT_STYLE, type DocumentStyle } from "../school/document-format";
 
 /**
  * Renders a report to PDF with pdfkit — pure JS, built-in fonts, no headless
@@ -12,9 +13,8 @@ import type { ReportData } from "../report-data";
 const INK = "#1a2233";
 const MUTED = "#565c68";
 const RULE = "#d6cfbc";
-const ACCENT = "#b23a2e";
 
-export function renderPdf(data: ReportData): Promise<Buffer> {
+export function renderPdf(data: ReportData, style: DocumentStyle = DEFAULT_DOCUMENT_STYLE): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ size: "A4", margin: 48, info: { Title: data.title } });
     const chunks: Buffer[] = [];
@@ -33,7 +33,7 @@ export function renderPdf(data: ReportData): Promise<Buffer> {
     };
 
     // Masthead
-    doc.fillColor(ACCENT).fontSize(9).font("Helvetica-Bold").text("VIDYA", left, doc.y, { characterSpacing: 2 });
+    doc.fillColor(style.accentColor).fontSize(9).font("Helvetica-Bold").text(style.schoolName, left, doc.y, { characterSpacing: 2 });
     doc.moveDown(0.2);
     doc.fillColor(INK).fontSize(20).font("Helvetica-Bold").text(data.title, { lineGap: 1 });
     doc.fillColor(MUTED).fontSize(13).font("Helvetica").text(data.subtitle);
@@ -103,6 +103,11 @@ export function renderPdf(data: ReportData): Promise<Buffer> {
       }
     }
 
+    if (style.footerText) {
+      ensureSpace(28);
+      doc.moveDown(0.5);
+      doc.fillColor(MUTED).fontSize(8).font("Helvetica").text(style.footerText, left, doc.y, { width });
+    }
     doc.end();
   });
 }

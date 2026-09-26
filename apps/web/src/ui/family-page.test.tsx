@@ -144,6 +144,17 @@ describe("family page (ADR-0027)", () => {
     expect(api.childFees).not.toHaveBeenCalledWith("stu-2");
   });
 
+  it("says when a child has left and how long read-only records stay open", async () => {
+    mocked(api.guardianChildren).mockResolvedValue({ children: [parentOf({
+      categories: ["attendance", "report-card"], recordsThrough: "2027-04-01T00:00:00.000Z", readOnlyUntil: "2027-06-30T00:00:00.000Z",
+    })] });
+    render(<FamilyPage />);
+    expect(await screen.findByText(/Asha Kulkarni has left the school\. Through 29 June 2027 you can read their attendance and published report cards as they stood on 31 March 2027\./)).toBeInTheDocument();
+    await waitFor(() => expect(api.childAttendance).toHaveBeenCalled());
+    expect(api.childToday).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: "Fees" })).not.toBeInTheDocument();
+  });
+
   it("explains a pending link instead of showing empty records", async () => {
     mocked(api.guardianChildren).mockResolvedValue({ children: [parentOf({ status: "pending" })] });
     render(<FamilyPage />);

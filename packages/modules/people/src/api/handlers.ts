@@ -3,6 +3,7 @@ import {
   type AccessAction,
   type AppConfig,
   type ObjectStorageClient,
+  type OrgPath,
   type Principal,
   type ResourceRef,
   type RouteContext,
@@ -21,6 +22,8 @@ import { usernameFromCode } from "../ids";
 import type { OrgService } from "../service/org-service";
 import { InvalidEnrollmentDatesError, PeopleService, UnknownReferenceError } from "../service/people-service";
 import type { AssignmentsService } from "../service/assignments-service";
+import { ProgressionBlockedError, type ProgressionPlan, type ProgressionService } from "../service/progression-service";
+import { GuardianHistoryPolicyConflictError, PROGRESSION_AUDIT, ProgressionConflictError, ProgressionReversalConflictError } from "../repo/progression-repo";
 import type { CredentialIssuer, ImportService } from "../service/import-service";
 import { DuplicateCodeError, UnitInUseError, type OrgUnitType } from "../repo/org-repo";
 import { DuplicateAssignmentError, DuplicatePersonError, EnrollmentConflictError, type StudentStatus } from "../repo/people-repo";
@@ -42,6 +45,7 @@ export interface PeopleHandlerDeps {
   readonly people: PeopleService;
   readonly staffAttendance: StaffAttendanceRepo;
   readonly assignments: AssignmentsService;
+  readonly progression: ProgressionService;
   readonly imports: ImportService;
   readonly scopeChecker: ScopeChecker;
   readonly storage: { readonly client: ObjectStorageClient; readonly bucket: string };
@@ -554,20 +558,25 @@ export function createPeopleHandlers(deps: PeopleHandlerDeps): Record<string, Ro
       ...rows.map((row) => allEvents("enrollment", row.id)),
     ]);
     const rawEvents = eventGroups.flat().sort((a, b) => b.id - a.id);
+    const correctedEnrollmentIds = rawEvents.flatMap((event) => {
+      if (event.action !== PROGRESSION_AUDIT.reversed.action || typeof event.details !== "object" || event.details === null) return [];
+      const id = (event.details as { sourceEnrollmentId?: unknown }).sourceEnrollmentId;
+      return typeof id === "string" ? [id] : [];
+    });
     const events = rawEvents.map((event) => ({
       action: event.action,
       actorId: event.actorId,
       occurredAt: event.occurredAt.toISOString(),
     }));
     const statusChanges = rawEvents.flatMap((event) => {
-      if (event.action !== "people.student-updated" || typeof event.details !== "object" || event.details === null) return [];
+      if ((event.action !== "people.student-updated" && event.action !== PROGRESSION_AUDIT.pupil.action && event.action !== PROGRESSION_AUDIT.reversed.action) || typeof event.details !== "object" || event.details === null) return [];
       const detail = event.details as { before?: { status?: unknown }; after?: { status?: unknown } };
       const from = studentStatusSchema.safeParse(detail.before?.status);
       const to = studentStatusSchema.safeParse(detail.after?.status);
       if (!from.success || !to.success || from.data === to.data) return [];
       return [{ from: from.data, to: to.data, occurredAt: event.occurredAt.toISOString(), actorId: event.actorId }];
     });
-    return { status: 200, body: { enrollments, statusChanges, events } };
+    return { status: 200, body: { enrollments, statusChanges, events, correctedEnrollmentIds } };
   };
 
   const studentUpdate: RouteHandler = async (ctx) => {
@@ -593,6 +602,12 @@ export function createPeopleHandlers(deps: PeopleHandlerDeps): Record<string, Ro
     });
     if (!scope.ok) {
       return scope.result;
+    }
+    // N6: a school exit ends the enrollment and sets the family's read-only
+    // window (ADR-0027 Decision 9); a bare status flip would do neither.
+    if (deps.edition === "school" && body.status !== undefined && body.status !== student.status &&
+        (body.status === "transferred" || body.status === "alumni" || student.status === "transferred" || student.status === "alumni")) {
+      return { status: 409, body: { message: "Record an exit under Promotion and exits. Correct a mistaken exit from the pupil's History tab so enrollment and family access change together." } };
     }
     const updated = await deps.people.updateStudent(params.studentId, body);
     if (updated === null) {
@@ -721,6 +736,144 @@ export function createPeopleHandlers(deps: PeopleHandlerDeps): Record<string, Ro
       };
     } catch (error) {
       return mapKnownErrors(error) ?? Promise.reject(error);
+    }
+  };
+
+  /**
+   * N6: the batch touches the source section's enrollments and creates rows
+   * in the target sections, so the caller needs both scopes. Exits also end
+   * guardian access, which is why the route is administrator-only (ADR-0027
+   * Decision 8 keeps the safety-critical direction with the admin).
+   */
+  async function progressionScope(ctx: RouteContext, plan: ProgressionPlan): Promise<{ ok: true; org: OrgPath } | { ok: false; result: RouteResult }> {
+    const principal = ctx.principal as Principal;
+    const source = await deps.org.pathForSection(plan.sectionId);
+    if (source === null) return { ok: false, result: notFound() };
+    const sourceScope = checkScope(deps.scopeChecker, ctx, principal, "update", { module: "people", resourceType: "enrollment", org: source });
+    if (!sourceScope.ok) return sourceScope;
+    for (const targetId of new Set([plan.promoteToSectionId, plan.detainInSectionId].filter((id): id is string => id !== undefined))) {
+      const target = await deps.org.pathForSection(targetId);
+      if (target === null || target.collegeId !== source.collegeId) return { ok: false, result: notFound() };
+      const targetScope = checkScope(deps.scopeChecker, ctx, principal, "create", { module: "people", resourceType: "enrollment", org: target });
+      if (!targetScope.ok) return targetScope;
+    }
+    return { ok: true, org: source };
+  }
+
+  const progressionPreview: RouteHandler = async (ctx) => {
+    const plan = ctx.request.body as ProgressionPlan;
+    const scope = await progressionScope(ctx, plan);
+    if (!scope.ok) return scope.result;
+    const preview = await deps.progression.preview(plan);
+    const counts: Record<string, number> = {};
+    for (const pupil of preview.pupils) counts[pupil.outcome] = (counts[pupil.outcome] ?? 0) + 1;
+    return {
+      status: 200,
+      body: preview,
+      audit: { org: scope.org, resourceId: plan.sectionId, details: { workflow: plan.workflow ?? "year_end", academicYear: plan.academicYear, targetAcademicYear: plan.targetAcademicYear ?? null, counts, ready: preview.ready } },
+    };
+  };
+
+  const guardianHistoryPolicyGet: RouteHandler = async (ctx) => {
+    if (deps.edition !== "school") return notFound();
+    const { collegeId } = ctx.request.params as { collegeId: string };
+    const path = await deps.org.pathForUnit("college", collegeId);
+    if (!path) return notFound();
+    const scope = checkScope(deps.scopeChecker, ctx, ctx.principal as Principal, "read", {
+      module: "people", resourceType: "college", org: path,
+    });
+    if (!scope.ok) return scope.result;
+    const policy = await deps.progression.getHistoryPolicy(collegeId);
+    return policy ? { status: 200, body: policy } : notFound();
+  };
+
+  const guardianHistoryPolicyUpdate: RouteHandler = async (ctx) => {
+    if (deps.edition !== "school") return notFound();
+    const principal = ctx.principal as Principal;
+    const { collegeId } = ctx.request.params as { collegeId: string };
+    const { days, expectedVersion } = ctx.request.body as { days: number; expectedVersion: number };
+    const path = await deps.org.pathForUnit("college", collegeId);
+    if (!path) return notFound();
+    const scope = checkScope(deps.scopeChecker, ctx, principal, "update", {
+      module: "people", resourceType: "college", org: path,
+    });
+    if (!scope.ok) return scope.result;
+    try {
+      const updated = await deps.progression.updateHistoryPolicy({
+        collegeId, days, expectedVersion,
+        attribution: { requestId: ctx.requestId, actorType: principal.kind, actorId: principal.id },
+      });
+      if (!updated) return notFound();
+      return {
+        status: 200, body: updated.policy,
+        audit: { org: path, resourceId: collegeId, persisted: { kind: "in-transaction", receipt: updated.receipt } },
+      };
+    } catch (error) {
+      if (error instanceof GuardianHistoryPolicyConflictError) return { status: 409, body: { message: error.message } };
+      throw error;
+    }
+  };
+
+  const progressionApply: RouteHandler = async (ctx) => {
+    const principal = ctx.principal as Principal;
+    const plan = ctx.request.body as ProgressionPlan;
+    const scope = await progressionScope(ctx, plan);
+    if (!scope.ok) return scope.result;
+    try {
+      const applied = await deps.progression.apply(plan, scope.org, { requestId: ctx.requestId, actorType: principal.kind, actorId: principal.id });
+      return {
+        status: 200,
+        body: { runId: applied.runId, preview: applied.preview, pupils: applied.pupils },
+        // ADR-0026: every pupil's event and the batch event committed with the moves.
+        audit: { org: scope.org, resourceId: applied.runId, persisted: { kind: "in-transaction", receipt: applied.receipt } },
+      };
+    } catch (error) {
+      if (error instanceof ProgressionBlockedError) return { status: 422, body: { message: error.message, preview: error.preview } };
+      if (error instanceof ProgressionConflictError) return { status: 409, body: { message: error.message } };
+      if (error instanceof GuardianHistoryPolicyConflictError) return { status: 409, body: { message: error.message } };
+      throw error;
+    }
+  };
+
+  const progressionReverse: RouteHandler = async (ctx) => {
+    const principal = ctx.principal as Principal;
+    const { studentId, enrollmentId } = ctx.request.params as { studentId: string; enrollmentId: string };
+    const { reason } = ctx.request.body as { reason: string };
+    const student = await deps.people.getStudent(studentId);
+    if (!student) return notFound();
+    const studentScope = checkScope(deps.scopeChecker, ctx, principal, "update", {
+      module: "people", resourceType: "student", org: { collegeId: student.collegeId },
+    });
+    if (!studentScope.ok) return studentScope.result;
+    const enrollments = await deps.people.listEnrollments(studentId);
+    const source = enrollments.find((row) => row.id === enrollmentId);
+    if (!source) return notFound();
+    const path = await deps.org.pathForSection(source.sectionId);
+    if (!path || path.collegeId !== student.collegeId) return notFound();
+    for (const action of ["update", "create"] as const) {
+      const scope = checkScope(deps.scopeChecker, ctx, principal, action, { module: "people", resourceType: "enrollment", org: path });
+      if (!scope.ok) return scope.result;
+    }
+    // The correction may void an applied next-year row. Check its scope too;
+    // the repo validates the exact id and state under the pupil row lock.
+    for (const row of enrollments.filter((entry) => entry.status === "enrolled" && entry.academicYear > source.academicYear)) {
+      const target = await deps.org.pathForSection(row.sectionId);
+      if (!target || target.collegeId !== student.collegeId) return notFound();
+      const scope = checkScope(deps.scopeChecker, ctx, principal, "update", { module: "people", resourceType: "enrollment", org: target });
+      if (!scope.ok) return scope.result;
+    }
+    try {
+      const corrected = await deps.progression.reverse({
+        studentId, sourceEnrollmentId: enrollmentId, reason, org: path,
+        attribution: { requestId: ctx.requestId, actorType: principal.kind, actorId: principal.id },
+      });
+      return {
+        status: 200, body: { correctionId: corrected.correctionId, reinstatedEnrollmentId: corrected.reinstatedEnrollmentId },
+        audit: { org: path, resourceId: studentId, persisted: { kind: "in-transaction", receipt: corrected.receipt } },
+      };
+    } catch (error) {
+      if (error instanceof ProgressionReversalConflictError) return { status: 409, body: { message: error.message } };
+      throw error;
     }
   };
 
@@ -1388,6 +1541,11 @@ export function createPeopleHandlers(deps: PeopleHandlerDeps): Record<string, Ro
     "people.student-link-identity": studentLinkIdentity,
     "people.student-enroll": studentEnroll,
     "people.student-enrollment-dates": studentEnrollmentDates,
+    "people.progression-preview": progressionPreview,
+    "people.progression-apply": progressionApply,
+    "people.guardian-history-policy-get": guardianHistoryPolicyGet,
+    "people.guardian-history-policy-update": guardianHistoryPolicyUpdate,
+    "people.progression-reverse": progressionReverse,
     "people.document-upload": documentUpload,
     "people.document-list": documentList,
     "people.document-download": documentDownload,

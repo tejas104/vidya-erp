@@ -94,6 +94,11 @@ async function main(): Promise<void> {
           await page.goto("/manage/report-cards");
           await page.getByRole("heading", { name: "Report card desk", level: 1 }).waitFor();
           await page.screenshot({ path: join(output, "admin-report-cards.png"), fullPage: true });
+          await page.goto("/manage/progression");
+          await page.getByRole("heading", { name: "Promotion and exits", level: 1 }).waitFor();
+          await page.getByLabel("Section").locator("option").first().waitFor({ state: "attached" });
+          await page.getByText("Loading the roll…").waitFor({ state: "hidden" });
+          await page.screenshot({ path: join(output, "admin-progression.png"), fullPage: true });
           await page.goto("/manage/fees");
           await page.getByRole("heading", { name: "Fee counter", level: 1 }).waitFor();
           await page.getByText("Asha Sharma").first().waitFor();

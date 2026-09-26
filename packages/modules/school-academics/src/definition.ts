@@ -38,6 +38,9 @@ export const termViewSchema = z.object({
 
 const termsResponseSchema = z.object({ terms: z.array(termViewSchema) });
 
+export const attendanceReviewSchema = z.object({ termId: idSchema, sectionId: idSchema, through: dateSchema, calendarVersion: z.number().int(), threshold: z.number(), scheduledDates: z.array(dateSchema), unsubmittedDates: z.array(dateSchema), students: z.array(z.object({ studentId: idSchema, fullName: z.string(), admissionNo: z.string(), enrollmentDates: z.array(z.object({ from: dateSchema.nullable(), to: dateSchema.nullable() })), dateIssue: z.string().nullable(), expectedDays: z.number().nullable(), recordedDays: z.number().nullable(), absentDays: z.number().nullable(), missingEntryDates: z.array(dateSchema), percentageDenominator: z.number().nullable(), percentage: z.number().nullable(), shortfall: z.boolean().nullable() })) });
+export type AttendanceReview = z.infer<typeof attendanceReviewSchema>;
+
 const routes: RouteSpec[] = [
   ...schoolMarksRoutes,
   {
@@ -60,7 +63,7 @@ const routes: RouteSpec[] = [
     path: "/api/v1/school/sections/{sectionId}/attendance-shortfall", summary: "Review daily-register gaps and pupil attendance shortfall",
     tags: ["school-academics"], auth: ANY_AUTHENTICATED,
     request: { params: z.object({ sectionId: idSchema }), query: z.object({ termId: idSchema, through: dateSchema.optional() }) },
-    responses: { 200: { description: "Attendance review", schema: z.object({ termId: idSchema, sectionId: idSchema, through: dateSchema, calendarVersion: z.number().int(), threshold: z.number(), scheduledDates: z.array(dateSchema), unsubmittedDates: z.array(dateSchema), students: z.array(z.object({ studentId: idSchema, fullName: z.string(), admissionNo: z.string(), enrollmentDates: z.array(z.object({ from: dateSchema.nullable(), to: dateSchema.nullable() })), dateIssue: z.string().nullable(), expectedDays: z.number().nullable(), recordedDays: z.number().nullable(), absentDays: z.number().nullable(), missingEntryDates: z.array(dateSchema), percentageDenominator: z.number().nullable(), percentage: z.number().nullable(), shortfall: z.boolean().nullable() })) }) }, 403: { description: "Outside scope", schema: problemSchema }, 404: { description: "No such section or term", schema: problemSchema }, 409: { description: "Calendar not configured", schema: problemSchema } },
+    responses: { 200: { description: "Attendance review", schema: attendanceReviewSchema }, 403: { description: "Outside scope", schema: problemSchema }, 404: { description: "No such section or term", schema: problemSchema }, 409: { description: "Calendar not configured", schema: problemSchema } },
   },
   {
     id: "school-academics.types-list", module: MODULE_NAME, method: "GET",

@@ -84,6 +84,8 @@ export interface AttendanceRecordView {
   readonly studentId: string;
   readonly status: "present" | "absent" | "late" | "excused";
   readonly heldOn: string;
+  /** When this entry was first recorded — lets a reader keep only records that existed at a cut-off (ADR-0027 Decision 9). */
+  readonly recordedAt: string;
   readonly academicYear: string;
   readonly position: AttendancePosition;
 }
@@ -213,6 +215,7 @@ export function createAcademicsModule(
             studentId: entry.studentId,
             status: entry.status as AttendanceRecordView["status"],
             heldOn: session.heldOn,
+            recordedAt: entry.createdAt.toISOString(),
             academicYear: session.academicYear,
             position: {
               collegeId: session.collegeId,
@@ -241,6 +244,7 @@ export function createAcademicsModule(
             studentId: entry.studentId,
             status: entry.status as AttendanceRecordView["status"],
             heldOn: session.heldOn,
+            recordedAt: entry.createdAt.toISOString(),
             academicYear: session.academicYear,
             position: {
               collegeId: session.collegeId,
@@ -329,3 +333,4 @@ function toMarkView(
     },
   };
 }
+export { academicsHasPupilYearRecords } from "./progression-dependencies";

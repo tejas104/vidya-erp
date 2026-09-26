@@ -55,3 +55,4 @@ export function createFeesModule(deps: FeesModuleDeps): RuntimeModule<Record<str
   assertModuleWiring(module);
   return module;
 }
+export { feesHasPupilYearRecords } from "./progression-dependencies";

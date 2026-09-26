@@ -21,6 +21,7 @@ apps/web/src/ui/help/help-content.generated.ts
 /test-results/
 /playwright-report/
 /blob-report/
+/output/pdf/
 
 # scripts/build-release.sh output — a build artifact, not source. Never commit
 # a built tarball.

@@ -1,0 +1,3 @@
+DROP TRIGGER rpt_school_certificates_no_update ON rpt_school_certificates;
+DROP FUNCTION rpt_school_certificates_immutable();
+DROP TABLE rpt_school_certificates;

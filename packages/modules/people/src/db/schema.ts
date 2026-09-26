@@ -23,6 +23,8 @@ export const pplColleges = pgTable("ppl_colleges", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
   code: text("code").notNull(),
+  guardianHistoryDays: integer("guardian_history_days").notNull().default(90),
+  guardianHistoryVersion: integer("guardian_history_version").notNull().default(1),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [uniqueIndex("ppl_colleges_code_idx").on(table.code)]);
@@ -132,6 +134,9 @@ export const pplEnrollments = pgTable("ppl_enrollments", {
   /** Effective school dates, not the date the row was entered. Null means unverified legacy data. */
   startsOn: date("starts_on", { mode: "string" }),
   endsOn: date("ends_on", { mode: "string" }),
+  /** Year-end result recorded on the row it concludes (0010); null while live or for a section move. */
+  outcome: text("outcome"),
+  outcomeReason: text("outcome_reason"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
@@ -176,6 +181,17 @@ export const pplImports = pgTable("ppl_imports", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   finishedAt: timestamp("finished_at", { withTimezone: true }),
 });
+
+/** One immutable correction record for an applied pupil outcome. */
+export const pplProgressionCorrections = pgTable("ppl_progression_corrections", {
+  id: text("id").primaryKey(),
+  studentId: text("student_id").notNull().references(() => pplStudents.id, { onDelete: "restrict" }),
+  sourceEnrollmentId: text("source_enrollment_id").notNull().unique().references(() => pplEnrollments.id, { onDelete: "restrict" }),
+  nextEnrollmentId: text("next_enrollment_id").references(() => pplEnrollments.id, { onDelete: "restrict" }),
+  reinstatedEnrollmentId: text("reinstated_enrollment_id").notNull().unique().references(() => pplEnrollments.id, { onDelete: "restrict" }),
+  reason: text("reason").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [index("ppl_progression_corrections_student_idx").on(table.studentId)]);
 
 /** One staff presence decision per teacher and calendar date. Retained for
  * audit/history even when the teacher later becomes inactive. */

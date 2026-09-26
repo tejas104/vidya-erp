@@ -8,14 +8,11 @@ describe("reporting module definition (contract conformance)", () => {
     expect(reportingModuleDefinition.name).toBe("reporting");
   });
 
-  it("versions every route under one of its two families and keeps them all authenticated", () => {
-    // reporting serves two deliberately distinct families: the queued
-    // /api/v1/reports export flow, and /api/v1/school/report-cards, whose
-    // artifact is a permanent academic record rather than a transient export.
-    // Nothing else may appear here — a third prefix means a route landed in
-    // the wrong module.
+  it("versions every route under its declared families and keeps them all authenticated", () => {
+    // Reporting serves queued exports, permanent school documents, and
+    // administrator document-format policy. Other prefixes belong elsewhere.
     for (const route of reportingModuleDefinition.routes) {
-      expect(route.path, route.id).toMatch(/^\/api\/v1\/(reports|school\/report-cards)/);
+      expect(route.path, route.id).toMatch(/^\/api\/v1\/(reports|school\/(report-cards|certificates|document-formats))/);
       expect(route.auth.public, route.id).toBe(false);
     }
   });
@@ -27,6 +24,8 @@ describe("reporting module definition (contract conformance)", () => {
     expect(stateChanging.map((route) => route.id).sort()).toEqual([
       "reporting.class-credentials",
       "reporting.request",
+      "reporting.school-certificate-issue",
+      "reporting.school-document-format-save",
       "reporting.school-report-card-generate",
       "reporting.school-report-card-preview",
       "reporting.school-report-card-publish",

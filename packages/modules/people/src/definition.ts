@@ -137,6 +137,8 @@ const studentHistorySchema = z.object({
     status: z.string(),
     startsOn: effectiveDateSchema.nullable(),
     endsOn: effectiveDateSchema.nullable(),
+    outcome: z.enum(["promoted", "detained", "transferred_out", "graduated"]).nullable(),
+    outcomeReason: z.string().nullable(),
     createdAt: z.string(),
     updatedAt: z.string(),
   })),
@@ -151,6 +153,7 @@ const studentHistorySchema = z.object({
     actorId: z.string().nullable(),
     occurredAt: z.string(),
   })),
+  correctedEnrollmentIds: z.array(z.string()),
 });
 
 export const teacherViewSchema = z.object({
@@ -216,6 +219,50 @@ const problemSchema = z.object({
   title: z.string(),
   status: z.number(),
   requestId: z.string(),
+});
+
+/** N6: section year-end plan or today's one-pupil exit. Shared by preview and apply. */
+const progressionChoiceSchema = z.enum(["promote", "detain", "transfer_out", "graduate"]);
+const progressionPlanSchema = z.object({
+  workflow: z.literal("single_exit").optional(),
+  sectionId: idSchema,
+  academicYear: academicYearSchema,
+  endsOn: effectiveDateSchema,
+  targetAcademicYear: academicYearSchema.optional(),
+  startsOn: effectiveDateSchema.optional(),
+  promoteToSectionId: idSchema.optional(),
+  detainInSectionId: idSchema.optional(),
+  pupils: z.array(z.object({
+    studentId: idSchema,
+    enrollmentId: idSchema,
+    outcome: progressionChoiceSchema,
+    reason: z.string().trim().max(240).optional(),
+  })).min(1).max(200),
+  expectedHistoryPolicyVersion: z.number().int().positive().optional(),
+});
+const progressionPreviewSchema = z.object({
+  sectionId: z.string(),
+  academicYear: z.string(),
+  endsOn: z.string(),
+  targetAcademicYear: z.string().nullable(),
+  startsOn: z.string().nullable(),
+  familyAccess: z.object({ liveUntil: z.string(), historicalAccessUntil: z.string(), days: z.number().int(), policyVersion: z.number().int() }).nullable(),
+  pupils: z.array(z.object({
+    studentId: z.string(),
+    admissionNo: z.string(),
+    fullName: z.string(),
+    enrollmentId: z.string(),
+    outcome: progressionChoiceSchema,
+    statusBefore: z.string(),
+    statusAfter: studentStatusSchema,
+    targetSectionId: z.string().nullable(),
+    reason: z.string().nullable(),
+    familyLinks: z.number(),
+    problems: z.array(z.string()),
+  })),
+  undecided: z.array(z.object({ studentId: z.string(), admissionNo: z.string(), fullName: z.string() })),
+  problems: z.array(z.string()),
+  ready: z.boolean(),
 });
 
 const ADMIN_ONLY = { public: false as const, requirement: { rolesAnyOf: ["admin" as const] } };
@@ -436,6 +483,7 @@ const routes: RouteSpec[] = [
     responses: {
       200: { description: "Updated", schema: studentViewSchema },
       404: { description: "No such student", schema: problemSchema },
+      409: { description: "School edition: transfers and graduations are recorded through year-end progression", schema: problemSchema },
     },
   },
   {
@@ -483,6 +531,114 @@ const routes: RouteSpec[] = [
       404: { description: "No such enrollment", schema: problemSchema },
       409: { description: "Enrollment changed since the editor loaded", schema: problemSchema },
       422: { description: "Invalid or overlapping dates", schema: problemSchema },
+    },
+  },
+  {
+    id: "people.guardian-history-policy-get",
+    module: MODULE_NAME,
+    method: "GET",
+    path: "/api/v1/people/colleges/{collegeId}/guardian-history-policy",
+    summary: "Read the school's guardian history window for future exits",
+    tags: ["people-students"],
+    auth: ADMIN_ONLY,
+    request: { params: z.object({ collegeId: idSchema }) },
+    responses: {
+      200: { description: "Current window and version", schema: z.object({ days: z.number().int(), version: z.number().int() }) },
+      403: { description: "Outside scope", schema: problemSchema },
+      404: { description: "No such school or unavailable edition", schema: problemSchema },
+    },
+  },
+  {
+    id: "people.guardian-history-policy-update",
+    module: MODULE_NAME,
+    method: "PATCH",
+    path: "/api/v1/people/colleges/{collegeId}/guardian-history-policy",
+    summary: "Set the guardian history window for future school exits",
+    description: "Administrator only. A versioned, audited setting; previous exits keep their recorded dates. Zero days disables read-only wind-down for future exits.",
+    tags: ["people-students"],
+    auth: ADMIN_ONLY,
+    request: { params: z.object({ collegeId: idSchema }), body: z.object({ days: z.number().int().min(0).max(365), expectedVersion: z.number().int().positive() }) },
+    audit: { action: "people.guardian-history-policy-updated", resourceType: "college" },
+    responses: {
+      200: { description: "Updated setting", schema: z.object({ days: z.number().int(), version: z.number().int() }) },
+      403: { description: "Outside scope", schema: problemSchema },
+      404: { description: "No such school or unavailable edition", schema: problemSchema },
+      409: { description: "Setting changed since the editor loaded", schema: problemSchema },
+    },
+  },
+  {
+    id: "people.progression-preview",
+    module: MODULE_NAME,
+    method: "POST",
+    path: "/api/v1/people/progression/preview",
+    summary: "Preview a section's year-end changes or one pupil's exit today",
+    description:
+      "Changes nothing. Runs the same checks as apply and lists every pupil's outcome, status change, next enrollment and ending family access, plus pupils left undecided. The single_exit workflow accepts one transfer or graduation dated today. Administrator only; scope-checked against the source and target sections.",
+    tags: ["people-students"],
+    auth: ADMIN_ONLY,
+    request: { body: progressionPlanSchema },
+    audit: { action: "people.progression-previewed", resourceType: "section" },
+    responses: {
+      200: { description: "The planned changes and any problems", schema: progressionPreviewSchema },
+      403: { description: "Outside scope", schema: problemSchema },
+      404: { description: "No such section", schema: problemSchema },
+    },
+  },
+  {
+    id: "people.progression-apply",
+    module: MODULE_NAME,
+    method: "POST",
+    path: "/api/v1/people/progression/apply",
+    summary: "Apply a section's year-end changes or one pupil's exit today",
+    description:
+      "All pupils or none, in one transaction with one audit event per pupil and one for the batch. Concluded enrollment rows are kept with their outcome; exits end live guardian access after the leaving day and use the school's versioned read-only historical access setting (ADR-0027 Decision 9).",
+    tags: ["people-students"],
+    auth: ADMIN_ONLY,
+    request: { body: progressionPlanSchema },
+    audit: { action: "people.progression-applied", resourceType: "progression-run" },
+    responses: {
+      200: {
+        description: "Applied",
+        schema: z.object({
+          runId: z.string(),
+          preview: progressionPreviewSchema,
+          pupils: z.array(z.object({
+            studentId: z.string(),
+            outcome: z.enum(["promoted", "detained", "transferred_out", "graduated"]),
+            closedEnrollmentId: z.string(),
+            newEnrollmentId: z.string().nullable(),
+            statusBefore: z.string(),
+            statusAfter: studentStatusSchema,
+            familyAccessChanged: z.number(),
+            invitationsRevoked: z.number(),
+          })),
+        }),
+      },
+      403: { description: "Outside scope", schema: problemSchema },
+      404: { description: "No such section", schema: problemSchema },
+      409: { description: "The roll changed since the preview", schema: problemSchema },
+      422: { description: "The plan has problems; nothing was applied", schema: z.object({ message: z.string(), preview: progressionPreviewSchema }) },
+    },
+  },
+  {
+    id: "people.progression-reverse",
+    module: MODULE_NAME,
+    method: "POST",
+    path: "/api/v1/people/students/{studentId}/enrollments/{enrollmentId}/progression-reversal",
+    summary: "Correct one applied promotion, detention or exit",
+    description: "Administrator only. Keeps the applied outcome and an immutable correction record, voids an unused next-year placement, restores the pupil's source-year placement and family access, and writes the audit event in one transaction. Revoked invitation codes stay revoked.",
+    tags: ["people-students"],
+    auth: ADMIN_ONLY,
+    request: {
+      params: z.object({ studentId: idSchema, enrollmentId: idSchema }),
+      body: z.object({ reason: z.string().trim().min(1).max(240) }),
+    },
+    audit: { action: "people.progression-reversed", resourceType: "student" },
+    responses: {
+      200: { description: "Corrected", schema: z.object({ correctionId: z.string(), reinstatedEnrollmentId: z.string() }) },
+      403: { description: "Outside scope", schema: problemSchema },
+      404: { description: "No such pupil or enrollment", schema: problemSchema },
+      409: { description: "Outcome changed, already corrected, or dependent data exists", schema: problemSchema },
     },
   },
   {

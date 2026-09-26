@@ -118,10 +118,27 @@ export class InvitationRefusedError extends Error {
   }
 }
 
+/**
+ * ADR-0027 Decision 9: once a pupil has left, a guardian keeps read-only access
+ * to records as they stood at the exit, until `historicalAccessUntil`. Only the
+ * categories whose readers cut records off at `recordsThrough` are listed here;
+ * everything else ends with live access (fail-closed for any new category).
+ */
+export const HISTORICAL_CATEGORIES: ReadonlySet<GuardianRecordCategory> = new Set(["attendance", "report-card"]);
+const HISTORICAL_ACTIONS: ReadonlySet<GuardianAccessAction> = new Set(["read", "direct-file-access"]);
+
+/** Past validUntil but inside the wind-down window of a relationship that was in force. */
+function inWindDown(row: RelationshipRow, now: Date): boolean {
+  return row.validUntil !== null && row.validUntil.getTime() <= now.getTime() &&
+    row.historicalAccessUntil !== null && row.historicalAccessUntil.getTime() > now.getTime() &&
+    (row.status === "active" || row.status === "restricted");
+}
+
 function toContract(row: RelationshipRow, now: Date): StudentGuardianRelationship {
-  // A relationship past its validUntil is expired whatever its stored status;
-  // the adapter reads status only, so the lapse is applied here.
-  const lapsed = row.validUntil !== null && row.validUntil.getTime() <= now.getTime();
+  // A relationship past its validUntil is expired whatever its stored status,
+  // unless it is winding down after the pupil's exit; the adapter reads status
+  // only, so the lapse is applied here and the wind-down limits in access().
+  const lapsed = row.validUntil !== null && row.validUntil.getTime() <= now.getTime() && !inWindDown(row, now);
   return {
     id: row.id,
     guardianId: row.guardianId,
@@ -242,10 +259,9 @@ export class GuardianService {
    * Null for an unknown or non-active guardian: suspending the guardian row
    * cuts off every child at once, independent of the relationships.
    */
-  async principalFor(identityUserId: string): Promise<GuardianPrincipal | null> {
+  async principalFor(identityUserId: string, now = this.now()): Promise<GuardianPrincipal | null> {
     const guardian = await this.deps.repo.guardianByIdentityUser(identityUserId);
     if (guardian === null || guardian.status !== "active") return null;
-    const now = this.now();
     const rows = await this.deps.repo.relationshipsForGuardian(guardian.id);
     return {
       identityUserId,
@@ -261,20 +277,16 @@ export class GuardianService {
     studentId: string,
     category: GuardianRecordCategory,
     publicationState?: PublicationState,
-  ): Promise<{ decision: GuardianAccessDecision; student: StudentBrief | null }> {
-    const principal = await this.principalFor(identityUserId);
-    if (principal === null) {
-      return { decision: { granted: false, reason: "denied:no-relationship" }, student: null };
-    }
+  ): Promise<{ decision: GuardianAccessDecision; student: StudentBrief | null; recordsThrough: string | null }> {
+    const refused = { decision: { granted: false, reason: "denied:no-relationship" } as const, student: null, recordsThrough: null };
+    const now = this.now();
+    const principal = await this.principalFor(identityUserId, now);
+    if (principal === null) return refused;
     // Refuse without looking the pupil up when no relationship names them,
     // so an unrelated id cannot be used to learn whether a pupil exists.
-    if (!principal.relationships.some((relationship) => relationship.studentId === studentId)) {
-      return { decision: { granted: false, reason: "denied:no-relationship" }, student: null };
-    }
+    if (!principal.relationships.some((relationship) => relationship.studentId === studentId)) return refused;
     const student = await this.deps.student(studentId);
-    if (student === null) {
-      return { decision: { granted: false, reason: "denied:no-relationship" }, student: null };
-    }
+    if (student === null) return refused;
     const decision = this.adapter.check(principal, action, {
       tenantId: DEPLOYMENT_TENANT,
       collegeId: student.collegeId,
@@ -282,25 +294,36 @@ export class GuardianService {
       category,
       ...(publicationState !== undefined ? { publicationState } : {}),
     });
-    return { decision, student: decision.granted ? student : null };
+    if (!decision.granted) return { decision, student: null, recordsThrough: null };
+    const matched = principal.relationships.find((relationship) => relationship.id === decision.matchedRelationshipId);
+    const windDown = matched?.validUntil != null && Date.parse(matched.validUntil) <= now.getTime();
+    if (!windDown) return { decision, student, recordsThrough: null };
+    if (!HISTORICAL_ACTIONS.has(action) || !HISTORICAL_CATEGORIES.has(category)) {
+      return { decision: { granted: false, reason: "denied:relationship-expired" }, student: null, recordsThrough: null };
+    }
+    return { decision, student, recordsThrough: matched!.validUntil };
   }
 
   /** "Which children am I linked to?" — the guardian's own relationship record. */
   async children(identityUserId: string) {
-    const principal = await this.principalFor(identityUserId);
+    const now = this.now();
+    const principal = await this.principalFor(identityUserId, now);
     if (principal === null) return [];
     const children = [];
     for (const relationship of principal.relationships) {
       if (relationship.status === "revoked") continue;
       const student = await this.deps.student(relationship.studentId);
       if (student === null) continue;
+      const windDown = relationship.status !== "expired" && relationship.validUntil !== null && Date.parse(relationship.validUntil) <= now.getTime();
       children.push({
         studentId: student.studentId,
         fullName: student.fullName,
         admissionNo: student.admissionNo,
         relationshipType: relationship.relationshipType,
         status: relationship.status,
-        categories: [...relationship.grantedCategories].sort(),
+        categories: [...relationship.grantedCategories].filter((category) => !windDown || HISTORICAL_CATEGORIES.has(category)).sort(),
+        recordsThrough: windDown ? relationship.validUntil : null,
+        readOnlyUntil: windDown ? relationship.historicalAccessUntil : null,
       });
     }
     return children;

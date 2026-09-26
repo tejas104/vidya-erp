@@ -49,3 +49,51 @@ School browser -> tenant allowlisted HTTPS -> tenant web + worker
 ## Consequences
 
 The initial per-school cost is higher and provisioning needs automation, but the current modular monolith can remain largely unchanged while tenant isolation is demonstrable. This ADR establishes boundaries, not a claim that a control plane, hosted licence service, two-tenant isolation test, or production deployment exists. The [hosting readiness register](../strategy/HOSTING-READINESS-2026-09-24.md) tracks those gates.
+
+## 2026-09-26 owner policy and first implementation checkpoint
+
+The owner chose named Vidya operators with MFA for the vendor console. Hosted
+subscriptions retain full school access for **30 calendar days** after the
+paid-through date, then become read-only. Existing report, receipt and
+certificate downloads and a full school-data export remain available. No
+student record is deleted. The commercial price/plan model is intentionally
+undecided; no price or payment-provider behavior may be inferred from the
+registry. The identity provider for operator MFA is still to be selected.
+
+`packages/control-plane` now defines this date-boundary calculation and a
+separate vendor-database migration for operator identity references, tenant
+registry, append-only subscription events and operator audit. Its repository
+serializes same-operation registration retries, checks active operator rows,
+and writes subscription events and audit in one transaction. A disposable
+integration test migrates an independent database and proves idempotency,
+conflict, rollback and migration reversal. These are foundations, not a live
+operator identity realm or an entitlement decision delivered to a tenant.
+
+`apps/operator` currently contains a **development-only, fictional UX
+preview**. The production route returns 404. It has no login, live tenant
+connection, payment action or provisioning control. Do not deploy it or treat
+its rows as customer data. First wire a reviewed OIDC/MFA identity provider,
+then server-authorized reads and mutations against the vendor database;
+publish signed, bounded entitlements only after outage, revocation, key
+rotation and school-data export behavior have been exercised with two isolated
+synthetic tenants.
+
+## Operator identity boundary after the registry checkpoint
+
+A second vendor migration now adds an OIDC issuer to the named operator
+record. Previously recorded subject-only rows retain a null issuer, so they
+cannot resolve to a live operator until deliberately rebound. Lookup uses the
+exact verified issuer and stable subject, never email. A pure assurance gate
+requires a provider-configured MFA `acr` and a fresh `auth_time` (no older than
+12 hours). This is defense in depth after an OIDC adapter has validated token
+signature, audience, issuer, nonce, expiry and the login transaction. The
+adapter, provider selection, session, and production route are still absent;
+this gate is **not** an authentication implementation or a live console.
+
+The next registry migration gives each subscription write a caller-generated
+UUID request key. A retry with the same key, operator and exact command returns
+the original revision; a conflicting reuse fails. The event and operator audit
+remain one transaction, so an audit failure rolls back the renewal. Existing
+events receive their event ID as a legacy request key during migration. The
+updated migration and retry path still require isolated PostgreSQL verification
+when Docker capacity is available.

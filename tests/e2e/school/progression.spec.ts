@@ -1,0 +1,184 @@
+/// <reference lib="dom" />
+import { expect, test } from "@playwright/test";
+import { apiSession, browserLogin } from "../support/fixtures";
+
+/**
+ * N6 in a real browser: an administrator closes a section's year (promote,
+ * detain, transfer out), previews, applies, and the leaving pupil's family
+ * then sees only the ADR-0027 Decision 9 read-only window.
+ */
+const credentials = {
+  username: process.env.SCHOOL_E2E_USERNAME ?? "int-admin",
+  password: process.env.SCHOOL_E2E_PASSWORD ?? "integration-admin-pass-1",
+};
+const DAY = 86_400_000;
+
+test("administrator promotes, detains and transfers out a section; the leaving family keeps read-only records", async ({ page, browser, baseURL }, testInfo) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  const admin = await apiSession(baseURL!, credentials);
+  const suffix = Date.now().toString(36);
+  const now = new Date();
+  const startYear = now.getMonth() + 1 >= 6 ? now.getFullYear() : now.getFullYear() - 1;
+  const year = `${startYear}-${String((startYear + 1) % 100).padStart(2, "0")}`;
+  const nextYear = `${startYear + 1}-${String((startYear + 2) % 100).padStart(2, "0")}`;
+  // Closed yesterday, so live family access has already ended and the read-only window is running.
+  const endsOn = new Date(Date.parse(`${now.toISOString().slice(0, 10)}T00:00:00Z`) - DAY).toISOString().slice(0, 10);
+  const post = async (path: string, data: unknown) => {
+    const response = await admin.post(path, { data });
+    expect(response.ok(), `${path}: ${await response.text()}`).toBe(true);
+    return (await response.json()) as { id: string };
+  };
+  try {
+    const { colleges } = (await (await admin.get("/api/v1/people/colleges")).json()) as { colleges: { id: string }[] };
+    const collegeId = colleges[0]!.id;
+    const { departments } = (await (await admin.get(`/api/v1/people/colleges/${collegeId}/tree`)).json()) as { departments: { id: string }[] };
+    const standard5 = await post("/api/v1/people/classes", { departmentId: departments[0]!.id, name: `Standard 5 ${suffix}`, code: `P5-${suffix}` });
+    const standard6 = await post("/api/v1/people/classes", { departmentId: departments[0]!.id, name: `Standard 6 ${suffix}`, code: `P6-${suffix}` });
+    const fiveA = await post("/api/v1/people/sections", { classId: standard5.id, name: "A" });
+    const fiveB = await post("/api/v1/people/sections", { classId: standard5.id, name: "B" });
+    const sixA = await post("/api/v1/people/sections", { classId: standard6.id, name: "A" });
+    const pupils: Record<string, string> = {};
+    for (const name of ["Asha Progress", "Dev Progress", "Ira Progress"]) {
+      const pupil = await post("/api/v1/people/students", { collegeId, admissionNo: `P-${name.split(" ")[0]}-${suffix}`, fullName: name });
+      const enrolled = await admin.post(`/api/v1/people/students/${pupil.id}/enrollment`, { data: { sectionId: fiveA.id, academicYear: year, startsOn: "2026-06-01" } });
+      expect(enrolled.status(), await enrolled.text()).toBe(200);
+      pupils[name] = pupil.id;
+    }
+    // Ira's parent is linked before the year closes.
+    const invited = (await (await admin.post(`/api/v1/people/students/${pupils["Ira Progress"]}/guardian-invitations`, {
+      data: { guardianName: "Meera Progress", relationshipType: "parent", contactMethod: "email", contactValue: `meera-${suffix}@example.test` },
+    })).json()) as { code: string };
+    const parentName = `progress-parent-${suffix}`;
+    const parentPassword = "progress-parent-passphrase";
+    const activated = await admin.post("/api/v1/people/guardian-invitations/activate", { data: { code: invited.code, fullName: "Meera Progress", username: parentName, password: parentPassword } });
+    expect(activated.status(), await activated.text()).toBe(201);
+
+    await browserLogin(page, credentials);
+    await page.goto("/manage/progression");
+    await expect(page.getByRole("heading", { name: "Promotion and exits" })).toBeVisible();
+    await page.getByRole("combobox", { name: "Section" }).selectOption(fiveA.id);
+    await expect(page.getByRole("spinbutton", { name: "Days after exit" })).toHaveValue("90");
+    await page.getByRole("spinbutton", { name: "Days after exit" }).fill("30");
+    await page.getByRole("button", { name: "Save window" }).click();
+    await expect(page.getByText("History window saved for future exits. Existing exit dates are unchanged.")).toBeVisible();
+    await expect(page.getByRole("combobox", { name: "Outcome for Asha Progress" })).toHaveValue("promote");
+    await page.getByLabel(`Last day of ${year}`).fill(endsOn);
+    await page.getByRole("combobox", { name: "Outcome for Dev Progress" }).selectOption("detain");
+    await page.getByRole("textbox", { name: "Reason for Dev Progress" }).fill("Did not meet the promotion criteria");
+    await page.getByRole("combobox", { name: "Outcome for Ira Progress" }).selectOption("transfer_out");
+    await page.getByRole("textbox", { name: "Reason for Ira Progress" }).fill("Family relocated to Chennai");
+    await page.getByLabel("Next academic year").fill(nextYear);
+    await page.getByLabel("New year starts").fill(`${startYear + 1}-06-01`);
+    await page.getByRole("combobox", { name: "Promote into" }).selectOption(sixA.id);
+    await page.getByRole("combobox", { name: "Detained pupils repeat in" }).selectOption(fiveB.id);
+    await page.getByRole("button", { name: "Preview changes" }).click();
+
+    await expect(page.getByText("3. Check and apply")).toBeVisible();
+    const leaver = page.getByRole("row").filter({ hasText: "Ira Progress" }).last();
+    await expect(leaver).toContainText("Transfer out");
+    await expect(leaver).toContainText("Active → Transferred");
+    await expect(leaver).toContainText("Leaves the school");
+    await expect(page.getByRole("row").filter({ hasText: "Asha Progress" }).last()).toContainText(`Standard 6 ${suffix} · A from ${startYear + 1}-06-01`);
+    await expect(page.getByText(/can read attendance and published report cards as they stood on that day/)).toBeVisible();
+    await expect(page.getByText(/for 30 days, through/)).toBeVisible();
+    await page.screenshot({ path: testInfo.outputPath("progression-preview.png"), fullPage: true });
+
+    await page.getByRole("button", { name: "Apply to 3 pupils" }).click();
+    await page.getByRole("dialog", { name: "Apply these changes?" }).getByRole("button", { name: "Apply now" }).click();
+    await expect(page.getByText(/Recorded for 3 pupils/)).toBeVisible();
+    await expect(page.getByText(`No pupils on this section's ${year} roll.`)).toBeVisible();
+    await page.screenshot({ path: testInfo.outputPath("progression-applied.png"), fullPage: true });
+
+    // The record keeps the outcome.
+    await page.goto(`/students/${pupils["Ira Progress"]}`);
+    await page.getByRole("tab", { name: "History" }).click();
+    await expect(page.getByText("Recorded outcome: Transferred out — Family relocated to Chennai")).toBeVisible();
+
+    // The family sees the read-only window, not the live school.
+    const parentContext = await browser.newContext({ baseURL });
+    const parent = await parentContext.newPage();
+    await browserLogin(parent, { username: parentName, password: parentPassword });
+    await parent.waitForURL("**/family");
+    await expect(parent.getByText(/Ira Progress has left the school\. Through .* you can read their attendance and published report cards/)).toBeVisible();
+    await expect(parent.getByRole("button", { name: "Fees" })).toHaveCount(0);
+    await expect(parent.getByRole("button", { name: "Notices" })).toHaveCount(0);
+    await parent.screenshot({ path: testInfo.outputPath("family-after-exit.png"), fullPage: true });
+    await parentContext.close();
+
+    await page.getByRole("button", { name: "Correct this outcome" }).click();
+    await page.getByRole("textbox", { name: "Reason for correcting this outcome" }).fill("Transfer was recorded for the wrong pupil");
+    await page.getByRole("button", { name: "Record correction" }).click();
+    await expect(page.getByText("Correction recorded. The pupil's history has been refreshed.")).toBeVisible();
+    await expect(page.getByText("Outcome corrected; the original record is retained.")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Correct this outcome" })).toHaveCount(0);
+    await page.screenshot({ path: testInfo.outputPath("progression-corrected.png"), fullPage: true });
+    expect(errors).toEqual([]);
+  } finally {
+    await admin.dispose();
+  }
+});
+
+test("administrator records one pupil's exit today while classmates stay enrolled", async ({ page, baseURL }, testInfo) => {
+  const admin = await apiSession(baseURL!, credentials);
+  const suffix = Date.now().toString(36);
+  const parts = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Kolkata", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date());
+  const read = (kind: string) => parts.find((part) => part.type === kind)?.value ?? "";
+  const today = `${read("year")}-${read("month")}-${read("day")}`;
+  const startYear = Number(read("month")) >= 6 ? Number(read("year")) : Number(read("year")) - 1;
+  const year = `${startYear}-${String((startYear + 1) % 100).padStart(2, "0")}`;
+  const post = async (path: string, data: unknown) => {
+    const response = await admin.post(path, { data });
+    expect(response.ok(), `${path}: ${await response.text()}`).toBe(true);
+    return (await response.json()) as { id: string };
+  };
+  try {
+    const { colleges } = (await (await admin.get("/api/v1/people/colleges")).json()) as { colleges: { id: string }[] };
+    const collegeId = colleges[0]!.id;
+    const { departments } = (await (await admin.get(`/api/v1/people/colleges/${collegeId}/tree`)).json()) as { departments: { id: string }[] };
+    const klass = await post("/api/v1/people/classes", { departmentId: departments[0]!.id, name: `Single exit ${suffix}`, code: `SE-${suffix}` });
+    const section = await post("/api/v1/people/sections", { classId: klass.id, name: "A" });
+    const pupils: { id: string; name: string }[] = [];
+    for (const name of ["Leela Exit", "Ravi Stays"]) {
+      const student = await post("/api/v1/people/students", { collegeId, admissionNo: `SE-${name.split(" ")[0]}-${suffix}`, fullName: name });
+      const enrolled = await admin.post(`/api/v1/people/students/${student.id}/enrollment`, {
+        data: { sectionId: section.id, academicYear: year, startsOn: `${startYear}-06-01` },
+      });
+      expect(enrolled.status(), await enrolled.text()).toBe(200);
+      pupils.push({ id: student.id, name });
+    }
+    const invited = await admin.post(`/api/v1/people/students/${pupils[0]!.id}/guardian-invitations`, {
+      data: { guardianName: "Parent Exit", relationshipType: "parent", contactMethod: "email", contactValue: `exit-${suffix}@example.test` },
+    });
+    expect(invited.status(), await invited.text()).toBe(201);
+
+    await browserLogin(page, credentials);
+    await page.goto("/manage/progression");
+    await page.getByRole("button", { name: "One pupil exit" }).click();
+    await page.getByRole("combobox", { name: "Section" }).selectOption(section.id);
+    await page.getByRole("combobox", { name: "Pupil" }).selectOption(pupils[0]!.id);
+    await page.getByRole("combobox", { name: "Exit outcome" }).selectOption("graduate");
+    await page.getByRole("textbox", { name: "Reason for leaving" }).fill("Completed the school programme");
+    const todayLabel = new Date(`${today}T00:00:00Z`).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
+    await expect(page.getByText(`${todayLabel} (today)`)).toBeVisible();
+    await page.getByRole("button", { name: "Preview exit" }).click();
+    await expect(page.getByText("Check this exit")).toBeVisible();
+    await expect(page.getByText(/Pending invitation codes will be revoked/)).toBeVisible();
+    await page.screenshot({ path: testInfo.outputPath("single-exit-preview.png"), fullPage: true });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)).toBeLessThanOrEqual(1);
+    await expect.poll(() => page.locator(".shell-side").evaluate((sidebar) => sidebar.getBoundingClientRect().right)).toBeLessThanOrEqual(1);
+    await page.screenshot({ path: testInfo.outputPath("single-exit-mobile.png"), fullPage: true });
+    await page.getByRole("button", { name: "Apply this exit" }).click();
+    await page.getByRole("dialog", { name: "Record this pupil's exit?" }).getByRole("button", { name: "Record exit" }).click();
+    await expect(page.getByText(/The pupil's exit is recorded and audited/)).toBeVisible();
+    await page.screenshot({ path: testInfo.outputPath("single-exit-applied.png"), fullPage: true });
+    const roster = (await (await admin.get(`/api/v1/people/sections/${section.id}/roster`)).json()) as { students: { id: string }[] };
+    expect(roster.students.map((student) => student.id)).toContain(pupils[1]!.id);
+    expect(roster.students.map((student) => student.id)).not.toContain(pupils[0]!.id);
+    await page.goto(`/students/${pupils[0]!.id}?tab=history`);
+    await expect(page.getByText("Recorded outcome: Graduated — Completed the school programme")).toBeVisible();
+  } finally {
+    await admin.dispose();
+  }
+});

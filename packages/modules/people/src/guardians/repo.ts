@@ -38,6 +38,16 @@ export class InvitationNotClaimableError extends Error {
   }
 }
 
+/** Statuses a year-end exit sets; invitations are closed for these pupils. */
+const PUPIL_LEFT_STATUSES: ReadonlySet<string> = new Set(["transferred", "alumni"]);
+
+export class PupilHasLeftError extends Error {
+  constructor() {
+    super("This pupil has left the school, so new family invitations are closed.");
+    this.name = "PupilHasLeftError";
+  }
+}
+
 export interface GuardiansRepo {
   /** Reissue is one transaction: pupil lock, prior revocation, new code. */
   issueInvitation(
@@ -73,7 +83,10 @@ export function createGuardiansRepo(db: Db): GuardiansRepo {
   return {
     async issueInvitation(input) {
       return db.transaction(async (tx) => {
-        await tx.execute(sql`SELECT id FROM ppl_students WHERE id = ${input.studentId} FOR UPDATE`);
+        const locked = await tx.execute(sql`SELECT status FROM ppl_students WHERE id = ${input.studentId} FOR UPDATE`);
+        // Year-end exits revoke pending codes under this same lock; a new code
+        // for a pupil who has left would re-open live access (ADR-0027 Decision 9).
+        if (PUPIL_LEFT_STATUSES.has(String((locked.rows[0] as { status?: string } | undefined)?.status))) throw new PupilHasLeftError();
         const revoked = await tx
           .update(pplGuardianInvitations)
           .set({ status: "revoked", updatedAt: new Date() })

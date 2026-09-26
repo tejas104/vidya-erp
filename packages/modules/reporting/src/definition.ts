@@ -1,6 +1,8 @@
 import { z } from "zod";
 import type { JobSpec, ModuleDefinition, RouteSpec } from "@vidya/platform";
 import { reportCardPreviewSchema, rosterStudentSchema } from "./school/report-card-contract";
+import { documentFamilySchema, documentStyleSchema, sampleSchema } from "./school/document-format";
+import { UPLOAD_BODY_MAX_BYTES } from "@vidya/platform";
 
 export const MODULE_NAME = "reporting";
 export const TABLE_PREFIX = "rpt_";
@@ -16,6 +18,7 @@ export const reportParamsSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("student-performance"), studentId: idSchema }),
   z.object({ kind: z.literal("section-attendance"), sectionId: idSchema }),
   z.object({ kind: z.literal("teacher-attendance"), collegeId: idSchema, date: schoolDateSchema }),
+  z.object({ kind: z.literal("school-attendance-review"), sectionId: idSchema, termId: idSchema, through: schoolDateSchema }),
   z.object({ kind: z.literal("marks-summary"), classId: idSchema }),
   z.object({ kind: z.literal("at-risk"), level: scopeLevelSchema, nodeId: idSchema }),
   // --- results ---
@@ -30,6 +33,7 @@ const reportViewSchema = z.object({
     "student-performance",
     "section-attendance",
     "teacher-attendance",
+    "school-attendance-review",
     "marks-summary",
     "at-risk",
     "grade-card",
@@ -56,6 +60,72 @@ const SCHOOL_LEADERS = { public: false as const, requirement: { rolesAnyOf: ["ad
 const ADMIN_ONLY = { public: false as const, requirement: { rolesAnyOf: ["admin" as const] } };
 
 const routes: RouteSpec[] = [
+  {
+    id: "reporting.school-certificate-issue", module: MODULE_NAME, method: "POST",
+    path: "/api/v1/school/certificates", summary: "Issue a source-checked bonafide certificate; transfer waits for approval policy",
+    tags: ["reporting", "school"], auth: SCHOOL_LEADERS,
+    request: { body: z.object({ studentId: idSchema, enrollmentId: idSchema,
+      kind: z.enum(["bonafide", "transfer"]), correctionOfId: idSchema.optional(),
+      idempotencyKey: z.string().uuid() }).strict() },
+    audit: { action: "reporting.school-certificate-issue-requested", resourceType: "certificate" },
+    responses: {
+      201: { description: "Immutable certificate issued", schema: z.object({ certificateId: idSchema,
+        number: z.string(), issuedAt: z.string(), replay: z.literal(false) }) },
+      200: { description: "Identical request replayed", schema: z.object({ certificateId: idSchema,
+        number: z.string(), issuedAt: z.string(), replay: z.literal(true) }) },
+      403: { description: "Outside school leadership scope", schema: problemSchema },
+      404: { description: "No verified source enrollment", schema: problemSchema },
+      409: { description: "Transfer source or correction conflict", schema: problemSchema },
+    },
+  },
+  {
+    id: "reporting.school-certificates-for-student", module: MODULE_NAME, method: "GET",
+    path: "/api/v1/school/certificates/students/{studentId}", summary: "List a pupil's issued certificates",
+    tags: ["reporting", "school"], auth: SCHOOL_LEADERS,
+    request: { params: z.object({ studentId: idSchema }) },
+    audit: { action: "reporting.school-certificates-viewed", resourceType: "student" },
+    responses: { 200: { description: "Visible immutable certificate records" },
+      403: { description: "Outside leadership scope", schema: problemSchema },
+      404: { description: "No such pupil", schema: problemSchema } },
+  },
+  {
+    id: "reporting.school-certificate-download", module: MODULE_NAME, method: "GET",
+    path: "/api/v1/school/certificates/{certificateId}/download", summary: "Download a stored certificate as PDF",
+    tags: ["reporting", "school"], auth: SCHOOL_LEADERS,
+    request: { params: z.object({ certificateId: idSchema }) },
+    audit: { action: "reporting.school-certificate-downloaded", resourceType: "certificate" },
+    responses: { 200: { description: "Immutable certificate PDF", contentType: "application/pdf" },
+      403: { description: "Outside current leadership scope", schema: problemSchema },
+      404: { description: "No such certificate", schema: problemSchema },
+      409: { description: "Stored version cannot be rendered", schema: problemSchema } },
+  },
+  {
+    id: "reporting.school-document-format-get", module: MODULE_NAME, method: "GET",
+    path: "/api/v1/school/document-formats/{collegeId}/{family}",
+    summary: "Read a school's controlled document format (administrator)", tags: ["reporting"], auth: ADMIN_ONLY,
+    request: { params: z.object({ collegeId: idSchema, family: documentFamilySchema }) },
+    responses: { 200: { description: "Current format and sample metadata" }, 403: { description: "Access denied", schema: problemSchema } },
+  },
+  {
+    id: "reporting.school-document-format-save", module: MODULE_NAME, method: "PUT",
+    path: "/api/v1/school/document-formats/{collegeId}/{family}",
+    summary: "Append a school document-format version; optional PDF/DOCX sample is reference only", tags: ["reporting"], auth: ADMIN_ONLY,
+    request: { params: z.object({ collegeId: idSchema, family: documentFamilySchema }),
+      body: z.object({ expectedVersion: z.number().int().min(0), style: documentStyleSchema, sample: sampleSchema.optional() }).strict() },
+    bodyMaxBytes: UPLOAD_BODY_MAX_BYTES,
+    audit: { action: "reporting.school-document-format-saved", resourceType: "college" },
+    responses: { 200: { description: "Saved format version" }, 403: { description: "Access denied", schema: problemSchema },
+      409: { description: "Format changed since it was read", schema: problemSchema }, 422: { description: "Invalid sample", schema: problemSchema } },
+  },
+  {
+    id: "reporting.school-document-format-sample", module: MODULE_NAME, method: "GET",
+    path: "/api/v1/school/document-formats/{collegeId}/{family}/sample",
+    summary: "Download the uploaded format reference (administrator)", tags: ["reporting"], auth: ADMIN_ONLY,
+    request: { params: z.object({ collegeId: idSchema, family: documentFamilySchema }) },
+    audit: { action: "reporting.school-document-format-sample-downloaded", resourceType: "college" },
+    responses: { 200: { description: "Uploaded sample", contentType: "application/octet-stream" },
+      403: { description: "Access denied", schema: problemSchema } },
+  },
   {
     id: "reporting.class-credentials",
     module: MODULE_NAME,

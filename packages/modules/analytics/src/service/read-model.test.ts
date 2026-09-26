@@ -32,6 +32,7 @@ async function makeReadModel() {
       studentId: "stu_1",
       status: "present",
       heldOn: "2026-07-01",
+      recordedAt: "2026-07-01T10:00:00.000Z",
       academicYear: YEAR,
       position: { ...paths.class, sectionId: ORG.sectionA },
     },

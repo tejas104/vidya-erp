@@ -30,7 +30,7 @@ function ctx(principal: Principal, query: unknown = {}, params: unknown = {}): R
 }
 
 /** Minimal fakes: only the methods the portal touches are real. */
-function makeDeps(opts: { linked: boolean }) {
+function makeDeps(opts: { linked: boolean; recordsThrough?: string }) {
   const directory = {
     studentByIdentityUser: async (identityUserId: string) =>
       opts.linked && identityUserId === "usr_1"
@@ -44,9 +44,9 @@ function makeDeps(opts: { linked: boolean }) {
 
   const academicsRead = {
     studentAttendance: async () => [
-      { entryId: "e1", studentId: "stu_1", status: "present", heldOn: "2026-06-01", academicYear: YEAR, position: {} },
-      { entryId: "e2", studentId: "stu_1", status: "absent", heldOn: "2026-06-02", academicYear: YEAR, position: {} },
-      { entryId: "e3", studentId: "stu_1", status: "late", heldOn: "2026-07-01", academicYear: YEAR, position: {} },
+      { entryId: "e1", studentId: "stu_1", status: "present", heldOn: "2026-06-01", recordedAt: "2026-06-01T10:00:00.000Z", academicYear: YEAR, position: {} },
+      { entryId: "e2", studentId: "stu_1", status: "absent", heldOn: "2026-06-02", recordedAt: "2026-06-02T10:00:00.000Z", academicYear: YEAR, position: {} },
+      { entryId: "e3", studentId: "stu_1", status: "late", heldOn: "2026-07-01", recordedAt: "2026-07-01T10:00:00.000Z", academicYear: YEAR, position: {} },
     ],
     studentMarks: async () => [
       {
@@ -74,8 +74,8 @@ function makeDeps(opts: { linked: boolean }) {
   // The parent of stu_1 may see attendance and timetable, not marks.
   const guardianAccess = async (identityUserId: string, studentId: string, category: string) =>
     identityUserId === "usr_parent" && studentId === "stu_1" && category !== "marks"
-      ? { decision: { granted: true, reason: "granted:active-relationship" as const }, student: { studentId, collegeId: "col_1", fullName: "Aarav Sharma", admissionNo: "FYCS-001" } }
-      : { decision: { granted: false, reason: "denied:category-not-granted" as const }, student: null };
+      ? { decision: { granted: true, reason: "granted:active-relationship" as const }, student: { studentId, collegeId: "col_1", fullName: "Aarav Sharma", admissionNo: "FYCS-001" }, recordsThrough: opts.recordsThrough ?? null }
+      : { decision: { granted: false, reason: "denied:category-not-granted" as const }, student: null, recordsThrough: null };
 
   return { directory, academicsRead, timetableRead, guardianAccess };
 }
@@ -140,6 +140,16 @@ describe("family portal handlers (ADR-0027)", () => {
     const stranger = await handlers["portal.child-attendance"]!(ctx(guardianPrincipal, query, { studentId: "stu_9" }));
     expect([marks.status, stranger.status]).toEqual([403, 403]);
     expect(marks.body).toEqual(stranger.body);
+  });
+
+  it("after the pupil left, shows a guardian only attendance recorded before the exit", async () => {
+    // Entries e1 and e2 were recorded in June; e3 on 1 July, after live access ended.
+    const handlers = createPortalHandlers(makeDeps({ linked: true, recordsThrough: "2026-06-30T00:00:00.000Z" }));
+    const result = await handlers["portal.child-attendance"]!(ctx(guardianPrincipal, query, { studentId: "stu_1" }));
+    expect(result.status).toBe(200);
+    const body = result.body as { counts: Record<string, number>; sessions: { heldOn: string }[] };
+    expect(body.counts).toEqual({ present: 1, absent: 1, late: 0, excused: 0 });
+    expect(body.sessions.map((row) => row.heldOn)).toEqual(["2026-06-02", "2026-06-01"]);
   });
 
   it("never lets the self routes be driven by a path parameter", async () => {

@@ -17,6 +17,7 @@ const WORK: Record<WorkspaceRole, Action[]> = {
     { label: "Fee counter", detail: "Invoices, payments and receipts", href: "/manage/fees" },
     { label: "Report cards", detail: "Preview, issue and publish", href: "/manage/report-cards" },
     { label: "Teachers", detail: "Staff records and assignments", href: "/manage/teachers" },
+    { label: "Document formats", detail: "School PDF style and samples", href: "/manage/school-policies" },
   ],
   principal: [
     { label: "School analytics", detail: "Attendance and learning trends", href: "/manage/analytics" },

@@ -87,14 +87,14 @@ they do not establish depth, usability, security or customer acceptance.
 
 | School job | Public benchmark signal | Vidya state verified in this branch | Next completion gate |
 |---|---|---|---|
-| One pupil record | Alma [A1] advertises student data and enrollment history. | **Partial.** Student 360 at `/students/[studentId]` has profile, history and independently scoped panels. The admissions and year-end promotion workflows are still absent. | N6 promotion and a connected admissions handoff, with school browser journeys. |
-| Attendance and oversight | Alma [A1] advertises attendance reports; Vidyalaya [V1] advertises attendance management. | **Partial.** Class and teacher registers, scoped reporting exports and monthly Analytics views exist. The school review uses explicit instructional days and effective enrollment windows, and separates unsubmitted daily registers, missing pupil entries, unverified dates and confirmed shortfall. Escalation, review exports and school pilot acceptance remain open. | Complete N5 escalation, exports and pilot validation. |
-| Marks and report cards | Alma [A1] advertises grading and report cards; Vidyalaya [V1] advertises assessment and progress cards. | **Partial.** Weighted school marks, immutable report-card snapshots, PDFs and audited parent publication exist. Teacher CSV marks import now previews changed scores and row errors, then uses an audited atomic save with a stale-score guard. | Measure pilot-sized imports and complete N4 review; continue N5–N7. |
+| One pupil record | Alma [A1] advertises student data and enrollment history. | **Partial.** Student 360 at `/students/[studentId]` has profile, history and independently scoped panels. A year-end batch and today's one-pupil exit (N6) record outcomes; an audited one-pupil correction retains the original history. Admissions is still absent. | A connected admissions handoff and real-school validation. |
+| Attendance and oversight | Alma [A1] advertises attendance reports; Vidyalaya [V1] advertises attendance management. | **Partial.** Class and teacher registers, scoped reporting exports and monthly Analytics views exist. The school review uses explicit instructional days and effective enrollment windows, and separates unsubmitted daily registers, missing pupil entries, unverified dates and confirmed shortfall. Escalation and school pilot acceptance remain open. | Complete N5 escalation and pilot validation. |
+| Marks and report cards | Alma [A1] advertises grading and report cards; Vidyalaya [V1] advertises assessment and progress cards. | **Partial.** Weighted school marks, immutable report-card snapshots, PDFs and audited parent publication exist. An administrator can version school PDF name, accent and footer and upload a PDF/DOCX reference; report-card and attendance PDFs freeze their style. Full sample-to-layout mapping is open. Teacher CSV marks import previews changed scores and row errors, then uses an audited atomic save with a stale-score guard. | Measure pilot-sized imports and complete N4 review; continue N5–N7. |
 | Family access | Alma [A1] advertises parent portals; Vidyalaya [V2] advertises parent/student records. | **Partial.** `/family` includes relationship-gated attendance, marks, notices, fees and published report cards. Provider delivery and school-user acceptance are absent. | Parent delivery adapter and two-child revocation/user acceptance. |
 | Fees and recovery | Alma [A1], EdPlus [E1] and Vidyalaya [V1] advertise fees. | **Partial.** Vidya has invoice/payment/adjustment records and family fee reads. Follow-up state, concessions, installments and reconciliation are not complete. | N8 and Phase 2 finance workflows with audit and restore proof. |
 | Fast data onboarding | Alma [A1] advertises validated bulk uploads; EdPlus [E1] advertises Excel-led setup. | **Partial.** Student and staff CSV imports and a teacher marks CSV flow exist. Guided school setup and measured large-cohort onboarding do not. | N4 scaling proof plus guided school setup with a pilot-sized synthetic school. |
 | Wider school operations | EdPlus [E1] and Vidyalaya [V1] advertise transport, HR, certificates and other modules. | **Missing/deferred.** Staff attendance exists; payroll, transport and library are not built. Certificates depend on a recorded exit. | N6/N7 first; choose further modules from pilot demand. |
-| Repeatable hosted SaaS | This is Vidya's delivery requirement, not a vendor parity claim. | **Design only.** ADR-0030 defines the control-plane boundary; this checkout has no deployed tenant provisioning or hosted licence/subscription service. | Phase 3 implementation and two-tenant isolation, restore and entitlement proof. |
+| Repeatable hosted SaaS | Alma's public terms describe a school subscription; EdPlus and Vidyalaya publish product/quote signals but not private licensing controls. | **Foundation only.** ADR-0030 defines the boundary; a separate registry and subscription history, issuer-scoped operator lookup foundation, and a fictional operator UI preview exist. No verified OIDC login, authenticated live dashboard, tenant provisioner or entitlement delivery exists. | Named operator MFA, live registry, two-tenant isolation, restore and entitlement proof. |
 
 The ordered work remains in [CLAUDE-DELIVERY-ROADMAP.md](CLAUDE-DELIVERY-ROADMAP.md).
 No row is validated by a real school user yet. Current demo data and browser
@@ -459,9 +459,16 @@ checks prove only the named local flows.
 
 - **Alma [A1, PUBLIC]** — "Enrollment history", "Re-enrollment", "Registration",
   "Cross-district enrollment" (state-agency tier).
-- **Vidya current state** — **Missing**. Enrollment exists
-  (`/api/v1/people/students/{studentId}/enrollment`) but year-end promotion,
-  detention and transfer are not implemented.
+- **Vidya current state** — **Partial** (N6, 2026-09-26). An administrator
+  previews and applies one section's promotion, detention, transfer-out and
+  graduation as one audited batch; concluded enrollment rows keep their
+  outcome and reason, and exits apply ADR-0027 Decision 9 to guardian access.
+  An audited one-pupil correction retains the original record and refuses
+  dependent next-year records. A versioned per-school guardian history window
+  governs future exits without rewriting existing exit dates. Database
+  concurrency and browser journeys pass. A separate one-pupil transfer or
+  graduation flow records today's exit with a reason and keeps classmates on
+  the roll. Real-school pilot review remains.
 - **India requirement** — Year-end promotion is an annual all-school event with
   legal weight; detention rules vary by board and state.
 - **Proposed Vidya workflow / why better** — Promotion as an **auditable batch
@@ -526,16 +533,32 @@ until that gating exists.
 
 ## Priority 8 — SaaS owner control plane (no benchmark parity)
 
-Neither Alma nor EdPlus publicly documents a vendor control plane, because it is
-internal to them. There is **no parity row here** — this is Vidya-specific and
-must be designed from first principles.
+### Public commercial signals checked 2026-09-26
+
+| Vendor | Publicly verifiable commercial model | What is not public |
+|---|---|---|
+| Alma | Its [terms](https://www.getalma.com/terms/) describe school or district subscriptions with term, estimated enrollment, fees and payment schedule agreed in a statement of work. Student, parent and teacher accounts are currently included with the school's subscription. | Operator dashboard, technical entitlement enforcement, renewal automation and tenant architecture. |
+| EdPlus AI | Its [pricing page](https://www.edpluss.com/pricing.php) lists Starter, Economic, Advance and Custom choices, with features and support varying by plan; displayed prices are placeholders and a calculator gathers branch and feature requirements. Its [product site](https://www.edpluss.com/) advertises Excel-led setup. | The actual quote formula, expiry behavior and internal vendor controls. |
+| Vidyalaya School Software | Its [ERP product page](https://www.vidyalayaschoolsoftware.com/products-services/school-erp) describes selectable modules, custom reports and possible per-module, per-student/month or annual pricing. | The contracted price for a particular school, internal subscription dashboard, entitlement protocol and enforcement policy. |
+
+These public pages describe sales terms or advertised capabilities, not how a
+competitor operates its private licensing system. Vidya should provide a clear
+school-facing subscription summary and a separate, audited operator console,
+then validate pricing and renewal UX with school buyers. Do not infer private
+vendor controls or claim superior ease of use from marketing pages.
+
+The checked public pages do not document vendor control-plane internals. There
+is **no parity row here** — this is Vidya-specific and must be designed from
+first principles.
 
 - **Actor / JTBD** — The Vidya operator provisions a new school, sets its plan
   and subscription dates, verifies a renewal payment, watches health and queue
   depth, and performs an audited support action.
-- **Vidya current state** — **Missing.** A `system` module (`sys_`) exists with
-  health, ready, metrics, license and a tenant-scoped audit log (ADR-0025).
-  That is tenant-plane infrastructure, not a control plane.
+- **Vidya current state** — **Foundation only.** A separate vendor registry,
+  subscription history, issuer-scoped operator lookup foundation and fictional
+  console preview exist. There is no authenticated live console or entitlement
+  enforcement. The `system` module's health, metrics and offline licence view
+  remain tenant-plane infrastructure (ADR-0025).
 - **Non-negotiables** — Owner administrators are distinct from school
   administrators. Subscription expiry **never** deletes school data. Trial,
   active, past-due, grace, restricted, suspended, cancelled and export states
@@ -554,7 +577,7 @@ strengths include scoped analytics, transactional financial audit, module-owned
 data and an explicit weighted-results rounding contract. These are Vidya code
 facts, **not** evidence that a competitor lacks the same qualities.
 
-Vidya still lacks admissions, promotion/transfer, certificates, bulk marks
+Vidya still lacks admissions, certificates, bulk marks
 import, guided onboarding, multiple school operations modules, a native app,
 and the hosted vendor control plane. It has not completed a real-school term or
 customer acceptance. The dated checkpoint above supersedes older current-state

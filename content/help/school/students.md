@@ -10,7 +10,7 @@ Open a student from a class roster, the student directory, search, or the needs-
 - **Finance** lists invoices and dues. Only staff with fee scope can read it.
 - **Documents** lists files on record; use the student management screen to add or remove files if authorized.
 - **Family** shows guardian invitations and relationships for authorized staff.
-- **History** keeps enrollment rows, including withdrawn rows, status changes, and their audit events.
+- **History** keeps enrollment rows, including withdrawn rows and each year's recorded outcome (promoted, detained, transferred out or graduated) with its reason, status changes, and their audit events.
 
 An administrator can set or correct effective enrollment dates from **Student records → Enrollment dates**. When adding or moving a pupil, choose the first day they belonged to the new section. A move ends the previous section the day before. Legacy rows without verified dates remain visibly incomplete in attendance reviews and report cards until corrected.
 
