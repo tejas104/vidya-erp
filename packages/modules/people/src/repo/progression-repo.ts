@@ -27,6 +27,7 @@ export interface ProgressionApplyRow {
 }
 
 export interface ProgressionApplyInput {
+  readonly workflow: "year_end" | "single_exit";
   readonly source: { readonly sectionId: string; readonly academicYear: string; readonly org: OrgPath };
   readonly endsOn: string;
   /** Exits only: when live family access ends and read-only access ends (ADR-0027 Decision 9). */
@@ -304,7 +305,7 @@ export function createProgressionRepo(
             actorType: input.attribution.actorType, actorId: input.attribution.actorId,
             resourceId: row.studentId, requestId: input.attribution.requestId,
             details: {
-              runId, outcome: row.outcome, reason: row.reason,
+              runId, workflow: input.workflow, outcome: row.outcome, reason: row.reason,
               sectionId: input.source.sectionId, academicYear: input.source.academicYear, endsOn: input.endsOn,
               closedEnrollmentId: row.enrollmentId, newEnrollmentId, next: row.next,
               before: { status: applied.statusBefore }, after: { status: row.statusAfter },
@@ -324,7 +325,7 @@ export function createProgressionRepo(
           actorType: input.attribution.actorType, actorId: input.attribution.actorId,
           resourceId: runId, requestId: input.attribution.requestId,
           details: {
-            routeId: "people.progression-apply", status: 200,
+            routeId: "people.progression-apply", status: 200, workflow: input.workflow,
             sectionId: input.source.sectionId, academicYear: input.source.academicYear, endsOn: input.endsOn,
             counts, studentIds: pupils.map((pupil) => pupil.studentId),
           },

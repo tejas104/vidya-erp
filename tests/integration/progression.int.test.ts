@@ -84,6 +84,39 @@ afterAll(async () => {
 });
 
 describe("Year-end progression over real Postgres (N6)", () => {
+  it("records today's one-pupil exit without changing classmates", async () => {
+    const leaving = await pupil(section5B, "Single Exit");
+    const classmate = await pupil(section5B, "Still Enrolled");
+    expect((await invite(leaving.studentId)).status).toBe(201);
+    const dateParts = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Kolkata", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date());
+    const part = (kind: string) => dateParts.find((item) => item.type === kind)?.value ?? "";
+    const leavingDay = `${part("year")}-${part("month")}-${part("day")}`;
+    const plan = {
+      workflow: "single_exit", sectionId: section5B, academicYear: YEAR, endsOn: leavingDay,
+      pupils: [{ ...leaving, outcome: "graduate", reason: "Completed final standard" }],
+    };
+    const previewResponse = await stack.call("people.progression-preview", { cookie: admin, body: plan });
+    expect(previewResponse.status).toBe(200);
+    const preview = (await previewResponse.json()) as { ready: boolean; pupils: unknown[]; undecided: { studentId: string }[]; familyAccess: { policyVersion: number; liveUntil: string } };
+    expect(preview.ready).toBe(true);
+    expect(preview.pupils).toHaveLength(1);
+    expect(preview.undecided).toEqual(expect.arrayContaining([expect.objectContaining({ studentId: classmate.studentId })]));
+    expect(preview.familyAccess.liveUntil).toBe(`${shift(leavingDay, 1)}T00:00:00.000Z`);
+    const applied = await stack.call("people.progression-apply", {
+      cookie: admin, body: { ...plan, expectedHistoryPolicyVersion: preview.familyAccess.policyVersion },
+    });
+    expect(applied.status, await applied.clone().text()).toBe(200);
+    const { runId } = (await applied.json()) as { runId: string };
+    const audit = await stack.pool.query("SELECT details->>'workflow' AS workflow FROM sys_audit_log WHERE resource_id = $1", [runId]);
+    expect(audit.rows).toEqual([{ workflow: "single_exit" }]);
+    const leavingRow = await stack.pool.query("SELECT status, ends_on::text, outcome, outcome_reason FROM ppl_enrollments WHERE id = $1", [leaving.enrollmentId]);
+    expect(leavingRow.rows[0]).toMatchObject({ status: "completed", ends_on: leavingDay, outcome: "graduated", outcome_reason: "Completed final standard" });
+    const classmateRow = await stack.pool.query("SELECT status, ends_on, outcome FROM ppl_enrollments WHERE id = $1", [classmate.enrollmentId]);
+    expect(classmateRow.rows[0]).toMatchObject({ status: "enrolled", ends_on: null, outcome: null });
+    const invitations = await stack.pool.query("SELECT status FROM ppl_guardian_invitations WHERE student_id = $1", [leaving.studentId]);
+    expect(invitations.rows).toEqual([{ status: "revoked" }]);
+  });
+
   it("promotes, detains and transfers out in one audited batch, keeping every concluded row", async () => {
     const asha = await pupil(section5A, "Asha Menon");
     const dev = await pupil(section5A, "Dev Menon");
@@ -302,7 +335,7 @@ describe("Year-end progression over real Postgres (N6)", () => {
 
   it("rolls back a one-pupil correction when its audit event fails", async () => {
     const row = await pupil(section5B, "Graduation correction");
-    const plan = { sectionId: section5B, academicYear: YEAR, endsOn, expectedHistoryPolicyVersion: 1, pupils: [{ ...row, outcome: "graduate" }] };
+    const plan = { sectionId: section5B, academicYear: YEAR, endsOn, expectedHistoryPolicyVersion: 1, pupils: [{ ...row, outcome: "graduate", reason: "Completed final standard" }] };
     expect((await stack.call("people.progression-apply", { cookie: admin, body: plan })).status).toBe(200);
     const request = { cookie: admin, params: { studentId: row.studentId, enrollmentId: row.enrollmentId }, body: { reason: "Graduation recorded in error" } };
     stack.peopleAuditFault.failAction = "people.progression-reversed";
@@ -321,7 +354,7 @@ describe("Year-end progression over real Postgres (N6)", () => {
       sectionId: section5B, academicYear: YEAR, endsOn, targetAcademicYear: NEXT, startsOn: shift(today, 1),
       expectedHistoryPolicyVersion: 1,
       promoteToSectionId: section6A,
-      pupils: [{ ...zara, outcome: "promote" }, { ...omar, outcome: "graduate" }],
+      pupils: [{ ...zara, outcome: "promote" }, { ...omar, outcome: "graduate", reason: "Completed final standard" }],
     };
     const before = await stack.pool.query("SELECT count(*)::int AS n FROM sys_audit_log WHERE action = 'people.student-progressed'");
 
@@ -400,7 +433,7 @@ describe("Year-end progression over real Postgres (N6)", () => {
     const laterUsername = `n6-zero-${randomUUID().slice(0, 8)}`;
     expect((await stack.call("people.guardian-activate", { body: { code: laterCode, fullName: "Zero parent", username: laterUsername, password: "n6-parent-pass-123" } })).status).toBe(201);
     const laterParent = await stack.login(laterUsername, "n6-parent-pass-123");
-    const laterPlan = { sectionId: section5B, academicYear: YEAR, endsOn, pupils: [{ ...later, outcome: "graduate" }] };
+    const laterPlan = { sectionId: section5B, academicYear: YEAR, endsOn, pupils: [{ ...later, outcome: "graduate", reason: "Completed final standard" }] };
     expect((await stack.call("people.progression-apply", { cookie: admin, body: { ...laterPlan, expectedHistoryPolicyVersion: 2 } })).status).toBe(409);
     expect((await stack.pool.query("SELECT status FROM ppl_enrollments WHERE id=$1", [later.enrollmentId])).rows[0].status).toBe("enrolled");
     const zeroPreview = await stack.call("people.progression-preview", { cookie: admin, body: laterPlan });

@@ -87,7 +87,7 @@ they do not establish depth, usability, security or customer acceptance.
 
 | School job | Public benchmark signal | Vidya state verified in this branch | Next completion gate |
 |---|---|---|---|
-| One pupil record | Alma [A1] advertises student data and enrollment history. | **Partial.** Student 360 at `/students/[studentId]` has profile, history and independently scoped panels. A year-end promotion, detention and exit batch (N6) records outcomes; an audited one-pupil correction retains the original history. Admissions is still absent. | A connected admissions handoff and real-school validation. |
+| One pupil record | Alma [A1] advertises student data and enrollment history. | **Partial.** Student 360 at `/students/[studentId]` has profile, history and independently scoped panels. A year-end batch and today's one-pupil exit (N6) record outcomes; an audited one-pupil correction retains the original history. Admissions is still absent. | A connected admissions handoff and real-school validation. |
 | Attendance and oversight | Alma [A1] advertises attendance reports; Vidyalaya [V1] advertises attendance management. | **Partial.** Class and teacher registers, scoped reporting exports and monthly Analytics views exist. The school review uses explicit instructional days and effective enrollment windows, and separates unsubmitted daily registers, missing pupil entries, unverified dates and confirmed shortfall. Escalation and school pilot acceptance remain open. | Complete N5 escalation and pilot validation. |
 | Marks and report cards | Alma [A1] advertises grading and report cards; Vidyalaya [V1] advertises assessment and progress cards. | **Partial.** Weighted school marks, immutable report-card snapshots, PDFs and audited parent publication exist. Teacher CSV marks import now previews changed scores and row errors, then uses an audited atomic save with a stale-score guard. | Measure pilot-sized imports and complete N4 review; continue N5–N7. |
 | Family access | Alma [A1] advertises parent portals; Vidyalaya [V2] advertises parent/student records. | **Partial.** `/family` includes relationship-gated attendance, marks, notices, fees and published report cards. Provider delivery and school-user acceptance are absent. | Parent delivery adapter and two-child revocation/user acceptance. |
@@ -466,8 +466,9 @@ checks prove only the named local flows.
   An audited one-pupil correction retains the original record and refuses
   dependent next-year records. A versioned per-school guardian history window
   governs future exits without rewriting existing exit dates. Database
-  concurrency and browser journeys pass; mid-year exit entry and real-school
-  pilot review remain.
+  concurrency and browser journeys pass. A separate one-pupil transfer or
+  graduation flow records today's exit with a reason and keeps classmates on
+  the roll. Real-school pilot review remains.
 - **India requirement** — Year-end promotion is an annual all-school event with
   legal weight; detention rules vary by board and state.
 - **Proposed Vidya workflow / why better** — Promotion as an **auditable batch
@@ -560,7 +561,7 @@ strengths include scoped analytics, transactional financial audit, module-owned
 data and an explicit weighted-results rounding contract. These are Vidya code
 facts, **not** evidence that a competitor lacks the same qualities.
 
-Vidya still lacks admissions, a mid-year single-pupil exit entry, certificates, bulk marks
+Vidya still lacks admissions, certificates, bulk marks
 import, guided onboarding, multiple school operations modules, a native app,
 and the hosted vendor control plane. It has not completed a real-school term or
 customer acceptance. The dated checkpoint above supersedes older current-state

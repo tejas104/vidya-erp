@@ -10,6 +10,7 @@ export const HISTORICAL_ACCESS_DAYS = 90;
 const DAY_MS = 86_400_000;
 
 export interface ProgressionPlan {
+  readonly workflow?: "single_exit";
   readonly sectionId: string;
   readonly academicYear: string;
   /** Last day on this section's roll; for an exit, the leaving date. */
@@ -89,7 +90,7 @@ export interface ProgressionServiceDeps {
 }
 
 /**
- * Year-end promotion, detention and exits for one section (N6). Preview and
+ * Year-end changes or today's one-pupil exit for one section (N6). Preview and
  * apply run the same checks; apply writes only a plan whose preview is clean,
  * and the repo's conditional updates catch anything that moved in between.
  */
@@ -189,6 +190,10 @@ export class ProgressionService {
     const exits = plan.pupils.some((pupil) => pupil.outcome === "transfer_out" || pupil.outcome === "graduate");
 
     if (plan.endsOn > today) problems.push("The closing date cannot be later than today.");
+    if (plan.workflow === "single_exit") {
+      if (plan.pupils.length !== 1 || !exits || continuing) problems.push("Choose one pupil to transfer or graduate.");
+      if (plan.endsOn !== today) problems.push("A one-pupil exit must be recorded for today.");
+    }
     if (continuing) {
       if (!plan.targetAcademicYear || plan.targetAcademicYear <= plan.academicYear) problems.push("Choose a next academic year after the one being closed.");
       if (!plan.startsOn || plan.startsOn <= plan.endsOn) problems.push("The new year must start after the closing date.");
@@ -225,7 +230,7 @@ export class ProgressionService {
         own.push(`Joined this section on ${entry.enrollment.startsOn}, after the closing date.`);
       }
       const reason = choice.reason?.trim() || null;
-      if ((choice.outcome === "detain" || choice.outcome === "transfer_out") && reason === null) {
+      if ((choice.outcome === "detain" || choice.outcome === "transfer_out" || choice.outcome === "graduate") && reason === null) {
         own.push(choice.outcome === "detain" ? "Record why the pupil is detained." : "Record the reason for leaving.");
       }
       const next = choice.outcome === "promote" ? plan.promoteToSectionId : choice.outcome === "detain" ? plan.detainInSectionId : undefined;
@@ -277,6 +282,7 @@ export class ProgressionService {
       throw new GuardianHistoryPolicyConflictError();
     }
     const applied = await this.deps.repo.apply({
+      workflow: plan.workflow ?? "year_end",
       source: { sectionId: plan.sectionId, academicYear: plan.academicYear, org },
       endsOn: plan.endsOn,
       familyAccess: familyAccessWindow(plan.endsOn, preview.familyAccess?.days ?? HISTORICAL_ACCESS_DAYS),

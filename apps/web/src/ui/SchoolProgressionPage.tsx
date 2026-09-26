@@ -6,6 +6,7 @@ import {
   type GuardianHistoryPolicy, type OrgTree, type ProgressionChoice, type ProgressionPlan, type ProgressionPreview, type ProgressionResult, type SchoolTermView, type StudentView,
 } from "./api";
 import { HelpButton } from "./help/HelpButton";
+import { SchoolSingleExit } from "./SchoolSingleExit";
 import styles from "./SchoolProgressionPage.module.css";
 
 type SectionOption = { id: string; label: string; classId: string; collegeId: string };
@@ -20,7 +21,7 @@ const CHOICES: { value: Choice; label: string }[] = [
 ];
 const OUTCOME_LABEL: Record<ProgressionChoice, string> = { promote: "Promote", detain: "Detain", transfer_out: "Transfer out", graduate: "Graduate" };
 const STATUS_LABEL: Record<string, string> = { active: "Active", transferred: "Transferred", alumni: "Alumni", year_back: "Year back", backlog: "Backlog", dropped: "Dropped", inactive: "Inactive" };
-const needsReason = (choice: Choice) => choice === "detain" || choice === "transfer_out";
+const needsReason = (choice: Choice) => choice === "detain" || choice === "transfer_out" || choice === "graduate";
 
 function schoolToday(): string {
   const parts = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Kolkata", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date());
@@ -37,11 +38,7 @@ function sectionsFromTree(tree: OrgTree): SectionOption[] {
 }
 const longDate = (iso: string) => new Date(iso.length === 10 ? `${iso}T00:00:00Z` : iso).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
 
-/**
- * N6: close one section's year. Every pupil gets an outcome; the server
- * previews the exact changes (status, next enrollment, family access) and
- * applies them only as one audited batch. Nothing is deleted.
- */
+/** N6: one-pupil exits and section year-end changes share the audited plan API. */
 export function SchoolProgressionPage() {
   const year = useMemo(() => currentAcademicYear(), []);
   const [sections, setSections] = useState<SectionOption[] | null>(null);
@@ -65,6 +62,7 @@ export function SchoolProgressionPage() {
   const [busy, setBusy] = useState<"preview" | "apply" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
+  const [mode, setMode] = useState<"year-end" | "single">("year-end");
 
   useEffect(() => {
     let active = true;
@@ -180,10 +178,34 @@ export function SchoolProgressionPage() {
     } finally { setHistorySaving(false); }
   }
 
+  async function refreshAfterSingleExit() {
+    try {
+      const { students } = await api.sectionRoster(sectionId);
+      const remaining = students.filter((student) => student.enrollment?.academicYear === year);
+      setRoster(remaining);
+      setChoices(Object.fromEntries(remaining.map((student) => [student.id, { outcome: "undecided" as Choice, reason: "" }])));
+      setPreview(null);
+    } catch {
+      setRoster(null);
+      throw new Error("The roll could not be reloaded after the exit was recorded.");
+    }
+  }
+
   return <>
     <PageHeader eyebrow="Students" title="Promotion and exits"
-      lede={`Close a section's ${year} year: promote, detain, transfer out or graduate each pupil. Preview first; nothing changes until you apply, and no record is deleted.`}
+      lede="Record one pupil's exit or close a section's year. Preview each change before applying; the original enrollment remains in history."
       help={<HelpButton slug="progression" />} />
+
+    <div className={styles.modeSwitch} role="group" aria-label="Progression workflow">
+      <Button variant={mode === "single" ? "primary" : "secondary"} onClick={() => setMode("single")}>One pupil exit</Button>
+      <Button variant={mode === "year-end" ? "primary" : "secondary"} onClick={() => setMode("year-end")}>Year-end section</Button>
+    </div>
+
+    {mode === "single" ? <SchoolSingleExit
+      sections={sections ?? []} sectionId={sectionId} onSectionChange={setSectionId}
+      roster={roster} year={year} historyPolicy={historyPolicy}
+      openTermNames={openTerms.map((term) => term.name)} onApplied={refreshAfterSingleExit}
+    /> : <>
 
     <Card title="1. Section and dates">
       <div className={styles.filters}>
@@ -232,7 +254,7 @@ export function SchoolProgressionPage() {
               </select></td>
               <td>{needsReason(choice.outcome) || choice.reason
                 ? <input aria-label={`Reason for ${student.fullName}`} value={choice.reason} maxLength={240} required={needsReason(choice.outcome)}
-                  placeholder={choice.outcome === "transfer_out" ? "Reason for leaving" : "Why the pupil repeats"} onChange={(event) => choose(student.id, { reason: event.target.value })} />
+                  placeholder={choice.outcome === "detain" ? "Why the pupil repeats" : "Reason for leaving"} onChange={(event) => choose(student.id, { reason: event.target.value })} />
                 : <span className={styles.hint}>Not needed</span>}</td>
             </tr>;
           })}</tbody>
@@ -284,5 +306,6 @@ export function SchoolProgressionPage() {
       footer={<><Button variant="ghost" onClick={() => setConfirming(false)}>Cancel</Button><Button variant="danger" onClick={() => void apply()}>Apply now</Button></>}>
       <p>This closes {year} for {current?.pupils.length ?? 0} pupils of {source?.label ?? "this section"}. Their records are kept; each change is audited. Undoing a pupil's outcome is not yet available on this page.</p>
     </Modal>
+    </>}
   </>;
 }

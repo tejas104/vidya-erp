@@ -1,8 +1,10 @@
 # Promotion and exits
 
-Close one section's academic year. Only an administrator can do this. Choose the section and the **last day** of the year. For pupils who leave, that day is also their leaving date. If anyone is promoted or detained, also enter the next academic year, the date it starts, the section of the next standard they move into and the section detained pupils repeat in.
+Only an administrator can record promotion and exits. Choose **One pupil exit** for a transfer or graduation during the school year. Select the section and pupil, choose the outcome, and record a reason. The leaving day is today; future and past dates need a separate reviewed workflow. Preview the pupil's status and family access dates, then confirm. Other pupils stay on the live roll. An open term warns you to review marks and report cards, but does not block the exit. Pending invitation codes are revoked.
 
-Give every pupil an outcome: **Promote**, **Detain**, **Transfer out** or **Graduate**. Detention and transfer need a reason, which is kept for later certificates and review. **Leave undecided** keeps a pupil exactly as they are, so you can close the year for them in a later batch, for example to promote a group into a different section.
+Choose **Year-end section** to close one section's academic year. Choose the section and the **last day** of the year. For pupils who leave, that day is also their leaving date. If anyone is promoted or detained, also enter the next academic year, the date it starts, the section of the next standard they move into and the section detained pupils repeat in.
+
+Give every pupil an outcome: **Promote**, **Detain**, **Transfer out** or **Graduate**. Detention and every exit need a reason, which is kept for later certificates and review. **Leave undecided** keeps a pupil exactly as they are, so you can close the year for them in a later batch, for example to promote a group into a different section.
 
 Select **Preview changes**. The preview lists each pupil's status before and after, their next enrollment, and how many family links end. It also flags anything that blocks the batch: a date in the future, a pupil already enrolled for the next year, a pupil no longer on this section's roll, or a missing reason. Nothing changes until you select **Apply**. If you change a choice after previewing, preview again.
 

@@ -71,8 +71,9 @@ analytics marks rollup is not presented as a school grade figure.
 
 1. Sign in as administrator: inspect the teacher directory, Results path,
    Students, Academic terms, Report cards, Fee counter, and organisation setup.
-   **Promotion and exits** previews a section's year-end promotion, detention,
-   transfer and graduation. Preview is safe; **Apply** really moves the demo
+   **Promotion and exits** can preview one pupil's transfer or graduation for
+   today, or a section's year-end promotion, detention, transfer and graduation.
+   Preview is safe; **Apply** really moves the demo
    pupils. A mistaken outcome for one pupil can be corrected from that pupil's
    History tab only while the next-year placement has no dependent records.
    The administrator can set the guardian history window on this page for

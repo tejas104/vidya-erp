@@ -354,10 +354,11 @@ export interface StudentDetailView extends Omit<StudentView, "enrollment"> {
     className: string; academicYear: string;
   } | null;
 }
-/** N6: the year-end result recorded on the enrollment row it concluded. */
+/** N6: the applied result recorded on the enrollment row it concluded. */
 export type EnrollmentOutcome = "promoted" | "detained" | "transferred_out" | "graduated";
 export type ProgressionChoice = "promote" | "detain" | "transfer_out" | "graduate";
 export interface ProgressionPlan {
+  workflow?: "single_exit";
   sectionId: string;
   academicYear: string;
   endsOn: string;

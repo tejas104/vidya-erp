@@ -983,9 +983,39 @@ describe("year-end progression (N6)", () => {
     expect(preview.pupils.map((pupil) => pupil.problems)).toEqual([
       [],
       ["Record why the pupil is detained."],
-      ["Not on this section's 2026-27 roll any more. Reload the roster."],
+      ["Not on this section's 2026-27 roll any more. Reload the roster.", "Record the reason for leaving."],
       [],
     ]);
+    expect(applied).toEqual([]);
+  });
+
+  it("requires a reason for graduation before applying any exit", async () => {
+    const { handlers, plan, choice, applied } = await yearEnd();
+    const result = await handlers["people.progression-apply"]!(ctx({ body: plan({
+      pupils: [choice(3, "graduate")],
+    }) }));
+    expect(result.status).toBe(422);
+    expect((result.body as { preview: { pupils: { problems: string[] }[] } }).preview.pupils[0]!.problems)
+      .toEqual(["Record the reason for leaving."]);
+    expect(applied).toEqual([]);
+  });
+
+  it("limits the one-pupil exit workflow to today and one leaving pupil", async () => {
+    const { handlers, plan, choice, applied } = await yearEnd();
+    const one = { workflow: "single_exit", targetAcademicYear: undefined, startsOn: undefined,
+      promoteToSectionId: undefined, detainInSectionId: undefined,
+      pupils: [choice(0, "graduate", "Completed final standard")] };
+    const past = await handlers["people.progression-apply"]!(ctx({ body: plan({ ...one, endsOn: "2027-04-09" }) }));
+    expect(past.status).toBe(422);
+    expect((past.body as { preview: { problems: string[] } }).preview.problems)
+      .toContain("A one-pupil exit must be recorded for today.");
+    const mixed = await handlers["people.progression-preview"]!(ctx({ body: plan({ ...one,
+      endsOn: "2027-04-10", pupils: [choice(0, "graduate", "Completed"), choice(1, "promote")],
+    }) }));
+    expect((mixed.body as { ready: boolean; problems: string[] }).problems)
+      .toContain("Choose one pupil to transfer or graduate.");
+    const today = await handlers["people.progression-preview"]!(ctx({ body: plan({ ...one, endsOn: "2027-04-10" }) }));
+    expect((today.body as { ready: boolean }).ready).toBe(true);
     expect(applied).toEqual([]);
   });
 

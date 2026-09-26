@@ -10,6 +10,9 @@ vi.mock("./api", async (importOriginal) => {
 });
 
 const YEAR = currentAcademicYear();
+const dateParts = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Kolkata", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date());
+const dayPart = (kind: string) => dateParts.find((item) => item.type === kind)?.value ?? "";
+const TODAY = `${dayPart("year")}-${dayPart("month")}-${dayPart("day")}`;
 const pupil = (id: string, fullName: string) => ({
   id, collegeId: "col_1", admissionNo: `A-${id}`, fullName, status: "active" as const, identityUserId: null, phone: null, guardianName: null, guardianPhone: null, dob: null,
   enrollment: { id: `enr_${id}`, sectionId: "sec_5a", academicYear: YEAR, startsOn: "2026-06-01", endsOn: null },
@@ -47,6 +50,42 @@ function renderPage() {
 }
 
 describe("year-end progression page", () => {
+  it("previews and records just one mid-year transfer from the exit workflow", async () => {
+    const single = previewOf({
+      endsOn: TODAY, targetAcademicYear: null, startsOn: null,
+      familyAccess: { liveUntil: "2026-09-27T00:00:00.000Z", historicalAccessUntil: "2026-12-26T00:00:00.000Z", days: 90, policyVersion: 1 },
+      pupils: [{ studentId: "2", admissionNo: "A-2", fullName: "Dev Rao", enrollmentId: "enr_2", outcome: "transfer_out", statusBefore: "active", statusAfter: "transferred", targetSectionId: null, reason: "Moved to Pune", familyLinks: 2, problems: [] }],
+      undecided: [{ studentId: "1", admissionNo: "A-1", fullName: "Asha Rao" }, { studentId: "3", admissionNo: "A-3", fullName: "Ira Rao" }],
+    });
+    vi.mocked(api.progressionPreview).mockResolvedValue(single);
+    vi.mocked(api.progressionApply).mockResolvedValue({ runId: "prg_single", preview: single, pupils: [
+      { studentId: "2", outcome: "transferred_out", closedEnrollmentId: "enr_2", newEnrollmentId: null, statusBefore: "active", statusAfter: "transferred", familyAccessChanged: 2, invitationsRevoked: 1 },
+    ] });
+    renderPage();
+    fireEvent.click(screen.getByRole("button", { name: "One pupil exit" }));
+    await screen.findByRole("option", { name: "Dev Rao · A-2" });
+    fireEvent.change(screen.getByRole("combobox", { name: "Pupil" }), { target: { value: "2" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "Reason for leaving" }), { target: { value: "Moved to Pune" } });
+    const todayLabel = new Date(`${TODAY}T00:00:00Z`).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
+    expect(screen.getByText(`${todayLabel} (today)`)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Preview exit" }));
+    await screen.findByText("Check this exit");
+    expect(vi.mocked(api.progressionPreview).mock.calls[0]![0]).toMatchObject({ workflow: "single_exit", endsOn: TODAY });
+    expect(vi.mocked(api.progressionPreview).mock.calls[0]![0].pupils).toEqual([
+      { studentId: "2", enrollmentId: "enr_2", outcome: "transfer_out", reason: "Moved to Pune" },
+    ]);
+    expect(screen.getByText(/2 family links will change/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Apply this exit" }));
+    expect(api.progressionApply).not.toHaveBeenCalled();
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Record exit" }));
+    await waitFor(() => expect(api.progressionApply).toHaveBeenCalledWith(expect.objectContaining({
+      expectedHistoryPolicyVersion: 1,
+      pupils: [{ studentId: "2", enrollmentId: "enr_2", outcome: "transfer_out", reason: "Moved to Pune" }],
+    })));
+    expect(await screen.findByText(/The pupil's exit is recorded and audited/)).toBeInTheDocument();
+    expect(api.sectionRoster).toHaveBeenCalledTimes(2);
+  });
+
   it("warns about open terms, requires a reason for leavers, and sends exactly the chosen outcomes", async () => {
     vi.mocked(api.progressionPreview).mockResolvedValue(previewOf());
     renderPage();
@@ -87,6 +126,7 @@ describe("year-end progression page", () => {
     // Changing a decision makes the preview stale: the apply step disappears.
     fireEvent.change(screen.getByRole("combobox", { name: "Outcome for Ira Rao" }), { target: { value: "graduate" } });
     expect(screen.queryByRole("button", { name: "Apply to 2 pupils" })).not.toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Reason for Ira Rao" })).toBeRequired();
     fireEvent.change(screen.getByRole("combobox", { name: "Outcome for Ira Rao" }), { target: { value: "promote" } });
     fireEvent.click(await screen.findByRole("button", { name: "Apply to 2 pupils" }));
     expect(api.progressionApply).not.toHaveBeenCalled();

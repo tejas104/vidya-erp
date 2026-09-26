@@ -770,7 +770,7 @@ export function createPeopleHandlers(deps: PeopleHandlerDeps): Record<string, Ro
     return {
       status: 200,
       body: preview,
-      audit: { org: scope.org, resourceId: plan.sectionId, details: { academicYear: plan.academicYear, targetAcademicYear: plan.targetAcademicYear ?? null, counts, ready: preview.ready } },
+      audit: { org: scope.org, resourceId: plan.sectionId, details: { workflow: plan.workflow ?? "year_end", academicYear: plan.academicYear, targetAcademicYear: plan.targetAcademicYear ?? null, counts, ready: preview.ready } },
     };
   };
 

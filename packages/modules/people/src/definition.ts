@@ -221,9 +221,10 @@ const problemSchema = z.object({
   requestId: z.string(),
 });
 
-/** N6: one section's year-end plan. Shared by preview and apply so they cannot drift. */
+/** N6: section year-end plan or today's one-pupil exit. Shared by preview and apply. */
 const progressionChoiceSchema = z.enum(["promote", "detain", "transfer_out", "graduate"]);
 const progressionPlanSchema = z.object({
+  workflow: z.literal("single_exit").optional(),
   sectionId: idSchema,
   academicYear: academicYearSchema,
   endsOn: effectiveDateSchema,
@@ -570,9 +571,9 @@ const routes: RouteSpec[] = [
     module: MODULE_NAME,
     method: "POST",
     path: "/api/v1/people/progression/preview",
-    summary: "Preview a section's year-end promotion, detention and exits",
+    summary: "Preview a section's year-end changes or one pupil's exit today",
     description:
-      "Changes nothing. Runs the same checks as apply and lists every pupil's outcome, status change, next enrollment and ending family access, plus pupils left undecided. Administrator only; scope-checked against the source and target sections.",
+      "Changes nothing. Runs the same checks as apply and lists every pupil's outcome, status change, next enrollment and ending family access, plus pupils left undecided. The single_exit workflow accepts one transfer or graduation dated today. Administrator only; scope-checked against the source and target sections.",
     tags: ["people-students"],
     auth: ADMIN_ONLY,
     request: { body: progressionPlanSchema },
@@ -588,7 +589,7 @@ const routes: RouteSpec[] = [
     module: MODULE_NAME,
     method: "POST",
     path: "/api/v1/people/progression/apply",
-    summary: "Apply a section's year-end promotion, detention and exits",
+    summary: "Apply a section's year-end changes or one pupil's exit today",
     description:
       "All pupils or none, in one transaction with one audit event per pupil and one for the batch. Concluded enrollment rows are kept with their outcome; exits end live guardian access after the leaving day and use the school's versioned read-only historical access setting (ADR-0027 Decision 9).",
     tags: ["people-students"],

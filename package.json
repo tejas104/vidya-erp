@@ -22,6 +22,7 @@
     "test": "vitest run --project unit",
     "test:coverage": "vitest run --project unit --coverage",
     "test:integration": "vitest run --project integration --no-file-parallelism",
+    "test:integration:school": "tsx scripts/school-e2e.ts integration",
     "test:ui": "vitest run --project ui",
     "db:migrate": "tsx scripts/migrate.ts up",
     "db:rollback": "tsx scripts/migrate.ts down --steps 1",

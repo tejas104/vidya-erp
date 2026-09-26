@@ -350,7 +350,7 @@ function HistoryPanel({ studentId, isAdmin }: { studentId: string; isAdmin: bool
             <div className="card" key={entry.id}>
               <strong>{entry.className} · Section {entry.sectionName}</strong>
               <span>{entry.academicYear} · {entry.status} · Effective {entry.startsOn ?? "date needs verification"} to {entry.endsOn ?? (entry.status === "enrolled" ? "current" : entry.status === "voided" ? "voided before use" : "end date needs verification")}</span>
-              {entry.outcome ? <span>Year-end outcome: {OUTCOME_LABEL[entry.outcome]}{entry.outcomeReason ? ` — ${entry.outcomeReason}` : ""}</span> : null}
+              {entry.outcome ? <span>Recorded outcome: {OUTCOME_LABEL[entry.outcome]}{entry.outcomeReason ? ` — ${entry.outcomeReason}` : ""}</span> : null}
               {history.correctedEnrollmentIds.includes(entry.id) ? <span>Outcome corrected; the original record is retained.</span> : null}
               {isAdmin && entry.outcome && !history.correctedEnrollmentIds.includes(entry.id) ? (
                 selected === entry.id ? <form onSubmit={(event) => { event.preventDefault(); void reverse(entry.id); }}>
