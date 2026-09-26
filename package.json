@@ -13,6 +13,7 @@
     "dev:worker": "pnpm --filter @vidya/worker dev",
     "build": "pnpm compile:help && pnpm --filter @vidya/web build",
     "compile:help": "tsx scripts/compile-help.ts",
+    "preview:school-certificate": "tsx scripts/preview-school-certificate.ts",
     "start": "pnpm --filter @vidya/web start",
     "worker": "pnpm --filter @vidya/worker start",
     "typecheck": "pnpm -r typecheck && tsc --noEmit -p tsconfig.json",

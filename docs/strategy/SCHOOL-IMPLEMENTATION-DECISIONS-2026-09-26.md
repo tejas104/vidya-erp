@@ -39,6 +39,15 @@ report cards and attendance PDFs, with an uploaded sample as a private human
 reference. Certificate styling is stored for the later certificate renderer.
 Arbitrary layout mapping and automatic sample conversion are still open.
 
+A pure N7 renderer now produces an English transfer or bonafide PDF from a
+versioned, frozen certificate snapshot. The local `pnpm
+preview:school-certificate` command writes one explicitly fictional PDF under
+`output/pdf/` for layout review. It does not issue a certificate from a pupil
+record, allocate a school/year number, approve an exception, create an audit
+event, or make number/QR verification available. Those are the next N7 service
+and database steps. Hindi text needs a packaged, licensed font and layout
+proof before the pilot option can be enabled.
+
 ## N5: attendance escalation
 
 Use the term's existing threshold. Escalate missing registers to staff before

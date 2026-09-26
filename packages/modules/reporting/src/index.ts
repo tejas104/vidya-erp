@@ -57,6 +57,10 @@ export { csvDocument, csvRow, escapeCsvCell, isFormulaInjection };
 export type { ReportSources } from "./report-data";
 export { SNAPSHOT_VERSION as SCHOOL_REPORT_CARD_SNAPSHOT_VERSION } from "./school/report-card-contract";
 export type { ReportCardPreview, ReportCardSnapshot } from "./school/report-card-contract";
+export { CERTIFICATE_SNAPSHOT_VERSION, certificateSnapshotSchema,
+  parseStoredCertificateSnapshot } from "./school/certificate-contract";
+export type { CertificateSnapshot } from "./school/certificate-contract";
+export { renderCertificatePdf } from "./school/certificate-pdf";
 
 export interface ReportingModuleDeps {
   readonly db: Db;
