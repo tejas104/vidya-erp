@@ -8,11 +8,18 @@ const dateOnly = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine((value) => {
   return Number.isFinite(time) && new Date(time).toISOString().slice(0, 10) === value;
 }, "valid calendar date required");
 
+// People and audit identifiers are opaque strings (for example stu_<UUID>),
+// not bare UUIDs. Keep their length bound aligned with the platform ID contract.
+const opaqueId = z.string().min(1).max(64).refine(
+  (value) => value === value.trim() && !/[\x00-\x1f\x7f]/.test(value),
+  "valid opaque identifier required",
+);
+
 const common = z.object({
   snapshotVersion: z.literal(CERTIFICATE_SNAPSHOT_VERSION),
-  schoolId: z.string().uuid(),
-  studentId: z.string().uuid(),
-  enrollmentId: z.string().uuid(),
+  schoolId: opaqueId,
+  studentId: opaqueId,
+  enrollmentId: opaqueId,
   number: z.string().trim().min(3).max(64),
   academicYear: z.string().trim().min(4).max(24),
   issuedAt: z.string().datetime({ offset: true }),
@@ -33,8 +40,8 @@ const common = z.object({
 }).strict();
 
 const transferSource = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("recorded_transfer"), progressionAuditId: z.string().uuid() }).strict(),
-  z.object({ kind: z.literal("manual_exception"), approvalAuditId: z.string().uuid(),
+  z.object({ kind: z.literal("recorded_transfer"), progressionAuditId: opaqueId }).strict(),
+  z.object({ kind: z.literal("manual_exception"), approvalAuditId: opaqueId,
     exceptionReason: z.string().trim().min(3).max(300) }).strict(),
 ]);
 

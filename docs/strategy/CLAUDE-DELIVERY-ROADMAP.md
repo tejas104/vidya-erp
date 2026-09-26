@@ -10,7 +10,8 @@ changes — this is a living record, not a plan written once.
 - Last revised: 2026-09-25 (school marks CSV import increment)
 
 Companion documents: [COMPETITIVE-PARITY-MATRIX.md](COMPETITIVE-PARITY-MATRIX.md),
-`DELIVERY-AND-REVIEW-REQUIREMENTS.md`, `VIDYA-SCHOOL-FIRST-SAAS-PLAN.md`.
+`DELIVERY-AND-REVIEW-REQUIREMENTS.md`, `VIDYA-SCHOOL-FIRST-SAAS-PLAN.md`, and the
+[26 September workflow and UI review](SCHOOL-PRODUCT-QUALITY-REVIEW-2026-09-26.md).
 
 ## Status legend
 

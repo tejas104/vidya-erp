@@ -4,9 +4,9 @@ import { CERTIFICATE_SNAPSHOT_VERSION, certificateSnapshotSchema,
 
 const common = {
   snapshotVersion: CERTIFICATE_SNAPSHOT_VERSION,
-  schoolId: "11111111-1111-4111-8111-111111111111",
-  studentId: "22222222-2222-4222-8222-222222222222",
-  enrollmentId: "33333333-3333-4333-8333-333333333333",
+  schoolId: "col_11111111-1111-4111-8111-111111111111",
+  studentId: "stu_22222222-2222-4222-8222-222222222222",
+  enrollmentId: "enr_33333333-3333-4333-8333-333333333333",
   number: "GF/2026-27/001",
   academicYear: "2026-27",
   issuedAt: "2026-09-26T06:30:00.000Z",
@@ -27,17 +27,19 @@ describe("school certificate stored contract", () => {
   it("requires recorded transfer provenance or a specific approved exception", () => {
     const transfer = { ...common, kind: "transfer", leavingOn: "2026-09-26",
       leavingReason: "Family moved", enrollment: { ...common.enrollment, endsOn: "2026-09-26" },
-      source: { kind: "recorded_transfer", progressionAuditId: "44444444-4444-4444-8444-444444444444" } };
+      source: { kind: "recorded_transfer", progressionAuditId: "audit_44444444" } };
     expect(certificateSnapshotSchema.safeParse(transfer).success).toBe(true);
     expect(certificateSnapshotSchema.safeParse({ ...transfer, enrollment: common.enrollment }).success).toBe(false);
     expect(certificateSnapshotSchema.safeParse({ ...transfer,
-      source: { kind: "manual_exception", approvalAuditId: "55555555-5555-4555-8555-555555555555",
+      source: { kind: "manual_exception", approvalAuditId: "audit_55555555",
         exceptionReason: "Principal approved after paper record review" } }).success).toBe(true);
     expect(certificateSnapshotSchema.safeParse({ ...transfer,
       source: { kind: "manual_exception", exceptionReason: "Missing approval" } }).success).toBe(false);
   });
 
   it("refuses invented dates, corrected numbers reused, and unknown versions", () => {
+    expect(certificateSnapshotSchema.safeParse({ ...common, kind: "bonafide", studentId: "" }).success).toBe(false);
+    expect(certificateSnapshotSchema.safeParse({ ...common, kind: "bonafide", studentId: ` ${common.studentId}` }).success).toBe(false);
     expect(certificateSnapshotSchema.safeParse({ ...common, kind: "bonafide",
       enrollment: { ...common.enrollment, startsOn: "2026-02-30" } }).success).toBe(false);
     expect(certificateSnapshotSchema.safeParse({ ...common, kind: "bonafide",
