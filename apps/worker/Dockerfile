@@ -17,6 +17,8 @@ WORKDIR /repo
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/web/package.json apps/web/
 COPY apps/worker/package.json apps/worker/
+COPY apps/operator/package.json apps/operator/
+COPY packages/control-plane/package.json packages/control-plane/
 COPY packages/platform/package.json packages/platform/
 COPY packages/ui-system/package.json packages/ui-system/
 COPY packages/modules/academics/package.json packages/modules/academics/
