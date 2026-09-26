@@ -77,3 +77,15 @@ then server-authorized reads and mutations against the vendor database;
 publish signed, bounded entitlements only after outage, revocation, key
 rotation and school-data export behavior have been exercised with two isolated
 synthetic tenants.
+
+## Operator identity boundary after the registry checkpoint
+
+A second vendor migration now adds an OIDC issuer to the named operator
+record. Previously recorded subject-only rows retain a null issuer, so they
+cannot resolve to a live operator until deliberately rebound. Lookup uses the
+exact verified issuer and stable subject, never email. A pure assurance gate
+requires a provider-configured MFA `acr` and a fresh `auth_time` (no older than
+12 hours). This is defense in depth after an OIDC adapter has validated token
+signature, audience, issuer, nonce, expiry and the login transaction. The
+adapter, provider selection, session, and production route are still absent;
+this gate is **not** an authentication implementation or a live console.

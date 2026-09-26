@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { Pool, PoolClient } from "pg";
 import { z } from "zod";
 import { tenantInputSchema } from "./tenant-contract";
+import { isAssuredOperatorIdentity, type AssuredOperatorIdentity } from "./operator-identity";
 
 export class RegistryConflict extends Error {
   constructor(message: string) { super(message); this.name = "RegistryConflict"; }
@@ -39,7 +40,7 @@ async function transaction<T>(pool: Pool, action: (client: PoolClient) => Promis
 
 async function requireActiveOperator(client: PoolClient, operatorId: string): Promise<void> {
   const active = await client.query(
-    "SELECT id FROM cp_operators WHERE id = $1 AND disabled_at IS NULL FOR SHARE", [operatorId],
+    "SELECT id FROM cp_operators WHERE id = $1 AND identity_issuer IS NOT NULL AND disabled_at IS NULL FOR SHARE", [operatorId],
   );
   if (active.rowCount !== 1) throw new Error("active operator required");
 }
@@ -47,6 +48,17 @@ async function requireActiveOperator(client: PoolClient, operatorId: string): Pr
 /** The caller must supply an authenticated, active control-plane operator ID. */
 export function createRegistryRepo(pool: Pool) {
   return {
+    /** Call only with claims checked by a trusted OIDC adapter and the assurance gate. */
+    async resolveOperatorId(identity: AssuredOperatorIdentity): Promise<string> {
+      if (!isAssuredOperatorIdentity(identity)) throw new Error("operator identity assurance failed");
+      const result = await pool.query<{ id: string }>(
+        `SELECT id FROM cp_operators WHERE identity_issuer = $1 AND identity_subject = $2
+         AND disabled_at IS NULL`, [identity.issuer, identity.subject],
+      );
+      if (result.rowCount !== 1) throw new Error("active operator required");
+      return result.rows[0]!.id;
+    },
+
     async registerTenant(raw: unknown, requestId: string, operatorId: string): Promise<{ id: string; created: boolean }> {
       const input = tenantInputSchema.parse(raw);
       if (!z.string().uuid().safeParse(requestId).success || !z.string().uuid().safeParse(operatorId).success) {
