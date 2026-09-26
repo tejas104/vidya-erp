@@ -1,6 +1,8 @@
 import { z } from "zod";
 import type { JobSpec, ModuleDefinition, RouteSpec } from "@vidya/platform";
 import { reportCardPreviewSchema, rosterStudentSchema } from "./school/report-card-contract";
+import { documentFamilySchema, documentStyleSchema, sampleSchema } from "./school/document-format";
+import { UPLOAD_BODY_MAX_BYTES } from "@vidya/platform";
 
 export const MODULE_NAME = "reporting";
 export const TABLE_PREFIX = "rpt_";
@@ -58,6 +60,33 @@ const SCHOOL_LEADERS = { public: false as const, requirement: { rolesAnyOf: ["ad
 const ADMIN_ONLY = { public: false as const, requirement: { rolesAnyOf: ["admin" as const] } };
 
 const routes: RouteSpec[] = [
+  {
+    id: "reporting.school-document-format-get", module: MODULE_NAME, method: "GET",
+    path: "/api/v1/school/document-formats/{collegeId}/{family}",
+    summary: "Read a school's controlled document format (administrator)", tags: ["reporting"], auth: ADMIN_ONLY,
+    request: { params: z.object({ collegeId: idSchema, family: documentFamilySchema }) },
+    responses: { 200: { description: "Current format and sample metadata" }, 403: { description: "Access denied", schema: problemSchema } },
+  },
+  {
+    id: "reporting.school-document-format-save", module: MODULE_NAME, method: "PUT",
+    path: "/api/v1/school/document-formats/{collegeId}/{family}",
+    summary: "Append a school document-format version; optional PDF/DOCX sample is reference only", tags: ["reporting"], auth: ADMIN_ONLY,
+    request: { params: z.object({ collegeId: idSchema, family: documentFamilySchema }),
+      body: z.object({ expectedVersion: z.number().int().min(0), style: documentStyleSchema, sample: sampleSchema.optional() }).strict() },
+    bodyMaxBytes: UPLOAD_BODY_MAX_BYTES,
+    audit: { action: "reporting.school-document-format-saved", resourceType: "college" },
+    responses: { 200: { description: "Saved format version" }, 403: { description: "Access denied", schema: problemSchema },
+      409: { description: "Format changed since it was read", schema: problemSchema }, 422: { description: "Invalid sample", schema: problemSchema } },
+  },
+  {
+    id: "reporting.school-document-format-sample", module: MODULE_NAME, method: "GET",
+    path: "/api/v1/school/document-formats/{collegeId}/{family}/sample",
+    summary: "Download the uploaded format reference (administrator)", tags: ["reporting"], auth: ADMIN_ONLY,
+    request: { params: z.object({ collegeId: idSchema, family: documentFamilySchema }) },
+    audit: { action: "reporting.school-document-format-sample-downloaded", resourceType: "college" },
+    responses: { 200: { description: "Uploaded sample", contentType: "application/octet-stream" },
+      403: { description: "Access denied", schema: problemSchema } },
+  },
   {
     id: "reporting.class-credentials",
     module: MODULE_NAME,

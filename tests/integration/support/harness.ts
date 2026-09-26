@@ -139,6 +139,15 @@ export function buildStack(edition: "college" | "school" = "college") {
       return receipt;
     },
   };
+  const reportingAuditFault: { failAction: string | null } = { failAction: null };
+  const reportingAudit: TransactionalAuditLogger = {
+    record: (event) => system.service.audit.record(event),
+    recordInTransaction: async (tx, event) => {
+      const receipt = await system.service.audit.recordInTransaction(tx, event);
+      if (reportingAuditFault.failAction === event.action) throw new Error("injected reporting audit failure");
+      return receipt;
+    },
+  };
   const people = createPeopleModule({
     hasNextYearRecords: async (tx, studentId, year) => {
       for (const check of [academicsHasPupilYearRecords, schoolAcademicsHasPupilYearRecords,
@@ -212,11 +221,14 @@ export function buildStack(edition: "college" | "school" = "college") {
   const enqueuedReports: { reportId: string; source: string }[] = [];
   const reporting = createReportingModule({
     db,
+    edition,
     schoolAcademicsRead: schoolAcademics.service.readModel,
     academicsRead: academics.service.readModel,
     metrics,
-    audit: system.service.audit,
+    audit: reportingAudit,
     analyticsRead: analytics.service.readModel,
+    sources: { gradeCard: results.service.gradeCard, teacherAttendance: people.service.staffAttendanceSource,
+      ...(edition === "school" ? { schoolAttendanceReview: schoolAcademics.service.attendanceReview } : {}) },
     storage: { client: objectStorage, bucket: process.env.S3_BUCKET ?? "vidya-int" },
     enqueueReport: async (payload) => {
       enqueuedReports.push(payload);
@@ -371,6 +383,7 @@ export function buildStack(edition: "college" | "school" = "college") {
     core,
     enqueuedImports,
     peopleAuditFault,
+    reportingAuditFault,
     enqueuedRollups,
     enqueuedReports,
     call,

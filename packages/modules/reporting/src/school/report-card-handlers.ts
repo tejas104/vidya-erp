@@ -11,6 +11,8 @@ import { ReportCardBuildError, type ReportCardBuilder } from "./report-card-serv
 import { renderReportCardPdf } from "./report-card-pdf";
 import type { ReportCardRepo } from "./report-card-repo";
 import { parseStoredSnapshot } from "./report-card-contract";
+import { DEFAULT_DOCUMENT_STYLE, documentStyleSchema } from "./document-format";
+import type { DocumentFormatRepo } from "./document-format-repo";
 
 /**
  * Transport for school report cards. Thin by design: it resolves the target's
@@ -55,6 +57,7 @@ export interface ReportCardHandlerDeps {
   readonly directory: PeopleDirectory;
   readonly scopeChecker: ScopeChecker;
   readonly guardianAccess: PeopleModuleService["guardianAccess"];
+  readonly formats?: DocumentFormatRepo;
 }
 
 export function createSchoolReportCardHandlers(
@@ -241,6 +244,7 @@ export function createSchoolReportCardHandlers(
         classId: authorized.org.classId,
         sectionId: authorized.org.sectionId ?? null,
       });
+      const style = deps.formats ? (await deps.formats.latest(authorized.org.collegeId, "report_card"))?.style ?? DEFAULT_DOCUMENT_STYLE : DEFAULT_DOCUMENT_STYLE;
       const row = await deps.repo.insert({
         studentId,
         termId,
@@ -250,6 +254,7 @@ export function createSchoolReportCardHandlers(
         classId: authorized.org.classId,
         sectionId: authorized.org.sectionId ?? null,
         payload: snapshot,
+        documentStyle: style,
         generatedBy: principal.id,
       });
       return {
@@ -309,7 +314,8 @@ export function createSchoolReportCardHandlers(
 
     return {
       status: 200,
-      body: await renderReportCardPdf(snapshot, row.generatedAt),
+      body: await renderReportCardPdf(snapshot, row.generatedAt,
+        row.documentStyle == null ? DEFAULT_DOCUMENT_STYLE : documentStyleSchema.parse(row.documentStyle)),
       contentType: "application/pdf",
       audit: {
         org,
@@ -371,7 +377,8 @@ export function createSchoolReportCardHandlers(
       await deps.repo.publishedForTerm(studentId, row.termId, cutoff(access.recordsThrough)) !== row.id) return fail(403, "access denied");
     const snapshot = parseStoredSnapshot(row.payload);
     if (snapshot === null) return fail(409, "A published report card cannot be displayed. Contact the school office.");
-    return { status: 200, body: await renderReportCardPdf(snapshot, row.generatedAt), contentType: "application/pdf",
+    return { status: 200, body: await renderReportCardPdf(snapshot, row.generatedAt,
+      row.documentStyle == null ? DEFAULT_DOCUMENT_STYLE : documentStyleSchema.parse(row.documentStyle)), contentType: "application/pdf",
       audit: { org: { collegeId: row.collegeId, departmentId: row.departmentId, classId: row.classId },
         resourceId: row.id, details: { studentId: row.studentId, termId: row.termId } } };
   };

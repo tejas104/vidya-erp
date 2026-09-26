@@ -289,6 +289,7 @@ async function main(): Promise<void> {
 
   const reporting = createReportingModule({
     db,
+    edition: config.edition,
     schoolAcademicsRead: schoolAcademics.service.readModel,
     academicsRead: academics.service.readModel,
     metrics,

@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildStack, type Stack } from "./support/harness";
+import { createLogger } from "@vidya/platform";
+import { REPORT_JOB_NAME } from "@vidya/module-reporting";
 
 let stack: Stack;
 let admin: string;
@@ -88,5 +90,27 @@ describe("school attendance review with real database and authorization", () => 
     const review = await stack.call("school-academics.attendance-shortfall", { cookie: admin, params: { sectionId }, query: { termId, through: days[2]! } });
     const result = await review.json() as { students: { studentId: string; expectedDays: number | null; dateIssue: string | null }[] };
     expect(result.students.find((student) => student.studentId === pupilUnknown)).toMatchObject({ expectedDays: 1, dateIssue: null });
+  });
+
+  it("freezes the attendance PDF style when queued, before later format edits", async () => {
+    const params = { collegeId, family: "attendance_review" };
+    const current = (await (await stack.call("reporting.school-document-format-get", { cookie: admin, params })).json()) as { version: number };
+    const firstStyle = { schoolName: "Greenfield School", accentColor: "#176A57", footerText: "Attendance office" };
+    expect((await stack.call("reporting.school-document-format-save", { cookie: admin, params,
+      body: { expectedVersion: current.version, style: firstStyle } })).status).toBe(200);
+    const requested = await stack.call("reporting.request", { cookie: admin,
+      body: { format: "pdf", academicYear: year, report: { kind: "school-attendance-review", sectionId, termId, through: days[2] } } });
+    expect(requested.status, await requested.clone().text()).toBe(202);
+    const { reportId } = (await requested.json()) as { reportId: string };
+    const secondStyle = { schoolName: "Greenfield Academy", accentColor: "#AA3311", footerText: "Changed later" };
+    expect((await stack.call("reporting.school-document-format-save", { cookie: admin, params,
+      body: { expectedVersion: current.version + 1, style: secondStyle } })).status).toBe(200);
+    const row = await stack.pool.query("SELECT document_style FROM rpt_reports WHERE id = $1", [reportId]);
+    expect(row.rows[0]?.document_style).toEqual(firstStyle);
+    await stack.reporting.jobProcessors[REPORT_JOB_NAME]!({ reportId, source: "integration-test" },
+      { logger: createLogger({ level: "silent", serviceName: "format-test" }), jobId: `job-${reportId}`, attempt: 1 });
+    const downloaded = await stack.call("reporting.download", { cookie: admin, params: { reportId } });
+    expect(downloaded.status, await downloaded.clone().text()).toBe(200);
+    expect(Buffer.from(await downloaded.arrayBuffer()).subarray(0, 5).toString()).toBe("%PDF-");
   });
 });

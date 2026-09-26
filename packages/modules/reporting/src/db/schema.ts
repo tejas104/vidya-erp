@@ -1,4 +1,5 @@
-import { bigint, index, integer, jsonb, pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import { bigint, index, integer, jsonb, pgTable, primaryKey, text, timestamp } from "drizzle-orm/pg-core";
+import type { DocumentStyle } from "../school/document-format";
 
 /**
  * INTERNAL to the reporting module (not exported from index.ts). One table,
@@ -25,6 +26,7 @@ export const rptReports = pgTable(
     rows: integer("rows").notNull().default(0),
     error: text("error"),
     requestedBy: text("requested_by").notNull(),
+    documentStyle: jsonb("document_style").$type<DocumentStyle | null>(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     finishedAt: timestamp("finished_at", { withTimezone: true }),
   },
@@ -67,6 +69,7 @@ export const rptSchoolReportCards = pgTable(
     sectionId: text("section_id"),
     /** The frozen, fully-computed report-card content. */
     payload: jsonb("payload").notNull(),
+    documentStyle: jsonb("document_style").$type<DocumentStyle | null>(),
     generatedBy: text("generated_by").notNull(),
     generatedAt: timestamp("generated_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -99,3 +102,17 @@ export const rptSchoolReportCardPublications = pgTable(
 );
 
 export type RptSchoolReportCardPublicationRow = typeof rptSchoolReportCardPublications.$inferSelect;
+
+export const rptSchoolDocumentFormats = pgTable("rpt_school_document_formats", {
+  collegeId: text("college_id").notNull(),
+  family: text("family").notNull(),
+  version: integer("version").notNull(),
+  style: jsonb("style").$type<DocumentStyle>().notNull(),
+  sampleKey: text("sample_key"),
+  sampleFilename: text("sample_filename"),
+  sampleContentType: text("sample_content_type"),
+  changedBy: text("changed_by").notNull(),
+  changedAt: timestamp("changed_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [primaryKey({ columns: [table.collegeId, table.family, table.version] })]);
+
+export type RptSchoolDocumentFormatRow = typeof rptSchoolDocumentFormats.$inferSelect;

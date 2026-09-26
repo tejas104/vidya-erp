@@ -264,6 +264,15 @@ const EXPECTATIONS: Record<string, MigrationExpectation> = {
     functions: ["rpt_guard_progression_report", "rpt_guard_progression_card"],
     triggers: [{ table: "rpt_reports", name: "rpt_report_progression_guard" }, { table: "rpt_school_report_cards", name: "rpt_card_progression_guard" }],
   },
+  "reporting/0009_school_document_formats": {
+    tables: ["rpt_school_document_formats"],
+    columns: [
+      { table: "rpt_school_report_cards", column: "document_style" },
+      { table: "rpt_reports", column: "document_style" },
+    ],
+    functions: ["rpt_school_document_formats_immutable"],
+    triggers: [{ table: "rpt_school_document_formats", name: "rpt_school_document_formats_no_update" }],
+  },
 
   "timetable/0000_timetable": { tables: ["ttb_periods", "ttb_entries"] },
   "coursework/0000_coursework": {

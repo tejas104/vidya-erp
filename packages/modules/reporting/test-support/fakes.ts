@@ -79,6 +79,7 @@ export class InMemoryReportsRepo implements ReportsRepo {
       params: input.params,
       academicYear: input.academicYear,
       requesterPrincipal: input.requesterPrincipal,
+      documentStyle: input.documentStyle ?? null,
       status: "pending",
       objectKey: null,
       rows: 0,

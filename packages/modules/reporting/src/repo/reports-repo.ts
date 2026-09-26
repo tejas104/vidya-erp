@@ -3,6 +3,7 @@ import { desc, eq } from "drizzle-orm";
 import type { Db, Role, ScopeGrant } from "@vidya/platform";
 import { rptReports, type RptReportRow } from "../db/schema";
 import type { ReportParams } from "../report-data";
+import type { DocumentStyle } from "../school/document-format";
 
 export type ReportFormat = "pdf" | "csv" | "xlsx";
 export type ReportStatus = "pending" | "running" | "completed" | "failed";
@@ -23,6 +24,7 @@ export interface ReportsRepo {
     academicYear: string;
     requestedBy: string;
     requesterPrincipal: RequesterSnapshot;
+    documentStyle?: DocumentStyle;
   }): Promise<RptReportRow>;
   get(id: string): Promise<RptReportRow | null>;
   markRunning(id: string): Promise<void>;
@@ -48,6 +50,7 @@ export function createReportsRepo(db: Db): ReportsRepo {
           academicYear: input.academicYear,
           requesterPrincipal: input.requesterPrincipal,
           requestedBy: input.requestedBy,
+          documentStyle: input.documentStyle,
         })
         .returning();
       return rows[0]!;

@@ -528,4 +528,27 @@ describe("School report cards over real Postgres", () => {
     expect((await pdf(after.snapshotId)).status).toBe(403);
     expect((await pdf(before.snapshotId)).status).toBe(403);
   });
+
+  it("freezes the school's chosen PDF style on each issued report card", async () => {
+    const params = { collegeId, family: "report_card" };
+    const current = await stack.call("reporting.school-document-format-get", { cookie: admin, params });
+    const { version } = (await current.json()) as { version: number };
+    const firstStyle = { schoolName: "Greenfield School", accentColor: "#176A57", footerText: "Term office copy" };
+    expect((await stack.call("reporting.school-document-format-save", { cookie: admin, params,
+      body: { expectedVersion: version, style: firstStyle } })).status).toBe(200);
+    const first = (await (await generate(admin)).json()) as { snapshotId: string };
+    const before = await stack.call("reporting.school-report-card-download", { cookie: admin, params: { snapshotId: first.snapshotId } });
+    expect(before.status).toBe(200);
+    const beforeBytes = Buffer.from(await before.arrayBuffer());
+
+    const secondStyle = { schoolName: "Greenfield Academy", accentColor: "#AA3311", footerText: "Revised office copy" };
+    expect((await stack.call("reporting.school-document-format-save", { cookie: admin, params,
+      body: { expectedVersion: version + 1, style: secondStyle } })).status).toBe(200);
+    const after = await stack.call("reporting.school-report-card-download", { cookie: admin, params: { snapshotId: first.snapshotId } });
+    expect(Buffer.from(await after.arrayBuffer()).equals(beforeBytes)).toBe(true);
+    const second = (await (await generate(admin)).json()) as { snapshotId: string };
+    const rows = await stack.pool.query("SELECT id, document_style FROM rpt_school_report_cards WHERE id = ANY($1)", [[first.snapshotId, second.snapshotId]]);
+    expect(rows.rows.find((row) => row.id === first.snapshotId)?.document_style).toEqual(firstStyle);
+    expect(rows.rows.find((row) => row.id === second.snapshotId)?.document_style).toEqual(secondStyle);
+  });
 });

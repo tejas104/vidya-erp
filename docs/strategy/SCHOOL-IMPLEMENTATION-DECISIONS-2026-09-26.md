@@ -34,6 +34,11 @@ authorizes a push, merge, deployment or publication.
 | Fee clearance | Separate clearance letter; each school may choose whether clearance blocks transfer-certificate issue. |
 | School-specific format | Apply to report cards, certificates and attendance reports. Allow a school to upload a sample PDF or DOCX and to edit a controlled template in Vidya. Generated values must come from verified records. |
 
+The first local format editor now offers school name, accent and footer for
+report cards and attendance PDFs, with an uploaded sample as a private human
+reference. Certificate styling is stored for the later certificate renderer.
+Arbitrary layout mapping and automatic sample conversion are still open.
+
 ## N5: attendance escalation
 
 Use the term's existing threshold. Escalate missing registers to staff before

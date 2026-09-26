@@ -12,3 +12,9 @@ Use **Report cards** to review one student's marks and attendance before creatin
 6. A school administrator or principal reviews the issued PDF, then chooses **Publish to family** and confirms. The roster marks the child **Published**. A later generated snapshot stays private until separately published; **Withdraw family access** stops family downloads while preserving the school record.
 
 If loading the roster or preview fails, use **Retry** without losing the chosen scope. If generation fails, read the message and try again after checking the preview.
+
+An administrator can set this school's PDF name, accent colour and footer on
+**Document formats** before issuing a card. An uploaded PDF or DOCX sample is
+reference material for the editor. It does not replace marks or automatically
+become a layout. Each issued card keeps the format version used at issue time,
+so a later school edit does not change an older download.

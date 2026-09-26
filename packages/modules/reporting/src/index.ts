@@ -20,7 +20,7 @@ import {
   getObjectBytes,
   isFormulaInjection,
   putObjectBytes,
-  type AuditLogger,
+  type TransactionalAuditLogger,
   type Db,
   type Metrics,
   type ObjectStorageClient,
@@ -41,6 +41,8 @@ import { createReportProcessor } from "./jobs/report-generate";
 import { createReportCardRepo } from "./school/report-card-repo";
 import { ReportCardBuilder } from "./school/report-card-service";
 import { createSchoolReportCardHandlers } from "./school/report-card-handlers";
+import { createDocumentFormatRepo } from "./school/document-format-repo";
+import { createSchoolDocumentFormatHandlers } from "./school/document-format-handlers";
 
 export {
   REPORT_JOB_NAME,
@@ -59,7 +61,8 @@ export type { ReportCardPreview, ReportCardSnapshot } from "./school/report-card
 export interface ReportingModuleDeps {
   readonly db: Db;
   readonly metrics: Metrics;
-  readonly audit: AuditLogger;
+  readonly audit: TransactionalAuditLogger;
+  readonly edition: "school" | "college";
   /** #5's scoped read model — the source of analytics report content. */
   readonly analyticsRead: AnalyticsReadModel;
   /** Injected non-analytics sources (results grade-card); absent kinds fail closed. */
@@ -84,6 +87,7 @@ export type ReportingService = Record<string, never>;
 
 export function createReportingModule(deps: ReportingModuleDeps): RuntimeModule<ReportingService> {
   const repo = createReportsRepo(deps.db);
+  const formatRepo = createDocumentFormatRepo(deps.db, deps.audit);
   const reportsTotal = new Counter({
     name: "vidya_reports_total",
     help: "Report generation by kind, format and outcome",
@@ -111,12 +115,24 @@ export function createReportingModule(deps: ReportingModuleDeps): RuntimeModule<
       get: (key) => getObjectBytes(deps.storage.client, deps.storage.bucket, key),
     },
     audit: deps.audit,
+    formats: formatRepo,
+    directory: deps.peopleDirectory,
     onFinished: (kind, format, status) => reportsTotal.inc({ kind, format, status }),
   });
 
   const module: RuntimeModule<ReportingService> = {
     definition: reportingModuleDefinition,
     handlers: {
+      ...createSchoolDocumentFormatHandlers({
+        edition: deps.edition, repo: formatRepo, directory: deps.peopleDirectory, scopeChecker: deps.scopeChecker,
+        store: {
+          put: async (key, bytes, contentType) => {
+            await ensureReady();
+            await putObjectBytes(deps.storage.client, deps.storage.bucket, key, bytes, contentType);
+          },
+          get: (key) => getObjectBytes(deps.storage.client, deps.storage.bucket, key),
+        },
+      }),
       ...createReportingHandlers({
         service,
         enqueue: deps.enqueueReport,
@@ -136,6 +152,7 @@ export function createReportingModule(deps: ReportingModuleDeps): RuntimeModule<
         directory: deps.peopleDirectory,
         scopeChecker: deps.scopeChecker,
         guardianAccess: deps.guardianAccess,
+        formats: formatRepo,
       }),
     },
     jobProcessors: {

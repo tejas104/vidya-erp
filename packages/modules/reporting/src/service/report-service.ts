@@ -11,6 +11,9 @@ import {
 } from "../report-data";
 import type { ReportFormat, ReportsRepo, RequesterSnapshot } from "../repo/reports-repo";
 import type { RptReportRow } from "../db/schema";
+import type { PeopleDirectory } from "@vidya/module-people";
+import { DEFAULT_DOCUMENT_STYLE, documentStyleSchema } from "../school/document-format";
+import type { DocumentFormatRepo } from "../school/document-format-repo";
 
 /** Object-storage port; the module factory adapts the platform S3 client. */
 export interface ReportStore {
@@ -25,6 +28,8 @@ export interface ReportServiceDeps {
   readonly sources?: ReportSources;
   readonly store: ReportStore;
   readonly audit: AuditLogger;
+  readonly formats?: DocumentFormatRepo;
+  readonly directory?: PeopleDirectory;
   readonly onFinished?: (kind: string, format: string, status: "completed" | "failed") => void;
 }
 
@@ -68,12 +73,19 @@ export class ReportService {
     format: ReportFormat,
     academicYear: string,
   ): Promise<RptReportRow> {
+    let documentStyle;
+    if (params.kind === "school-attendance-review" && this.deps.formats && this.deps.directory) {
+      const org = await this.deps.directory.sectionPath(params.sectionId);
+      if (!org) throw new Error("School attendance section is no longer available.");
+      documentStyle = (await this.deps.formats.latest(org.collegeId, "attendance_review"))?.style ?? DEFAULT_DOCUMENT_STYLE;
+    }
     return this.deps.repo.create({
       kind: params.kind,
       format,
       params,
       academicYear,
       requestedBy: principal.id,
+      ...(documentStyle ? { documentStyle } : {}),
       requesterPrincipal: {
         id: principal.id,
         displayName: principal.displayName ?? principal.id,
@@ -125,7 +137,8 @@ export class ReportService {
         ? new TextEncoder().encode(renderCsv(data))
         : format === "xlsx"
           ? await renderXlsx(data)
-          : new Uint8Array(await renderPdf(data));
+          : new Uint8Array(await renderPdf(data,
+            row.documentStyle == null ? DEFAULT_DOCUMENT_STYLE : documentStyleSchema.parse(row.documentStyle)));
       const objectKey = `reports/${reportId}.${format}`;
       await this.deps.store.put(objectKey, bytes, CONTENT_TYPE[format]);
       await this.deps.repo.finish(reportId, { status: "completed", objectKey, rows: data.rowCount });

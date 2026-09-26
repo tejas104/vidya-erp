@@ -1,5 +1,6 @@
 import PDFDocument from "pdfkit";
 import type { ReportCardSnapshot } from "./report-card-contract";
+import { DEFAULT_DOCUMENT_STYLE, type DocumentStyle } from "./document-format";
 
 /**
  * Renders an issued report card to PDF with pdfkit — pure JS, built-in fonts,
@@ -18,7 +19,6 @@ import type { ReportCardSnapshot } from "./report-card-contract";
 const INK = "#1a2233";
 const MUTED = "#565c68";
 const RULE = "#d6cfbc";
-const ACCENT = "#b23a2e";
 
 const NOT_RECORDED = "Not recorded";
 
@@ -29,6 +29,7 @@ function percent(value: number | null): string {
 export function renderReportCardPdf(
   snapshot: ReportCardSnapshot,
   issuedAt: Date,
+  style: DocumentStyle = DEFAULT_DOCUMENT_STYLE,
 ): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const title = `Report card — ${snapshot.student.fullName} — ${snapshot.term.name}`;
@@ -58,7 +59,7 @@ export function renderReportCardPdf(
     };
 
     // Masthead
-    doc.fillColor(ACCENT).fontSize(9).font("Helvetica-Bold").text("VIDYA", left, doc.y, { characterSpacing: 2 });
+    doc.fillColor(style.accentColor).fontSize(9).font("Helvetica-Bold").text(style.schoolName, left, doc.y, { characterSpacing: 2 });
     doc.moveDown(0.2);
     doc.fillColor(INK).fontSize(20).font("Helvetica-Bold").text("Report card", { lineGap: 1 });
     doc.fillColor(MUTED).fontSize(13).font("Helvetica").text(
@@ -185,6 +186,11 @@ export function renderReportCardPdf(
       { width },
     );
 
+    if (style.footerText) {
+      ensureSpace(28);
+      doc.moveDown(0.5);
+      doc.fillColor(MUTED).fontSize(8).font("Helvetica").text(style.footerText, left, doc.y, { width });
+    }
     doc.end();
   });
 }

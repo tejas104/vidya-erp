@@ -3,6 +3,7 @@ import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import type { Db } from "@vidya/platform";
 import { rptSchoolReportCards, rptSchoolReportCardPublications, type RptSchoolReportCardRow } from "../db/schema";
 import type { ReportCardSnapshot } from "./report-card-contract";
+import type { DocumentStyle } from "./document-format";
 
 export interface NewReportCardSnapshot {
   readonly studentId: string;
@@ -13,6 +14,7 @@ export interface NewReportCardSnapshot {
   readonly classId: string;
   readonly sectionId: string | null;
   readonly payload: ReportCardSnapshot;
+  readonly documentStyle?: DocumentStyle;
   readonly generatedBy: string;
 }
 

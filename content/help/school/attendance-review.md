@@ -7,3 +7,9 @@ Choose the term, section and through date, then select **Review attendance**. Th
 The review includes current and previous enrollments in this section for the academic year. The effective dates determine which days count for each pupil; the date the record was entered does not. Open **Check dates** to inspect the pupil's history. An administrator can correct an unverified date under **Student records → Enrollment dates**. A correction is audited and a stale editor must reload before saving. This screen does not automatically impose a consequence on a pupil.
 
 After loading a review, choose **Prepare PDF**, **Prepare Excel**, or **Prepare CSV**. The report uses the same scoped calculation as this screen and shows missing registers, incomplete entries, and dates that still need verification. Download becomes available when the background report finishes; access is checked again when it is downloaded. An export reflects the records at its generation time, so prepare a new one after corrections.
+# School PDF format
+
+An administrator can edit the **Attendance review** PDF style on **Document
+formats** and upload a PDF or DOCX reference sample. Only the controlled name,
+accent and footer affect a generated PDF. An export freezes the chosen style
+when it is requested; Excel and CSV retain their structured data formats.

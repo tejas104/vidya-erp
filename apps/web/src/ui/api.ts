@@ -949,6 +949,12 @@ export const api = {
   // people — org
   colleges: () => get<{ colleges: CollegeView[] }>("/api/v1/people/colleges"),
   collegeTree: (collegeId: string) => get<OrgTree>(`/api/v1/people/colleges/${encodeURIComponent(collegeId)}/tree`),
+  schoolDocumentFormat: (collegeId: string, family: "report_card" | "attendance_review" | "certificate") =>
+    get<{ family: string; version: number; style: { schoolName: string; accentColor: string; footerText: string }; sample: { filename: string; contentType: string } | null }>(`/api/v1/school/document-formats/${encodeURIComponent(collegeId)}/${family}`),
+  saveSchoolDocumentFormat: (collegeId: string, family: "report_card" | "attendance_review" | "certificate", body: { expectedVersion: number; style: { schoolName: string; accentColor: string; footerText: string }; sample?: { filename: string; contentType: "application/pdf" | "application/vnd.openxmlformats-officedocument.wordprocessingml.document"; dataBase64: string } }) =>
+    put<{ family: string; version: number; style: { schoolName: string; accentColor: string; footerText: string }; sample: { filename: string; contentType: string } | null }>(`/api/v1/school/document-formats/${encodeURIComponent(collegeId)}/${family}`, body),
+  schoolDocumentFormatSampleUrl: (collegeId: string, family: "report_card" | "attendance_review" | "certificate") =>
+    `/api/v1/school/document-formats/${encodeURIComponent(collegeId)}/${family}/sample`,
   createDepartment: (body: { collegeId: string; name: string; code: string }) =>
     post<DepartmentView>("/api/v1/people/departments", body),
   createClass: (body: { departmentId: string; name: string; code: string }) =>
