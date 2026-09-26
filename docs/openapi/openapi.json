@@ -4748,6 +4748,36 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "School edition: transfers and graduations are recorded through year-end progression",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
           }
         }
       }
@@ -4821,6 +4851,20 @@
                             "nullable": true,
                             "format": "date"
                           },
+                          "outcome": {
+                            "type": "string",
+                            "nullable": true,
+                            "enum": [
+                              "promoted",
+                              "detained",
+                              "transferred_out",
+                              "graduated"
+                            ]
+                          },
+                          "outcomeReason": {
+                            "type": "string",
+                            "nullable": true
+                          },
                           "createdAt": {
                             "type": "string"
                           },
@@ -4838,6 +4882,8 @@
                           "status",
                           "startsOn",
                           "endsOn",
+                          "outcome",
+                          "outcomeReason",
                           "createdAt",
                           "updatedAt"
                         ]
@@ -5379,6 +5425,935 @@
                     "title",
                     "status",
                     "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/people/progression/preview": {
+      "post": {
+        "summary": "Preview a section's year-end promotion, detention and exits",
+        "description": "Changes nothing. Runs the same checks as apply and lists every pupil's outcome, status change, next enrollment and ending family access, plus pupils left undecided. Administrator only; scope-checked against the source and target sections.\n\n**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "people-students"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "sectionId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64
+                  },
+                  "academicYear": {
+                    "type": "string",
+                    "pattern": "^\\d{4}-\\d{2}$"
+                  },
+                  "endsOn": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "targetAcademicYear": {
+                    "type": "string",
+                    "pattern": "^\\d{4}-\\d{2}$"
+                  },
+                  "startsOn": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "promoteToSectionId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64
+                  },
+                  "detainInSectionId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64
+                  },
+                  "pupils": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "studentId": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 64
+                        },
+                        "enrollmentId": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 64
+                        },
+                        "outcome": {
+                          "type": "string",
+                          "enum": [
+                            "promote",
+                            "detain",
+                            "transfer_out",
+                            "graduate"
+                          ]
+                        },
+                        "reason": {
+                          "type": "string",
+                          "maxLength": 240
+                        }
+                      },
+                      "required": [
+                        "studentId",
+                        "enrollmentId",
+                        "outcome"
+                      ]
+                    },
+                    "minItems": 1,
+                    "maxItems": 200
+                  }
+                },
+                "required": [
+                  "sectionId",
+                  "academicYear",
+                  "endsOn",
+                  "pupils"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The planned changes and any problems",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "sectionId": {
+                      "type": "string"
+                    },
+                    "academicYear": {
+                      "type": "string"
+                    },
+                    "endsOn": {
+                      "type": "string"
+                    },
+                    "targetAcademicYear": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "startsOn": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "familyAccess": {
+                      "type": "object",
+                      "nullable": true,
+                      "properties": {
+                        "liveUntil": {
+                          "type": "string"
+                        },
+                        "historicalAccessUntil": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "liveUntil",
+                        "historicalAccessUntil"
+                      ]
+                    },
+                    "pupils": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "studentId": {
+                            "type": "string"
+                          },
+                          "admissionNo": {
+                            "type": "string"
+                          },
+                          "fullName": {
+                            "type": "string"
+                          },
+                          "enrollmentId": {
+                            "type": "string"
+                          },
+                          "outcome": {
+                            "type": "string",
+                            "enum": [
+                              "promote",
+                              "detain",
+                              "transfer_out",
+                              "graduate"
+                            ]
+                          },
+                          "statusBefore": {
+                            "type": "string"
+                          },
+                          "statusAfter": {
+                            "type": "string",
+                            "enum": [
+                              "active",
+                              "inactive",
+                              "backlog",
+                              "year_back",
+                              "transferred",
+                              "dropped",
+                              "alumni"
+                            ]
+                          },
+                          "targetSectionId": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "reason": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "familyLinks": {
+                            "type": "number"
+                          },
+                          "problems": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "required": [
+                          "studentId",
+                          "admissionNo",
+                          "fullName",
+                          "enrollmentId",
+                          "outcome",
+                          "statusBefore",
+                          "statusAfter",
+                          "targetSectionId",
+                          "reason",
+                          "familyLinks",
+                          "problems"
+                        ]
+                      }
+                    },
+                    "undecided": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "studentId": {
+                            "type": "string"
+                          },
+                          "admissionNo": {
+                            "type": "string"
+                          },
+                          "fullName": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "studentId",
+                          "admissionNo",
+                          "fullName"
+                        ]
+                      }
+                    },
+                    "problems": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "ready": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "sectionId",
+                    "academicYear",
+                    "endsOn",
+                    "targetAcademicYear",
+                    "startsOn",
+                    "familyAccess",
+                    "pupils",
+                    "undecided",
+                    "problems",
+                    "ready"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Outside scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such section",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/people/progression/apply": {
+      "post": {
+        "summary": "Apply a section's year-end promotion, detention and exits",
+        "description": "All pupils or none, in one transaction with one audit event per pupil and one for the batch. Concluded enrollment rows are kept with their outcome; exits end live guardian access after the leaving day and allow read-only historical access for 90 days (ADR-0027 Decision 9).\n\n**Requires authentication.** Until Vidya #2 ships the session authenticator, every request receives 401 (deny-by-default gate).",
+        "tags": [
+          "people-students"
+        ],
+        "security": [
+          {
+            "sessionAuth": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "sectionId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64
+                  },
+                  "academicYear": {
+                    "type": "string",
+                    "pattern": "^\\d{4}-\\d{2}$"
+                  },
+                  "endsOn": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "targetAcademicYear": {
+                    "type": "string",
+                    "pattern": "^\\d{4}-\\d{2}$"
+                  },
+                  "startsOn": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "promoteToSectionId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64
+                  },
+                  "detainInSectionId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64
+                  },
+                  "pupils": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "studentId": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 64
+                        },
+                        "enrollmentId": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 64
+                        },
+                        "outcome": {
+                          "type": "string",
+                          "enum": [
+                            "promote",
+                            "detain",
+                            "transfer_out",
+                            "graduate"
+                          ]
+                        },
+                        "reason": {
+                          "type": "string",
+                          "maxLength": 240
+                        }
+                      },
+                      "required": [
+                        "studentId",
+                        "enrollmentId",
+                        "outcome"
+                      ]
+                    },
+                    "minItems": 1,
+                    "maxItems": 200
+                  }
+                },
+                "required": [
+                  "sectionId",
+                  "academicYear",
+                  "endsOn",
+                  "pupils"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Applied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "runId": {
+                      "type": "string"
+                    },
+                    "preview": {
+                      "type": "object",
+                      "properties": {
+                        "sectionId": {
+                          "type": "string"
+                        },
+                        "academicYear": {
+                          "type": "string"
+                        },
+                        "endsOn": {
+                          "type": "string"
+                        },
+                        "targetAcademicYear": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "startsOn": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "familyAccess": {
+                          "type": "object",
+                          "nullable": true,
+                          "properties": {
+                            "liveUntil": {
+                              "type": "string"
+                            },
+                            "historicalAccessUntil": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "liveUntil",
+                            "historicalAccessUntil"
+                          ]
+                        },
+                        "pupils": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "studentId": {
+                                "type": "string"
+                              },
+                              "admissionNo": {
+                                "type": "string"
+                              },
+                              "fullName": {
+                                "type": "string"
+                              },
+                              "enrollmentId": {
+                                "type": "string"
+                              },
+                              "outcome": {
+                                "type": "string",
+                                "enum": [
+                                  "promote",
+                                  "detain",
+                                  "transfer_out",
+                                  "graduate"
+                                ]
+                              },
+                              "statusBefore": {
+                                "type": "string"
+                              },
+                              "statusAfter": {
+                                "type": "string",
+                                "enum": [
+                                  "active",
+                                  "inactive",
+                                  "backlog",
+                                  "year_back",
+                                  "transferred",
+                                  "dropped",
+                                  "alumni"
+                                ]
+                              },
+                              "targetSectionId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "reason": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "familyLinks": {
+                                "type": "number"
+                              },
+                              "problems": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            "required": [
+                              "studentId",
+                              "admissionNo",
+                              "fullName",
+                              "enrollmentId",
+                              "outcome",
+                              "statusBefore",
+                              "statusAfter",
+                              "targetSectionId",
+                              "reason",
+                              "familyLinks",
+                              "problems"
+                            ]
+                          }
+                        },
+                        "undecided": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "studentId": {
+                                "type": "string"
+                              },
+                              "admissionNo": {
+                                "type": "string"
+                              },
+                              "fullName": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "studentId",
+                              "admissionNo",
+                              "fullName"
+                            ]
+                          }
+                        },
+                        "problems": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "ready": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "sectionId",
+                        "academicYear",
+                        "endsOn",
+                        "targetAcademicYear",
+                        "startsOn",
+                        "familyAccess",
+                        "pupils",
+                        "undecided",
+                        "problems",
+                        "ready"
+                      ]
+                    },
+                    "pupils": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "studentId": {
+                            "type": "string"
+                          },
+                          "outcome": {
+                            "type": "string",
+                            "enum": [
+                              "promoted",
+                              "detained",
+                              "transferred_out",
+                              "graduated"
+                            ]
+                          },
+                          "closedEnrollmentId": {
+                            "type": "string"
+                          },
+                          "newEnrollmentId": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "statusBefore": {
+                            "type": "string"
+                          },
+                          "statusAfter": {
+                            "type": "string",
+                            "enum": [
+                              "active",
+                              "inactive",
+                              "backlog",
+                              "year_back",
+                              "transferred",
+                              "dropped",
+                              "alumni"
+                            ]
+                          },
+                          "familyAccessChanged": {
+                            "type": "number"
+                          },
+                          "invitationsRevoked": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "studentId",
+                          "outcome",
+                          "closedEnrollmentId",
+                          "newEnrollmentId",
+                          "statusBefore",
+                          "statusAfter",
+                          "familyAccessChanged",
+                          "invitationsRevoked"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "runId",
+                    "preview",
+                    "pupils"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required (problem+json)"
+          },
+          "403": {
+            "description": "Outside scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such section",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The roll changed since the preview",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "number"
+                    },
+                    "requestId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "requestId"
+                  ]
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The plan has problems; nothing was applied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    },
+                    "preview": {
+                      "type": "object",
+                      "properties": {
+                        "sectionId": {
+                          "type": "string"
+                        },
+                        "academicYear": {
+                          "type": "string"
+                        },
+                        "endsOn": {
+                          "type": "string"
+                        },
+                        "targetAcademicYear": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "startsOn": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "familyAccess": {
+                          "type": "object",
+                          "nullable": true,
+                          "properties": {
+                            "liveUntil": {
+                              "type": "string"
+                            },
+                            "historicalAccessUntil": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "liveUntil",
+                            "historicalAccessUntil"
+                          ]
+                        },
+                        "pupils": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "studentId": {
+                                "type": "string"
+                              },
+                              "admissionNo": {
+                                "type": "string"
+                              },
+                              "fullName": {
+                                "type": "string"
+                              },
+                              "enrollmentId": {
+                                "type": "string"
+                              },
+                              "outcome": {
+                                "type": "string",
+                                "enum": [
+                                  "promote",
+                                  "detain",
+                                  "transfer_out",
+                                  "graduate"
+                                ]
+                              },
+                              "statusBefore": {
+                                "type": "string"
+                              },
+                              "statusAfter": {
+                                "type": "string",
+                                "enum": [
+                                  "active",
+                                  "inactive",
+                                  "backlog",
+                                  "year_back",
+                                  "transferred",
+                                  "dropped",
+                                  "alumni"
+                                ]
+                              },
+                              "targetSectionId": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "reason": {
+                                "type": "string",
+                                "nullable": true
+                              },
+                              "familyLinks": {
+                                "type": "number"
+                              },
+                              "problems": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            "required": [
+                              "studentId",
+                              "admissionNo",
+                              "fullName",
+                              "enrollmentId",
+                              "outcome",
+                              "statusBefore",
+                              "statusAfter",
+                              "targetSectionId",
+                              "reason",
+                              "familyLinks",
+                              "problems"
+                            ]
+                          }
+                        },
+                        "undecided": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "studentId": {
+                                "type": "string"
+                              },
+                              "admissionNo": {
+                                "type": "string"
+                              },
+                              "fullName": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "studentId",
+                              "admissionNo",
+                              "fullName"
+                            ]
+                          }
+                        },
+                        "problems": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "ready": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "sectionId",
+                        "academicYear",
+                        "endsOn",
+                        "targetAcademicYear",
+                        "startsOn",
+                        "familyAccess",
+                        "pupils",
+                        "undecided",
+                        "problems",
+                        "ready"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "message",
+                    "preview"
                   ]
                 }
               }
@@ -9052,6 +10027,24 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "The pupil has left the school (transferred or graduated)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "message"
+                  ]
+                }
+              }
+            }
           }
         }
       }
@@ -9695,6 +10688,14 @@
                             "items": {
                               "type": "string"
                             }
+                          },
+                          "recordsThrough": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "readOnlyUntil": {
+                            "type": "string",
+                            "nullable": true
                           }
                         },
                         "required": [
@@ -9703,7 +10704,9 @@
                           "admissionNo",
                           "relationshipType",
                           "status",
-                          "categories"
+                          "categories",
+                          "recordsThrough",
+                          "readOnlyUntil"
                         ]
                       }
                     }

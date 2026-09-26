@@ -169,6 +169,20 @@ const EXPECTATIONS: Record<string, MigrationExpectation> = {
     tables: ["ppl_guardians", "ppl_student_guardians", "ppl_guardian_invitations"],
     indexes: ["ppl_guardians_identity_idx", "ppl_sg_pair_idx", "ppl_sg_student_idx", "ppl_gi_code_idx", "ppl_gi_student_idx"],
   },
+  // Same index name before and after (non-unique to unique); nothing here can
+  // tell the two apart, so the row only records that the rollback runs.
+  "people/0007_unique_teacher_identity": {},
+  "people/0008_teacher_attendance": {
+    tables: ["ppl_teacher_attendance"],
+    indexes: ["ppl_teacher_attendance_day_idx", "ppl_teacher_attendance_college_day_idx"],
+  },
+  "people/0009_enrollment_dates": {
+    columns: [{ table: "ppl_enrollments", column: "starts_on" }, { table: "ppl_enrollments", column: "ends_on" }],
+    indexes: ["ppl_enrollments_section_year_idx"],
+  },
+  "people/0010_enrollment_outcomes": {
+    columns: [{ table: "ppl_enrollments", column: "outcome" }, { table: "ppl_enrollments", column: "outcome_reason" }],
+  },
   "fees/0001_payment_idempotency": {
     columns: [{ table: "fee_payments", column: "idempotency_key" }],
     indexes: ["fee_payments_idempotency_uq"],
@@ -207,6 +221,15 @@ const EXPECTATIONS: Record<string, MigrationExpectation> = {
     tables: ["rpt_school_report_card_publications"],
     indexes: ["rpt_rc_publications_student_term_idx"],
   },
+  "reporting/0005_xlsx_format": {
+    constraintDiffs: [{ table: "rpt_reports", constraint: "rpt_reports_format_check", addedText: "xlsx" }],
+  },
+  "reporting/0006_teacher_attendance_kind": {
+    constraintDiffs: [{ table: "rpt_reports", constraint: "rpt_reports_kind_check", addedText: "teacher-attendance" }],
+  },
+  "reporting/0007_school_attendance_review_kind": {
+    constraintDiffs: [{ table: "rpt_reports", constraint: "rpt_reports_kind_check", addedText: "school-attendance-review" }],
+  },
 
   "timetable/0000_timetable": { tables: ["ttb_periods", "ttb_entries"] },
   "coursework/0000_coursework": {
@@ -240,6 +263,7 @@ const EXPECTATIONS: Record<string, MigrationExpectation> = {
   "school-academics/0001_assessment_types": { tables: ["sca_assessment_types"], indexes: ["sca_assessment_types_term_idx", "sca_assessment_types_name_idx"] },
   "school-academics/0002_school_marks": { tables: ["sca_assessments", "sca_marks"], columns: [{ table: "sca_terms", column: "grade_bands" }, { table: "sca_terms", column: "scale_id" }, { table: "sca_terms", column: "scale_name" }] },
   "school-academics/0003_term_marks_release": { columns: [{ table: "sca_terms", column: "marks_released_at" }] },
+  "school-academics/0004_term_calendar": { columns: [{ table: "sca_terms", column: "instructional_days" }, { table: "sca_terms", column: "shortfall_threshold" }, { table: "sca_terms", column: "calendar_version" }] },
 };
 
 async function assertPresent(key: string, label: string): Promise<void> {
@@ -311,6 +335,13 @@ describe("migration harness (ADR-0008)", () => {
     // the same order migrateDown unwinds from the tail.
     const order = status.applied.map((entry) => ({ module: entry.module, name: entry.name }));
     expect(order.length).toBeGreaterThan(0);
+
+    // Some rollbacks refuse to discard history (Excel and new-kind report
+    // rows, recorded enrollment outcomes). Other suites may have written such
+    // rows into this disposable database; the walk below drops every table
+    // anyway, so clear exactly those rows first.
+    await pool.query("DELETE FROM rpt_reports WHERE format = 'xlsx' OR kind IN ('teacher-attendance', 'school-attendance-review')");
+    await pool.query("UPDATE ppl_enrollments SET outcome = NULL, outcome_reason = NULL WHERE outcome IS NOT NULL");
 
     // Walk backward, rolling back exactly one migration at a time (mirrors
     // migrateDown's `steps` semantics: it always unwinds the most-recently-

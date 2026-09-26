@@ -136,7 +136,7 @@ function makeDeps(opts: Opts = {}) {
 
   const deps: FeesHandlerDeps = {
     repo, directory, scopeChecker,
-    guardianAccess: async () => ({ decision: { granted: true, reason: "granted:active-relationship" }, student: { studentId: "stu_1", collegeId: "col_1", fullName: "Aarav", admissionNo: "FYCS-001" } }),
+    guardianAccess: async () => ({ decision: { granted: true, reason: "granted:active-relationship" }, student: { studentId: "stu_1", collegeId: "col_1", fullName: "Aarav", admissionNo: "FYCS-001" }, recordsThrough: null }),
     enqueueGenerate: async (payload) => { enqueued.push(payload); },
   };
   return { deps, enqueued, attributions };
@@ -156,7 +156,7 @@ describe("fees handlers", () => {
 
   it("answers a uniform 403 when guardian access to fees is withheld", async () => {
     const base = makeDeps().deps;
-    const handlers = createFeesHandlers({ ...base, guardianAccess: async () => ({ decision: { granted: false, reason: "denied:no-relationship" }, student: null }) });
+    const handlers = createFeesHandlers({ ...base, guardianAccess: async () => ({ decision: { granted: false, reason: "denied:no-relationship" }, student: null, recordsThrough: null }) });
     const result = await handlers["fees.child-fees"]!(ctx({ ...student, kind: "guardian", roles: [] }, { params: { studentId: "stu_other" } }));
     expect(result).toEqual({ status: 403, body: { message: "access denied" } });
   });

@@ -50,6 +50,11 @@ async function orNull<T>(request: Promise<T>): Promise<T | null> {
   }
 }
 
+/** A calendar day from an ISO instant, read in UTC so the stored day never shifts. */
+function utcDate(iso: string): string {
+  return new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
+}
+
 export default function FamilyPage() {
   const edition = useHelpEdition();
   const year = useMemo(() => currentAcademicYear(), []);
@@ -107,6 +112,12 @@ export default function FamilyPage() {
           {sections.map((section) => <button key={section.id} type="button" aria-pressed={activeView === section.id}
             onClick={() => setView(section.id)}>{section.label}</button>)}
         </nav>
+      ) : null}
+
+      {child?.readOnlyUntil && child.recordsThrough ? (
+        <p className={styles.leftNotice} role="status">
+          {child.fullName} has left the school. Through {utcDate(new Date(Date.parse(child.readOnlyUntil) - 1).toISOString())} you can read their attendance and published report cards as they stood on {utcDate(new Date(Date.parse(child.recordsThrough) - 1).toISOString())}.
+        </p>
       ) : null}
 
       {child === null ? (

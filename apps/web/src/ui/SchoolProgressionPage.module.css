@@ -1,0 +1,24 @@
+.filters { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-3); align-items: end; margin-bottom: var(--space-3); }
+.field { display: grid; gap: var(--space-2); font-weight: 600; }
+.field input { min-height: 2.75rem; padding: var(--space-2); border: 1px solid var(--rule-strong); border-radius: var(--radius-sm); background: var(--surface); color: inherit; font: inherit; }
+.field small, .hint, .table small { color: var(--ink-2); font-weight: 400; }
+.warning, .notice { margin: var(--space-3) 0 0; padding: var(--space-3) var(--space-4); border-radius: var(--radius); border: 1px solid var(--rule); background: var(--surface); }
+.warning { border-left: 4px solid var(--warn); }
+.notice { border-left: 4px solid var(--section-link); }
+.error { color: var(--bad); margin: var(--space-3) 0 0; }
+.problems { margin: var(--space-3) 0; padding-left: var(--space-5); color: var(--bad); }
+.tableScroll { overflow-x: auto; }
+.table { width: 100%; min-width: 44rem; border-collapse: collapse; text-align: left; }
+.table th, .table td { border-bottom: 1px solid var(--rule); padding: var(--space-3); vertical-align: top; }
+.table th { color: var(--ink-2); font-size: var(--text-12); }
+.table small { display: block; margin-top: var(--space-1); }
+.table a, .outcomes a { color: var(--section-link); font-weight: 700; }
+.table select, .table input { width: 100%; min-height: 2.5rem; padding: var(--space-2); border: 1px solid var(--rule-strong); border-radius: var(--radius-sm); background: var(--surface); color: inherit; font: inherit; }
+.table td > span + span { margin-left: var(--space-1); }
+.bar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: var(--space-3); margin-top: var(--space-4); }
+.bar p { margin: 0; color: var(--ink-2); }
+.chips { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-bottom: var(--space-3); }
+.chips span { padding: var(--space-2) var(--space-3); border-radius: 99px; border: 1px solid var(--rule); background: var(--surface); }
+.outcomes { margin: var(--space-3) 0 0; padding-left: var(--space-5); display: grid; gap: var(--space-2); }
+@media (max-width: 900px) { .filters { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 520px) { .filters { grid-template-columns: 1fr; } }

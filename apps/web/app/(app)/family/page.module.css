@@ -87,3 +87,4 @@
   margin: var(--space-3) 0 0;
   color: var(--bad);
 }
+.leftNotice { margin: 0 0 var(--space-4); padding: var(--space-3) var(--space-4); border: var(--rule-width) solid var(--rule); border-left: 4px solid var(--warn); border-radius: var(--radius); background: var(--surface); }

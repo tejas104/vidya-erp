@@ -132,6 +132,9 @@ export const pplEnrollments = pgTable("ppl_enrollments", {
   /** Effective school dates, not the date the row was entered. Null means unverified legacy data. */
   startsOn: date("starts_on", { mode: "string" }),
   endsOn: date("ends_on", { mode: "string" }),
+  /** Year-end result recorded on the row it concludes (0010); null while live or for a section move. */
+  outcome: text("outcome"),
+  outcomeReason: text("outcome_reason"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [

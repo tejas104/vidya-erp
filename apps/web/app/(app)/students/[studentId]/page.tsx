@@ -4,7 +4,7 @@ import { use, useEffect, useMemo, useRef, useState, type ReactNode } from "react
 import {
   api, ApiError, currentAcademicYear,
   type FeeInvoiceView, type StudentAttendance, type StudentDetailView,
-  type StudentDocument, type StudentHistory, type StudentMarksRow, type StudentPerformance,
+  type StudentDocument, type EnrollmentOutcome, type StudentHistory, type StudentMarksRow, type StudentPerformance,
 } from "@/ui/api";
 import { AttendanceColumns, Sparkline, StatTile, SubjectBars } from "@/ui/charts";
 import { ReportButton } from "@/ui/ReportButton";
@@ -316,6 +316,8 @@ function DocumentsPanel({ studentId }: { studentId: string }) {
   </ResourcePanel>;
 }
 
+const OUTCOME_LABEL: Record<EnrollmentOutcome, string> = { promoted: "Promoted", detained: "Detained", transferred_out: "Transferred out", graduated: "Graduated" };
+
 function HistoryPanel({ studentId }: { studentId: string }) {
   return <ResourcePanel load={() => api.studentHistory(studentId)} identity={[studentId]}>
     {(history: StudentHistory) => <div className={styles.historySections}>
@@ -326,6 +328,7 @@ function HistoryPanel({ studentId }: { studentId: string }) {
             <div className="card" key={entry.id}>
               <strong>{entry.className} · Section {entry.sectionName}</strong>
               <span>{entry.academicYear} · {entry.status} · Effective {entry.startsOn ?? "date needs verification"} to {entry.endsOn ?? (entry.status === "enrolled" ? "current" : "end date needs verification")}</span>
+              {entry.outcome ? <span>Year-end outcome: {OUTCOME_LABEL[entry.outcome]}{entry.outcomeReason ? ` — ${entry.outcomeReason}` : ""}</span> : null}
               <span>Record entered {dateLabel(entry.createdAt)}</span>
             </div>
           ))}</div>

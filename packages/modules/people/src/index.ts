@@ -15,7 +15,6 @@ import {
   getObjectText,
   putObjectText,
   type AppConfig,
-  type AuditLogger,
   type Db,
   type Metrics,
   type ObjectStorageClient,
@@ -23,6 +22,7 @@ import {
   type OrgPath,
   type RuntimeModule,
   type ScopeChecker,
+  type TransactionalAuditLogger,
 } from "@vidya/platform";
 import type { DerivedGrantsApi } from "@vidya/module-identity";
 import { z } from "zod";
@@ -37,6 +37,8 @@ import { createPeopleRepo } from "./repo/people-repo";
 import { createStaffAttendanceRepo } from "./repo/staff-attendance-repo";
 import { createStaffAttendanceSource, type StaffAttendanceSource } from "./service/staff-attendance-source";
 import { createImportsRepo } from "./repo/imports-repo";
+import { createProgressionRepo } from "./repo/progression-repo";
+import { ProgressionService } from "./service/progression-service";
 import { OrgService } from "./service/org-service";
 import { PeopleService } from "./service/people-service";
 import { AssignmentsService } from "./service/assignments-service";
@@ -69,8 +71,8 @@ export { usernameFromCode } from "./ids";
 export interface PeopleModuleDeps {
   readonly db: Db;
   readonly metrics: Metrics;
-  /** The audit seam (system module's implementation). */
-  readonly audit: AuditLogger;
+  /** The audit seam (system module's implementation); year-end progression writes in-transaction (ADR-0026). */
+  readonly audit: TransactionalAuditLogger;
   /** #2's scope-check chokepoint — every handler decision goes through it. */
   readonly scopeChecker: ScopeChecker;
   /** Identity's derived-grant surface (ADR-0015). */
@@ -110,7 +112,7 @@ export interface PeopleDirectory {
   studentEnrollmentWindows(studentId: string, academicYear: string): Promise<{ sectionId: string; startsOn: string | null; endsOn: string | null; status: string }[]>;
   /** Enrollment-derived org position; `{collegeId}` for unenrolled students. */
   studentPosition(studentId: string): Promise<OrgPath | null>;
-  /** Active enrollment for one academic year; null when no class is enrolled that year. */
+  /** The class a pupil was in for one academic year: the live enrollment, else the last concluded one; null when never enrolled that year. */
   studentPositionForAcademicYear(studentId: string, academicYear: string): Promise<OrgPath | null>;
   /** W1 portal: the student linked to this identity sign-in, if any. */
   studentByIdentityUser(
@@ -185,13 +187,17 @@ export interface PeopleModuleService {
    * the pure GuardianAccessAdapter. `student` is returned only when access is
    * granted, and a pupil the guardian has no relationship with is never
    * looked up — so the answer cannot be used to probe whether a pupil exists.
+   *
+   * `recordsThrough` is non-null only after the pupil left (ADR-0027 Decision
+   * 9), and only for HISTORICAL_CATEGORIES: the caller MUST then omit every
+   * record that did not exist before that instant.
    */
   guardianAccess(
     identityUserId: string,
     studentId: string,
     category: GuardianRecordCategory,
     publicationState?: PublicationState,
-  ): Promise<{ decision: GuardianAccessDecision; student: StudentBrief | null }>;
+  ): Promise<{ decision: GuardianAccessDecision; student: StudentBrief | null; recordsThrough: string | null }>;
 }
 
 export function createPeopleModule(deps: PeopleModuleDeps): RuntimeModule<PeopleModuleService> {
@@ -206,11 +212,18 @@ export function createPeopleModule(deps: PeopleModuleDeps): RuntimeModule<People
     const row = await peopleRepo.getStudent(studentId);
     return row === null ? null : { studentId: row.id, collegeId: row.collegeId, fullName: row.fullName, admissionNo: row.admissionNo };
   };
+  const guardiansRepo = createGuardiansRepo(deps.db);
   const guardians = new GuardianService({
-    repo: createGuardiansRepo(deps.db),
+    repo: guardiansRepo,
     student: studentBrief,
     accounts: deps.guardianAccounts,
     selfAttestedLimit: deps.guardianSelfAttestedLimit ?? 2,
+  });
+  const progression = new ProgressionService({
+    people: peopleRepo,
+    org: orgRepo,
+    repo: createProgressionRepo(deps.db, deps.audit),
+    relationships: (studentId) => guardiansRepo.relationshipsForStudent(studentId),
   });
   const assignments = new AssignmentsService({
     repo: peopleRepo,
@@ -269,6 +282,7 @@ export function createPeopleModule(deps: PeopleModuleDeps): RuntimeModule<People
       people,
       staffAttendance,
       assignments,
+      progression,
       imports,
       scopeChecker: deps.scopeChecker,
       storage: deps.storage,
@@ -306,7 +320,9 @@ export function createPeopleModule(deps: PeopleModuleDeps): RuntimeModule<People
           return student === null ? null : people.studentOrgPosition(student);
         },
         studentPositionForAcademicYear: async (studentId, academicYear) => {
-          const enrollment = await peopleRepo.activeEnrollment(studentId, academicYear);
+          // A closed year (promotion or exit) has no live row; its last concluded row still places the pupil.
+          const rows = (await peopleRepo.listEnrollments(studentId)).filter((row) => row.academicYear === academicYear);
+          const enrollment = rows.find((row) => row.status === "enrolled") ?? rows.at(-1) ?? null;
           return enrollment === null ? null : orgRepo.pathForSection(enrollment.sectionId);
         },
         studentByIdentityUser: async (identityUserId) => {

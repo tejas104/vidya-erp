@@ -18,6 +18,7 @@ import {
   type OrgDirectory,
   type RouteDependencies,
   type RouteSpec,
+  type TransactionalAuditLogger,
 } from "@vidya/platform";
 import { createSystemModule } from "@vidya/module-system";
 import { createIdentityCore, createIdentityModule } from "@vidya/module-identity";
@@ -121,11 +122,22 @@ export function buildStack(edition: "college" | "school" = "college") {
     forcePathStyle: true,
   });
   const enqueuedImports: { importId: string; source: string }[] = [];
+  // ADR-0026 fault injection: fail the people module's in-transaction audit
+  // write for one action, after its insert, to prove the mutation rolls back.
+  const peopleAuditFault: { failAction: string | null } = { failAction: null };
+  const peopleAudit: TransactionalAuditLogger = {
+    record: (event) => system.service.audit.record(event),
+    recordInTransaction: async (tx, event) => {
+      const receipt = await system.service.audit.recordInTransaction(tx, event);
+      if (peopleAuditFault.failAction === event.action) throw new Error("injected audit failure");
+      return receipt;
+    },
+  };
   const people = createPeopleModule({
     edition,
     db,
     metrics,
-    audit: system.service.audit,
+    audit: peopleAudit,
     scopeChecker: core.scopeChecker,
     identityGrants: identity.service.derivedGrants,
     identity: { issueCredential: identity.service.issueCredential, accountForLink: identity.service.accountForLink },
@@ -345,6 +357,7 @@ export function buildStack(edition: "college" | "school" = "college") {
     enqueuedFees,
     core,
     enqueuedImports,
+    peopleAuditFault,
     enqueuedRollups,
     enqueuedReports,
     call,

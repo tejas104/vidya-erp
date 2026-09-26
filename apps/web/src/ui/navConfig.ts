@@ -49,6 +49,8 @@ export const NAV: NavEntry[] = [
   { href: "/manage/classes", label: "My Classes", icon: "students", group: "TOP", roles: ["teacher", "class_teacher"] },
   // --- STUDENTS: the pupil record and everything that populates it.
   { href: "/manage/students", label: "Students", icon: "students", group: "STUDENTS", roles: ["admin"] },
+  // N6 year-end promotion, detention and exits: administrator only (the route is ADMIN_ONLY).
+  { href: "/manage/progression", label: "Promotion & exits", icon: "students", group: "STUDENTS", roles: ["admin"], editions: ["school"] },
   // accountant reconciles against student records + documents (read-only)
   { href: "/manage/directory", label: "Student directory", icon: "students", group: "STUDENTS", roles: ["accountant"] },
   // --- onboarding import (task A4): split off the old single /manage/import

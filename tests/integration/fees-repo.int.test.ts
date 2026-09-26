@@ -193,7 +193,7 @@ beforeAll(async () => {
   } as unknown as PeopleDirectory;
 
   const module = createFeesModule({ db, audit, scopeChecker, peopleDirectory: directory,
-    guardianAccess: async () => ({ decision: { granted: false, reason: "denied:no-relationship" }, student: null }),
+    guardianAccess: async () => ({ decision: { granted: false, reason: "denied:no-relationship" }, student: null, recordsThrough: null }),
     enqueueGenerate: async () => {} });
   handlers = module.handlers as typeof handlers;
 }, 60_000);

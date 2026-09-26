@@ -17,7 +17,8 @@ export type IdPrefix =
   | "asg"
   | "imp"
   | "doc"
-  | "sat";
+  | "sat"
+  | "prg";
 
 export function newId(prefix: IdPrefix): string {
   return `${prefix}_${randomUUID()}`;

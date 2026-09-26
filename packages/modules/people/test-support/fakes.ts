@@ -524,6 +524,8 @@ export class InMemoryPeopleRepo implements PeopleRepo {
       status: "enrolled",
       startsOn: input.startsOn ?? null,
       endsOn: null,
+      outcome: null,
+      outcomeReason: null,
       createdAt: now(),
       updatedAt: now(),
     };

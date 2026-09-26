@@ -26,10 +26,15 @@ export interface ReportCardRepo {
     studentIds: readonly string[],
     termId: string,
   ): Promise<Map<string, { id: string; generatedAt: Date }>>;
-  /** Current release for a pupil and term; null means never released or withdrawn. */
-  publishedForTerm(studentId: string, termId: string): Promise<string | null>;
-  /** Current published snapshots, one per term. */
-  publishedForStudent(studentId: string): Promise<RptSchoolReportCardRow[]>;
+  /**
+   * Current release for a pupil and term; null means never released or withdrawn.
+   * With `publishedBefore` (a guardian after the pupil left, ADR-0027 Decision 9)
+   * a release made at or after that instant counts as none; a later withdrawal
+   * still hides the card.
+   */
+  publishedForTerm(studentId: string, termId: string, publishedBefore?: Date): Promise<string | null>;
+  /** Current published snapshots, one per term; `publishedBefore` as for publishedForTerm. */
+  publishedForStudent(studentId: string, publishedBefore?: Date): Promise<RptSchoolReportCardRow[]>;
   /** Serialized per pupil/term; returns false if the requested state is already current. */
   publicationChange(input: { studentId: string; termId: string; snapshotId: string | null; actorId: string; expectedCurrent?: string }): Promise<boolean>;
 }
@@ -82,19 +87,22 @@ export function createReportCardRepo(db: Db): ReportCardRepo {
       return latest;
     },
 
-    async publishedForTerm(studentId, termId) {
+    async publishedForTerm(studentId, termId, publishedBefore) {
       const [event] = await db.select().from(rptSchoolReportCardPublications)
         .where(and(eq(rptSchoolReportCardPublications.studentId, studentId), eq(rptSchoolReportCardPublications.termId, termId)))
         .orderBy(desc(rptSchoolReportCardPublications.id)).limit(1);
-      return event?.action === "published" ? event.snapshotId : null;
+      return event?.action === "published" && (publishedBefore === undefined || event.createdAt < publishedBefore) ? event.snapshotId : null;
     },
 
-    async publishedForStudent(studentId) {
+    async publishedForStudent(studentId, publishedBefore) {
       const events = await db.select().from(rptSchoolReportCardPublications)
         .where(eq(rptSchoolReportCardPublications.studentId, studentId))
         .orderBy(desc(rptSchoolReportCardPublications.id));
       const current = new Map<string, string | null>();
-      for (const event of events) if (!current.has(event.termId)) current.set(event.termId, event.action === "published" ? event.snapshotId : null);
+      for (const event of events) {
+        if (current.has(event.termId)) continue;
+        current.set(event.termId, event.action === "published" && (publishedBefore === undefined || event.createdAt < publishedBefore) ? event.snapshotId : null);
+      }
       const ids = [...current.values()].filter((id): id is string => id !== null);
       if (ids.length === 0) return [];
       return db.select().from(rptSchoolReportCards).where(inArray(rptSchoolReportCards.id, ids))

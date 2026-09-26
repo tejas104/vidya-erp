@@ -354,11 +354,46 @@ export interface StudentDetailView extends Omit<StudentView, "enrollment"> {
     className: string; academicYear: string;
   } | null;
 }
+/** N6: the year-end result recorded on the enrollment row it concluded. */
+export type EnrollmentOutcome = "promoted" | "detained" | "transferred_out" | "graduated";
+export type ProgressionChoice = "promote" | "detain" | "transfer_out" | "graduate";
+export interface ProgressionPlan {
+  sectionId: string;
+  academicYear: string;
+  endsOn: string;
+  targetAcademicYear?: string;
+  startsOn?: string;
+  promoteToSectionId?: string;
+  detainInSectionId?: string;
+  pupils: { studentId: string; enrollmentId: string; outcome: ProgressionChoice; reason?: string }[];
+}
+export interface ProgressionPreview {
+  sectionId: string;
+  academicYear: string;
+  endsOn: string;
+  targetAcademicYear: string | null;
+  startsOn: string | null;
+  familyAccess: { liveUntil: string; historicalAccessUntil: string } | null;
+  pupils: {
+    studentId: string; admissionNo: string; fullName: string; enrollmentId: string; outcome: ProgressionChoice;
+    statusBefore: string; statusAfter: StudentStatus; targetSectionId: string | null; reason: string | null;
+    familyLinks: number; problems: string[];
+  }[];
+  undecided: { studentId: string; admissionNo: string; fullName: string }[];
+  problems: string[];
+  ready: boolean;
+}
+export interface ProgressionResult {
+  runId: string;
+  preview: ProgressionPreview;
+  pupils: { studentId: string; outcome: EnrollmentOutcome; closedEnrollmentId: string; newEnrollmentId: string | null; statusBefore: string; statusAfter: StudentStatus; familyAccessChanged: number; invitationsRevoked: number }[];
+}
 export interface StudentHistory {
   enrollments: {
     id: string; sectionId: string; sectionName: string; classId: string | null;
     className: string; academicYear: string; status: string; createdAt: string; updatedAt: string;
     startsOn?: string | null; endsOn?: string | null;
+    outcome?: EnrollmentOutcome | null; outcomeReason?: string | null;
   }[];
   statusChanges: { from: StudentStatus; to: StudentStatus; occurredAt: string; actorId: string | null }[];
   events: { action: string; actorId: string | null; occurredAt: string }[];
@@ -802,6 +837,9 @@ export interface GuardianChild {
   relationshipType: GuardianRelationshipType;
   status: GuardianRelationshipStatus;
   categories: string[];
+  /** Set after the pupil left (ADR-0027 Decision 9): records up to this instant, readable until readOnlyUntil. */
+  recordsThrough?: string | null;
+  readOnlyUntil?: string | null;
 }
 export interface GuardianRelationshipView {
   id: string;
@@ -942,6 +980,8 @@ export const api = {
       `/api/v1/people/students/${encodeURIComponent(studentId)}/enrollment`,
       body,
     ),
+  progressionPreview: (plan: ProgressionPlan) => post<ProgressionPreview>("/api/v1/people/progression/preview", plan),
+  progressionApply: (plan: ProgressionPlan) => post<ProgressionResult>("/api/v1/people/progression/apply", plan),
   correctEnrollmentDates: (studentId: string, enrollmentId: string, body: { startsOn: string; endsOn: string | null; expectedStartsOn: string | null; expectedEndsOn: string | null }) =>
     patch<{ enrollmentId: string; startsOn: string; endsOn: string | null }>(`/api/v1/people/students/${encodeURIComponent(studentId)}/enrollments/${encodeURIComponent(enrollmentId)}/dates`, body),
   // people — teachers

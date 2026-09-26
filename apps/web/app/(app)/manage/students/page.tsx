@@ -6,6 +6,7 @@ import { AsyncState } from "@/ui/AsyncState";
 import { AVATARS, initials } from "@/ui/avatar";
 import { StudentSlideOver, type DrawerStudent } from "@/ui/StudentSlideOver";
 import { HelpButton } from "@/ui/help/HelpButton";
+import { useHelpEdition } from "@/ui/help/HelpEditionContext";
 import styles from "./page.module.css";
 
 export const dynamic = "force-dynamic";
@@ -73,6 +74,8 @@ export default function StudentsPage() {
   const [eDob, setEDob] = useState("");
   const [users, setUsers] = useState<{ id: string; username: string; displayName: string }[]>([]);
   const [viewing, setViewing] = useState<StudentView | null>(null);
+  // School exits go through Promotion and exits (N6), which records the leaving date and family access.
+  const statusOptions = useHelpEdition() === "school" ? STATUS_OPTIONS.filter((o) => o.value !== "transferred" && o.value !== "alumni") : STATUS_OPTIONS;
 
   useEffect(() => {
     void api.session().then((session) => setCanCorrectDates(session.roles.includes("admin"))).catch(() => setCanCorrectDates(false));
@@ -296,11 +299,11 @@ export default function StudentsPage() {
         onChange={(event) => void setStatus(row, event.target.value as StudentStatus)}
         className={styles.statusSelect}
       >
-        {STATUS_OPTIONS.map((opt) => (
+        {statusOptions.map((opt) => (
           <option key={opt.value} value={opt.value}>{opt.label}</option>
         ))}
         {/* keep a legacy value selectable if a record still carries it */}
-        {STATUS_OPTIONS.every((opt) => opt.value !== row.status) ? (
+        {statusOptions.every((opt) => opt.value !== row.status) ? (
           <option value={row.status}>{row.status}</option>
         ) : null}
       </select>

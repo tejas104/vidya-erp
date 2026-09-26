@@ -173,6 +173,8 @@ export class PeopleService {
       status: enrollment.status,
       startsOn: enrollment.startsOn,
       endsOn: enrollment.endsOn,
+      outcome: enrollment.outcome as "promoted" | "detained" | "transferred_out" | "graduated" | null,
+      outcomeReason: enrollment.outcomeReason,
       createdAt: enrollment.createdAt.toISOString(),
       updatedAt: enrollment.updatedAt.toISOString(),
     };

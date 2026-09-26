@@ -338,12 +338,15 @@ export function createSchoolReportCardHandlers(
       audit: { org, resourceId: row.id, details: { studentId: row.studentId, termId: row.termId } } };
   };
 
+  /** After the pupil left, only releases made before the exit (ADR-0027 Decision 9). */
+  const cutoff = (recordsThrough: string | null) => (recordsThrough === null ? undefined : new Date(recordsThrough));
+
   const childCards: RouteHandler = async (ctx) => {
     const principal = ctx.principal as Principal;
     const { studentId } = ctx.request.params as { studentId: string };
     const access = await deps.guardianAccess(principal.id, studentId, "report-card", "published");
     if (!access.decision.granted || access.student === null) return fail(403, "access denied");
-    const rows = await deps.repo.publishedForStudent(access.student.studentId);
+    const rows = await deps.repo.publishedForStudent(access.student.studentId, cutoff(access.recordsThrough));
     const cards = [];
     for (const row of rows) {
       if (row.studentId !== access.student.studentId || row.collegeId !== access.student.collegeId) continue;
@@ -365,7 +368,7 @@ export function createSchoolReportCardHandlers(
     if (!access.decision.granted || access.student === null) return fail(403, "access denied");
     const row = await deps.repo.get(snapshotId);
     if (row === null || row.studentId !== access.student.studentId || row.collegeId !== access.student.collegeId ||
-      await deps.repo.publishedForTerm(studentId, row.termId) !== row.id) return fail(403, "access denied");
+      await deps.repo.publishedForTerm(studentId, row.termId, cutoff(access.recordsThrough)) !== row.id) return fail(403, "access denied");
     const snapshot = parseStoredSnapshot(row.payload);
     if (snapshot === null) return fail(409, "A published report card cannot be displayed. Contact the school office.");
     return { status: 200, body: await renderReportCardPdf(snapshot, row.generatedAt), contentType: "application/pdf",

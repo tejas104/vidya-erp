@@ -188,7 +188,7 @@ describe("GuardianService lifecycle", () => {
     expect(own.student?.fullName).toBe("Asha Rao");
 
     const other = await service.access(activated.userId, "read", OTHER_PUPIL.studentId, "attendance");
-    expect(other).toEqual({ decision: { granted: false, reason: "denied:no-relationship" }, student: null });
+    expect(other).toEqual({ decision: { granted: false, reason: "denied:no-relationship" }, student: null, recordsThrough: null });
   });
 
   it("never looks up a pupil the guardian has no relationship with (no existence oracle)", async () => {
@@ -291,8 +291,71 @@ describe("GuardianService lifecycle", () => {
     expect((await service.access(parent.userId, "read", PUPIL.studentId, "attendance")).decision.reason).toBe("denied:relationship-expired");
   });
 
+  it("live access is unchanged before an exit date passes", async () => {
+    const { service, repo, issue, activate } = setup();
+    const parent = await activate((await issue()).code);
+    repo.relationships[0]!.validUntil = new Date("2026-09-24T00:00:00Z");
+    repo.relationships[0]!.historicalAccessUntil = new Date("2026-12-23T00:00:00Z");
+    const fees = await service.access(parent.userId, "read", PUPIL.studentId, "fees");
+    expect(fees).toMatchObject({ decision: { granted: true }, recordsThrough: null });
+  });
+
   it("redeem refuses a caller who is not a guardian", async () => {
     const { service, issue } = setup();
     await expect(service.redeem({ code: (await issue()).code, identityUserId: "staff-user" })).rejects.toBeInstanceOf(InvitationRefusedError);
+  });
+});
+
+describe("after the pupil leaves (ADR-0027 Decision 9)", () => {
+  async function leftSchool() {
+    const context = setup();
+    const parent = await context.activate((await context.issue()).code);
+    // Left on 19 September: live access ended at the start of the 20th, read-only for 90 days.
+    context.repo.relationships[0]!.validUntil = new Date("2026-09-20T00:00:00Z");
+    context.repo.relationships[0]!.historicalAccessUntil = new Date("2026-12-19T00:00:00Z");
+    return { ...context, parent };
+  }
+
+  it("reads attendance and published report cards only as they stood at the exit", async () => {
+    const { service, parent } = await leftSchool();
+    const attendance = await service.access(parent.userId, "read", PUPIL.studentId, "attendance");
+    expect(attendance).toMatchObject({ decision: { granted: true }, recordsThrough: "2026-09-20T00:00:00.000Z" });
+    expect(attendance.student?.studentId).toBe(PUPIL.studentId);
+    const card = await service.access(parent.userId, "read", PUPIL.studentId, "report-card", "published");
+    expect(card).toMatchObject({ decision: { granted: true }, recordsThrough: "2026-09-20T00:00:00.000Z" });
+  });
+
+  it("refuses live categories and anything but reading", async () => {
+    const { service, parent } = await leftSchool();
+    for (const category of ["fees", "marks", "notices", "timetable"] as const) {
+      expect(await service.access(parent.userId, "read", PUPIL.studentId, category))
+        .toEqual({ decision: { granted: false, reason: "denied:relationship-expired" }, student: null, recordsThrough: null });
+    }
+    expect((await service.access(parent.userId, "acknowledge", PUPIL.studentId, "attendance")).decision.granted).toBe(false);
+  });
+
+  it("tells the family what remains and until when", async () => {
+    const { service, parent } = await leftSchool();
+    expect(await service.children(parent.userId)).toEqual([expect.objectContaining({
+      status: "active",
+      categories: ["attendance", "report-card"],
+      recordsThrough: "2026-09-20T00:00:00.000Z",
+      readOnlyUntil: "2026-12-19T00:00:00.000Z",
+    })]);
+  });
+
+  it("ends completely when the window closes", async () => {
+    const { service, parent, advance } = await leftSchool();
+    advance(24 * 90);
+    expect((await service.access(parent.userId, "read", PUPIL.studentId, "attendance")).decision.reason).toBe("denied:relationship-expired");
+    expect(await service.children(parent.userId)).toEqual([expect.objectContaining({ status: "expired", recordsThrough: null, readOnlyUntil: null })]);
+  });
+
+  it("gives a revoked or never-verified relationship no window", async () => {
+    const { service, repo, parent } = await leftSchool();
+    repo.relationships[0]!.status = "revoked";
+    expect((await service.access(parent.userId, "read", PUPIL.studentId, "attendance")).decision.reason).toBe("denied:relationship-revoked");
+    repo.relationships[0]!.status = "pending";
+    expect((await service.access(parent.userId, "read", PUPIL.studentId, "attendance")).decision.reason).toBe("denied:relationship-expired");
   });
 });

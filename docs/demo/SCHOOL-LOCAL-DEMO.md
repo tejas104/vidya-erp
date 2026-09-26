@@ -71,6 +71,10 @@ analytics marks rollup is not presented as a school grade figure.
 
 1. Sign in as administrator: inspect the teacher directory, Results path,
    Students, Academic terms, Report cards, Fee counter, and organisation setup.
+   **Promotion and exits** previews a section's year-end promotion, detention,
+   transfer and graduation. Preview is safe; **Apply** really moves the demo
+   pupils, and it cannot yet be undone per pupil, so apply only to a section
+   you create for the purpose.
 2. Sign in as principal: inspect the leadership dashboard, analytics, leave
    decisions, report cards, and notices.
 3. Sign in as class teacher: inspect the class dashboard, roster, whole-class

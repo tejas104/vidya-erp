@@ -17,7 +17,12 @@ export interface PortalHandlerDeps {
 
 /** Whose records a portal view shows: resolved server-side, never trusted
  *  from the request alone. */
-type Subject = { readonly studentId: string; readonly collegeId: string };
+type Subject = {
+  readonly studentId: string;
+  readonly collegeId: string;
+  /** Set only for a guardian after the pupil left: show records created before it (ADR-0027 Decision 9). */
+  readonly recordsThrough?: string | null;
+};
 type Resolver = (ctx: RouteContext) => Promise<Subject | RouteResult>;
 const isResult = (value: Subject | RouteResult): value is RouteResult => "status" in value;
 
@@ -60,12 +65,13 @@ export function createPortalHandlers(deps: PortalHandlerDeps): Record<string, Ro
     (category: GuardianRecordCategory): Resolver =>
     async (ctx) => {
       const { studentId } = ctx.request.params as { studentId: string };
-      const { decision, student } = await deps.guardianAccess((ctx.principal as Principal).id, studentId, category);
+      const access = await deps.guardianAccess((ctx.principal as Principal).id, studentId, category);
+      const { decision, student } = access;
       if (!decision.granted || student === null) {
         ctx.logger.warn({ reason: decision.reason }, "guardian access denied");
         return { status: 403, body: { message: "access denied" } };
       }
-      return { studentId: student.studentId, collegeId: student.collegeId };
+      return { studentId: student.studentId, collegeId: student.collegeId, recordsThrough: access.recordsThrough };
     };
 
   const me: RouteHandler = async (ctx) => {
@@ -105,7 +111,9 @@ export function createPortalHandlers(deps: PortalHandlerDeps): Record<string, Ro
     const student = await resolve(ctx);
     if (isResult(student)) return student;
     const query = ctx.request.query as { academicYear: string };
-    const rows = await deps.academicsRead.studentAttendance(student.studentId, query.academicYear);
+    const cutoff = student.recordsThrough ?? null;
+    const rows = (await deps.academicsRead.studentAttendance(student.studentId, query.academicYear))
+      .filter((row) => cutoff === null || Date.parse(row.recordedAt) < Date.parse(cutoff));
     const counts = { present: 0, absent: 0, late: 0, excused: 0 };
     const byMonth = new Map<string, { attended: number; total: number }>();
     for (const row of rows) {
