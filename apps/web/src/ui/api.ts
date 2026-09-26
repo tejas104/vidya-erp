@@ -397,6 +397,7 @@ export interface StudentHistory {
   }[];
   statusChanges: { from: StudentStatus; to: StudentStatus; occurredAt: string; actorId: string | null }[];
   events: { action: string; actorId: string | null; occurredAt: string }[];
+  correctedEnrollmentIds: string[];
 }
 export interface StudentAttendance {
   sessions: { sessionId: string; sectionId: string; heldOn: string; slot: string; status: AttendanceStatus }[];
@@ -982,6 +983,11 @@ export const api = {
     ),
   progressionPreview: (plan: ProgressionPlan) => post<ProgressionPreview>("/api/v1/people/progression/preview", plan),
   progressionApply: (plan: ProgressionPlan) => post<ProgressionResult>("/api/v1/people/progression/apply", plan),
+  progressionReverse: (studentId: string, enrollmentId: string, reason: string) =>
+    post<{ correctionId: string; reinstatedEnrollmentId: string }>(
+      `/api/v1/people/students/${encodeURIComponent(studentId)}/enrollments/${encodeURIComponent(enrollmentId)}/progression-reversal`,
+      { reason },
+    ),
   correctEnrollmentDates: (studentId: string, enrollmentId: string, body: { startsOn: string; endsOn: string | null; expectedStartsOn: string | null; expectedEndsOn: string | null }) =>
     patch<{ enrollmentId: string; startsOn: string; endsOn: string | null }>(`/api/v1/people/students/${encodeURIComponent(studentId)}/enrollments/${encodeURIComponent(enrollmentId)}/dates`, body),
   // people — teachers

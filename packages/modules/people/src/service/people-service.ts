@@ -150,7 +150,7 @@ export class PeopleService {
     if (current.status === "enrolled" && endsOn !== null) throw new InvalidEnrollmentDatesError("An active enrollment cannot have an end date.");
     if (current.status !== "enrolled" && endsOn === null) throw new InvalidEnrollmentDatesError("A past enrollment needs an end date.");
     for (const other of records) {
-      if (other.id === enrollmentId || other.academicYear !== current.academicYear || !other.startsOn) continue;
+      if (other.id === enrollmentId || other.academicYear !== current.academicYear || other.status === "voided" || !other.startsOn) continue;
       if (startsOn <= (other.endsOn ?? "9999-12-31") && other.startsOn <= (endsOn ?? "9999-12-31")) {
         throw new InvalidEnrollmentDatesError("Enrollment dates overlap another section for this pupil.");
       }

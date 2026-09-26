@@ -64,6 +64,12 @@ import { createResultsModule } from "@vidya/module-results";
 import { createExamsModule } from "@vidya/module-exams";
 import { createLeaveModule } from "@vidya/module-leave";
 import { createSchoolAcademicsModule } from "@vidya/module-school-academics";
+import { academicsHasPupilYearRecords } from "@vidya/module-academics";
+import { schoolAcademicsHasPupilYearRecords } from "@vidya/module-school-academics";
+import { reportingHasPupilYearRecords } from "@vidya/module-reporting";
+import { courseworkHasPupilYearRecords } from "@vidya/module-coursework";
+import { feesHasPupilYearRecords } from "@vidya/module-fees";
+import { analyticsHasPupilYearRecords } from "@vidya/module-analytics";
 import { createMetricsServer } from "./metrics-server";
 
 const RESET_CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
@@ -158,6 +164,13 @@ async function main(): Promise<void> {
   });
   lifecycle.onShutdown("people-queue", () => peopleQueue.close());
   const people = createPeopleModule({
+    hasNextYearRecords: async (tx, studentId, year) => {
+      for (const check of [academicsHasPupilYearRecords, schoolAcademicsHasPupilYearRecords,
+        reportingHasPupilYearRecords, courseworkHasPupilYearRecords, feesHasPupilYearRecords, analyticsHasPupilYearRecords]) {
+        if (await check(tx, studentId, year)) return true;
+      }
+      return false;
+    },
     db,
     metrics,
     edition: config.edition,

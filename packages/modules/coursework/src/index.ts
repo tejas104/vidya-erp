@@ -48,3 +48,4 @@ export function createCourseworkModule(deps: CourseworkModuleDeps): RuntimeModul
   assertModuleWiring(module);
   return module;
 }
+export { courseworkHasPupilYearRecords } from "./progression-dependencies";

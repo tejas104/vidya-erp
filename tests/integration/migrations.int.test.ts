@@ -183,6 +183,10 @@ const EXPECTATIONS: Record<string, MigrationExpectation> = {
   "people/0010_enrollment_outcomes": {
     columns: [{ table: "ppl_enrollments", column: "outcome" }, { table: "ppl_enrollments", column: "outcome_reason" }],
   },
+  "people/0011_progression_corrections": {
+    tables: ["ppl_progression_corrections"],
+    indexes: ["ppl_progression_corrections_student_idx"],
+  },
   "fees/0001_payment_idempotency": {
     columns: [{ table: "fee_payments", column: "idempotency_key" }],
     indexes: ["fee_payments_idempotency_uq"],

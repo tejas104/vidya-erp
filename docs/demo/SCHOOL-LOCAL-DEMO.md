@@ -73,8 +73,9 @@ analytics marks rollup is not presented as a school grade figure.
    Students, Academic terms, Report cards, Fee counter, and organisation setup.
    **Promotion and exits** previews a section's year-end promotion, detention,
    transfer and graduation. Preview is safe; **Apply** really moves the demo
-   pupils, and it cannot yet be undone per pupil, so apply only to a section
-   you create for the purpose.
+   pupils. A mistaken outcome for one pupil can be corrected from that pupil's
+   History tab only while the next-year placement has no dependent records.
+   Apply only to a section you create for the purpose.
 2. Sign in as principal: inspect the leadership dashboard, analytics, leave
    decisions, report cards, and notices.
 3. Sign in as class teacher: inspect the class dashboard, roster, whole-class

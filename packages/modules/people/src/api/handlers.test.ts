@@ -75,6 +75,11 @@ async function makeHarness(opts: { identity?: CredentialIssuer; edition?: "colle
       relationships: async () => [{ status: "active", validUntil: null }],
       today: () => "2027-04-10",
       repo: {
+        reverse: async (input) => ({
+          correctionId: "prc_test",
+          reinstatedEnrollmentId: "enr_reinstated",
+          receipt: issueDurableAuditReceipt({ module: "people", action: "people.progression-reversed", actorType: "user", actorId: input.attribution.actorId, resourceType: "student", resourceId: input.studentId, requestId: input.attribution.requestId, details: {} }),
+        }),
         apply: async (input) => {
           applied.push(input);
           return {
@@ -906,6 +911,16 @@ describe("year-end progression (N6)", () => {
     });
     return { ...harness, nextSection, repeatSection, pupils, choice, plan };
   }
+
+  it("checks enrollment scope before reading reversal audit evidence", async () => {
+    const { handlers, scopeChecker, pupils } = await yearEnd();
+    scopeChecker.decision = { granted: false, reason: "outside scope" };
+    const result = await handlers["people.progression-reverse"]!(ctx({
+      params: { studentId: pupils[0]!.student.id, enrollmentId: pupils[0]!.enrollment.id },
+      body: { reason: "Wrong result" },
+    }));
+    expect(result.status).toBe(403);
+  });
 
   it("previews every pupil's change, and who is left undecided, without writing", async () => {
     const { handlers, plan, peopleRepo, org, applied } = await yearEnd();

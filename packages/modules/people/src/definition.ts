@@ -153,6 +153,7 @@ const studentHistorySchema = z.object({
     actorId: z.string().nullable(),
     occurredAt: z.string(),
   })),
+  correctedEnrollmentIds: z.array(z.string()),
 });
 
 export const teacherViewSchema = z.object({
@@ -582,6 +583,27 @@ const routes: RouteSpec[] = [
       404: { description: "No such section", schema: problemSchema },
       409: { description: "The roll changed since the preview", schema: problemSchema },
       422: { description: "The plan has problems; nothing was applied", schema: z.object({ message: z.string(), preview: progressionPreviewSchema }) },
+    },
+  },
+  {
+    id: "people.progression-reverse",
+    module: MODULE_NAME,
+    method: "POST",
+    path: "/api/v1/people/students/{studentId}/enrollments/{enrollmentId}/progression-reversal",
+    summary: "Correct one applied promotion, detention or exit",
+    description: "Administrator only. Keeps the applied outcome and an immutable correction record, voids an unused next-year placement, restores the pupil's source-year placement and family access, and writes the audit event in one transaction. Revoked invitation codes stay revoked.",
+    tags: ["people-students"],
+    auth: ADMIN_ONLY,
+    request: {
+      params: z.object({ studentId: idSchema, enrollmentId: idSchema }),
+      body: z.object({ reason: z.string().trim().min(1).max(240) }),
+    },
+    audit: { action: "people.progression-reversed", resourceType: "student" },
+    responses: {
+      200: { description: "Corrected", schema: z.object({ correctionId: z.string(), reinstatedEnrollmentId: z.string() }) },
+      403: { description: "Outside scope", schema: problemSchema },
+      404: { description: "No such pupil or enrollment", schema: problemSchema },
+      409: { description: "Outcome changed, already corrected, or dependent data exists", schema: problemSchema },
     },
   },
   {

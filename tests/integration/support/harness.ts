@@ -33,6 +33,12 @@ import { createResultsModule } from "@vidya/module-results";
 import { createPortalModule } from "@vidya/module-portal";
 import { createFeesModule } from "@vidya/module-fees";
 import { createNoticesModule } from "@vidya/module-notices";
+import { academicsHasPupilYearRecords } from "@vidya/module-academics";
+import { schoolAcademicsHasPupilYearRecords } from "@vidya/module-school-academics";
+import { reportingHasPupilYearRecords } from "@vidya/module-reporting";
+import { courseworkHasPupilYearRecords } from "@vidya/module-coursework";
+import { feesHasPupilYearRecords } from "@vidya/module-fees";
+import { analyticsHasPupilYearRecords } from "@vidya/module-analytics";
 import { integrationDatabaseUrl } from "./db-url";
 
 export const ADMIN_USERNAME = "int-admin";
@@ -134,6 +140,13 @@ export function buildStack(edition: "college" | "school" = "college") {
     },
   };
   const people = createPeopleModule({
+    hasNextYearRecords: async (tx, studentId, year) => {
+      for (const check of [academicsHasPupilYearRecords, schoolAcademicsHasPupilYearRecords,
+        reportingHasPupilYearRecords, courseworkHasPupilYearRecords, feesHasPupilYearRecords, analyticsHasPupilYearRecords]) {
+        if (await check(tx, studentId, year)) return true;
+      }
+      return false;
+    },
     edition,
     db,
     metrics,

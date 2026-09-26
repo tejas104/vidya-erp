@@ -180,6 +180,17 @@ export const pplImports = pgTable("ppl_imports", {
   finishedAt: timestamp("finished_at", { withTimezone: true }),
 });
 
+/** One immutable correction record for an applied pupil outcome. */
+export const pplProgressionCorrections = pgTable("ppl_progression_corrections", {
+  id: text("id").primaryKey(),
+  studentId: text("student_id").notNull().references(() => pplStudents.id, { onDelete: "restrict" }),
+  sourceEnrollmentId: text("source_enrollment_id").notNull().unique().references(() => pplEnrollments.id, { onDelete: "restrict" }),
+  nextEnrollmentId: text("next_enrollment_id").references(() => pplEnrollments.id, { onDelete: "restrict" }),
+  reinstatedEnrollmentId: text("reinstated_enrollment_id").notNull().unique().references(() => pplEnrollments.id, { onDelete: "restrict" }),
+  reason: text("reason").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [index("ppl_progression_corrections_student_idx").on(table.studentId)]);
+
 /** One staff presence decision per teacher and calendar date. Retained for
  * audit/history even when the teacher later becomes inactive. */
 export const pplTeacherAttendance = pgTable("ppl_teacher_attendance", {

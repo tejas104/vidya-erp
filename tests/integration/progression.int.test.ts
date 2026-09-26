@@ -16,6 +16,7 @@ let admin: string;
 let collegeId: string;
 let departmentId: string;
 let standard5: string;
+let standard6: string;
 let section5A: string;
 let section5B: string;
 let section6A: string;
@@ -61,7 +62,7 @@ beforeAll(async () => {
   collegeId = bootstrap.collegeId;
   departmentId = (await stack.people.service.ensureImplicitDepartment(collegeId)).departmentId;
   standard5 = (await create("people.class-create", { departmentId, name: `Std 5 ${suffix}`, code: `N6-5-${suffix}` })).id;
-  const standard6 = (await create("people.class-create", { departmentId, name: `Std 6 ${suffix}`, code: `N6-6-${suffix}` })).id;
+  standard6 = (await create("people.class-create", { departmentId, name: `Std 6 ${suffix}`, code: `N6-6-${suffix}` })).id;
   section5A = (await create("people.section-create", { classId: standard5, name: "A" })).id;
   section5B = (await create("people.section-create", { classId: standard5, name: "B" })).id;
   section6A = (await create("people.section-create", { classId: standard6, name: "A" })).id;
@@ -188,6 +189,71 @@ describe("Year-end progression over real Postgres (N6)", () => {
     expect((await stack.call("fees.child-fees", { cookie: parent, params: { studentId: ira.studentId } })).status).toBe(403);
     expect((await stack.call("portal.child-timetable", { cookie: parent, params: { studentId: ira.studentId }, query: { academicYear: YEAR } })).status).toBe(403);
     expect((await invite(ira.studentId)).status).toBe(409);
+    expect((await stack.call("people.student-update", { cookie: admin, params: { studentId: ira.studentId }, body: { status: "active" } })).status).toBe(409);
+
+    // One pupil can be corrected without changing the other three. The
+    // concluded transfer and revoked invitation remain in history.
+    const reversal = { studentId: ira.studentId, enrollmentId: ira.enrollmentId };
+    expect((await stack.call("people.progression-reverse", { cookie: classTeacher, params: reversal, body: { reason: "Transfer entered for the wrong pupil" } })).status).toBe(403);
+    const corrected = await stack.call("people.progression-reverse", { cookie: admin, params: reversal, body: { reason: "Transfer entered for the wrong pupil" } });
+    expect(corrected.status, await corrected.clone().text()).toBe(200);
+    const iraRows = await stack.pool.query("SELECT status, outcome, starts_on::text, ends_on::text FROM ppl_enrollments WHERE student_id=$1 ORDER BY created_at, id", [ira.studentId]);
+    expect(iraRows.rows).toEqual([
+      expect.objectContaining({ status: "withdrawn", outcome: "transferred_out", ends_on: endsOn }),
+      expect.objectContaining({ status: "enrolled", outcome: null, starts_on: today, ends_on: null }),
+    ]);
+    expect((await stack.pool.query("SELECT status FROM ppl_students WHERE id=$1", [ira.studentId])).rows[0].status).toBe("active");
+    expect((await stack.pool.query("SELECT valid_until, historical_access_until FROM ppl_student_guardians WHERE student_id=$1", [ira.studentId])).rows[0])
+      .toEqual({ valid_until: null, historical_access_until: null });
+    expect((await stack.pool.query("SELECT status FROM ppl_guardian_invitations WHERE student_id=$1 ORDER BY created_at", [ira.studentId])).rows.map((row) => row.status))
+      .toEqual(["activated", "revoked"]);
+    expect((await stack.call("fees.child-fees", { cookie: parent, params: { studentId: ira.studentId } })).status).toBe(200);
+    const correctedHistory = await stack.call("people.student-history", { cookie: admin, params: { studentId: ira.studentId } });
+    expect((await correctedHistory.json()) as { correctedEnrollmentIds: string[] }).toMatchObject({ correctedEnrollmentIds: [ira.enrollmentId] });
+    expect((await stack.call("people.progression-reverse", { cookie: admin, params: reversal, body: { reason: "Again" } })).status).toBe(409);
+  });
+
+  it("voids an unused next-year row but refuses one with dependent attendance", async () => {
+    const clean = await pupil(section5B, "Clean promotion");
+    const used = await pupil(section5B, "Used promotion");
+    const plan = {
+      sectionId: section5B, academicYear: YEAR, endsOn, targetAcademicYear: NEXT, startsOn: shift(today, 2),
+      promoteToSectionId: section6A,
+      pupils: [{ ...clean, outcome: "promote" }, { ...used, outcome: "promote" }],
+    };
+    expect((await stack.call("people.progression-apply", { cookie: admin, body: plan })).status).toBe(200);
+    const target = await stack.pool.query("SELECT id FROM ppl_enrollments WHERE student_id=$1 AND academic_year=$2", [used.studentId, NEXT]);
+    const sessionId = `acd_n6_${randomUUID()}`;
+    await stack.pool.query(
+      "INSERT INTO acd_attendance_sessions(id, section_id, held_on, academic_year, taken_by, college_id, department_id, class_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8)",
+      [sessionId, section6A, shift(today, 2), NEXT, "n6-test", collegeId, departmentId, standard6],
+    );
+    await stack.pool.query("INSERT INTO acd_attendance_entries(id, session_id, student_id, status) VALUES($1,$2,$3,$4)",
+      [`acd_n6_${randomUUID()}`, sessionId, used.studentId, "present"]);
+    const reverse = (studentId: string, enrollmentId: string) => stack.call("people.progression-reverse", {
+      cookie: admin, params: { studentId, enrollmentId }, body: { reason: "Wrong section chosen" },
+    });
+    expect((await reverse(used.studentId, used.enrollmentId)).status).toBe(409);
+    expect((await stack.pool.query("SELECT status FROM ppl_enrollments WHERE id=$1", [target.rows[0].id])).rows[0].status).toBe("enrolled");
+    const corrected = await reverse(clean.studentId, clean.enrollmentId);
+    expect(corrected.status, await corrected.clone().text()).toBe(200);
+    expect((await stack.pool.query("SELECT status FROM ppl_enrollments WHERE student_id=$1 AND academic_year=$2", [clean.studentId, NEXT])).rows[0].status).toBe("voided");
+    expect((await stack.pool.query("SELECT status FROM ppl_enrollments WHERE student_id=$1 AND academic_year=$2 ORDER BY created_at, id", [clean.studentId, YEAR])).rows.map((row) => row.status))
+      .toEqual(["completed", "enrolled"]);
+  });
+
+  it("rolls back a one-pupil correction when its audit event fails", async () => {
+    const row = await pupil(section5B, "Graduation correction");
+    const plan = { sectionId: section5B, academicYear: YEAR, endsOn, pupils: [{ ...row, outcome: "graduate" }] };
+    expect((await stack.call("people.progression-apply", { cookie: admin, body: plan })).status).toBe(200);
+    const request = { cookie: admin, params: { studentId: row.studentId, enrollmentId: row.enrollmentId }, body: { reason: "Graduation recorded in error" } };
+    stack.peopleAuditFault.failAction = "people.progression-reversed";
+    expect((await stack.call("people.progression-reverse", request)).status).toBe(500);
+    stack.peopleAuditFault.failAction = null;
+    expect((await stack.pool.query("SELECT count(*)::int AS n FROM ppl_progression_corrections WHERE student_id=$1", [row.studentId])).rows[0].n).toBe(0);
+    expect((await stack.pool.query("SELECT status FROM ppl_students WHERE id=$1", [row.studentId])).rows[0].status).toBe("alumni");
+    expect((await stack.pool.query("SELECT status FROM ppl_enrollments WHERE student_id=$1", [row.studentId])).rows.map((entry) => entry.status)).toEqual(["completed"]);
+    expect((await stack.call("people.progression-reverse", request)).status).toBe(200);
   });
 
   it("rolls every pupil back when the batch audit cannot be written (ADR-0026)", async () => {

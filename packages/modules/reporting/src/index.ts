@@ -147,3 +147,4 @@ export function createReportingModule(deps: ReportingModuleDeps): RuntimeModule<
   assertModuleWiring(module);
   return module;
 }
+export { reportingHasPupilYearRecords } from "./progression-dependencies";

@@ -463,7 +463,9 @@ checks prove only the named local flows.
   previews and applies one section's promotion, detention, transfer-out and
   graduation as one audited batch; concluded enrollment rows keep their
   outcome and reason, and exits apply ADR-0027 Decision 9 to guardian access.
-  Per-pupil reversal and a real-school pilot review remain.
+  A local per-pupil reversal candidate now records a correction and refuses
+  dependent next-year records; its database and browser gates and a real-school
+  pilot review remain.
 - **India requirement** — Year-end promotion is an annual all-school event with
   legal weight; detention rules vary by board and state.
 - **Proposed Vidya workflow / why better** — Promotion as an **auditable batch

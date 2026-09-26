@@ -1,7 +1,7 @@
 import type { OrgPath } from "@vidya/platform";
 import type { OrgRepo } from "../repo/org-repo";
 import type { PeopleRepo, StudentStatus } from "../repo/people-repo";
-import type { AppliedPupil, ProgressionApplyInput, ProgressionRepo, RecordedOutcome } from "../repo/progression-repo";
+import { PROGRESSION_AUDIT, ProgressionReversalConflictError, type AppliedPupil, type ProgressionApplyInput, type ProgressionRepo, type RecordedOutcome } from "../repo/progression-repo";
 
 export type ProgressionChoice = "promote" | "detain" | "transfer_out" | "graduate";
 
@@ -83,6 +83,7 @@ export interface ProgressionServiceDeps {
   readonly repo: ProgressionRepo;
   readonly relationships: (studentId: string) => Promise<readonly { status: string; validUntil: Date | null }[]>;
   readonly today?: () => string;
+  readonly readAudit?: (resourceType: string, resourceId: string, limit: number, beforeId?: number) => Promise<readonly { id: number; action: string; details: unknown }[]>;
 }
 
 /**
@@ -92,6 +93,71 @@ export interface ProgressionServiceDeps {
  */
 export class ProgressionService {
   constructor(private readonly deps: ProgressionServiceDeps) {}
+
+  async reverse(input: {
+    studentId: string; sourceEnrollmentId: string; reason: string; org: OrgPath;
+    attribution: ProgressionApplyInput["attribution"];
+  }) {
+    if (!this.deps.readAudit) throw new Error("Progression reversal requires audit history.");
+    let beforeId: number | undefined;
+    let evidence: {
+      outcome: RecordedOutcome; endsOn: string; newEnrollmentId: string | null;
+      before: { status: StudentStatus }; after: { status: StudentStatus };
+      familyAccess: readonly {
+        relationshipId: string;
+        before: { validUntil: string | null; historicalAccessUntil: string | null };
+        after: { validUntil: string; historicalAccessUntil: string };
+      }[];
+    } | null = null;
+    for (;;) {
+      const page = await this.deps.readAudit("student", input.studentId, 1000, beforeId);
+      const found = page.find((event) => event.action === PROGRESSION_AUDIT.pupil.action &&
+        typeof event.details === "object" && event.details !== null &&
+        (event.details as { closedEnrollmentId?: unknown }).closedEnrollmentId === input.sourceEnrollmentId);
+      if (found) {
+        const detail = found.details as Record<string, unknown>;
+        if (!["promoted", "detained", "transferred_out", "graduated"].includes(String(detail.outcome)) ||
+            typeof detail.endsOn !== "string" || typeof detail.newEnrollmentId !== "string" && detail.newEnrollmentId !== null ||
+            typeof detail.before !== "object" || detail.before === null ||
+            typeof detail.after !== "object" || detail.after === null ||
+            !Array.isArray(detail.familyAccess)) {
+          throw new ProgressionReversalConflictError("The original progression audit is incomplete.");
+        }
+        const before = detail.before as { status?: unknown };
+        const after = detail.after as { status?: unknown };
+        const statuses: StudentStatus[] = ["active", "inactive", "backlog", "year_back", "transferred", "dropped", "alumni"];
+        if (!statuses.includes(before.status as StudentStatus) || !statuses.includes(after.status as StudentStatus)) {
+          throw new ProgressionReversalConflictError("The original status audit is incomplete.");
+        }
+        const familyAccess = detail.familyAccess as {
+          relationshipId: string; before: { validUntil: string | null; historicalAccessUntil: string | null };
+          after: { validUntil: string; historicalAccessUntil: string };
+        }[];
+        if (familyAccess.some((link) => typeof link.relationshipId !== "string" ||
+            !link.before || !link.after || typeof link.after.validUntil !== "string" ||
+            typeof link.after.historicalAccessUntil !== "string")) {
+          throw new ProgressionReversalConflictError("The family access audit is incomplete.");
+        }
+        evidence = {
+          outcome: detail.outcome as RecordedOutcome, endsOn: detail.endsOn,
+          newEnrollmentId: detail.newEnrollmentId as string | null,
+          before: { status: before.status as StudentStatus }, after: { status: after.status as StudentStatus },
+          familyAccess,
+        };
+        break;
+      }
+      if (page.length < 1000) break;
+      beforeId = page[page.length - 1]!.id;
+    }
+    if (!evidence) throw new ProgressionReversalConflictError("No applied outcome was recorded for this enrollment.");
+    return this.deps.repo.reverse({
+      studentId: input.studentId, sourceEnrollmentId: input.sourceEnrollmentId,
+      nextEnrollmentId: evidence.newEnrollmentId, outcome: evidence.outcome, endsOn: evidence.endsOn,
+      today: this.deps.today?.() ?? schoolToday(),
+      statusBefore: evidence.before.status, statusAfter: evidence.after.status,
+      familyAccess: evidence.familyAccess, reason: input.reason, org: input.org, attribution: input.attribution,
+    });
+  }
 
   async preview(plan: ProgressionPlan): Promise<ProgressionPreview> {
     const today = this.deps.today?.() ?? schoolToday();

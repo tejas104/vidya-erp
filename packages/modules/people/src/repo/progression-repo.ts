@@ -1,13 +1,14 @@
 import { and, eq, gt, inArray, isNull, or } from "drizzle-orm";
 import type { ActorType, Db, DurableAuditReceipt, OrgPath, TransactionalAuditLogger } from "@vidya/platform";
 import { newId } from "../ids";
-import { pplEnrollments, pplGuardianInvitations, pplStudentGuardians, pplStudents } from "../db/schema";
+import { pplEnrollments, pplGuardianInvitations, pplProgressionCorrections, pplStudentGuardians, pplStudents } from "../db/schema";
 import type { StudentStatus } from "./people-repo";
 
 /** Shared with the RouteSpec so the in-transaction receipt matches (ADR-0026). */
 export const PROGRESSION_AUDIT = {
   applied: { action: "people.progression-applied", resourceType: "progression-run" },
   pupil: { action: "people.student-progressed", resourceType: "student" },
+  reversed: { action: "people.progression-reversed", resourceType: "student" },
 } as const;
 
 export type RecordedOutcome = "promoted" | "detained" | "transferred_out" | "graduated";
@@ -52,6 +53,30 @@ export class ProgressionConflictError extends Error {
 
 export interface ProgressionRepo {
   apply(input: ProgressionApplyInput): Promise<{ runId: string; pupils: AppliedPupil[]; receipt: DurableAuditReceipt }>;
+  reverse(input: ProgressionReverseInput): Promise<{ correctionId: string; reinstatedEnrollmentId: string; receipt: DurableAuditReceipt }>;
+}
+
+export interface ProgressionReverseInput {
+  readonly studentId: string;
+  readonly sourceEnrollmentId: string;
+  readonly nextEnrollmentId: string | null;
+  readonly outcome: RecordedOutcome;
+  readonly endsOn: string;
+  readonly today: string;
+  readonly statusBefore: StudentStatus;
+  readonly statusAfter: StudentStatus;
+  readonly familyAccess: readonly {
+    readonly relationshipId: string;
+    readonly before: { readonly validUntil: string | null; readonly historicalAccessUntil: string | null };
+    readonly after: { readonly validUntil: string; readonly historicalAccessUntil: string };
+  }[];
+  readonly reason: string;
+  readonly org: OrgPath;
+  readonly attribution: ProgressionApplyInput["attribution"];
+}
+
+export class ProgressionReversalConflictError extends Error {
+  constructor(message: string) { super(message); this.name = "ProgressionReversalConflictError"; }
 }
 
 function pgErrorCode(error: unknown): string | undefined {
@@ -64,8 +89,90 @@ function pgErrorCode(error: unknown): string | undefined {
  * invitation issue and claim lock — so an exit cannot interleave with a claim.
  * Enrollment rows are updated or inserted, never deleted.
  */
-export function createProgressionRepo(db: Db, audit: TransactionalAuditLogger): ProgressionRepo {
+export function createProgressionRepo(
+  db: Db, audit: TransactionalAuditLogger,
+  hasNextYearRecords: (tx: Db, studentId: string, year: string) => Promise<boolean>,
+): ProgressionRepo {
   return {
+    async reverse(input) {
+      const correctionId = newId("prc");
+      return db.transaction(async (tx) => {
+        const handle = tx as unknown as Db;
+        const student = await tx.select({ status: pplStudents.status }).from(pplStudents)
+          .where(eq(pplStudents.id, input.studentId)).for("update");
+        if (student[0]?.status !== input.statusAfter) throw new ProgressionReversalConflictError("The pupil's status changed after the outcome was applied.");
+        const source = await tx.select().from(pplEnrollments).where(and(
+          eq(pplEnrollments.id, input.sourceEnrollmentId), eq(pplEnrollments.studentId, input.studentId),
+        )).for("update");
+        const original = source[0];
+        if (!original || original.outcome !== input.outcome || original.endsOn !== input.endsOn ||
+            original.status !== (input.outcome === "transferred_out" ? "withdrawn" : "completed")) {
+          throw new ProgressionReversalConflictError("The recorded outcome has changed. Reload the pupil's history.");
+        }
+        const existing = await tx.select({ id: pplProgressionCorrections.id }).from(pplProgressionCorrections)
+          .where(eq(pplProgressionCorrections.sourceEnrollmentId, input.sourceEnrollmentId));
+        if (existing.length) throw new ProgressionReversalConflictError("This outcome was already corrected.");
+        const enrollments = await tx.select().from(pplEnrollments).where(eq(pplEnrollments.studentId, input.studentId)).for("update");
+        const next = input.nextEnrollmentId === null ? null : enrollments.find((row) => row.id === input.nextEnrollmentId);
+        if (input.nextEnrollmentId !== null) {
+          if (!next || next.status !== "enrolled" || next.outcome !== null || next.startsOn === null ||
+              next.academicYear <= original.academicYear || next.startsOn <= input.endsOn) {
+            throw new ProgressionReversalConflictError("The next-year enrollment has changed.");
+          }
+          if (next.startsOn <= input.today) {
+            throw new ProgressionReversalConflictError("The next-year enrollment has already begun. Review its records before changing the outcome.");
+          }
+          if (await hasNextYearRecords(handle, input.studentId, next.academicYear)) {
+            throw new ProgressionReversalConflictError("The next-year enrollment has attendance, marks, reports, coursework, fees or analytics records. It cannot be reversed.");
+          }
+        }
+        if (enrollments.some((row) => row.status === "enrolled" && row.id !== input.nextEnrollmentId)) {
+          throw new ProgressionReversalConflictError("The pupil has another live enrollment.");
+        }
+        const startsOn = new Date(Date.parse(`${input.endsOn}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
+        // A corrected year-end result is a new placement, not an erasure of
+        // the concluded historical row. Void only the unused next-year row.
+        if (next) await tx.update(pplEnrollments).set({ status: "voided", updatedAt: new Date() })
+          .where(eq(pplEnrollments.id, next.id));
+        const reinstated = await tx.insert(pplEnrollments).values({
+          id: newId("enr"), studentId: input.studentId, sectionId: original.sectionId,
+          academicYear: original.academicYear, startsOn,
+        }).returning({ id: pplEnrollments.id });
+        for (const link of input.familyAccess) {
+          const relationship = await tx.select().from(pplStudentGuardians)
+            .where(and(eq(pplStudentGuardians.id, link.relationshipId), eq(pplStudentGuardians.studentId, input.studentId))).for("update");
+          const row = relationship[0];
+          if (!row || !["pending", "active", "restricted"].includes(row.status) ||
+              row.validUntil?.toISOString() !== link.after.validUntil ||
+              row.historicalAccessUntil?.toISOString() !== link.after.historicalAccessUntil) {
+            throw new ProgressionReversalConflictError("A family relationship changed after the exit.");
+          }
+          await tx.update(pplStudentGuardians).set({
+            validUntil: link.before.validUntil === null ? null : new Date(link.before.validUntil),
+            historicalAccessUntil: link.before.historicalAccessUntil === null ? null : new Date(link.before.historicalAccessUntil),
+            updatedAt: new Date(),
+          }).where(eq(pplStudentGuardians.id, link.relationshipId));
+        }
+        await tx.update(pplStudents).set({ status: input.statusBefore, updatedAt: new Date() }).where(eq(pplStudents.id, input.studentId));
+        await tx.insert(pplProgressionCorrections).values({
+          id: correctionId, studentId: input.studentId, sourceEnrollmentId: input.sourceEnrollmentId,
+          nextEnrollmentId: input.nextEnrollmentId, reinstatedEnrollmentId: reinstated[0]!.id, reason: input.reason,
+        });
+        const receipt = await audit.recordInTransaction(handle, {
+          org: input.org, module: "people", ...PROGRESSION_AUDIT.reversed,
+          actorType: input.attribution.actorType, actorId: input.attribution.actorId,
+          resourceId: input.studentId, requestId: input.attribution.requestId,
+          details: {
+            routeId: "people.progression-reverse", status: 200, correctionId, reason: input.reason,
+            sourceEnrollmentId: input.sourceEnrollmentId, nextEnrollmentId: input.nextEnrollmentId,
+            reinstatedEnrollmentId: reinstated[0]!.id, outcome: input.outcome,
+            before: { status: input.statusAfter }, after: { status: input.statusBefore },
+            familyAccessRestored: input.familyAccess.map((link) => link.relationshipId),
+          },
+        });
+        return { correctionId, reinstatedEnrollmentId: reinstated[0]!.id, receipt };
+      });
+    },
     async apply(input) {
       const runId = newId("prg");
       return db.transaction(async (tx) => {

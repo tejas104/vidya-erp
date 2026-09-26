@@ -9,7 +9,7 @@ vi.mock("./api", async (importOriginal) => {
     ...actual.api,
     session: vi.fn(), studentGet: vi.fn(), studentPerformance: vi.fn(),
     studentMarks: vi.fn(), studentAttendance: vi.fn(), feesStudentInvoices: vi.fn(),
-    studentHistory: vi.fn(), docList: vi.fn(),
+    studentHistory: vi.fn(), progressionReverse: vi.fn(), docList: vi.fn(),
   } };
 });
 
@@ -21,7 +21,7 @@ const profile = {
 };
 
 beforeEach(() => {
-  vi.clearAllMocks();
+  vi.resetAllMocks();
   window.history.replaceState({}, "", "/students/stu_1");
   (api.session as ReturnType<typeof vi.fn>).mockResolvedValue({ userId: "u_1", displayName: "Admin", roles: ["admin"], grants: [] });
   (api.studentGet as ReturnType<typeof vi.fn>).mockResolvedValue(profile);
@@ -30,7 +30,7 @@ beforeEach(() => {
     enrollments: [
       { id: "enr_old", sectionId: "sec_old", sectionName: "A", classId: "cls_1", className: "Standard Eight", academicYear: "2026-27", status: "withdrawn", createdAt: "2026-06-01T00:00:00Z", updatedAt: "2026-07-01T00:00:00Z" },
       { id: "enr_new", sectionId: "sec_1", sectionName: "B", classId: "cls_1", className: "Standard Eight", academicYear: "2026-27", status: "enrolled", createdAt: "2026-07-01T00:00:00Z", updatedAt: "2026-07-01T00:00:00Z" },
-    ], statusChanges: [], events: [{ action: "people.student-enrolled", actorId: "u_1", occurredAt: "2026-07-01T00:00:00Z", details: {} }],
+    ], statusChanges: [], events: [{ action: "people.student-enrolled", actorId: "u_1", occurredAt: "2026-07-01T00:00:00Z", details: {} }], correctedEnrollmentIds: [],
   });
   (api.feesStudentInvoices as ReturnType<typeof vi.fn>).mockResolvedValue({ invoices: [{
     id: "inv_1", headName: "Tuition", academicYear: "2026-27", dueOn: "2026-10-01",
@@ -45,6 +45,24 @@ function renderPage() {
 }
 
 describe("Student 360", () => {
+  it("records one administrator correction with a reason and refreshes history", async () => {
+    (api.studentHistory as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      enrollments: [{ id: "enr_old", sectionId: "sec_old", sectionName: "A", classId: "cls_1", className: "Standard Eight", academicYear: "2026-27", status: "withdrawn", outcome: "transferred_out", outcomeReason: "Moved", createdAt: "2026-06-01T00:00:00Z", updatedAt: "2026-07-01T00:00:00Z" }],
+      statusChanges: [], events: [], correctedEnrollmentIds: [],
+    }).mockResolvedValueOnce({
+      enrollments: [{ id: "enr_old", sectionId: "sec_old", sectionName: "A", classId: "cls_1", className: "Standard Eight", academicYear: "2026-27", status: "withdrawn", outcome: "transferred_out", outcomeReason: "Moved", createdAt: "2026-06-01T00:00:00Z", updatedAt: "2026-07-01T00:00:00Z" }],
+      statusChanges: [], events: [], correctedEnrollmentIds: ["enr_old"],
+    });
+    (api.progressionReverse as ReturnType<typeof vi.fn>).mockResolvedValue({ correctionId: "prc_1", reinstatedEnrollmentId: "enr_return" });
+    renderPage();
+    await screen.findByRole("heading", { name: "Meera Record" });
+    fireEvent.click(screen.getByRole("tab", { name: "History" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Correct this outcome" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Reason for correcting this outcome" }), { target: { value: "Wrong pupil chosen" } });
+    fireEvent.click(screen.getByRole("button", { name: "Record correction" }));
+    await waitFor(() => expect(api.progressionReverse).toHaveBeenCalledWith("stu_1", "enr_old", "Wrong pupil chosen"));
+    expect(await screen.findByText(/Outcome corrected; the original record is retained/)).toBeInTheDocument();
+  });
   it("keeps the profile and history usable when analytics denies the summary panel", async () => {
     renderPage();
     expect(await screen.findByRole("heading", { name: "Meera Record" })).toBeInTheDocument();

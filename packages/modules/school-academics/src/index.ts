@@ -107,3 +107,4 @@ export function createSchoolAcademicsModule(
   assertModuleWiring(module);
   return module;
 }
+export { schoolAcademicsHasPupilYearRecords } from "./progression-dependencies";

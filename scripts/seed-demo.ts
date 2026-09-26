@@ -16,6 +16,12 @@ import {
 import { createSystemModule } from "@vidya/module-system";
 import { createIdentityCore, createIdentityModule } from "@vidya/module-identity";
 import { createPeopleModule } from "@vidya/module-people";
+import { academicsHasPupilYearRecords } from "@vidya/module-academics";
+import { schoolAcademicsHasPupilYearRecords } from "@vidya/module-school-academics";
+import { reportingHasPupilYearRecords } from "@vidya/module-reporting";
+import { courseworkHasPupilYearRecords } from "@vidya/module-coursework";
+import { feesHasPupilYearRecords } from "@vidya/module-fees";
+import { analyticsHasPupilYearRecords } from "@vidya/module-analytics";
 import { createAcademicsModule } from "@vidya/module-academics";
 import { ROLLUP_JOB_NAME, createAnalyticsModule } from "@vidya/module-analytics";
 import { createCourseworkModule } from "@vidya/module-coursework";
@@ -275,6 +281,13 @@ function buildStack() {
     orgDirectory: () => orgDirectoryRef.current,
   });
   const people = createPeopleModule({
+    hasNextYearRecords: async (tx, studentId, year) => {
+      for (const check of [academicsHasPupilYearRecords, schoolAcademicsHasPupilYearRecords,
+        reportingHasPupilYearRecords, courseworkHasPupilYearRecords, feesHasPupilYearRecords, analyticsHasPupilYearRecords]) {
+        if (await check(tx, studentId, year)) return true;
+      }
+      return false;
+    },
     db,
     metrics,
     audit: system.service.audit,
