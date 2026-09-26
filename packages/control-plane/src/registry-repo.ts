@@ -22,7 +22,8 @@ const subscriptionChangeSchema = z.object({
 export type TenantRow = {
   id: string; code: string; school_name: string; edition: "school";
   planned_seats: number; deployment_state: string; created_at: Date;
-  subscription_state: string | null; paid_through: string | null; subscription_revision: number | null;
+  subscription_state: string | null; paid_through: string | null; grace_days: number | null;
+  subscription_revision: number | null;
 };
 
 async function transaction<T>(pool: Pool, action: (client: PoolClient) => Promise<T>): Promise<T> {
@@ -105,9 +106,9 @@ export function createRegistryRepo(pool: Pool) {
         await requireActiveOperator(client, operatorId);
         const result = await client.query<TenantRow>(`SELECT t.id, t.code, t.school_name, t.edition, t.planned_seats,
         t.deployment_state, t.created_at, s.state AS subscription_state,
-        s.paid_through::text AS paid_through, s.revision AS subscription_revision
+        s.paid_through::text AS paid_through, s.grace_days, s.revision AS subscription_revision
         FROM cp_tenants t LEFT JOIN LATERAL (
-          SELECT state, paid_through, revision FROM cp_subscription_events
+          SELECT state, paid_through, grace_days, revision FROM cp_subscription_events
           WHERE tenant_id = t.id ORDER BY revision DESC LIMIT 1
         ) s ON true ORDER BY t.created_at DESC, t.id DESC LIMIT $1 OFFSET $2`, [limit, offset]);
         return result.rows;

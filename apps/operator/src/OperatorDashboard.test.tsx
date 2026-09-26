@@ -10,6 +10,7 @@ describe("operator portfolio preview", () => {
     expect(screen.getByRole("heading", { name: "Schools and licences" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Needs attention" }));
     expect(screen.getByRole("button", { name: "View Riverbend Academy" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "View Harborview School" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "View Greenfield School" })).not.toBeInTheDocument();
     fireEvent.change(screen.getByRole("textbox", { name: "Search schools" }), { target: { value: "northstar" } });
     fireEvent.click(screen.getByRole("button", { name: "View Northstar School" }));
@@ -21,5 +22,13 @@ describe("operator portfolio preview", () => {
   it("explains an empty filter result", () => {
     render(<OperatorDashboard tenants={[]} />);
     expect(screen.getByText("No schools match this view. Try another search or filter.")).toBeInTheDocument();
+  });
+
+  it("shows recorded and effective access separately after grace ends", () => {
+    render(<OperatorDashboard tenants={syntheticTenants} />);
+    fireEvent.click(screen.getByRole("button", { name: "View Harborview School" }));
+    const detail = screen.getByRole("dialog", { name: "Harborview School details" });
+    expect(detail).toHaveTextContent("Active");
+    expect(detail).toHaveTextContent("Read only");
   });
 });

@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createLogger, migrateDown, migrateUp } from "@vidya/platform";
-import { assuredOperatorIdentity, createRegistryRepo, RegistryConflict } from "../../packages/control-plane/src";
+import { assuredOperatorIdentity, createRegistryRepo, RegistryConflict, tenantAccessView } from "../../packages/control-plane/src";
 import { integrationDatabaseUrl } from "./support/db-url";
 
 const databaseName = `vidya_cp_int_${randomUUID().replaceAll("-", "").slice(0, 12)}`;
@@ -78,7 +78,12 @@ describe("separate vendor registry database", () => {
     expect(saved.revision).toBe(1);
     await expect(repo.recordSubscription({ tenantId: first.id, expectedRevision: 0, state: "active",
       paidThrough: "2027-10-31", reason: "stale renewal" }, operatorId)).rejects.toBeInstanceOf(RegistryConflict);
-    expect((await repo.listTenants(operatorId))[0]).toMatchObject({ id: first.id, subscription_state: "trial", subscription_revision: 1 });
+    const latest = (await repo.listTenants(operatorId))[0]!;
+    expect(latest).toMatchObject({ id: first.id, subscription_state: "trial", grace_days: 30, subscription_revision: 1 });
+    expect(tenantAccessView(latest, new Date("2026-12-01T00:00:00Z"))).toMatchObject({
+      recordedState: "trial", needsAttention: false,
+      access: { mode: "read_only", reason: "grace_ended", daysOverdue: 31 },
+    });
 
     await pool.query(`CREATE FUNCTION cp_test_fail_audit() RETURNS trigger LANGUAGE plpgsql AS $$
       BEGIN IF NEW.action = 'subscription.recorded' THEN RAISE EXCEPTION 'audit fault'; END IF; RETURN NEW; END $$`);
