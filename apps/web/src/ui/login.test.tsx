@@ -63,7 +63,7 @@ describe("login page", () => {
   it("sends each successful account to its server-reported workspace", () => {
     expect(landingFor({ userId: "g", kind: "guardian", displayName: "Parent", roles: [], grants: [] })).toBe("/family");
     expect(landingFor({ userId: "s", displayName: "Pupil", roles: ["student"], grants: [] })).toBe("/portal");
-    expect(landingFor({ userId: "a", displayName: "Accountant", roles: ["accountant"], grants: [] })).toBe("/manage/fees");
+    expect(landingFor({ userId: "a", displayName: "Accountant", roles: ["accountant"], grants: [] })).toBe("/manage/accounting");
     expect(landingFor({ userId: "t", displayName: "Teacher", roles: ["teacher"], grants: [] })).toBe("/dashboard");
   });
 

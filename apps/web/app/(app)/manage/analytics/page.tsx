@@ -10,9 +10,10 @@ import {
   type DistributionResponse,
   type NodeRollup,
   type Session,
+  type SchoolTermView,
 } from "@/ui/api";
 import { Button, PageHeader } from "@vidya/ui-system";
-import { AttendanceColumns, CompareBars, Histogram, RegisterStrip, SubjectBars, TrendLine } from "@/ui/charts";
+import { AttendanceColumns, CompareBars, Histogram, PieBreakdown, RegisterStrip, SubjectBars, TrendLine } from "@/ui/charts";
 import { focusOf, type Focus } from "@/ui/oversightFocus";
 import { HelpButton } from "@/ui/help/HelpButton";
 import styles from "./page.module.css";
@@ -53,7 +54,11 @@ function percent(value: number): string {
 // `focusOf` (which node the caller is currently focused on) is shared with
 // /dashboard via @/ui/oversightFocus rather than duplicated.
 export default function AnalyticsPage() {
-  const year = useMemo(() => currentAcademicYear(), []);
+  const currentYear = useMemo(() => currentAcademicYear(), []);
+  const [year, setYear] = useState(currentYear);
+  const [terms, setTerms] = useState<SchoolTermView[] | null>(null);
+  const [classes, setClasses] = useState<{ id: string; label: string }[]>([]);
+  const [classId, setClassId] = useState("");
   const [session, setSession] = useState<Session | null>(null);
   const [dashboard, setDashboard] = useState<Dashboard | null>(null);
   const [focus, setFocus] = useState<Focus | null>(null);
@@ -79,11 +84,21 @@ export default function AnalyticsPage() {
 
   useEffect(() => {
     let alive = true;
+    setDashboard(null); setRollup(null); setCompare(null); setDistribution(null); setTerms(null); setError(null);
     (async () => {
       try {
         const me = await api.session();
         if (!alive) return;
         setSession(me);
+        void api.schoolTerms(year).then(({ terms: rows }) => { if (alive) setTerms(rows); }).catch(() => { if (alive) setTerms([]); });
+        if (me.roles.includes("admin") || me.roles.includes("principal")) void api.colleges().then(async ({ colleges }) => {
+          if (!colleges[0]) return;
+          const tree = await api.collegeTree(colleges[0].id);
+          if (!alive) return;
+          const options = tree.departments.flatMap((department) => department.classes.map((klass) => ({ id: klass.id, label: klass.name })));
+          setClasses(options);
+          setClassId((current) => options.some((option) => option.id === current) ? current : options[0]?.id ?? "");
+        }).catch(() => { if (alive) setClasses([]); });
 
         const dash = await api.dashboard(year);
         if (!alive) return;
@@ -102,13 +117,6 @@ export default function AnalyticsPage() {
           } catch {
             /* comparison optional */
           }
-          if (f.classId) {
-            try {
-              if (alive) setDistribution(await api.distribution("class", f.classId, year));
-            } catch {
-              /* distribution optional */
-            }
-          }
         }
       } catch (caught) {
         if (caught instanceof ApiError && caught.status === 401) {
@@ -122,6 +130,17 @@ export default function AnalyticsPage() {
       alive = false;
     };
   }, [year, reloadKey]);
+
+  useEffect(() => {
+    const scopedClassId = classId || focus?.classId;
+    if (!scopedClassId) return;
+    let alive = true;
+    setDistribution(null);
+    void api.distribution("class", scopedClassId, year).then((result) => {
+      if (alive) setDistribution(result);
+    }).catch(() => { if (alive) setDistribution(null); });
+    return () => { alive = false; };
+  }, [classId, focus?.classId, year, reloadKey]);
 
   if (error !== null) {
     return <div className="state">{error}</div>;
@@ -164,6 +183,26 @@ export default function AnalyticsPage() {
           ) : undefined
         }
       />
+
+      <div className={styles.yearPicker}>
+        <label htmlFor="analytics-year">Academic year</label>
+        <select id="analytics-year" value={year} onChange={(event) => setYear(event.target.value)}>
+          {[0, 1, 2, 3].map((offset) => {
+            const first = Number(currentYear.slice(0, 4)) - offset;
+            const option = `${first}-${String((first + 1) % 100).padStart(2, "0")}`;
+            return <option key={option} value={option}>{option}</option>;
+          })}
+        </select>
+        <span>Charts show the full selected academic year. Term dates are listed below.</span>
+      </div>
+
+      {terms && terms.length > 0 ? <section className="section" aria-label="School terms">
+        <div className="section-head"><h2>School terms</h2><span className="stat-sub num">{terms.length} terms</span></div>
+        <div className={styles.terms}>{terms.map((term) => <div className="card" key={term.id}>
+          <strong>{term.name}</strong><span>{term.startsOn} to {term.endsOn}</span>
+          <span>{term.status === "open" ? "Open" : "Closed"}{term.marksReleasedAt ? " · Marks released" : " · Marks not released"}</span>
+        </div>)}</div>
+      </section> : null}
 
       {!hasContent ? (
         <div className="state">
@@ -245,13 +284,20 @@ export default function AnalyticsPage() {
             </section>
           ) : null}
 
-          {/* MARKS DISTRIBUTION */}
+          {/* PRIVACY-GATED DISTRIBUTIONS */}
+          {classes.length > 0 ? <div className={styles.yearPicker}>
+            <label htmlFor="analytics-class">Distribution class</label>
+            <select id="analytics-class" value={classId} onChange={(event) => setClassId(event.target.value)}>
+              {classes.map((klass) => <option key={klass.id} value={klass.id}>{klass.label}</option>)}
+            </select>
+            <span>Only cohorts you are allowed to see are summarized.</span>
+          </div> : null}
           {distribution ? (
-            <section className="section" aria-label="Marks distribution">
-              <div className="section-head"><h2>Marks distribution</h2></div>
-              <div className="card">
+            <section className="section" aria-label="Student distributions">
+              <div className="section-head"><h2>Student distributions</h2></div>
+              <div className={styles.distributions}><div className="card"><h3>Marks by band</h3>
                 {distribution.marks.state === "ok" ? (
-                  <Histogram label="Overall marks distribution" bands={distribution.marks.value.bands} />
+                  <><PieBreakdown label="Marks distribution" bands={distribution.marks.value.bands} /><Histogram label="Overall marks distribution" bands={distribution.marks.value.bands} /></>
                 ) : (
                   <div className="strip-empty">
                     {distribution.marks.state === "insufficient-cohort"
@@ -259,7 +305,10 @@ export default function AnalyticsPage() {
                       : "No distribution yet."}
                   </div>
                 )}
-              </div>
+              </div><div className="card"><h3>Attendance by band</h3>
+                {distribution.attendance.state === "ok" ? <PieBreakdown label="Attendance distribution" bands={distribution.attendance.value.bands} /> :
+                  <div className="strip-empty">{distribution.attendance.state === "insufficient-cohort" ? `Cohort too small to summarise (under ${distribution.attendance.minCohort}).` : "No distribution yet."}</div>}
+              </div></div>
             </section>
           ) : null}
 

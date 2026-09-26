@@ -121,7 +121,7 @@ export default function StudentPage({ params }: { params: Promise<{ studentId: s
 
   return (
     <>
-      <a className="linklike" href="/dashboard">← Back to the register</a>
+      <a className="linklike" href={accountantOnly ? "/manage/directory" : "/manage/students"}>← Back to student list</a>
       {profile.state === "forbidden" ? <div className={styles.stateRow}><DeniedState title="Outside your scope." message="This student's profile is not available to your account." /></div> : null}
       {profile.state === "not-found" ? <div className={styles.stateRow}><EmptyState title="No such student." body="This record may have been removed." /></div> : null}
       {profile.state === "loading" || profile.state === "error" ? (
@@ -181,14 +181,14 @@ function StudentRecord({ student, studentId, year, tab, changeTab, accountantOnl
         help={<HelpButton slug="students" />}
       />
       <div ref={tabScroller} className={styles.tabsScroller}>
-        <Tabs tabs={[...TABS]} active={tab} onChange={changeTab} />
+        <Tabs tabs={TABS.filter((item) => !accountantOnly || ["summary", "finance", "documents", "history"].includes(item.id))} active={tab} onChange={changeTab} />
       </div>
       <section className={styles.tabPanel} role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`}>
-        {tab === "summary" ? <SummaryPanel student={student} studentId={studentId} year={year} /> : null}
+        {tab === "summary" ? <SummaryPanel student={student} studentId={studentId} year={year} accountantOnly={accountantOnly} /> : null}
         {tab === "academics" ? accountantOnly ? <DeniedState title="Not in your scope." /> : <AcademicsPanel studentId={studentId} year={year} /> : null}
         {tab === "attendance" ? accountantOnly ? <DeniedState title="Not in your scope." /> : <AttendancePanel studentId={studentId} year={year} /> : null}
         {tab === "finance" ? <FinancePanel studentId={studentId} /> : null}
-        {tab === "documents" ? <DocumentsPanel studentId={studentId} /> : null}
+        {tab === "documents" ? <DocumentsPanel studentId={studentId} isAdmin={isAdmin} /> : null}
         {tab === "family" ? <GuardiansPanel studentId={studentId} /> : null}
         {tab === "history" ? <HistoryPanel studentId={studentId} isAdmin={isAdmin} /> : null}
       </section>
@@ -196,21 +196,25 @@ function StudentRecord({ student, studentId, year, tab, changeTab, accountantOnl
   );
 }
 
-function SummaryPanel({ student, studentId, year }: { student: StudentDetailView; studentId: string; year: string }) {
+function SummaryPanel({ student, studentId, year, accountantOnly }: { student: StudentDetailView; studentId: string; year: string; accountantOnly: boolean }) {
   return (
     <>
       <div className={`card ${styles.profileCard}`}>
-        <h2>Profile</h2>
+        <div className={styles.profileHeading}>
+          <div className={styles.profileAvatar} aria-hidden="true">{student.fullName.split(/\s+/).slice(0, 2).map((part) => part[0]?.toUpperCase()).join("")}</div>
+          <div><h2>Student profile</h2><p>Contact and family details</p></div>
+        </div>
         <dl className={styles.profileGrid}>
+          <dt>Current status</dt><dd>{student.status.replaceAll("_", " ")}</dd>
           <dt>Date of birth</dt><dd>{student.dob ?? "Not recorded"}</dd>
           <dt>Phone</dt><dd>{student.phone ?? "Not recorded"}</dd>
           <dt>Guardian contact</dt><dd>{student.guardianName ?? "Not recorded"}{student.guardianPhone ? ` · ${student.guardianPhone}` : ""}</dd>
         </dl>
       </div>
-      <h2>Performance</h2>
-      <ResourcePanel load={() => api.studentPerformance(studentId, year)} identity={[studentId, year]}>
+      {accountantOnly ? <p className={styles.explainer}>Open Finance for invoices and receipts, or Documents for supporting records.</p> : <h2>Performance</h2>}
+      {!accountantOnly ? <ResourcePanel load={() => api.studentPerformance(studentId, year)} identity={[studentId, year]}>
         {(data) => <PerformancePanel data={data} year={year} />}
-      </ResourcePanel>
+      </ResourcePanel> : null}
     </>
   );
 }
@@ -307,8 +311,38 @@ function FinancePanel({ studentId }: { studentId: string }) {
   </ResourcePanel>;
 }
 
-function DocumentsPanel({ studentId }: { studentId: string }) {
-  return <ResourcePanel load={() => api.docList(studentId)} identity={[studentId]}>
+function DocumentsPanel({ studentId, isAdmin }: { studentId: string; isAdmin: boolean }) {
+  const [revision, setRevision] = useState(0);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  async function upload(file: File) {
+    if (!isAdmin) return;
+    if (!['application/pdf', 'image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > 5 * 1024 * 1024) {
+      setError('Choose a PDF or JPEG, PNG or WebP image under 5 MB.'); return;
+    }
+    setUploading(true); setError(null);
+    try {
+      const dataBase64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result).split(',')[1] ?? '');
+        reader.onerror = () => reject(new Error('File read failed'));
+        reader.readAsDataURL(file);
+      });
+      await api.docUpload(studentId, { kind: 'other', filename: file.name, contentType: file.type, dataBase64 });
+      setRevision((value) => value + 1);
+    } catch (caught) {
+      setError(caught instanceof ApiError ? caught.message : 'Could not attach this file.');
+    } finally { setUploading(false); }
+  }
+  return <>
+    {isAdmin ? <div className={`card ${styles.documentUpload}`}>
+      <h2>Attach a student record</h2>
+      <p>PDF or image, up to 5 MB. Attachments are available to authorized school staff.</p>
+      <input aria-label="Attach student document" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp" disabled={uploading} onChange={(event) => { const file = event.target.files?.[0]; if (file) void upload(file); event.target.value = ''; }} />
+      {uploading ? <span role="status">Uploading document…</span> : null}
+      {error ? <span role="alert">{error}</span> : null}
+    </div> : null}
+    <ResourcePanel load={() => api.docList(studentId)} identity={[studentId, revision]}>
     {({ documents }: { documents: StudentDocument[] }) => documents.length === 0
       ? <EmptyState title="No documents on file." />
       : <div className={styles.panelList}>{documents.map((document) => (
@@ -317,7 +351,7 @@ function DocumentsPanel({ studentId }: { studentId: string }) {
           <a className="linklike" href={api.docDownloadUrl(document.id)} target="_blank" rel="noreferrer">View document</a>
         </div>
       ))}</div>}
-  </ResourcePanel>;
+  </ResourcePanel></>;
 }
 
 const OUTCOME_LABEL: Record<EnrollmentOutcome, string> = { promoted: "Promoted", detained: "Detained", transferred_out: "Transferred out", graduated: "Graduated" };

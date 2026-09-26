@@ -48,6 +48,8 @@ describe("navConfig job-shaped regroup", () => {
   });
   it("omits empty groups (no SETUP for accountant)", () => {
     expect(visibleNav(["accountant"]).map((x) => x.group)).not.toContain("SETUP");
+    expect(visibleNav(["accountant"]).flatMap((x) => x.entries).map((entry) => entry.href)).toContain("/manage/accounting");
+    expect(crumbsFor("/manage/accounting")).toEqual([{ label: "Money" }, { label: "Accounting" }]);
   });
   it("Analytics is visible to oversight roles (admin/principal/hod) only", () => {
     const hrefs = (r: Parameters<typeof visibleNav>[0]) => visibleNav(r).flatMap((g) => g.entries).map((e) => e.href);

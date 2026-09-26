@@ -8,6 +8,34 @@ import { densityBucket, subjectColor } from "./api";
  * bundle stays CDN-free.
  */
 
+/** Cohort distribution with a visible numeric legend; callers must supply a privacy-gated aggregate. */
+export function PieBreakdown({ label, bands }: { label: string; bands: { label: string; count: number }[] }) {
+  const rows = bands.filter((band) => Number.isFinite(band.count) && band.count > 0);
+  const total = rows.reduce((sum, band) => sum + band.count, 0);
+  if (total === 0) return <p className="strip-empty">No distribution yet.</p>;
+  let start = -Math.PI / 2;
+  const point = (angle: number) => `${(100 + 88 * Math.cos(angle)).toFixed(3)},${(100 + 88 * Math.sin(angle)).toFixed(3)}`;
+  return <div style={{ display: "flex", alignItems: "center", gap: 24, flexWrap: "wrap" }}>
+    <svg width="200" height="200" viewBox="0 0 200 200" role="img" aria-label={`${label}: ${rows.map((row) => `${row.label} ${row.count}`).join(", ")}`}>
+      {rows.map((row, index) => {
+        const sweep = row.count / total * Math.PI * 2;
+        const end = start + sweep;
+        const shape = rows.length === 1
+          ? <circle key={row.label} cx="100" cy="100" r="88" fill={`var(--series-${index % 6 + 1})`} />
+          : <path key={row.label} d={`M100,100 L${point(start)} A88,88 0 ${sweep > Math.PI ? 1 : 0},1 ${point(end)} Z`} fill={`var(--series-${index % 6 + 1})`} stroke="var(--paper-raised)" strokeWidth="2" />;
+        start = end;
+        return shape;
+      })}
+    </svg>
+    <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: 8 }}>
+      {rows.map((row, index) => <li key={row.label} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <span aria-hidden="true" style={{ width: 12, height: 12, borderRadius: "50%", background: `var(--series-${index % 6 + 1})` }} />
+        <span>{row.label}: <strong>{row.count}</strong> ({Math.round(row.count / total * 100)}%)</span>
+      </li>)}
+    </ul>
+  </div>;
+}
+
 export function StatTile({
   value,
   label,

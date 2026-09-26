@@ -6,6 +6,27 @@
   display: flex;
   gap: var(--space-2);
 }
+.directoryTools {
+  display: grid;
+  gap: var(--space-3);
+  margin: var(--space-5) 0;
+}
+.directoryTools > :nth-child(2) { max-width: 24rem; }
+.categories { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.category {
+  min-height: 44px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius-sm);
+  background: var(--paper-raised);
+  color: var(--ink-2);
+  font: 600 var(--text-14) var(--font-body);
+  cursor: pointer;
+}
+.category[aria-pressed="true"] { border-color: var(--section-link); background: var(--section-link-soft); color: var(--section-link); }
+.category:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.category .num { margin-left: var(--space-1); }
+.resultCount { margin: 0; color: var(--ink-2); font-size: var(--text-14); }
 .badgeRow {
   display: inline-flex;
   gap: var(--space-1);

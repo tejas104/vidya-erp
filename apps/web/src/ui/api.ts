@@ -1038,8 +1038,15 @@ export const api = {
   classTeacherAssignments: (classId: string) =>
     get<{ assignments: AssignmentView[] }>(`/api/v1/people/classes/${encodeURIComponent(classId)}/assignments`),
   // identity (admin)
-  listUsers: (collegeId: string) =>
-    get<{ users: UserView[] }>(`/api/v1/identity/users?collegeId=${encodeURIComponent(collegeId)}&limit=200`),
+  listUsers: async (collegeId: string) => {
+    const users: UserView[] = [];
+    const limit = 200;
+    for (let offset = 0; ; offset += limit) {
+      const page = await get<{ users: UserView[] }>(`/api/v1/identity/users?collegeId=${encodeURIComponent(collegeId)}&limit=${limit}&offset=${offset}`);
+      users.push(...page.users);
+      if (page.users.length < limit) return { users };
+    }
+  },
   createUser: (body: { username: string; displayName: string; collegeId: string; temporaryPassword: string; roles: Role[] }) =>
     post<UserView>("/api/v1/identity/users", body),
   updateUser: (userId: string, body: { displayName?: string; status?: "active" | "disabled" }) =>

@@ -3,8 +3,6 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react
 import { api, ApiError, currentAcademicYear, type OrgTree, type StudentView, type StudentStatus } from "@/ui/api";
 import { useToast, Button, Input, Select, Modal, Table, EmptyState, Skeleton, PageHeader, type TableColumn } from "@vidya/ui-system";
 import { AsyncState } from "@/ui/AsyncState";
-import { AVATARS, initials } from "@/ui/avatar";
-import { StudentSlideOver, type DrawerStudent } from "@/ui/StudentSlideOver";
 import { HelpButton } from "@/ui/help/HelpButton";
 import { useHelpEdition } from "@/ui/help/HelpEditionContext";
 import styles from "./page.module.css";
@@ -73,7 +71,6 @@ export default function StudentsPage() {
   const [eGuardianPhone, setEGuardianPhone] = useState("");
   const [eDob, setEDob] = useState("");
   const [users, setUsers] = useState<{ id: string; username: string; displayName: string }[]>([]);
-  const [viewing, setViewing] = useState<StudentView | null>(null);
   // School exits go through Promotion and exits (N6), which records the leaving date and family access.
   const statusOptions = useHelpEdition() === "school" ? STATUS_OPTIONS.filter((o) => o.value !== "transferred" && o.value !== "alumni") : STATUS_OPTIONS;
 
@@ -239,33 +236,9 @@ export default function StudentsPage() {
       await api.updateStudent(student.id, { status: next });
       toast.push({ status: "good", message: `${student.fullName} → ${STATUS_LABEL[next] ?? next}.` });
       await loadRoster();
-      setViewing((current) => (current && current.id === student.id ? { ...current, status: next } : current));
     } catch (caught) {
       toast.push({ status: "danger", message: caught instanceof ApiError ? caught.message : "Couldn't update." });
     }
-  }
-
-  function toDrawerStudent(row: StudentView, idx: number, sectionLabel: string): DrawerStudent {
-    return {
-      studentId: row.id,
-      initials: initials(row.fullName),
-      gradient: AVATARS[idx % AVATARS.length]!.gradient,
-      ink: AVATARS[idx % AVATARS.length]!.ink,
-      rollNo: row.admissionNo,
-      name: row.fullName,
-      section: sectionLabel,
-      status: row.status,
-      pct: null,
-      attended: 0,
-      total: 0,
-      lastMark: null,
-      backlogs: row.status === "backlog" ? 1 : 0,
-      flags: { backlog: row.status === "backlog", yb: row.status === "year_back" },
-      phone: row.phone,
-      guardianName: row.guardianName,
-      guardianPhone: row.guardianPhone,
-      dob: row.dob,
-    };
   }
 
   if (failed) return <EmptyState title="Couldn't load the college." body="Try again shortly." />;
@@ -310,7 +283,7 @@ export default function StudentsPage() {
     ),
     actions: (
       <span className={styles.rowActions}>
-        <Button variant="ghost" onClick={() => setViewing(row)}>View</Button>
+        <a className="btn ghost" href={`/students/${encodeURIComponent(row.id)}`}>Open record</a>
         <Button variant="ghost" onClick={() => openEdit(row)}>Edit</Button>
         {canCorrectDates ? <Button variant="ghost" onClick={() => void openEnrollmentDates(row)}>{row.enrollment?.startsOn ? "Enrollment dates" : "Set enrollment date"}</Button> : null}
         <Button variant="ghost" onClick={() => { setLinkUserId(""); setLinking(row); }}>
@@ -464,12 +437,6 @@ export default function StudentsPage() {
         </div>
       </Modal>
 
-      <StudentSlideOver
-        student={viewing ? toDrawerStudent(viewing, roster?.indexOf(viewing) ?? 0, sectionLabel) : null}
-        canManage
-        onSetStatus={(next) => viewing && void setStatus(viewing, next as StudentStatus)}
-        onClose={() => setViewing(null)}
-      />
     </>
   );
 }

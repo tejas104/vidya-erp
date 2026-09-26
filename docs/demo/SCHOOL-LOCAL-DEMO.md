@@ -30,6 +30,10 @@ containers and volumes running for review; `docker compose ... up -d --no-build`
 restarts them without reseeding. The browser verification writes screenshots to
 `test-results/school-demo/`.
 
+After enrichment, run `pnpm exec tsx scripts/verify-school-office-demo.ts` to
+check user categories, analytics, accountant navigation and the sample PDF
+import/attachment path. It only adds the fictional PDF to Meera Das if absent.
+
 ## Sign-ins
 
 | Role | Username | Password |
@@ -38,6 +42,7 @@ restarts them without reseeding. The browser verification writes screenshots to
 | Subject teacher | `school-demo-teacher` | `school-demo-teacher-pass-2026` |
 | Class teacher | `school-demo-class-teacher` | `school-demo-class-pass-2026` |
 | Principal | `school-demo-principal` | `school-demo-principal-pass-2026` |
+| Accountant | `school-demo-accountant` | `school-demo-accountant-pass-2026` |
 | Student | `school-demo-student` | `school-demo-student-pass-2026` |
 | Standard 9 student | `school-demo-student-9a` | `school-demo-student-9a-pass-2026` |
 | Family | `school-demo-family` | `school-demo-family-pass-2026` |
@@ -71,6 +76,13 @@ analytics marks rollup is not presented as a school grade figure.
 
 1. Sign in as administrator: inspect the teacher directory, Results path,
    Students, Academic terms, Report cards, Fee counter, and organisation setup.
+   **Users** has filters for teacher, student sign-in, accountant, family and
+   leadership accounts. **Analytics** shows academic terms, year trends, bar
+   comparisons and class-level distributions. From **Students**, open a full
+   pupil record. The sample
+   [`fictional-student-record.pdf`](fixtures/fictional-student-record.pdf)
+   demonstrates document attachment for Meera Das. The bulk student importer
+   accepts CSV rows only and explains this when given a PDF.
    **Promotion and exits** can preview one pupil's transfer or graduation for
    today, or a section's year-end promotion, detention, transfer and graduation.
    Preview is safe; **Apply** really moves the demo
@@ -86,6 +98,9 @@ analytics marks rollup is not presented as a school grade figure.
    Apply only to a section you create for the purpose.
 2. Sign in as principal: inspect the leadership dashboard, analytics, leave
    decisions, report cards, and notices.
+   Sign in as accountant to open **Accounting**, review collections and dues,
+   then use **Fees** to record a payment and issue a receipt. The accountant
+   can view student finance records but cannot change academic results.
 3. Sign in as class teacher: inspect the class dashboard, roster, whole-class
    attendance, saved-register duplicate guard, and report card desk. The class
    register has pupil search and an enrolment action.

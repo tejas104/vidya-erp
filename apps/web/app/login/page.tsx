@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 export function landingFor(session: Session): string {
   if (session.kind === "guardian") return "/family";
   if (session.roles.length > 0 && session.roles.every((role) => role === "student")) return "/portal";
-  if (session.roles.length > 0 && session.roles.every((role) => role === "accountant")) return "/manage/fees";
+  if (session.roles.length > 0 && session.roles.every((role) => role === "accountant")) return "/manage/accounting";
   return "/dashboard";
 }
 

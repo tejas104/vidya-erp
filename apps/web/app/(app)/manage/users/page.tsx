@@ -27,7 +27,23 @@ import styles from "./page.module.css";
 
 export const dynamic = "force-dynamic";
 
-const ROLES: Role[] = ["admin", "principal", "hod", "class_teacher", "teacher"];
+const ROLES: Role[] = ["admin", "principal", "hod", "class_teacher", "teacher", "accountant"];
+type Category = "all" | "teachers" | "students" | "accountants" | "families" | "leadership" | "other";
+const CATEGORIES: { id: Category; label: string }[] = [
+  { id: "all", label: "All" }, { id: "teachers", label: "Teachers" },
+  { id: "students", label: "Student sign-ins" }, { id: "accountants", label: "Accountants" },
+  { id: "families", label: "Families" }, { id: "leadership", label: "Leadership" },
+  { id: "other", label: "Other" },
+];
+function inCategory(user: UserView, category: Category): boolean {
+  if (category === "all") return true;
+  if (category === "families") return user.accountKind === "guardian";
+  if (category === "teachers") return user.roles.some((role) => role === "teacher" || role === "class_teacher");
+  if (category === "students") return user.roles.includes("student");
+  if (category === "accountants") return user.roles.includes("accountant");
+  if (category === "leadership") return user.roles.some((role) => role === "admin" || role === "principal" || role === "hod");
+  return user.accountKind !== "guardian" && user.roles.length === 0;
+}
 
 type Row = {
   username: ReactNode;
@@ -42,6 +58,8 @@ export default function UsersPage() {
   const toast = useToast();
   const [tree, setTree] = useState<OrgTree | null>(null);
   const [users, setUsers] = useState<UserView[] | null>(null);
+  const [category, setCategory] = useState<Category>("all");
+  const [query, setQuery] = useState("");
   const [failed, setFailed] = useState(false);
   const [saving, setSaving] = useState(false);
   // create-user modal
@@ -101,7 +119,7 @@ export default function UsersPage() {
         temporaryPassword: tempPassword,
         roles: newRoles,
       });
-      toast.push({ status: "good", message: `"${username.trim()}" created — they must reset the temporary password before first sign-in.` });
+      toast.push({ status: "good", message: `"${username.trim()}" created. Add a scope grant before first sign-in, then have them reset the temporary password.` });
       setCreating(false);
       setUsername("");
       setDisplayName("");
@@ -262,7 +280,11 @@ export default function UsersPage() {
     { key: "grants", header: "Grants", figure: true, align: "right" },
     { key: "actions", header: "", align: "right" },
   ];
-  const rows: Row[] = (users ?? []).map((row) => ({
+  const normalizedQuery = query.trim().toLocaleLowerCase();
+  const visibleUsers = users.filter((user) => inCategory(user, category) && (
+    normalizedQuery === "" || `${user.displayName} ${user.username}`.toLocaleLowerCase().includes(normalizedQuery)
+  ));
+  const rows: Row[] = visibleUsers.map((row) => ({
     username: <span className="num">{row.username}</span>,
     name: <>{row.displayName}{row.accountKind === "guardian" ? <StatusBadge status="info">Guardian</StatusBadge> : null}</>,
     roles: (
@@ -279,7 +301,7 @@ export default function UsersPage() {
     actions: (
       <span className={styles.tableActions}>
         {row.accountKind === "staff" ? <Button variant="ghost" onClick={() => { setRoleDraft(row.roles); setRolesFor(row); }}>Roles</Button> : null}
-        {row.accountKind === "staff" ? <Button variant="ghost" onClick={() => { setGrantRole("hod"); setGrantDept(""); setGrantClass(""); setGrantSubject(""); setGrantsFor(row); }}>Grants</Button> : null}
+        {row.accountKind === "staff" ? <Button variant="ghost" onClick={() => { setGrantRole(row.roles.includes("accountant") ? "accountant" : row.roles[0] ?? "hod"); setGrantDept(""); setGrantClass(""); setGrantSubject(""); setGrantsFor(row); }}>Grants</Button> : null}
         <Button variant="ghost" onClick={() => setResetFor(row)}>Reset (token)</Button>
         <Button variant="ghost" onClick={() => { setNewPass(""); setPasswordFor(row); }}>Set password</Button>
         <Button variant="ghost" onClick={() => void toggleStatus(row)}>{row.status === "disabled" ? "Enable" : "Disable"}</Button>
@@ -302,7 +324,19 @@ export default function UsersPage() {
         help={<HelpButton slug="users" />}
       />
 
-      <AsyncState loading={false} error={false} isEmpty={users.length === 0} empty={<EmptyState title="No users yet." />}>
+      <section className={styles.directoryTools} aria-label="User categories">
+        <div className={styles.categories} role="group" aria-label="Filter users by category">
+          {CATEGORIES.map((item) => (
+            <button key={item.id} type="button" className={styles.category} aria-pressed={category === item.id} onClick={() => setCategory(item.id)}>
+              {item.label} <span className="num">{users.filter((user) => inCategory(user, item.id)).length}</span>
+            </button>
+          ))}
+        </div>
+        <Input id="user-search" label="Find a user" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Name or username" />
+        <p className={styles.resultCount} role="status">Showing {visibleUsers.length} of {users.length} sign-ins. A user can belong to more than one category. Pupil records without sign-ins are in Students.</p>
+      </section>
+
+      <AsyncState loading={false} error={false} isEmpty={visibleUsers.length === 0} empty={<EmptyState title={users.length === 0 ? "No users yet." : "No users match this view."} />}>
         <Table columns={columns} rows={rows} />
       </AsyncState>
 
@@ -366,7 +400,7 @@ export default function UsersPage() {
         }
       >
         <p className={`field-hint ${styles.noTopMargin}`}>
-          Removing a role also removes its scope grants, and the user is signed out everywhere.
+          Removing a role also removes its scope grants, and the user is signed out everywhere. Accountants need a college-wide accountant grant before they can open the fee workspace.
         </p>
         <span className={styles.rolesRow}>
           {ROLES.map((role) => (
@@ -391,7 +425,7 @@ export default function UsersPage() {
         footer={
           <>
             <Button variant="ghost" onClick={() => setGrantsFor(null)}>Close</Button>
-            <Button onClick={() => void submitGrant()} loading={saving}>Add grant</Button>
+            <Button onClick={() => void submitGrant()} loading={saving} disabled={!grantsFor?.roles.some((role) => role !== "student")}>Add grant</Button>
           </>
         }
       >
@@ -414,13 +448,14 @@ export default function UsersPage() {
           )}
         </div>
         <div className={styles.grantForm}>
+          {grantsFor?.roles.length === 0 ? <p className="field-hint">Add a staff role first, then grant its school scope.</p> : null}
           <Select
             id="grant-role"
             label="Role"
             hint="The user must already hold this role."
             value={grantRole}
             onChange={(event) => { setGrantRole(event.target.value as Role); setGrantDept(""); setGrantClass(""); setGrantSubject(""); }}
-            options={ROLES.map((role) => ({ value: role, label: role }))}
+            options={(grantsFor?.roles ?? []).filter((role) => role !== "student").map((role) => ({ value: role, label: role.replaceAll("_", " ") }))}
           />
           {grantRole === "hod" || grantRole === "class_teacher" || grantRole === "teacher" ? (
             <Select

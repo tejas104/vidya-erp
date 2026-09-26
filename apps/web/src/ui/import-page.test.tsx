@@ -52,6 +52,14 @@ beforeEach(() => {
 });
 
 describe("/manage/import/students", () => {
+  it("rejects a PDF as a bulk import and points to student documents", async () => {
+    renderStudents();
+    const input = await screen.findByLabelText("Upload CSV file");
+    fireEvent.change(input, { target: { files: [new File(["%PDF-1.4"], "fictional-student-record.pdf", { type: "application/pdf" })] } });
+    expect(await screen.findByRole("alert")).toHaveTextContent("This importer accepts CSV only");
+    expect(screen.getByRole("button", { name: /Preview.*dry-run/i })).toBeDisabled();
+    expect(api.createImport).not.toHaveBeenCalled();
+  });
   it("shows the template download link, scoped to kind=students", async () => {
     renderStudents();
     const link = await screen.findByRole("link", { name: /download csv template/i });

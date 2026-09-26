@@ -14,6 +14,9 @@ vi.mock("./api", async (importOriginal) => {
       rollup: vi.fn(),
       compare: vi.fn(),
       distribution: vi.fn(),
+      schoolTerms: vi.fn(),
+      colleges: vi.fn(),
+      collegeTree: vi.fn(),
       recomputeAnalytics: vi.fn(),
     },
   };
@@ -60,7 +63,10 @@ beforeEach(() => {
   mocked(api.compare).mockResolvedValue({ children: [], childLevel: "class" });
   // The page dereferences distribution.marks.state, so a bare {} here renders
   // nothing and fails every assertion for the wrong reason.
-  mocked(api.distribution).mockResolvedValue({ marks: { state: "insufficient-cohort", minCohort: 5 } });
+  mocked(api.distribution).mockResolvedValue({ marks: { state: "insufficient-cohort", minCohort: 5 }, attendance: { state: "insufficient-cohort", minCohort: 5 } });
+  mocked(api.schoolTerms).mockResolvedValue({ terms: [{ id: "term_1", name: "Term 1", academicYear: "2026-27", startsOn: "2026-04-01", endsOn: "2026-09-30", status: "closed", marksReleasedAt: "2026-10-01T00:00:00Z" }] });
+  mocked(api.colleges).mockResolvedValue({ colleges: [{ id: "college_1", name: "Demo", code: "D" }] });
+  mocked(api.collegeTree).mockResolvedValue({ departments: [{ classes: [{ id: "class-se-a", name: "Standard 8" }, { id: "class-se-b", name: "Standard 9" }] }] });
   mocked(api.recomputeAnalytics).mockResolvedValue(undefined);
 });
 
@@ -71,6 +77,21 @@ describe("AnalyticsPage", () => {
     // The trend section is what actually moved off /dashboard — assert the
     // content, not just the shell, or the split could silently render nothing.
     expect(await screen.findByRole("region", { name: "Attendance trend" })).toBeInTheDocument();
+    expect(await screen.findByRole("region", { name: "School terms" })).toHaveTextContent("Term 1");
+  });
+
+  it("shows privacy-gated pie breakdowns with numeric labels", async () => {
+    mocked(api.distribution).mockResolvedValue({
+      marks: { state: "ok", value: { total: 10, bands: [{ label: "High", count: 7 }, { label: "Developing", count: 3 }] } },
+      attendance: { state: "ok", value: { total: 10, bands: [{ label: "On track", count: 8 }, { label: "Needs support", count: 2 }] } },
+    });
+    render(<AnalyticsPage />);
+    expect(await screen.findByRole("img", { name: /Marks distribution: High 7/ })).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: /Attendance distribution: On track 8/ })).toBeInTheDocument();
+    expect(screen.getByText(/Developing:.*3/)).toBeInTheDocument();
+    expect(screen.getByLabelText("Distribution class")).toHaveValue("class-se-a");
+    fireEvent.change(screen.getByLabelText("Distribution class"), { target: { value: "class-se-b" } });
+    await waitFor(() => expect(api.distribution).toHaveBeenCalledWith("class", "class-se-b", "2026-27"));
   });
 
   it("switches attendance between columns, line, area and exact values", async () => {

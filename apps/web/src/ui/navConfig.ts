@@ -70,6 +70,7 @@ export const NAV: NavEntry[] = [
   // --- exams ---
   { href: "/manage/exams", label: "Exams", icon: "check", group: "ACADEMICS", roles: ["admin"] },
   // --- money ---
+  { href: "/manage/accounting", label: "Accounting", icon: "rupee", group: "MONEY", roles: ["accountant", "admin", "principal"] },
   { href: "/manage/fees", label: "Fees", icon: "rupee", group: "MONEY", roles: ["accountant", "admin", "principal"] },
   // --- PEOPLE: staff and the messages that go out to everyone.
   { href: "/manage/teachers", label: "Teachers", icon: "teachers", group: "PEOPLE", roles: ["admin"] },

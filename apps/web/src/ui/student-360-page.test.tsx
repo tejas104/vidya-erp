@@ -9,7 +9,7 @@ vi.mock("./api", async (importOriginal) => {
     ...actual.api,
     session: vi.fn(), studentGet: vi.fn(), studentPerformance: vi.fn(),
     studentMarks: vi.fn(), studentAttendance: vi.fn(), feesStudentInvoices: vi.fn(),
-    studentHistory: vi.fn(), progressionReverse: vi.fn(), docList: vi.fn(),
+    studentHistory: vi.fn(), progressionReverse: vi.fn(), docList: vi.fn(), docUpload: vi.fn(),
   } };
 });
 
@@ -45,6 +45,16 @@ function renderPage() {
 }
 
 describe("Student 360", () => {
+  it("lets an administrator attach a PDF from the full record", async () => {
+    (api.docList as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ documents: [] }).mockResolvedValueOnce({ documents: [{ id: "doc_1", kind: "other", filename: "record.pdf", createdAt: "2026-09-26T00:00:00Z" }] });
+    (api.docUpload as ReturnType<typeof vi.fn>).mockResolvedValue({ id: "doc_1" });
+    renderPage();
+    await screen.findByRole("heading", { name: "Meera Record" });
+    fireEvent.click(screen.getByRole("tab", { name: "Documents" }));
+    fireEvent.change(await screen.findByLabelText("Attach student document"), { target: { files: [new File(["%PDF-1.4"], "record.pdf", { type: "application/pdf" })] } });
+    await waitFor(() => expect(api.docUpload).toHaveBeenCalledWith("stu_1", expect.objectContaining({ kind: "other", filename: "record.pdf", contentType: "application/pdf" })));
+    expect(await screen.findByText("record.pdf")).toBeInTheDocument();
+  });
   it("records one administrator correction with a reason and refreshes history", async () => {
     (api.studentHistory as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
       enrollments: [{ id: "enr_old", sectionId: "sec_old", sectionName: "A", classId: "cls_1", className: "Standard Eight", academicYear: "2026-27", status: "withdrawn", outcome: "transferred_out", outcomeReason: "Moved", createdAt: "2026-06-01T00:00:00Z", updatedAt: "2026-07-01T00:00:00Z" }],
@@ -76,15 +86,14 @@ describe("Student 360", () => {
     expect(window.location.search).toBe("?tab=history");
   });
 
-  it("shows an accountant the profile and finance, with separate academic denial states", async () => {
+  it("shows an accountant the finance and document tabs without academic affordances", async () => {
     (api.session as ReturnType<typeof vi.fn>).mockResolvedValue({ userId: "u_2", displayName: "Accountant", roles: ["accountant"], grants: [] });
     renderPage();
     expect(await screen.findByRole("heading", { name: "Meera Record" })).toBeInTheDocument();
     await waitFor(() => expect(api.session).toHaveBeenCalled());
-    fireEvent.click(screen.getByRole("tab", { name: "Academics" }));
-    expect(screen.getByText("Not in your scope.")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("tab", { name: "Attendance" }));
-    expect(screen.getByText("Not in your scope.")).toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: "Academics" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: "Attendance" })).not.toBeInTheDocument();
+    expect(api.studentPerformance).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("tab", { name: "Finance" }));
     expect(await screen.findByText("Tuition")).toBeInTheDocument();
     expect(screen.getAllByText(/₹1,200/).length).toBeGreaterThan(0);

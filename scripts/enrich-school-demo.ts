@@ -109,6 +109,19 @@ async function main() {
     }
     const class9Pupil = rosters.get("9A")![0]!;
     const { users } = await api<{ users: { id: string; username: string; status: string }[] }>(admin, "get", `/api/v1/identity/users?collegeId=${collegeId}&limit=200`);
+    let accountant = users.find((item) => item.username === "school-demo-accountant");
+    if (!accountant) {
+      accountant = await api<{ id: string; username: string; status: string }>(admin, "post", "/api/v1/identity/users", {
+        collegeId, username: "school-demo-accountant", displayName: "Leena Shah (Demo Accountant)",
+        temporaryPassword: "school-demo-accountant-pass-2026", roles: ["accountant"],
+      });
+      await api(admin, "post", `/api/v1/identity/users/${accountant.id}/password`, { newPassword: "school-demo-accountant-pass-2026" });
+    } else if (accountant.status === "must_reset") {
+      await api(admin, "post", `/api/v1/identity/users/${accountant.id}/password`, { newPassword: "school-demo-accountant-pass-2026" });
+    }
+    const accountantDetails = await api<{ grants: { role: string; collegeId: string }[] }>(admin, "get", `/api/v1/identity/users/${accountant.id}`);
+    if (!accountantDetails.grants.some((grant) => grant.role === "accountant" && grant.collegeId === collegeId))
+      await api(admin, "post", `/api/v1/identity/users/${accountant.id}/grants`, { role: "accountant", collegeId });
     let class9User = users.find((item) => item.username === "school-demo-student-9a");
     if (!class9User) {
       class9User = await api<{ id: string; username: string; status: string }>(admin, "post", "/api/v1/identity/users", {

@@ -160,6 +160,7 @@ export default function ImportStudentsPage() {
               </Button>
             ) : null}
           </div>
+          <p className={styles.formHint}>Have a PDF student record? Create or open that student first, then attach the PDF in their Documents tab. This bulk importer reads CSV rows only.</p>
           {phase.name === "running" ? (
             <p className={styles.formHint} role="status">
               {progress ? `${progress.processed} / ${progress.total} rows processed…` : "Starting…"}

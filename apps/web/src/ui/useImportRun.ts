@@ -127,8 +127,14 @@ export function useImportRun(kind: "students" | "teachers") {
   }
 
   function onFile(file: File) {
+    if (!/\.csv$/i.test(file.name) || (file.type && !["text/csv", "application/vnd.ms-excel", "text/plain"].includes(file.type))) {
+      setCsv("");
+      setPhase({ name: "failed", dryRun: true, message: "This importer accepts CSV only. A PDF can be attached in an existing student's Documents tab; it cannot create student rows." });
+      return;
+    }
     const reader = new FileReader();
-    reader.onload = () => setCsv(String(reader.result ?? ""));
+    reader.onload = () => { setCsv(String(reader.result ?? "")); setPhase({ name: "idle" }); };
+    reader.onerror = () => setPhase({ name: "failed", dryRun: true, message: "Could not read the CSV file." });
     reader.readAsText(file);
   }
 

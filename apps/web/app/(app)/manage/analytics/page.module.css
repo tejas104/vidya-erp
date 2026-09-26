@@ -3,6 +3,15 @@
   flex-wrap: wrap;
   gap: var(--space-3);
 }
+.yearPicker { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-3); margin-bottom: var(--space-6); color: var(--ink-2); }
+.yearPicker label { color: var(--ink); font-weight: 600; }
+.yearPicker select { min-height: 44px; border: 1px solid var(--rule-strong); border-radius: var(--radius-sm); background: var(--paper-raised); color: var(--ink); padding: 0 var(--space-3); font: inherit; }
+.terms { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: var(--space-3); }
+.terms > div { display: grid; gap: var(--space-2); }
+.terms span { color: var(--ink-2); font-size: var(--text-14); }
+.distributions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); }
+.distributions h3 { margin: 0 0 var(--space-4); }
+@media (max-width: 860px) { .distributions { grid-template-columns: 1fr; } }
 
 .chartModes {
   display: flex;

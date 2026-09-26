@@ -51,6 +51,22 @@ beforeEach(() => {
 });
 
 describe("/manage/users", () => {
+  it("filters account categories and search without mixing pupil records with sign-ins", async () => {
+    (api.listUsers as ReturnType<typeof vi.fn>).mockResolvedValue({ users: [
+      existing,
+      { ...existing, id: "u_teacher", username: "teacher.aya", displayName: "Aya Teacher", roles: ["teacher"], grants: [] },
+      { ...existing, id: "u_student", username: "pupil.zee", displayName: "Zee Pupil", roles: ["student"], grants: [] },
+      { ...existing, id: "u_accountant", username: "accounts.leena", displayName: "Leena Shah", roles: ["accountant"], grants: [] },
+    ] });
+    renderPage();
+    expect(await screen.findByText("accounts.leena")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Accountants/ }));
+    expect(screen.getByText("accounts.leena")).toBeInTheDocument();
+    expect(screen.queryByText("teacher.aya")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Student sign-ins/ }));
+    expect(screen.getByText("pupil.zee")).toBeInTheDocument();
+    expect(screen.queryByText("accounts.leena")).not.toBeInTheDocument();
+  });
   it("lists users with roles and status", async () => {
     renderPage();
     expect(await screen.findByText("demo-hod-cse")).toBeInTheDocument();
