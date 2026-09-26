@@ -87,8 +87,8 @@ they do not establish depth, usability, security or customer acceptance.
 
 | School job | Public benchmark signal | Vidya state verified in this branch | Next completion gate |
 |---|---|---|---|
-| One pupil record | Alma [A1] advertises student data and enrollment history. | **Partial.** Student 360 at `/students/[studentId]` has profile, history and independently scoped panels. A first year-end promotion, detention and exit batch (N6) records outcomes in the history; admissions is still absent. | Per-pupil reversal for N6 and a connected admissions handoff, with school browser journeys. |
-| Attendance and oversight | Alma [A1] advertises attendance reports; Vidyalaya [V1] advertises attendance management. | **Partial.** Class and teacher registers, scoped reporting exports and monthly Analytics views exist. The school review uses explicit instructional days and effective enrollment windows, and separates unsubmitted daily registers, missing pupil entries, unverified dates and confirmed shortfall. Escalation, review exports and school pilot acceptance remain open. | Complete N5 escalation, exports and pilot validation. |
+| One pupil record | Alma [A1] advertises student data and enrollment history. | **Partial.** Student 360 at `/students/[studentId]` has profile, history and independently scoped panels. A year-end promotion, detention and exit batch (N6) records outcomes; an audited one-pupil correction retains the original history. Admissions is still absent. | A connected admissions handoff and real-school validation. |
+| Attendance and oversight | Alma [A1] advertises attendance reports; Vidyalaya [V1] advertises attendance management. | **Partial.** Class and teacher registers, scoped reporting exports and monthly Analytics views exist. The school review uses explicit instructional days and effective enrollment windows, and separates unsubmitted daily registers, missing pupil entries, unverified dates and confirmed shortfall. Escalation and school pilot acceptance remain open. | Complete N5 escalation and pilot validation. |
 | Marks and report cards | Alma [A1] advertises grading and report cards; Vidyalaya [V1] advertises assessment and progress cards. | **Partial.** Weighted school marks, immutable report-card snapshots, PDFs and audited parent publication exist. Teacher CSV marks import now previews changed scores and row errors, then uses an audited atomic save with a stale-score guard. | Measure pilot-sized imports and complete N4 review; continue N5–N7. |
 | Family access | Alma [A1] advertises parent portals; Vidyalaya [V2] advertises parent/student records. | **Partial.** `/family` includes relationship-gated attendance, marks, notices, fees and published report cards. Provider delivery and school-user acceptance are absent. | Parent delivery adapter and two-child revocation/user acceptance. |
 | Fees and recovery | Alma [A1], EdPlus [E1] and Vidyalaya [V1] advertise fees. | **Partial.** Vidya has invoice/payment/adjustment records and family fee reads. Follow-up state, concessions, installments and reconciliation are not complete. | N8 and Phase 2 finance workflows with audit and restore proof. |
@@ -463,8 +463,9 @@ checks prove only the named local flows.
   previews and applies one section's promotion, detention, transfer-out and
   graduation as one audited batch; concluded enrollment rows keep their
   outcome and reason, and exits apply ADR-0027 Decision 9 to guardian access.
-  A local per-pupil reversal candidate now records a correction and refuses
-  dependent next-year records; its database and browser gates and a real-school
+  An audited one-pupil correction retains the original record and refuses
+  dependent next-year records. Database concurrency and browser journeys pass;
+  a per-school guardian history window, mid-year exit entry, and real-school
   pilot review remain.
 - **India requirement** — Year-end promotion is an annual all-school event with
   legal weight; detention rules vary by board and state.
@@ -558,7 +559,7 @@ strengths include scoped analytics, transactional financial audit, module-owned
 data and an explicit weighted-results rounding contract. These are Vidya code
 facts, **not** evidence that a competitor lacks the same qualities.
 
-Vidya still lacks admissions, promotion reversal, certificates, bulk marks
+Vidya still lacks admissions, a mid-year single-pupil exit entry, certificates, bulk marks
 import, guided onboarding, multiple school operations modules, a native app,
 and the hosted vendor control plane. It has not completed a real-school term or
 customer acceptance. The dated checkpoint above supersedes older current-state

@@ -6,8 +6,10 @@
  * connection, with synthetic fee_heads/fee_structures/fee_invoices rows
  * inserted directly. No FK exists from any fee_* table to another module's
  * tables (college/department/class/section/student ids are plain,
- * unconstrained text — see db/schema.ts), so no people/identity fixtures
- * are needed; the intra-module FK chain (fee_invoices -> fee_structures ->
+ * unconstrained text — see db/schema.ts), so no people/identity fixture rows
+ * are needed. The schema migrations still install people/0012, whose public
+ * progression guard is called by the fee invoice trigger. The intra-module
+ * FK chain (fee_invoices -> fee_structures ->
  * fee_heads) is real and is satisfied by seedInvoice() below. Authorization,
  * people-directory lookups, and audit logging are faked (already covered by
  * packages/modules/fees/src/handlers.test.ts's mocks); only the DATABASE
@@ -167,6 +169,8 @@ beforeAll(async () => {
     pool,
     [
       { module: "system", dir: path.join(modulePackageDir("system"), "migrations") },
+      { module: "identity", dir: path.join(modulePackageDir("identity"), "migrations") },
+      { module: "people", dir: path.join(modulePackageDir("people"), "migrations") },
       { module: "fees", dir: path.join(modulePackageDir("fees"), "migrations") },
     ],
     logger,

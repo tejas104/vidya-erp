@@ -225,8 +225,8 @@ describe("Year-end progression over real Postgres (N6)", () => {
     const target = await stack.pool.query("SELECT id FROM ppl_enrollments WHERE student_id=$1 AND academic_year=$2", [used.studentId, NEXT]);
     const sessionId = `acd_n6_${randomUUID()}`;
     await stack.pool.query(
-      "INSERT INTO acd_attendance_sessions(id, section_id, held_on, academic_year, taken_by, college_id, department_id, class_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8)",
-      [sessionId, section6A, shift(today, 2), NEXT, "n6-test", collegeId, departmentId, standard6],
+      "INSERT INTO acd_attendance_sessions(id, section_id, held_on, slot, academic_year, taken_by, college_id, department_id, class_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)",
+      [sessionId, section6A, shift(today, 2), `concurrent-${randomUUID()}`, NEXT, "n6-test", collegeId, departmentId, standard6],
     );
     await stack.pool.query("INSERT INTO acd_attendance_entries(id, session_id, student_id, status) VALUES($1,$2,$3,$4)",
       [`acd_n6_${randomUUID()}`, sessionId, used.studentId, "present"]);
@@ -244,6 +244,59 @@ describe("Year-end progression over real Postgres (N6)", () => {
     expect((await stack.pool.query("SELECT status FROM ppl_enrollments WHERE student_id=$1 AND academic_year=$2", [clean.studentId, NEXT])).rows[0].status).toBe("voided");
     expect((await stack.pool.query("SELECT status FROM ppl_enrollments WHERE student_id=$1 AND academic_year=$2 ORDER BY created_at, id", [clean.studentId, YEAR])).rows.map((row) => row.status))
       .toEqual(["completed", "enrolled"]);
+    await expect(stack.pool.query("INSERT INTO acd_attendance_entries(id, session_id, student_id, status) VALUES($1,$2,$3,$4)",
+      [`acd_n6_${randomUUID()}`, sessionId, clean.studentId, "present"])).rejects.toMatchObject({ code: "23514" });
+    const headId = `fhd_n6_${randomUUID()}`;
+    const structureId = `fst_n6_${randomUUID()}`;
+    await stack.pool.query("INSERT INTO fee_heads(id, college_id, name) VALUES($1,$2,$3)", [headId, collegeId, `N6 fee ${headId}`]);
+    await stack.pool.query("INSERT INTO fee_structures(id, college_id, department_id, class_id, head_id, academic_year, amount, due_on) VALUES($1,$2,$3,$4,$5,$6,$7,$8)",
+      [structureId, collegeId, departmentId, standard6, headId, NEXT, 1000, shift(today, 2)]);
+    await expect(stack.pool.query("INSERT INTO fee_invoices(id, college_id, department_id, class_id, section_id, student_id, structure_id, head_id, academic_year, amount, due_on) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)",
+      [`fiv_n6_${randomUUID()}`, collegeId, departmentId, standard6, section6A, clean.studentId, structureId, headId, NEXT, 1000, shift(today, 2)]))
+      .rejects.toMatchObject({ code: "23514" });
+  });
+
+  it("waits for an in-flight next-year write before deciding whether correction is safe", async () => {
+    const row = await pupil(section5B, "Concurrent promotion");
+    const plan = {
+      sectionId: section5B, academicYear: YEAR, endsOn, targetAcademicYear: NEXT, startsOn: shift(today, 2),
+      promoteToSectionId: section6A, pupils: [{ ...row, outcome: "promote" }],
+    };
+    expect((await stack.call("people.progression-apply", { cookie: admin, body: plan })).status).toBe(200);
+    const sessionId = `acd_n6_${randomUUID()}`;
+    await stack.pool.query(
+      "INSERT INTO acd_attendance_sessions(id, section_id, held_on, slot, academic_year, taken_by, college_id, department_id, class_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)",
+      [sessionId, section6A, shift(today, 2), `concurrent-${randomUUID()}`, NEXT, "n6-test", collegeId, departmentId, standard6],
+    );
+    const writer = await stack.pool.connect();
+    let inTransaction = false;
+    try {
+      await writer.query("BEGIN");
+      inTransaction = true;
+      await writer.query("INSERT INTO acd_attendance_entries(id, session_id, student_id, status) VALUES($1,$2,$3,$4)",
+        [`acd_n6_${randomUUID()}`, sessionId, row.studentId, "present"]);
+      let settled = false;
+      const correction = stack.call("people.progression-reverse", {
+        cookie: admin, params: { studentId: row.studentId, enrollmentId: row.enrollmentId }, body: { reason: "Wrong placement" },
+      }).then((response) => { settled = true; return response; });
+      let waitingOnWriter = false;
+      for (let attempt = 0; attempt < 60; attempt += 1) {
+        const activity = await stack.pool.query(
+          "SELECT 1 FROM pg_stat_activity WHERE query LIKE 'SELECT ppl_lock_progression_year%' AND wait_event = 'advisory' LIMIT 1",
+        );
+        if (activity.rowCount) { waitingOnWriter = true; break; }
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+      expect(waitingOnWriter).toBe(true);
+      expect(settled).toBe(false);
+      await writer.query("COMMIT");
+      inTransaction = false;
+      expect((await correction).status).toBe(409);
+      expect((await stack.pool.query("SELECT status FROM ppl_enrollments WHERE student_id=$1 AND academic_year=$2", [row.studentId, NEXT])).rows[0].status).toBe("enrolled");
+    } finally {
+      if (inTransaction) await writer.query("ROLLBACK");
+      writer.release();
+    }
   });
 
   it("rolls back a one-pupil correction when its audit event fails", async () => {

@@ -37,6 +37,22 @@ async function indexExists(name: string): Promise<boolean> {
   return (result.rowCount ?? 0) > 0;
 }
 
+async function functionExists(name: string): Promise<boolean> {
+  const result = await pool.query(
+    "SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace WHERE n.nspname = 'public' AND p.proname = $1",
+    [name],
+  );
+  return (result.rowCount ?? 0) > 0;
+}
+
+async function triggerExists(table: string, name: string): Promise<boolean> {
+  const result = await pool.query(
+    "SELECT 1 FROM pg_trigger g JOIN pg_class t ON t.oid = g.tgrelid JOIN pg_namespace n ON n.oid = t.relnamespace WHERE n.nspname = 'public' AND t.relname = $1 AND g.tgname = $2 AND NOT g.tgisinternal",
+    [table, name],
+  );
+  return (result.rowCount ?? 0) > 0;
+}
+
 /** Definition text of a named CHECK/UNIQUE/etc constraint on `table`, or null
  *  if it doesn't exist. Used for migrations that DROP+ADD a constraint under
  *  the SAME name (widening/narrowing a CHECK) — existence alone can't prove
@@ -70,6 +86,8 @@ interface MigrationExpectation {
   columns?: { table: string; column: string }[];
   /** Indexes the up migration creates (must vanish on down). */
   indexes?: string[];
+  functions?: string[];
+  triggers?: { table: string; name: string }[];
   /** A CHECK constraint that up widens/narrows in place (same name before
    *  and after). `addedText` must appear in the definition after up and
    *  must NOT appear after down. */
@@ -187,10 +205,12 @@ const EXPECTATIONS: Record<string, MigrationExpectation> = {
     tables: ["ppl_progression_corrections"],
     indexes: ["ppl_progression_corrections_student_idx"],
   },
+  "people/0012_progression_write_guard": { functions: ["ppl_lock_progression_year", "ppl_guard_progression_year"] },
   "fees/0001_payment_idempotency": {
     columns: [{ table: "fee_payments", column: "idempotency_key" }],
     indexes: ["fee_payments_idempotency_uq"],
   },
+  "fees/0002_progression_write_guard": { functions: ["fee_guard_progression_invoice"], triggers: [{ table: "fee_invoices", name: "fee_invoice_progression_guard" }] },
 
   "academics/0000_academics": {
     tables: ["acd_attendance_sessions", "acd_attendance_entries", "acd_assessments", "acd_marks"],
@@ -198,10 +218,15 @@ const EXPECTATIONS: Record<string, MigrationExpectation> = {
   "academics/0001_attendance_subject": {
     columns: [{ table: "acd_attendance_sessions", column: "subject_id" }],
   },
+  "academics/0002_progression_write_guard": {
+    functions: ["acd_guard_progression_entry", "acd_guard_progression_mark"],
+    triggers: [{ table: "acd_attendance_entries", name: "acd_entry_progression_guard" }, { table: "acd_marks", name: "acd_mark_progression_guard" }],
+  },
 
   "analytics/0000_analytics": {
     tables: ["anl_attendance_rollups", "anl_marks_rollups", "anl_student_flags"],
   },
+  "analytics/0001_progression_write_guard": { functions: ["anl_guard_progression_flag"], triggers: [{ table: "anl_student_flags", name: "anl_flag_progression_guard" }] },
 
   "reporting/0000_reporting": { tables: ["rpt_reports"] },
   "reporting/0001_grade_card_kind": {
@@ -234,11 +259,16 @@ const EXPECTATIONS: Record<string, MigrationExpectation> = {
   "reporting/0007_school_attendance_review_kind": {
     constraintDiffs: [{ table: "rpt_reports", constraint: "rpt_reports_kind_check", addedText: "school-attendance-review" }],
   },
+  "reporting/0008_progression_write_guard": {
+    functions: ["rpt_guard_progression_report", "rpt_guard_progression_card"],
+    triggers: [{ table: "rpt_reports", name: "rpt_report_progression_guard" }, { table: "rpt_school_report_cards", name: "rpt_card_progression_guard" }],
+  },
 
   "timetable/0000_timetable": { tables: ["ttb_periods", "ttb_entries"] },
   "coursework/0000_coursework": {
     tables: ["cwk_assignments", "cwk_submissions", "cwk_materials"],
   },
+  "coursework/0001_progression_write_guard": { functions: ["cwk_guard_progression_submission"], triggers: [{ table: "cwk_submissions", name: "cwk_submission_progression_guard" }] },
   "syllabus/0000_syllabus": { tables: ["syl_units", "syl_topics"] },
   "fees/0000_fees": {
     tables: [
@@ -268,6 +298,7 @@ const EXPECTATIONS: Record<string, MigrationExpectation> = {
   "school-academics/0002_school_marks": { tables: ["sca_assessments", "sca_marks"], columns: [{ table: "sca_terms", column: "grade_bands" }, { table: "sca_terms", column: "scale_id" }, { table: "sca_terms", column: "scale_name" }] },
   "school-academics/0003_term_marks_release": { columns: [{ table: "sca_terms", column: "marks_released_at" }] },
   "school-academics/0004_term_calendar": { columns: [{ table: "sca_terms", column: "instructional_days" }, { table: "sca_terms", column: "shortfall_threshold" }, { table: "sca_terms", column: "calendar_version" }] },
+  "school-academics/0005_progression_write_guard": { functions: ["sca_guard_progression_mark"], triggers: [{ table: "sca_marks", name: "sca_mark_progression_guard" }] },
 };
 
 async function assertPresent(key: string, label: string): Promise<void> {
@@ -281,6 +312,12 @@ async function assertPresent(key: string, label: string): Promise<void> {
   }
   for (const idx of exp.indexes ?? []) {
     expect(await indexExists(idx), `${label}: index ${idx} should exist`).toBe(true);
+  }
+  for (const fn of exp.functions ?? []) {
+    expect(await functionExists(fn), `${label}: function ${fn} should exist`).toBe(true);
+  }
+  for (const trigger of exp.triggers ?? []) {
+    expect(await triggerExists(trigger.table, trigger.name), `${label}: trigger ${trigger.name} should exist`).toBe(true);
   }
   for (const cd of exp.constraintDiffs ?? []) {
     const def = await constraintDef(cd.table, cd.constraint);
@@ -302,6 +339,12 @@ async function assertAbsent(key: string, label: string): Promise<void> {
   }
   for (const idx of exp.indexes ?? []) {
     expect(await indexExists(idx), `${label}: index ${idx} should be gone`).toBe(false);
+  }
+  for (const fn of exp.functions ?? []) {
+    expect(await functionExists(fn), `${label}: function ${fn} should be gone`).toBe(false);
+  }
+  for (const trigger of exp.triggers ?? []) {
+    expect(await triggerExists(trigger.table, trigger.name), `${label}: trigger ${trigger.name} should be gone`).toBe(false);
   }
   for (const cd of exp.constraintDiffs ?? []) {
     const def = await constraintDef(cd.table, cd.constraint);
@@ -341,10 +384,13 @@ describe("migration harness (ADR-0008)", () => {
     expect(order.length).toBeGreaterThan(0);
 
     // Some rollbacks refuse to discard history (Excel and new-kind report
-    // rows, recorded enrollment outcomes). Other suites may have written such
+    // rows, recorded enrollment outcomes and their append-only corrections).
+    // Other suites may have written such
     // rows into this disposable database; the walk below drops every table
     // anyway, so clear exactly those rows first.
     await pool.query("DELETE FROM rpt_reports WHERE format = 'xlsx' OR kind IN ('teacher-attendance', 'school-attendance-review')");
+    await pool.query("DELETE FROM ppl_progression_corrections");
+    await pool.query("DELETE FROM ppl_enrollments WHERE status = 'voided'");
     await pool.query("UPDATE ppl_enrollments SET outcome = NULL, outcome_reason = NULL WHERE outcome IS NOT NULL");
 
     // Walk backward, rolling back exactly one migration at a time (mirrors

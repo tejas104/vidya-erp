@@ -100,6 +100,14 @@ test("administrator promotes, detains and transfers out a section; the leaving f
     await expect(parent.getByRole("button", { name: "Notices" })).toHaveCount(0);
     await parent.screenshot({ path: testInfo.outputPath("family-after-exit.png"), fullPage: true });
     await parentContext.close();
+
+    await page.getByRole("button", { name: "Correct this outcome" }).click();
+    await page.getByRole("textbox", { name: "Reason for correcting this outcome" }).fill("Transfer was recorded for the wrong pupil");
+    await page.getByRole("button", { name: "Record correction" }).click();
+    await expect(page.getByText("Correction recorded. The pupil's history has been refreshed.")).toBeVisible();
+    await expect(page.getByText("Outcome corrected; the original record is retained.")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Correct this outcome" })).toHaveCount(0);
+    await page.screenshot({ path: testInfo.outputPath("progression-corrected.png"), fullPage: true });
     expect(errors).toEqual([]);
   } finally {
     await admin.dispose();

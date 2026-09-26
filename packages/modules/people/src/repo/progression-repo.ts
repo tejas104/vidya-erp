@@ -1,4 +1,4 @@
-import { and, eq, gt, inArray, isNull, or } from "drizzle-orm";
+import { and, eq, gt, inArray, isNull, or, sql } from "drizzle-orm";
 import type { ActorType, Db, DurableAuditReceipt, OrgPath, TransactionalAuditLogger } from "@vidya/platform";
 import { newId } from "../ids";
 import { pplEnrollments, pplGuardianInvitations, pplProgressionCorrections, pplStudentGuardians, pplStudents } from "../db/schema";
@@ -101,6 +101,12 @@ export function createProgressionRepo(
       const correctionId = newId("prc");
       return db.transaction(async (tx) => {
         const handle = tx as unknown as Db;
+        if (input.next !== null) {
+          // Dependent-table triggers take this same transaction lock before
+          // writing. A committed write is visible to the check below; a later
+          // write sees the voided placement and is refused.
+          await tx.execute(sql`SELECT ppl_lock_progression_year(${input.studentId}, ${input.next.academicYear})`);
+        }
         const student = await tx.select({ status: pplStudents.status }).from(pplStudents)
           .where(eq(pplStudents.id, input.studentId)).for("update");
         if (student[0]?.status !== input.statusAfter) throw new ProgressionReversalConflictError("The pupil's status changed after the outcome was applied.");
